@@ -1,0 +1,121 @@
+/* v2 Editor Styles
+ * Block types: scene_number, action, dialogue, parenthetical, transition
+ * All measurements relative to editor font size (em-based).
+ */
+
+/* ── Surface ──────────────────────────────────────────────────────────────── */
+.v2-surface {
+  position: relative;
+}
+
+/* ── Base block ──────────────────────────────────────────────────────────── */
+.v2b {
+  display: block;
+  position: relative;
+  white-space: pre-wrap;
+  word-break: break-word;
+  outline: none;
+  padding: 0;
+  margin: 0;
+  min-height: 1.6em;
+  caret-color: var(--c-accent);
+}
+
+.v2b:focus {
+  background: transparent;
+}
+
+/* ── Scene number ─────────────────────────────────────────────────────────── */
+.v2b-scene {
+  font-weight: bold;
+  margin-top: 2em;
+  margin-bottom: 0.5em;
+  color: var(--c-text);
+  padding-left: 2.5em;  /* room for label */
+}
+
+.v2b-scene::before {
+  content: attr(data-v2-label);
+  position: absolute;
+  left: 0;
+  color: var(--c-text3);
+  font-weight: bold;
+  pointer-events: none;
+  user-select: none;
+  white-space: nowrap;
+}
+
+/* Character tags (등장인물) shown at right of scene heading */
+.v2b-scene::after {
+  content: attr(data-v2-char-tags);
+  position: absolute;
+  right: 0;
+  top: 0;
+  font-size: 0.72em;
+  font-weight: normal;
+  color: var(--c-text6);
+  pointer-events: none;
+  user-select: none;
+  max-width: 40%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Action (지문) ─────────────────────────────────────────────────────────── */
+.v2b-action {
+  color: var(--c-text2);
+  margin-top: 0.5em;
+}
+
+/* ── Dialogue (대사) ────────────────────────────────────────────────────────── */
+.v2b-dialogue {
+  display: flex;
+  align-items: baseline;
+  gap: 0;
+  margin-top: 0.5em;
+}
+
+.v2b-badge {
+  flex-shrink: 0;
+  width: var(--dialogue-gap, 7em);
+  color: var(--c-text3);
+  font-weight: bold;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.v2b-badge:hover {
+  color: var(--c-accent);
+}
+
+.v2b-speech {
+  flex: 1;
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-height: 1.4em;
+  color: var(--c-text);
+}
+
+/* ── Parenthetical ───────────────────────────────────────────────────────── */
+.v2b-paren {
+  padding-left: var(--dialogue-gap, 7em);
+  color: var(--c-text5);
+  font-style: italic;
+}
+
+/* ── Transition ──────────────────────────────────────────────────────────── */
+.v2b-transition {
+  text-align: right;
+  color: var(--c-text3);
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+}
+
+/* ── Pending type highlight (cursor blink on pending block) ──────────────── */
+.v2-surface[data-pending-type] .v2b:focus {
+  background: color-mix(in srgb, var(--c-accent) 6%, transparent);
+}
