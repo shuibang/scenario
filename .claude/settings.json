@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cmd /c \"cd /d \"\"c:\\\\Users\\\\jiusu\\\\OneDrive\\\\바탕 화면\\\\코딩\\\\star_sky\"\" && npx vite build 2>&1\")",
+      "Bash(powershell -Command \"Set-Location ''c:\\\\Users\\\\jiusu\\\\OneDrive\\\\바탕 화면\\\\코딩\\\\star_sky''; npm run build 2>&1\")"
+    ]
+  }
+}

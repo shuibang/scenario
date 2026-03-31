@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --input-type=module --eval \"import\\(''''./src/ByeolHayum.jsx''''\\)\")",
+      "Bash(npx vite:*)",
+      "Bash(node_modules/.bin/vite build:*)"
+    ]
+  }
+}

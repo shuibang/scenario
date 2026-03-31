@@ -1,0 +1,430 @@
+@import "tailwindcss";
+
+/* ═══════════════════════════════════════════════════════════════
+   CSS CUSTOM PROPERTIES — theme tokens
+   All hardcoded color values are aliased here.
+   Components should prefer var(--c-*) or .t-* utility classes.
+═══════════════════════════════════════════════════════════════ */
+:root {
+  /* ── Backgrounds */
+  --c-bg:      #1a1a1a;
+  --c-panel:   #171717;
+  --c-header:  #111111;
+  --c-input:   #242424;
+  --c-hover:   #242424;
+  --c-active:  #2a2a4a;
+  --c-tag:     #2a2a3a;
+  --c-card:    #1e1e1e;
+
+  /* ── Borders */
+  --c-border:  #252525;
+  --c-border2: #2a2a2a;
+  --c-border3: #333333;
+  --c-border4: #3a3a4a;
+
+  /* ── Text */
+  --c-text:    #e0e0e0;
+  --c-text2:   #bbbbbb;
+  --c-text3:   #888888;
+  --c-text4:   #666666;
+  --c-text5:   #555555;
+  --c-text6:   #444444;
+  --c-dim:     #333333;
+
+  /* ── Accents */
+  --c-accent:       #5a5af5;
+  --c-accent-hover: #6a6aff;
+  --c-accent2:      #a78bfa;
+
+  /* ── Dialogue */
+  --c-dialogue-gap: 7em;
+
+  /* ── Status */
+  --c-success: #4a4;
+  --c-error:   #ef4444;
+}
+
+[data-theme="light"] {
+  /* ── Backgrounds */
+  --c-bg:      #f8f8f8;
+  --c-panel:   #ffffff;
+  --c-header:  #f0f0f0;
+  --c-input:   #eeeeee;
+  --c-hover:   #ebebeb;
+  --c-active:  #ede9fe;
+  --c-tag:     #e8e4ff;
+  --c-card:    #f5f5f5;
+
+  /* ── Borders */
+  --c-border:  #e0e0e0;
+  --c-border2: #e8e8e8;
+  --c-border3: #dddddd;
+  --c-border4: #c4b5fd;
+
+  /* ── Text */
+  --c-text:    #1a1a1a;
+  --c-text2:   #333333;
+  --c-text3:   #555555;
+  --c-text4:   #777777;
+  --c-text5:   #888888;
+  --c-text6:   #999999;
+  --c-dim:     #aaaaaa;
+
+  /* ── Accents */
+  --c-accent:       #4f46e5;
+  --c-accent-hover: #4338ca;
+  --c-accent2:      #7c3aed;
+
+  /* ── Status */
+  --c-success: #166534;
+  --c-error:   #dc2626;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   BASE RESET
+═══════════════════════════════════════════════════════════════ */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+  background: var(--c-bg);
+  color: var(--c-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+textarea {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   THEME UTILITY CLASSES  (.t-*)
+   Use these in new/updated components instead of hardcoded Tailwind.
+═══════════════════════════════════════════════════════════════ */
+.t-bg      { background: var(--c-bg); }
+.t-panel   { background: var(--c-panel); }
+.t-header  { background: var(--c-header); }
+.t-input   { background: var(--c-input); }
+.t-card    { background: var(--c-card); }
+.t-active  { background: var(--c-active); }
+
+.t-border  { border-color: var(--c-border); }
+.t-border2 { border-color: var(--c-border2); }
+.t-border3 { border-color: var(--c-border3); }
+
+.t-text    { color: var(--c-text); }
+.t-text2   { color: var(--c-text2); }
+.t-text3   { color: var(--c-text3); }
+.t-text4   { color: var(--c-text4); }
+.t-text5   { color: var(--c-text5); }
+.t-text6   { color: var(--c-text6); }
+.t-dim     { color: var(--c-dim); }
+.t-accent  { color: var(--c-accent); }
+.t-accent2 { color: var(--c-accent2); }
+
+.t-input-field {
+  background: var(--c-input);
+  color: var(--c-text);
+  border: 1px solid var(--c-border3);
+  border-radius: 0.375rem;
+  outline: none;
+}
+.t-input-field:focus { border-color: var(--c-accent); }
+
+/* ═══════════════════════════════════════════════════════════════
+   SCROLLBAR
+═══════════════════════════════════════════════════════════════ */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #444; }
+[data-theme="light"] ::-webkit-scrollbar-thumb { background: #ccc; }
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: #aaa; }
+
+::selection { background: #3a3a6a; color: #fff; }
+[data-theme="light"] ::selection { background: #a78bfa; color: #fff; }
+
+/* ═══════════════════════════════════════════════════════════════
+   LIGHT MODE OVERRIDES FOR EXISTING TAILWIND ARBITRARY CLASSES
+   These allow existing components to inherit the light theme
+   without being rewritten.
+═══════════════════════════════════════════════════════════════ */
+
+/* --- Inputs / textareas --- */
+[data-theme="light"] input,
+[data-theme="light"] textarea,
+[data-theme="light"] select {
+  color: #1a1a1a !important;
+}
+[data-theme="light"] ::placeholder { color: #aaaaaa !important; }
+
+/* --- Backgrounds --- */
+[data-theme="light"] .bg-\[\#1a1a1a\]  { background-color: #f8f8f8 !important; }
+[data-theme="light"] .bg-\[\#171717\]  { background-color: #ffffff !important; }
+[data-theme="light"] .bg-\[\#111\]     { background-color: #f0f0f0 !important; }
+[data-theme="light"] .bg-\[\#111111\]  { background-color: #f0f0f0 !important; }
+[data-theme="light"] .bg-\[\#1c1c1c\]  { background-color: #f5f5f5 !important; }
+[data-theme="light"] .bg-\[\#1e1e1e\]  { background-color: #f3f3f3 !important; }
+[data-theme="light"] .bg-\[\#1e1e2e\]  { background-color: #ede9fe !important; }
+[data-theme="light"] .bg-\[\#242424\]  { background-color: #eeeeee !important; }
+[data-theme="light"] .bg-\[\#252525\]  { background-color: #ebebeb !important; }
+[data-theme="light"] .bg-\[\#2a2a2a\]  { background-color: #e8e8e8 !important; }
+[data-theme="light"] .bg-\[\#2a2a3a\]  { background-color: #e8e4ff !important; }
+[data-theme="light"] .bg-\[\#2a2a4a\]  { background-color: #ddd6fe !important; }
+[data-theme="light"] .bg-\[\#3a3a5a\]  { background-color: #c4b5fd !important; }
+[data-theme="light"] .bg-\[\#333\]     { background-color: #e0e0e0 !important; }
+
+/* --- Hover backgrounds --- */
+[data-theme="light"] .hover\:bg-\[\#242424\]:hover { background-color: #ebebeb !important; }
+[data-theme="light"] .hover\:bg-\[\#1c1c1c\]:hover { background-color: #f0f0f0 !important; }
+[data-theme="light"] .hover\:bg-\[\#2a2a2a\]:hover { background-color: #e8e8e8 !important; }
+[data-theme="light"] .hover\:bg-\[\#333\]:hover     { background-color: #e0e0e0 !important; }
+[data-theme="light"] .hover\:bg-\[\#3a3a5a\]:hover  { background-color: #c4b5fd !important; }
+
+/* --- Borders --- */
+[data-theme="light"] .border-\[\#252525\]  { border-color: #e0e0e0 !important; }
+[data-theme="light"] .border-\[\#222\]     { border-color: #e8e8e8 !important; }
+[data-theme="light"] .border-\[\#1e1e1e\]  { border-color: #eeeeee !important; }
+[data-theme="light"] .border-\[\#2a2a2a\]  { border-color: #e8e8e8 !important; }
+[data-theme="light"] .border-\[\#2a2a3a\]  { border-color: #c4b5fd !important; }
+[data-theme="light"] .border-\[\#333\]     { border-color: #dddddd !important; }
+[data-theme="light"] .border-\[\#3a3a3a\]  { border-color: #d0d0d0 !important; }
+[data-theme="light"] .border-\[\#3a3a4a\]  { border-color: #c4b5fd !important; }
+[data-theme="light"] .border-\[\#4a4a6a\]  { border-color: #a78bfa !important; }
+[data-theme="light"] .border-\[\#444\]     { border-color: #cccccc !important; }
+[data-theme="light"] .border-\[\#555\]     { border-color: #bbbbbb !important; }
+
+/* --- Text: light values → dark --- */
+[data-theme="light"] .text-\[\#f0f0f0\]   { color: #111111 !important; }
+[data-theme="light"] .text-\[\#e0e0e0\]   { color: #1a1a1a !important; }
+[data-theme="light"] .text-\[\#e0e0f0\]   { color: #1a1a1a !important; }
+[data-theme="light"] .text-\[\#e8e8e8\]   { color: #1a1a1a !important; }
+[data-theme="light"] .text-\[\#d8d8d8\]   { color: #222222 !important; }
+[data-theme="light"] .text-\[\#d4d4d4\]   { color: #2a2a2a !important; }
+[data-theme="light"] .text-\[\#ccc\]      { color: #333333 !important; }
+[data-theme="light"] .text-\[\#bbb\]      { color: #444444 !important; }
+[data-theme="light"] .text-\[\#aaa\]      { color: #555555 !important; }
+[data-theme="light"] .text-\[\#999\]      { color: #666666 !important; }
+[data-theme="light"] .text-\[\#888\]      { color: #555555 !important; }
+[data-theme="light"] .text-\[\#777\]      { color: #555555 !important; }
+[data-theme="light"] .text-\[\#666\]      { color: #666666 !important; }
+[data-theme="light"] .text-\[\#555\]      { color: #777777 !important; }
+[data-theme="light"] .text-\[\#4a4a4a\]   { color: #888888 !important; }
+[data-theme="light"] .text-\[\#444\]      { color: #888888 !important; }
+[data-theme="light"] .text-\[\#3a3a3a\]   { color: #999999 !important; }
+[data-theme="light"] .text-\[\#333\]      { color: #aaaaaa !important; }
+[data-theme="light"] .text-\[\#8080c0\]   { color: #6d28d9 !important; }
+[data-theme="light"] .text-\[\#7070c0\]   { color: #5b21b6 !important; }
+
+/* ═══════════════════════════════════════════════════════════════
+   DIALOGUE FORMAT (editor display)
+═══════════════════════════════════════════════════════════════ */
+.dialogue-row {
+  display: flex;
+  align-items: flex-start;
+  padding: 0.2em 0;
+}
+.dialogue-char {
+  min-width: var(--c-dialogue-gap);
+  flex-shrink: 0;
+  font-weight: bold;
+  cursor: text;
+  line-height: inherit;
+  padding-top: 2px;
+}
+.dialogue-text-area {
+  flex: 1;
+  background: transparent;
+  outline: none;
+  resize: none;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  border: none;
+}
+
+/* contentEditable placeholder */
+[contenteditable][data-placeholder]:empty::before {
+  content: attr(data-placeholder);
+  color: var(--c-text6);
+  pointer-events: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SINGLE contentEditable SCRIPT EDITOR SURFACE  (.ce-*)
+═══════════════════════════════════════════════════════════════ */
+
+/* Surface container */
+.ce-surface {
+  outline: none;
+  caret-color: var(--c-accent);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* All block rows */
+.ce-block {
+  display: block;
+  min-height: 1.4em;
+  position: relative;
+}
+
+/* Scene number — label shown via ::before */
+.ce-block[data-block-type="scene_number"] {
+  font-weight: bold;
+  margin-top: 1.5em;
+  margin-bottom: 0.25em;
+  color: var(--c-text);
+}
+.ce-block[data-block-type="scene_number"]::before {
+  content: attr(data-label) " ";
+  color: var(--c-accent2);
+  font-weight: bold;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* Scene number: show character tags to the right — editor-only, not printed */
+.ce-block[data-block-type="scene_number"][data-char-tags]::after {
+  content: " " attr(data-char-tags);
+  color: var(--c-text6);
+  font-size: 0.78em;
+  font-weight: normal;
+  margin-left: 1.2em;
+  user-select: none;
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+/* Action */
+.ce-block[data-block-type="action"] {
+  padding-left: 1.5rem;
+  color: var(--c-text2);
+}
+
+/* Dialogue row */
+.ce-block[data-block-type="dialogue"] {
+  display: flex;
+  align-items: flex-start;
+}
+.ce-char-badge {
+  min-width: var(--c-dialogue-gap, 7em);
+  font-weight: bold;
+  flex-shrink: 0;
+  cursor: pointer;
+  user-select: none;
+  color: var(--c-text);
+  padding-right: 0.5em;
+}
+.ce-char-badge:hover {
+  color: var(--c-accent);
+}
+.ce-speech {
+  flex: 1;
+  outline: none;
+  color: var(--c-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Parenthetical */
+.ce-block[data-block-type="parenthetical"] {
+  padding-left: var(--c-dialogue-gap, 7em);
+  font-style: italic;
+  color: var(--c-text4);
+}
+
+/* Transition */
+.ce-block[data-block-type="transition"] {
+  text-align: right;
+  text-transform: uppercase;
+  color: var(--c-text4);
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PAGE BREAK INDICATOR (preview)
+═══════════════════════════════════════════════════════════════ */
+.page-break-line {
+  position: relative;
+  border-top: 1px dashed #999;
+  margin: 2.5em 0 1.5em;
+}
+.page-break-line::after {
+  content: attr(data-label);
+  position: absolute;
+  top: -0.65em;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--c-bg);
+  color: var(--c-text5);
+  padding: 0 0.6em;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PRINT STYLES
+═══════════════════════════════════════════════════════════════ */
+@media print {
+  @page {
+    size: A4;
+    margin: 35mm 30mm 30mm 30mm;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+    font-family: 'Malgun Gothic', 'AppleGothic', sans-serif;
+    font-size: 12pt;
+    line-height: 1.8;
+    -webkit-print-color-adjust: exact;
+  }
+
+  #root { height: auto; overflow: visible; }
+  .no-print { display: none !important; }
+
+  /* Scene heading */
+  .p-scene { font-weight: bold; margin-top: 1.5em; margin-bottom: 0.3em; }
+
+  /* Action */
+  .p-action { margin: 0.2em 0 0.6em 0; }
+
+  /* Dialogue — left align with hanging indent */
+  .p-dialogue {
+    display: flex;
+    align-items: flex-start;
+    margin: 0.4em 0;
+  }
+  .p-char {
+    font-weight: bold;
+    min-width: 7em;
+    flex-shrink: 0;
+  }
+  .p-speech { flex: 1; }
+
+  /* Parenthetical */
+  .p-paren {
+    margin-left: 7em;
+    font-style: italic;
+    margin-bottom: 0.1em;
+  }
+
+  /* Transition */
+  .p-trans { text-align: right; margin: 0.8em 0; }
+
+  /* Page number footer — -n- at 15mm from bottom */
+  @page { @bottom-center { content: "- " counter(page) " -"; font-size: 10pt; } }
+}

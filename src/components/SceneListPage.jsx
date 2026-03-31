@@ -1,0 +1,391 @@
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { useApp } from '../store/AppContext';
+import { resolveSceneLabel, TIME_OF_DAY_OPTIONS } from '../utils/sceneResolver';
+import { now } from '../store/db';
+
+// ─── CharacterMultiSelect ─────────────────────────────────────────────────────
+function CharacterMultiSelect({ characterIds = [], projectChars, autoDetectedStr, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [dropPos, setDropPos] = useState(null);
+  const triggerRef = useRef(null);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (!containerRef.current?.contains(e.target) && !triggerRef.current?.contains(e.target)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const selectedChars = characterIds.map(id => projectChars.find(c => c.id === id)).filter(Boolean);
+  const selectedNames = selectedChars.map(c => c.givenName || c.name || '');
+  const autoNames = autoDetectedStr ? autoDetectedStr.split(', ').filter(Boolean) : [];
+  const hasMismatch = autoNames.length > 0 && (
+    autoNames.some(n => !selectedNames.includes(n)) || selectedNames.some(n => !autoNames.includes(n))
+  );
+
+  const toggle = (charId) => {
+    const next = characterIds.includes(charId)
+      ? characterIds.filter(id => id !== charId)
+      : [...characterIds, charId];
+    onChange(next);
+  };
+
+  const handleOpen = () => {
+    if (!open && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setDropPos({ top: rect.bottom + 2, left: rect.left });
+    }
+    setOpen(v => !v);
+  };
+
+  const displayText = selectedNames.length > 0 ? selectedNames.join(', ') : (autoDetectedStr || '—');
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        ref={triggerRef}
+        onMouseDown={e => { e.preventDefault(); handleOpen(); }}
+        className="text-xs text-left w-full"
+        style={{
+          background: 'none', border: 'none', cursor: 'pointer', padding: '0',
+          color: hasMismatch ? 'var(--c-accent2)' : 'var(--c-text4)',
+          maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          display: 'block',
+        }}
+        title={hasMismatch ? `대사 감지: ${autoDetectedStr}\n선택됨: ${selectedNames.join(', ')}` : displayText}
+      >
+        {hasMismatch && <span style={{ marginRight: '3px', color: 'var(--c-accent2)' }}>⚠</span>}
+        {displayText}
+      </button>
+      {open && dropPos && (
+        <div
+          ref={containerRef}
+          style={{
+            position: 'fixed',
+            top: dropPos.top,
+            left: dropPos.left,
+            zIndex: 200,
+            background: 'var(--c-tag)',
+            border: '1px solid var(--c-border4)',
+            borderRadius: '6px',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+            minWidth: '160px',
+            maxHeight: '220px',
+            overflowY: 'auto',
+          }}
+        >
+          {projectChars.length === 0 ? (
+            <div className="px-3 py-2 text-xs" style={{ color: 'var(--c-text6)' }}>
+              등록된 인물 없음
+            </div>
+          ) : projectChars.map(c => {
+            const name = c.givenName || c.name || '';
+            const checked = characterIds.includes(c.id);
+            return (
+              <div
+                key={c.id}
+                onMouseDown={e => { e.preventDefault(); toggle(c.id); }}
+                className="flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer"
+                style={{ color: 'var(--c-text2)' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-active)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+              >
+                <span style={{
+                  display: 'inline-block', width: '12px', height: '12px',
+                  border: `1.5px solid ${checked ? 'var(--c-accent)' : 'var(--c-border3)'}`,
+                  borderRadius: '3px',
+                  background: checked ? 'var(--c-accent)' : 'transparent',
+                  flexShrink: 0,
+                  position: 'relative',
+                }}>
+                  {checked && (
+                    <span style={{
+                      position: 'absolute', top: '-1px', left: '1px',
+                      color: '#fff', fontSize: '10px', lineHeight: 1,
+                    }}>✓</span>
+                  )}
+                </span>
+                {name}
+              </div>
+            );
+          })}
+          {autoDetectedStr && (
+            <div className="px-3 py-1.5 text-[10px]" style={{
+              color: 'var(--c-text6)', borderTop: '1px solid var(--c-border)',
+            }}>
+              대사 감지: {autoDetectedStr}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Single row ───────────────────────────────────────────────────────────────
+function SceneListRow({ scene, idx, autoCharacters, projectChars, onContentChange, onMetaChange, onCharsChange, onNavigate }) {
+  const [contentVal, setContentVal] = useState(scene.sceneListContent || '');
+
+  // Sync when scene.sceneListContent changes externally (undo/redo)
+  useEffect(() => {
+    setContentVal(scene.sceneListContent || '');
+  }, [scene.sceneListContent]);
+
+  const cellInput = (placeholder, value, onChange) => (
+    <input
+      placeholder={placeholder}
+      value={value || ''}
+      onChange={e => onChange(e.target.value)}
+      className="w-full rounded text-xs px-1.5 py-0.5 outline-none"
+      style={{
+        background: 'var(--c-input)',
+        color: 'var(--c-text)',
+        border: '1px solid transparent',
+        minWidth: '52px',
+      }}
+      onFocus={e => { e.target.style.borderColor = 'var(--c-accent)'; }}
+      onBlur={e => { e.target.style.borderColor = 'transparent'; }}
+    />
+  );
+
+  return (
+    <tr
+      style={{ borderBottom: '1px solid var(--c-border)' }}
+      onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-hover)'; }}
+      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+    >
+      {/* 씬번호 */}
+      <td className="px-3 py-1.5" style={{ whiteSpace: 'nowrap' }}>
+        <button
+          onClick={onNavigate}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: 'var(--c-accent)', fontWeight: 700, fontSize: '11px',
+          }}
+          title="대본 씬으로 이동"
+        >
+          {scene.label || `S#${idx + 1}.`}
+        </button>
+      </td>
+
+      {/* 장소 */}
+      <td className="px-2 py-1">
+        {cellInput('장소', scene.location, v => onMetaChange({ location: v }))}
+      </td>
+
+      {/* 세부장소 */}
+      <td className="px-2 py-1">
+        {cellInput('세부장소', scene.subLocation, v => onMetaChange({ subLocation: v }))}
+      </td>
+
+      {/* 시간대 */}
+      <td className="px-2 py-1">
+        <select
+          value={scene.timeOfDay || ''}
+          onChange={e => onMetaChange({ timeOfDay: e.target.value })}
+          className="rounded text-xs px-1 py-0.5 outline-none"
+          style={{
+            background: 'var(--c-input)',
+            color: 'var(--c-text)',
+            border: '1px solid transparent',
+          }}
+        >
+          <option value="">-</option>
+          {TIME_OF_DAY_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+      </td>
+
+      {/* 내용 (독립 입력 — 씬리스트 전용) */}
+      <td className="px-2 py-1">
+        <input
+          value={contentVal}
+          onChange={e => setContentVal(e.target.value)}
+          onBlur={() => onContentChange(contentVal)}
+          placeholder="내용 입력"
+          className="w-full rounded text-xs px-1.5 py-0.5 outline-none"
+          style={{
+            background: 'var(--c-input)',
+            color: 'var(--c-text)',
+            border: '1px solid transparent',
+          }}
+          onFocus={e => { e.target.style.borderColor = 'var(--c-accent)'; }}
+        />
+      </td>
+
+      {/* 등장인물 (multi-select from character data) */}
+      <td className="px-3 py-1.5">
+        <CharacterMultiSelect
+          characterIds={scene.characterIds || []}
+          projectChars={projectChars}
+          autoDetectedStr={autoCharacters}
+          onChange={onCharsChange}
+        />
+      </td>
+
+      {/* 비고(태그) */}
+      <td className="px-3 py-1.5">
+        <div className="flex flex-wrap gap-0.5">
+          {(scene.tags || []).map(t => (
+            <span key={t} className="text-[9px] px-1 rounded"
+              style={{ background: 'var(--c-tag)', color: 'var(--c-accent2)' }}>
+              #{t}
+            </span>
+          ))}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+// ─── SceneListPage ────────────────────────────────────────────────────────────
+export default function SceneListPage() {
+  const { state, dispatch } = useApp();
+  const { scenes, scriptBlocks, episodes, characters, activeProjectId, activeEpisodeId } = state;
+
+  const projectEpisodes = useMemo(() =>
+    episodes.filter(e => e.projectId === activeProjectId).sort((a, b) => a.number - b.number),
+    [episodes, activeProjectId]
+  );
+
+  const [selectedEpId, setSelectedEpId] = useState(activeEpisodeId || projectEpisodes[0]?.id || null);
+  const epId = selectedEpId || projectEpisodes[0]?.id;
+
+  // Fallback if selected episode was deleted
+  useEffect(() => {
+    if (!selectedEpId) return;
+    if (!episodes.some(e => e.id === selectedEpId)) {
+      setSelectedEpId(projectEpisodes[0]?.id || null);
+    }
+  }, [episodes]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const epScenes = useMemo(() =>
+    scenes.filter(s => s.episodeId === epId).sort((a, b) => a.sceneSeq - b.sceneSeq),
+    [scenes, epId]
+  );
+
+  const epBlocks = useMemo(() =>
+    scriptBlocks.filter(b => b.episodeId === epId),
+    [scriptBlocks, epId]
+  );
+
+  const projectChars = useMemo(() =>
+    characters.filter(c => c.projectId === activeProjectId),
+    [characters, activeProjectId]
+  );
+
+  // Compute dialogue characters per scene (auto-detected from blocks)
+  const sceneCharacters = useMemo(() => {
+    const result = {};
+    epScenes.forEach(scene => {
+      const snBlock = epBlocks.find(b => b.type === 'scene_number' && b.sceneId === scene.id);
+      if (!snBlock) { result[scene.id] = ''; return; }
+      const snIdx  = epBlocks.indexOf(snBlock);
+      const nextSn = epBlocks.find((b, i) => i > snIdx && b.type === 'scene_number');
+      const endIdx = nextSn ? epBlocks.indexOf(nextSn) : epBlocks.length;
+      const seg    = epBlocks.slice(snIdx + 1, endIdx);
+      const names  = new Set(
+        seg.filter(b => b.type === 'dialogue' && b.characterName).map(b => b.characterName)
+      );
+      result[scene.id] = [...names].join(', ');
+    });
+    return result;
+  }, [epScenes, epBlocks]);
+
+  const handleContentChange = (sceneId, content) => {
+    dispatch({ type: 'UPDATE_SCENE', payload: { id: sceneId, sceneListContent: content, updatedAt: now() }, _record: true });
+  };
+
+  const handleMetaChange = (sceneId, meta) => {
+    dispatch({ type: 'UPDATE_SCENE', payload: { id: sceneId, ...meta, updatedAt: now() } });
+  };
+
+  const handleCharsChange = (sceneId, characterIds) => {
+    dispatch({ type: 'UPDATE_SCENE', payload: { id: sceneId, characterIds, updatedAt: now() } });
+  };
+
+  const handleNavigate = (scene) => {
+    dispatch({ type: 'SET_ACTIVE_EPISODE', id: epId });
+    setTimeout(() => dispatch({ type: 'SET_SCROLL_TO_SCENE', id: scene.id }), 50);
+  };
+
+  if (!activeProjectId) return null;
+
+  const HEADERS = ['씬번호', '장소', '세부장소', '시간대', '내용', '등장인물', '비고'];
+
+  return (
+    <div className="h-full flex flex-col" style={{ background: 'var(--c-bg)' }}>
+      {/* Header */}
+      <div className="px-6 py-3 flex items-center gap-3 shrink-0" style={{ borderBottom: '1px solid var(--c-border2)' }}>
+        <span className="text-sm font-medium" style={{ color: 'var(--c-text2)' }}>씬리스트</span>
+        <select
+          value={epId || ''}
+          onChange={e => setSelectedEpId(e.target.value)}
+          className="text-xs rounded outline-none px-2 py-1"
+          style={{ background: 'var(--c-input)', color: 'var(--c-text2)', border: '1px solid var(--c-border3)' }}
+        >
+          {projectEpisodes.map((ep, i) => (
+            <option key={ep.id} value={ep.id}>{i + 1}회 {ep.title || ''}</option>
+          ))}
+        </select>
+        <span className="text-xs" style={{ color: 'var(--c-text6)' }}>{epScenes.length}개 씬</span>
+        <span className="text-[10px] ml-2" style={{ color: 'var(--c-text6)' }}>
+          씬번호 클릭 → 대본 이동 · 내용만 직접 입력 · 나머지는 대본과 자동 동기화
+        </span>
+      </div>
+
+      {/* Table */}
+      <div className="flex-1 overflow-auto">
+        {epScenes.length === 0 ? (
+          <div className="py-16 text-center text-sm" style={{ color: 'var(--c-text5)' }}>
+            씬이 없습니다. 대본 편집기에서 Ctrl+1로 씬번호를 추가하세요.
+          </div>
+        ) : (
+          <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%', minWidth: '580px' }}>
+            <colgroup>
+              <col style={{ width: '60px' }} />   {/* 씬번호 */}
+              <col style={{ width: '88px' }} />   {/* 장소 */}
+              <col style={{ width: '88px' }} />   {/* 세부장소 */}
+              <col style={{ width: '72px' }} />   {/* 시간대 */}
+              <col />                              {/* 내용 — takes remaining */}
+              <col style={{ width: '136px' }} />  {/* 등장인물 */}
+              <col style={{ width: '80px' }} />   {/* 비고 */}
+            </colgroup>
+            <thead>
+              <tr style={{ background: 'var(--c-panel)', borderBottom: '2px solid var(--c-border2)', position: 'sticky', top: 0, zIndex: 1 }}>
+                {HEADERS.map(h => (
+                  <th
+                    key={h}
+                    className="px-3 py-2 text-left font-semibold text-xs"
+                    style={{ color: 'var(--c-text4)', whiteSpace: 'nowrap' }}
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {epScenes.map((scene, idx) => (
+                <SceneListRow
+                  key={scene.id}
+                  scene={scene}
+                  idx={idx}
+                  autoCharacters={sceneCharacters[scene.id] || ''}
+                  projectChars={projectChars}
+                  onContentChange={v => handleContentChange(scene.id, v)}
+                  onMetaChange={meta => handleMetaChange(scene.id, meta)}
+                  onCharsChange={ids => handleCharsChange(scene.id, ids)}
+                  onNavigate={() => handleNavigate(scene)}
+                />
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
