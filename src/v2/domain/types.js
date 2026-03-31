@@ -218,6 +218,20 @@ export const DEFAULT_STYLE_PRESET = {
   },
 };
 
+/**
+ * @typedef {Object} SceneListRow
+ * @property {ID} id
+ * @property {ID} sceneId      — foreign key → Scene (canonical source for location/time/chars)
+ * @property {ID} episodeId
+ * @property {ID} projectId
+ * @property {string} content  — user-editable synopsis/memo for this scene
+ * @property {string} note     — user-editable note (e.g. staff note)
+ * @property {ISOString} updatedAt
+ *
+ * Derived columns (from Scene, NOT stored here):
+ *   sceneNumber, location, subLocation, timeOfDay, specialSituation, characterIds
+ */
+
 // ─── Print ───────────────────────────────────────────────────────────────────
 
 /**

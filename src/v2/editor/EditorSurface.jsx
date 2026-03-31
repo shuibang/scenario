@@ -48,6 +48,9 @@ function changeBlockTypeInDOM(el, newType, charName = '', charId = '') {
   } else if (newType === 'scene_number') {
     el.removeAttribute('data-v2-char-name');
     el.removeAttribute('data-v2-char-id');
+    // Preserve existing sceneId; generate new one only when converting from another type
+    if (!el.dataset.v2SceneId) el.dataset.v2SceneId = genId();
+    el.dataset.v2Label = ''; // will be set by doParse label-sync
     el.textContent = text;
   } else {
     el.textContent = text;
@@ -116,12 +119,30 @@ const EditorSurface = forwardRef(function EditorSurface({
     const el = surfaceRef.current;
     if (!el) return;
     const blocks = parseDOM(el, metaRef.current, epIdRef.current, projIdRef.current);
-    syncMeta(blocks);
+
+    // ── Post-parse repair + DOM label sync ──────────────────────────────────
+    // Must run BEFORE syncMeta so repaired sceneIds are stored in metaRef.
+    for (const b of blocks) {
+      if (b.type !== 'scene_number') continue;
+      const div = el.querySelector(`[data-v2-id="${b.id}"]`);
+      if (!div) continue;
+      // Repair: generate sceneId if missing (handles old saves and new conversions)
+      if (!b.sceneId) {
+        b.sceneId = genId();
+        div.dataset.v2SceneId = b.sceneId;
+      }
+      // Sync label in DOM for CSS ::before (content: attr(data-v2-label))
+      if (div.dataset.v2Label !== b.label) {
+        div.dataset.v2Label = b.label;
+      }
+    }
+
+    syncMeta(blocks); // after repair so repaired fields are in metaRef
+
     // Batch via rAF so multiple synchronous DOM changes don't cause multiple commits
     cancelAnimationFrame(commitRafRef.current);
     commitRafRef.current = requestAnimationFrame(() => {
       const sel = window.getSelection();
-      const focused = document.activeElement;
       const blockEl = sel?.rangeCount
         ? findBlockEl(sel.getRangeAt(0).startContainer, surfaceRef.current)
         : null;
@@ -201,9 +222,9 @@ const EditorSurface = forwardRef(function EditorSurface({
       const badge = div.querySelector('.v2b-badge');
       if (badge) badge.textContent = charName || '\u00a0';
       doParse();
-      // Move caret to speech
+      // Move caret to speech — refocus surface first (char picker had focus)
       const speech = div.querySelector('[data-v2-speech]');
-      if (speech) setTimeout(() => setCaret(div, 0), 20);
+      if (speech) setTimeout(() => { el.focus(); setCaret(div, 0); }, 20);
     },
 
     /** Scroll to a scene_number block by sceneId */

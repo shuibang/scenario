@@ -85,6 +85,7 @@ export function reducer(state = makeInitialState(), action) {
           synopsisDocs:   filterCol(entities.synopsisDocs),
           resources:      filterCol(entities.resources),
           workTimeLogs:   filterCol(entities.workTimeLogs),
+          sceneListRows:  filterCol(entities.sceneListRows || { ids: [], byId: {} }),
         },
         ui: state.ui.activeProjectId === pid
           ? { ...state.ui, activeProjectId: null, activeEpisodeId: null, activeDoc: 'cover' }
@@ -133,9 +134,20 @@ export function reducer(state = makeInitialState(), action) {
         treatmentItems: filterByEp(ent(state).treatmentItems),
       };
 
+      // Also remove sceneListRows for scenes in this episode
+      const epSceneIds = new Set(
+        entities.scenes.ids.filter(id => entities.scenes.byId[id]?.episodeId === eid)
+      );
+      const slrCol = entities.sceneListRows || { ids: [], byId: {} };
+      const filteredSlr = (() => {
+        const ids = slrCol.ids.filter(id => !epSceneIds.has(slrCol.byId[id]?.sceneId));
+        const byId = Object.fromEntries(ids.map(id => [id, slrCol.byId[id]]));
+        return { ids, byId };
+      })();
+
       return {
         ...state,
-        entities: renumberEpisodes(entities, ep.projectId),
+        entities: renumberEpisodes({ ...entities, sceneListRows: filteredSlr }, ep.projectId),
         ui: state.ui.activeEpisodeId === eid
           ? { ...state.ui, activeEpisodeId: null, activeDoc: 'cover' }
           : state.ui,
@@ -353,6 +365,35 @@ export function reducer(state = makeInitialState(), action) {
         entities: {
           ...ent(state),
           synopsisDocs: addToCollection(ent(state).synopsisDocs, entry),
+        },
+      };
+    }
+
+    // ── Scene List Rows (Phase 4) ─────────────────────────────────────────────
+    case A.SET_SCENE_LIST_ROW: {
+      // Upsert: find existing row for sceneId and replace, or add new.
+      const row     = action.payload;
+      const col     = ent(state).sceneListRows || { ids: [], byId: {} };
+      const existingId = col.ids.find(id => col.byId[id]?.sceneId === row.sceneId);
+      const entry = existingId
+        ? { ...col.byId[existingId], ...row, id: existingId, updatedAt: now() }
+        : { ...row, updatedAt: now() };
+      return {
+        ...state,
+        entities: {
+          ...ent(state),
+          sceneListRows: addToCollection(col, entry),
+        },
+      };
+    }
+
+    case A.DELETE_SCENE_LIST_ROW: {
+      const col = ent(state).sceneListRows || { ids: [], byId: {} };
+      return {
+        ...state,
+        entities: {
+          ...ent(state),
+          sceneListRows: removeFromCollection(col, action.id),
         },
       };
     }

@@ -19,6 +19,7 @@ import { sel } from '../store/selectors.js';
 import * as A from '../store/actions.js';
 import EditorSurface from './EditorSurface.jsx';
 import { resolveFont } from '../../print/FontRegistry.js';
+import { deriveSpeakersFromBlocks } from '../store/selectors.js';
 
 const CHAR_SUGGEST_STORAGE_KEY = 'v2_charSuggestEnabled';
 
@@ -81,9 +82,18 @@ export default function EditorCore({ scrollToSceneId, onScrollHandled }) {
 
     // Derive scenes from scene_number blocks
     const currentScenes = scenesRef.current;
-    const sceneBlocks = blocks.filter(b => b.type === 'scene_number');
+    const sceneBlocks   = blocks.filter(b => b.type === 'scene_number');
+
+    // Phase 4: derive speaker characterIds per scene from dialogue blocks
+    const speakerMap = deriveSpeakersFromBlocks(blocks); // Map<sceneId, Set<charId>>
+
     const updatedScenes = sceneBlocks.map((b, idx) => {
-      const existing = currentScenes.find(s => s.id === b.sceneId);
+      const existing    = currentScenes.find(s => s.id === b.sceneId);
+      // Merge manual characterIds with dialogue-derived speakers (dedup, no deleted chars)
+      const manual      = existing?.characterIds || [];
+      const speakers    = [...(speakerMap.get(b.sceneId) || new Set())];
+      const mergedIds   = [...new Set([...manual, ...speakers])];
+
       return {
         id:          b.sceneId || genId(),
         episodeId:   epId,
@@ -92,7 +102,7 @@ export default function EditorCore({ scrollToSceneId, onScrollHandled }) {
         label:       `S#${idx + 1}.`,
         status:      existing?.status      || 'draft',
         tags:        existing?.tags        || [],
-        characterIds: existing?.characterIds || [],
+        characterIds: mergedIds,           // ← canonical: manual ∪ dialogue speakers
         specialSituation: existing?.specialSituation || '',
         location:    existing?.location    || '',
         subLocation: existing?.subLocation || '',
@@ -310,6 +320,25 @@ export default function EditorCore({ scrollToSceneId, onScrollHandled }) {
               onClick={() => dispatch({ type: A.SET_SAVE_STATUS, payload: 'saved' })}>
               ⚠ 저장 실패
             </span>
+          )}
+          {import.meta.env.DEV && (
+            <button
+              title="편집기 자가진단 (dev only)"
+              onMouseDown={e => {
+                e.preventDefault();
+                import('./EditorSelfCheck.js').then(({ runEditorSelfCheck }) => {
+                  runEditorSelfCheck(surfaceRef, activeEpisodeId, activeProjectId).then(({ passed, results, passing, total }) => {
+                    const lines = results.map(r => `${r.pass ? '✓' : '✗'} ${r.name}${r.detail ? ': ' + r.detail : ''}`).join('\n');
+                    alert(`[Self-check] ${passed ? '✅ ALL PASSED' : '❌ FAILED'} (${passing}/${total})\n\n${lines}`);
+                  });
+                });
+              }}
+              style={{
+                fontSize: 9, padding: '1px 5px', borderRadius: 3,
+                border: '1px solid var(--c-border3)', background: 'transparent',
+                color: 'var(--c-text6)', cursor: 'pointer',
+              }}
+            >SELF CHECK</button>
           )}
         </span>
       </div>

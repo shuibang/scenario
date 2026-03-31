@@ -54,6 +54,7 @@ export function makeInitialState() {
       synopsisDocs:   emptyCollection(),
       resources:      emptyCollection(),
       workTimeLogs:   emptyCollection(),
+      sceneListRows:  emptyCollection(),  // Phase 4: SceneListRow, keyed by id, linked by sceneId
     },
 
     // ── Settings (persisted, single object) ─────────────────────────────

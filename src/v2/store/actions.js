@@ -37,6 +37,10 @@ export const DELETE_TREATMENT_ITEM    = 'v2/DELETE_TREATMENT_ITEM';
 export const REORDER_TREATMENT_ITEMS  = 'v2/REORDER_TREATMENT_ITEMS';
 export const IMPORT_TREATMENT         = 'v2/IMPORT_TREATMENT';  // atomic: scenes+blocks+items
 
+// ─── Scene List Rows ──────────────────────────────────────────────────────────
+export const SET_SCENE_LIST_ROW    = 'v2/SET_SCENE_LIST_ROW';    // upsert by sceneId
+export const DELETE_SCENE_LIST_ROW = 'v2/DELETE_SCENE_LIST_ROW';
+
 // ─── Documents ────────────────────────────────────────────────────────────
 export const SET_COVER         = 'v2/SET_COVER';
 export const SET_SYNOPSIS      = 'v2/SET_SYNOPSIS';

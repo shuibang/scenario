@@ -74,6 +74,7 @@ export function migrateV1toV2() {
       synopsisDocs:   arrayToCollection(v1.synopsisDocs),
       resources:      arrayToCollection(v1.resources),
       workTimeLogs:   arrayToCollection(v1.workTimeLogs),
+      sceneListRows:  emptyCollection(),  // Phase 4: new, no v1 equivalent
     },
     settings: {
       stylePreset: v1.stylePreset ?? DEFAULT_STYLE_PRESET,
@@ -144,8 +145,9 @@ export function createV2SeedData() {
         genre: '', theme: '', intent: '', story: '', characterSettings: '',
         sections: [],
       }]),
-      resources:    emptyCollection(),
-      workTimeLogs: emptyCollection(),
+      resources:     emptyCollection(),
+      workTimeLogs:  emptyCollection(),
+      sceneListRows: emptyCollection(),
     },
     settings: {
       stylePreset: DEFAULT_STYLE_PRESET,
