@@ -10,8 +10,8 @@
  */
 
 import {
-  Document, Packer, Paragraph, TextRun,
-  AlignmentType,
+  Document, Packer, Paragraph, TextRun, Tab,
+  AlignmentType, TabStopType,
   convertMillimetersToTwip,
   Footer, PageNumber,
   SectionType, LineRuleType, NumberFormat,
@@ -103,15 +103,30 @@ function sectionBreak() {
 // ─── Dialogue paragraph (character name + speech, tab-based) ──────────────────
 function dialoguePara(charName, speech, dp) {
   const gapTwips = dp.dialogueGapTwips;
-  // Use tab stop for character column alignment
+  // Single tab jumps to gapTwips where speech starts.
+  // Hanging indent: continuation lines align with speech start position.
   return new Paragraph({
     children: [
-      new TextRun({ text: charName, bold: true, font: { name: dp.fontFamily }, size: dp.fontSizeHalfPt }),
-      new TextRun({ text: '\t', font: { name: dp.fontFamily }, size: dp.fontSizeHalfPt }),
-      new TextRun({ text: speech, font: { name: dp.fontFamily }, size: dp.fontSizeHalfPt }),
+      new TextRun({ text: String(charName || ''), bold: true, font: { name: dp.fontFamily }, size: dp.fontSizeHalfPt }),
+      new TextRun({ children: [new Tab()], font: { name: dp.fontFamily }, size: dp.fontSizeHalfPt }),
+      new TextRun({ text: String(speech || ''), font: { name: dp.fontFamily }, size: dp.fontSizeHalfPt }),
     ],
-    tabStops: [{ type: 'left', position: gapTwips }],
+    tabStops: [
+      { type: TabStopType.LEFT, position: gapTwips },
+    ],
+    indent: { left: gapTwips, hanging: gapTwips },
     spacing: lineSpacing(dp),
+  });
+}
+
+// ─── Cover title paragraph (large, bold, centered) ───────────────────────────
+function coverTitlePara(text, dp) {
+  const titleSizeHalfPt = (dp.fontSize + 11) * 2;
+  return new Paragraph({
+    children: [new TextRun({ text, bold: true, font: { name: dp.fontFamily }, size: titleSizeHalfPt })],
+    alignment: AlignmentType.CENTER,
+    // Do NOT use EXACT line rule — it clips oversized text. Let Word auto-size the title line.
+    spacing: { before: 0, after: 240 },
   });
 }
 
@@ -152,7 +167,9 @@ function buildDocxSections(printModel, dp) {
     if (section.type === 'cover') {
       // Cover: center-aligned, no footer (no page numbers)
       paras.push(blankPara(dp), blankPara(dp), blankPara(dp));
-      paras.push(para(section.title, dp, { bold: true, center: true }));
+      paras.push(coverTitlePara(section.title, dp));
+      // Spacer between title and secondary fields (mirrors PDF 70% vs 28% positioning)
+      for (let i = 0; i < 8; i++) paras.push(blankPara(dp));
       section.fields.forEach(f => paras.push(para(`${f.label}: ${f.value}`, dp, { center: true })));
       docxSections.push({
         properties: {
@@ -200,11 +217,9 @@ function buildDocxSections(printModel, dp) {
       paras.push(para(epTitle, dp, { bold: true, center: true }));
       paras.push(blankPara(dp));
 
-      let prevType = null;
+      let prevBlock = null;
       for (const block of section.blocks) {
-        if (prevType !== null && prevType !== block.type) {
-          paras.push(blankPara(dp));
-        }
+        if (prevBlock !== null && prevBlock.type !== block.type) paras.push(blankPara(dp));
         switch (block.type) {
           case 'scene_number':
             paras.push(para(`${block.label} ${block.content}`.trim(), dp, { bold: true }));
@@ -227,7 +242,7 @@ function buildDocxSections(printModel, dp) {
           default:
             if (block.content) paras.push(para(block.content, dp));
         }
-        prevType = block.type;
+        prevBlock = block;
       }
     }
 

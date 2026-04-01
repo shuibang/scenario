@@ -157,11 +157,9 @@ export function tokenizeSection(section, metrics) {
     tokens.push(T('ep_title', epTitle, { bold: true, center: true }));
     tokens.push(B());
 
-    let prevType = null;
+    let prevBlock = null;
     for (const block of section.blocks) {
-      if (prevType !== null && prevType !== block.type) {
-        tokens.push(B());
-      }
+      if (prevBlock !== null && prevBlock.type !== block.type) tokens.push(B());
 
       switch (block.type) {
         case 'scene_number': {
@@ -191,6 +189,10 @@ export function tokenizeSection(section, metrics) {
           );
           break;
         }
+        case 'scene_ref': {
+          tokens.push(T('scene_ref', block.content || ''));
+          break;
+        }
         case 'transition': {
           tokens.push(T('transition', (block.content || '').toUpperCase(), { center: false }));
           break;
@@ -202,7 +204,7 @@ export function tokenizeSection(section, metrics) {
             );
           }
       }
-      prevType = block.type;
+      prevBlock = block;
     }
     return tokens;
   }

@@ -31,31 +31,47 @@ const M_BOT = 7087;  // 25 mm bottom
 const M_HF  = 4252;  // 15 mm header/footer
 
 // ─── Sequential ID counter (reset per document) ─────────────────────────────
-// HWPML requires all child elements (pPr, run, pEnd) to share the paragraph's id.
+// HWPML: hp:p and all its children (pPr, run, pEnd) must each have a unique id.
 let _pid = 0;
 function resetIds() { _pid = 0; }
 
 /**
  * Build one HWPX paragraph element.
- * text:    string | '' (empty = no run, just pEnd)
+ * text:    string | '' (empty paragraph)
  * cid:     charShape id reference (0=normal, 1=title, 2=heading)
- * parid:   paraShape id reference (0=normal, 1=center, 2=heading)
+ * parid:   paraShape id reference (0=normal, 1=center, 2=heading, 3=dialogue)
  * sid:     style id reference
  */
 function para(text, { cid = 0, parid = 0, sid = 0 } = {}) {
-  const id = _pid++;
+  const pId = _pid++;
   if (!text) {
-    return `  <hp:p id="${id}" listCnt="1" listID="0">
-    <hp:pPr id="${id}" paraPrIDRef="${parid}" styleIDRef="${sid}" pageBreak="false" columnBreak="false" merged="false"/>
-    <hp:pEnd id="${id}" charPrIDRef="${cid}"/>
-  </hp:p>`;
+    return `  <hp:p id="${pId}" paraPrIDRef="${parid}" styleIDRef="${sid}" pageBreak="0" columnBreak="0" merged="0"/>`;
   }
-  return `  <hp:p id="${id}" listCnt="2" listID="0">
-    <hp:pPr id="${id}" paraPrIDRef="${parid}" styleIDRef="${sid}" pageBreak="false" columnBreak="false" merged="false"/>
-    <hp:run id="${id}" charPrIDRef="${cid}">
+  return `  <hp:p id="${pId}" paraPrIDRef="${parid}" styleIDRef="${sid}" pageBreak="0" columnBreak="0" merged="0">
+    <hp:run charPrIDRef="${cid}">
       <hp:t xml:space="preserve">${esc(text)}</hp:t>
     </hp:run>
-    <hp:pEnd id="${id}" charPrIDRef="${cid}"/>
+  </hp:p>`;
+}
+
+/**
+ * Dialogue paragraph — ONE run, ONE hp:t: name + TWO tabs + speech.
+ * Matches real HWPX file structure exactly (verified from user's test file).
+ * paraPr 3: hc:left=0 (name flush left on first line), hc:intent=dialogueTabHwp (continuation lines
+ *   indent to speech start position). HWP interprets hc:left=first-line pos, hc:intent=continuation offset.
+ */
+function dialoguePara(charName, content) {
+  const pId = _pid++;
+  // Run 1 (bold): name + TWO tabs inside hp:t — tabs are children of hp:t (verified from real HWPX)
+  // Run 2 (normal): speech text
+  // paraPr 3: hc:left=0 (name flush left), hc:intent=dialogueTabHwp (continuation at speech position)
+  return `  <hp:p id="${pId}" paraPrIDRef="3" styleIDRef="3" pageBreak="0" columnBreak="0" merged="0">
+    <hp:run charPrIDRef="3">
+      <hp:t xml:space="preserve">${esc(charName || '')}<hp:tab leader="0" type="1"/><hp:tab leader="0" type="1"/></hp:t>
+    </hp:run>
+    <hp:run charPrIDRef="0">
+      <hp:t xml:space="preserve">${esc(content || '')}</hp:t>
+    </hp:run>
   </hp:p>`;
 }
 
@@ -64,24 +80,52 @@ function xmlMimetype() {
   return 'application/hwp+zip';
 }
 
-function xmlContainer() {
+function xmlManifest() {
+  // Real HWPX manifest.xml is an empty self-closing element (verified from Skeleton.hwpx)
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<container>
-  <rootfiles>
-    <rootfile full-path="Contents/content.hpf" media-type="application/hwp+zip"/>
-  </rootfiles>
-</container>`;
+<odf:manifest xmlns:odf="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0"/>`;
+}
+
+function xmlContainer() {
+  // Must use ocf: prefix and media-type="application/hwpml-package+xml" (verified from Skeleton.hwpx)
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<ocf:container xmlns:ocf="urn:oasis:names:tc:opendocument:xmlns:container"
+               xmlns:hpf="http://www.hancom.co.kr/schema/2011/hpf">
+  <ocf:rootfiles>
+    <ocf:rootfile full-path="Contents/content.hpf" media-type="application/hwpml-package+xml"/>
+  </ocf:rootfiles>
+</ocf:container>`;
+}
+
+function xmlVersion() {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<hv:HCFVersion xmlns:hv="http://www.hancom.co.kr/hwpml/2011/version"
+    tagetApplication="WORDPROCESSOR" major="5" minor="1" micro="0"
+    buildNumber="0" os="1" xmlVersion="1.31"
+    application="대본 작업실" appVersion="1.0.0.0"/>`;
+}
+
+function xmlSettings() {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<ha:HWPApplicationSetting xmlns:ha="http://www.hancom.co.kr/hwpml/2011/app"
+                          xmlns:config="urn:oasis:names:tc:opendocument:xmlns:config:1.0">
+  <ha:CaretPosition listIDRef="0" paraIDRef="0" pos="0"/>
+</ha:HWPApplicationSetting>`;
 }
 
 function xmlContentHpf(title) {
+  // hrefs are ZIP-root-relative (not relative to Contents/ folder) — verified from Skeleton.hwpx
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<opf:package xmlns:opf="http://www.idpf.org/2007/opf" version="1.2.0.0" uniqueIdentifier="HWPXId">
+<opf:package xmlns:opf="http://www.idpf.org/2007/opf/"
+             xmlns:dc="http://purl.org/dc/elements/1.1/"
+             version="1.2.0.0" uniqueIdentifier="HWPXId">
   <opf:metadata>
-    <dc:title xmlns:dc="http://purl.org/dc/elements/1.1/">${esc(title)}</dc:title>
+    <opf:title>${esc(title)}</opf:title>
   </opf:metadata>
   <opf:manifest>
-    <opf:item id="header"   href="header.xml"   media-type="application/xml"/>
-    <opf:item id="section0" href="section0.xml" media-type="application/xml"/>
+    <opf:item id="settings" href="settings.xml"          media-type="application/xml"/>
+    <opf:item id="header"   href="Contents/header.xml"   media-type="application/xml"/>
+    <opf:item id="section0" href="Contents/section0.xml" media-type="application/xml"/>
   </opf:manifest>
   <opf:spine>
     <opf:itemref idref="section0"/>
@@ -89,121 +133,198 @@ function xmlContentHpf(title) {
 </opf:package>`;
 }
 
-function xmlHeader(fontName, fontSizePt) {
+function xmlHeader(fontName, fontSizePt, dialogueTabHwp) {
   // HWPX height unit = 1/100 pt
   const normalH  = Math.round(fontSizePt * 100);
   const titleH   = Math.round(fontSizePt * 140);
   const headingH = Math.round(fontSizePt * 110);
+  const halfGap  = Math.round(dialogueTabHwp / 2);
 
-  const charShape = (id, height, bold) => `    <hh:charShape id="${id}" height="${height}" textColor="0" shadeColor="16777215"
-      useFontSpace="false" useKerning="false" shadowType="None"
-      shadowColor="8421504" shadowDX="30" shadowDY="-30"
-      bold="${bold}" italic="false" underline="false" strikeout="false"
-      outline="false" emboss="false" engrave="false"
-      superScript="false" subScript="false" smallCaps="false" allCaps="false" hiddenText="false">
-      <hh:fontRef lang="Hangul"   hangulFont="0"/>
-      <hh:fontRef lang="Latin"    latinFont="0"/>
-      <hh:fontRef lang="Hanja"    hanjaFont="0"/>
-      <hh:fontRef lang="Japanese" japaneseFont="0"/>
-      <hh:fontRef lang="Other"    otherFont="0"/>
-      <hh:fontRef lang="Symbol"   symbolFont="0"/>
-      <hh:fontRef lang="User"     userFont="0"/>
-      <hh:ratio kana="100" hangul="100" latin="100" hanja="100" other="100" symbol="100" user="100"/>
-      <hh:spacing kana="0" hangul="0" latin="0" hanja="0" other="0" symbol="0" user="0"/>
-      <hh:relSize kana="100" hangul="100" latin="100" hanja="100" other="100" symbol="100" user="100"/>
-      <hh:offset kana="0" hangul="0" latin="0" hanja="0" other="0" symbol="0" user="0"/>
-    </hh:charShape>`;
+  const fontLangs = ['HANGUL','LATIN','HANJA','JAPANESE','OTHER','SYMBOL','USER'];
+
+  // <hh:bold/> child element only — bold="1" attribute caused HWP to corrupt page orientation
+  const charPr = (id, height, bold) => `      <hh:charPr id="${id}" height="${height}" textColor="#000000"
+          useFontSpace="0" useKerning="0" symMark="NONE" borderFillIDRef="1">
+        <hh:fontRef hangul="0" latin="0" hanja="0" japanese="0" other="0" symbol="0" user="0"/>
+        <hh:ratio hangul="100" latin="100" hanja="100" japanese="100" other="100" symbol="100" user="100"/>
+        <hh:spacing hangul="0" latin="0" hanja="0" japanese="0" other="0" symbol="0" user="0"/>
+        <hh:relSz hangul="100" latin="100" hanja="100" japanese="100" other="100" symbol="100" user="100"/>
+        <hh:offset hangul="0" latin="0" hanja="0" japanese="0" other="0" symbol="0" user="0"/>${bold ? '\n        <hh:bold/>' : ''}
+      </hh:charPr>`;
+
+  // hc:intent (NOT hc:indent) is the correct HWPX element for first-line indent/outdent.
+  // Negative hc:intent = 내어쓰기 (hanging indent): first line starts before hc:left.
+  const paraPr = (id, align, prevSp, nextSp, tabRef, leftMargin = 0, firstLineIndent = 0) => `      <hh:paraPr id="${id}" tabPrIDRef="${tabRef}" condense="0"
+          fontLineHeight="0" snapToGrid="1" suppressLineNumbers="0" checked="0">
+        <hh:align horizontal="${align}" vertical="BASELINE"/>
+        <hh:heading type="NONE" idRef="0" level="0"/>
+        <hh:breakSetting breakLatinWord="KEEP_WORD" breakNonLatinWord="KEEP_WORD"
+            widowOrphan="0" keepWithNext="0" keepLines="0" pageBreakBefore="0" lineWrap="BREAK"/>
+        <hh:autoSpacing eAsianEng="0" eAsianNum="0"/>
+        <hh:margin>
+          <hc:intent value="${firstLineIndent}" unit="HWPUNIT"/>
+          <hc:left value="${leftMargin}" unit="HWPUNIT"/>
+          <hc:right value="0" unit="HWPUNIT"/>
+          <hc:prev value="${prevSp}" unit="HWPUNIT"/>
+          <hc:next value="${nextSp}" unit="HWPUNIT"/>
+        </hh:margin>
+        <hh:lineSpacing type="PERCENT" value="160" unit="HWPUNIT"/>
+        <hh:border borderFillIDRef="1" offsetLeft="0" offsetRight="0" offsetTop="0"
+                   offsetBottom="0" connect="0" ignoreMargin="0"/>
+      </hh:paraPr>`;
+
+  // borderFill id starts at 1 (matching real HWPX files); attribute formats match real files.
+  const borderFill = (id) => `      <hh:borderFill id="${id}" threeD="0" shadow="0" centerLine="NONE" breakCellSeparateLine="0">
+        <hh:slash type="NONE" Crooked="0" isCounter="0"/>
+        <hh:backSlash type="NONE" Crooked="0" isCounter="0"/>
+        <hh:leftBorder   type="NONE" width="0.1 mm" color="#000000"/>
+        <hh:rightBorder  type="NONE" width="0.1 mm" color="#000000"/>
+        <hh:topBorder    type="NONE" width="0.1 mm" color="#000000"/>
+        <hh:bottomBorder type="NONE" width="0.1 mm" color="#000000"/>
+        <hh:diagonal     type="NONE" width="0.1 mm" color="#000000"/>
+      </hh:borderFill>`;
 
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<hh:head xmlns:hh="http://www.hancom.co.kr/hwpml/2012/head" version="1.2.0.0" secCnt="1">
+<hh:head xmlns:hh="http://www.hancom.co.kr/hwpml/2011/head"
+         xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph"
+         xmlns:hc="http://www.hancom.co.kr/hwpml/2011/core"
+         version="1.5" secCnt="1">
   <hh:beginNum page="1" footnote="1" endnote="1" pic="1" tbl="1" equation="1"/>
-  <hh:idMappings>
-    <hh:binData count="0"/>
-    <hh:faceNameCount normal="1" eng="0" cn="0" jp="0" other="0" symbol="0" user="0"/>
-    <hh:borderFillCount count="1"/>
-    <hh:charShapeCount count="3"/>
-    <hh:tabDefCount count="0"/>
-    <hh:numberingCount count="0"/>
-    <hh:bulletCount count="0"/>
-    <hh:paraShapeCount count="3"/>
-    <hh:styleCount count="3"/>
-    <hh:memoShapeCount count="0"/>
-    <hh:trackChangeCount count="0"/>
-    <hh:trackChangeAuthorCount count="0"/>
-  </hh:idMappings>
-  <hh:mappingTable>
-    <hh:faceName id="0" name="${esc(fontName)}" fontType="TTF" baseFont="${esc(fontName)}">
-      <hh:typeInfo familyType="Roman" serifStyle="Serif" weight="Book" proportion="Modern"/>
-    </hh:faceName>
-    <hh:borderFill id="1" threeD="false" shadow="false" centerLine="false" breakCellSeparateLine="false">
-      <hh:slash type="None" crooked="false" isCounter="false"/>
-      <hh:backSlash type="None" crooked="false" isCounter="false"/>
-      <hh:leftBorder   type="None" width="0.1mm" color="0"/>
-      <hh:rightBorder  type="None" width="0.1mm" color="0"/>
-      <hh:topBorder    type="None" width="0.1mm" color="0"/>
-      <hh:bottomBorder type="None" width="0.1mm" color="0"/>
-      <hh:diagonal     type="None" width="0.1mm" color="0"/>
-      <hh:fillInfo><hh:noFill/></hh:fillInfo>
-    </hh:borderFill>
-${charShape(0, normalH,  'false')}
-${charShape(1, titleH,   'true')}
-${charShape(2, headingH, 'true')}
-    <hh:paraShape id="0" lineSpacingType="percent" lineSpacing="160"
-      paraSPBefore="0" paraSPAfter="0" indent="0" outdent="0"
-      leftMargin="0" rightMargin="0" align="Justify" borderFillIDRef="1"
-      noBreak="false" keepWithNext="false" widowOrphan="0"
-      fontLineHeight="false" snapToGrid="true" condense="0" tabStop="709"/>
-    <hh:paraShape id="1" lineSpacingType="percent" lineSpacing="160"
-      paraSPBefore="300" paraSPAfter="100" indent="0" outdent="0"
-      leftMargin="0" rightMargin="0" align="Center" borderFillIDRef="1"
-      noBreak="false" keepWithNext="false" widowOrphan="0"
-      fontLineHeight="false" snapToGrid="true" condense="0" tabStop="709"/>
-    <hh:paraShape id="2" lineSpacingType="percent" lineSpacing="160"
-      paraSPBefore="200" paraSPAfter="0" indent="0" outdent="0"
-      leftMargin="0" rightMargin="0" align="Justify" borderFillIDRef="1"
-      noBreak="false" keepWithNext="false" widowOrphan="0"
-      fontLineHeight="false" snapToGrid="true" condense="0" tabStop="709"/>
-    <hh:style id="0" type="Para" name="바탕글"  engName="Normal"
-      paraPrIDRef="0" charPrIDRef="0" nextStyleIDRef="0" langID="1042" lockForm="false"/>
-    <hh:style id="1" type="Para" name="제목"    engName="Title"
-      paraPrIDRef="1" charPrIDRef="1" nextStyleIDRef="0" langID="1042" lockForm="false"/>
-    <hh:style id="2" type="Para" name="소제목"  engName="Heading"
-      paraPrIDRef="2" charPrIDRef="2" nextStyleIDRef="0" langID="1042" lockForm="false"/>
-  </hh:mappingTable>
-  <hh:docSetting>
-    <hh:linkDocList/>
-    <hh:trackChangedSettings acceptAllChange="true"/>
-    <hh:masterPageList/>
-    <hh:forbiddenWordList/>
-    <hh:compatibleDocument targetProgram="HWP2014"/>
-    <hh:layoutCompatibility/>
-  </hh:docSetting>
-  <hh:forbidden/>
+  <hh:refList>
+    <hh:fontfaces itemCnt="7">
+${fontLangs.map(lang => `      <hh:fontface lang="${lang}" fontCnt="1">
+        <hh:font id="0" face="${esc(fontName)}" type="TTF" isEmbedded="0"/>
+      </hh:fontface>`).join('\n')}
+    </hh:fontfaces>
+    <hh:borderFills itemCnt="1">
+${borderFill(1)}
+    </hh:borderFills>
+    <hh:charProperties itemCnt="4">
+${charPr(0, normalH,  false)}
+${charPr(1, titleH,   true)}
+${charPr(2, headingH, true)}
+${charPr(3, normalH,  true)}
+    </hh:charProperties>
+    <hh:tabProperties itemCnt="1">
+      <hh:tabPr id="0" autoTabLeft="0" autoTabRight="0">
+        <hh:tabItem pos="${halfGap}" type="LEFT" leader="NONE" unit="HWPUNIT"/>
+        <hh:tabItem pos="${dialogueTabHwp}" type="LEFT" leader="NONE" unit="HWPUNIT"/>
+      </hh:tabPr>
+    </hh:tabProperties>
+    <hh:paraProperties itemCnt="7">
+${paraPr(0, 'JUSTIFY', 0,   0,   0)}
+${paraPr(1, 'CENTER',  300, 100, 0)}
+${paraPr(2, 'JUSTIFY', 200, 0,   0)}
+${paraPr(3, 'JUSTIFY', 0,   0,   0)}
+${paraPr(4, 'JUSTIFY', 0,   0,   0, 2268)}
+${paraPr(5, 'JUSTIFY', 0,   0,   0, dialogueTabHwp)}
+${paraPr(6, 'RIGHT',   0,   0,   0)}
+    </hh:paraProperties>
+    <hh:styles itemCnt="4">
+      <hh:style id="0" type="PARA" name="바탕글" engName="Normal"
+        paraPrIDRef="0" charPrIDRef="0" nextStyleIDRef="0" langID="1042" lockForm="0"/>
+      <hh:style id="1" type="PARA" name="제목"   engName="Title"
+        paraPrIDRef="1" charPrIDRef="1" nextStyleIDRef="0" langID="1042" lockForm="0"/>
+      <hh:style id="2" type="PARA" name="소제목" engName="Heading"
+        paraPrIDRef="2" charPrIDRef="2" nextStyleIDRef="0" langID="1042" lockForm="0"/>
+      <hh:style id="3" type="PARA" name="대사"   engName="Dialogue"
+        paraPrIDRef="3" charPrIDRef="3" nextStyleIDRef="3" langID="1042" lockForm="0"/>
+    </hh:styles>
+  </hh:refList>
+  <hh:compatibleDocument targetProgram="HWP2014"/>
+  <hh:layoutCompatibility/>
 </hh:head>`;
+}
+
+// ─── secPr control paragraph (must be first paragraph in every section) ──────
+// Contains page setup, column layout, and lineseg metadata.
+// Structure verified from Skeleton.hwpx: hp:secPr lives inside hp:run inside hp:p.
+function secPrPara() {
+  const pId = _pid++;
+  return `  <hp:p id="${pId}" paraPrIDRef="0" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">
+    <hp:run charPrIDRef="0">
+      <hp:secPr id="" textDirection="HORIZONTAL" spaceColumns="1134" tabStop="8000"
+                outlineShapeIDRef="1" memoShapeIDRef="0" textVerticalWidthHead="0" masterPageCnt="0">
+        <hp:grid lineGrid="0" charGrid="0" wonggojiFormat="0"/>
+        <hp:startNum pageStartsOn="BOTH" page="0" pic="0" tbl="0" equation="0"/>
+        <hp:visibility hideFirstHeader="0" hideFirstFooter="0" hideFirstMasterPage="0"
+                       border="SHOW_ALL" fill="SHOW_ALL" hideFirstPageNum="0"
+                       hideFirstEmptyLine="0" showLineNumber="0"/>
+        <hp:lineNumberShape restartType="0" countBy="0" distance="0" startNumber="0"/>
+        <hp:pagePr landscape="WIDELY" width="${A4_W}" height="${A4_H}" gutterType="LEFT_ONLY">
+          <hp:margin header="${M_HF}" footer="${M_HF}" gutter="0"
+                     left="${M_LR}" right="${M_LR}" top="${M_TOP}" bottom="${M_BOT}"/>
+        </hp:pagePr>
+        <hp:footNotePr>
+          <hp:autoNumFormat type="DIGIT" userChar="" prefixChar="" suffixChar=")" supscript="0"/>
+          <hp:noteLine length="-1" type="SOLID" width="0.12 mm" color="#000000"/>
+          <hp:noteSpacing betweenNotes="283" belowLine="567" aboveLine="850"/>
+          <hp:numbering type="CONTINUOUS" newNum="1"/>
+          <hp:placement place="EACH_COLUMN" beneathText="0"/>
+        </hp:footNotePr>
+        <hp:endNotePr>
+          <hp:autoNumFormat type="DIGIT" userChar="" prefixChar="" suffixChar=")" supscript="0"/>
+          <hp:noteLine length="14692344" type="SOLID" width="0.12 mm" color="#000000"/>
+          <hp:noteSpacing betweenNotes="0" belowLine="567" aboveLine="850"/>
+          <hp:numbering type="CONTINUOUS" newNum="1"/>
+          <hp:placement place="END_OF_DOCUMENT" beneathText="0"/>
+        </hp:endNotePr>
+        <hp:pageBorderFill type="BOTH" borderFillIDRef="0" textBorder="PAPER" headerInside="0" footerInside="0" fillArea="PAPER">
+          <hp:offset left="0" right="0" top="0" bottom="0"/>
+        </hp:pageBorderFill>
+        <hp:pageBorderFill type="EVEN" borderFillIDRef="0" textBorder="PAPER" headerInside="0" footerInside="0" fillArea="PAPER">
+          <hp:offset left="0" right="0" top="0" bottom="0"/>
+        </hp:pageBorderFill>
+        <hp:pageBorderFill type="ODD" borderFillIDRef="0" textBorder="PAPER" headerInside="0" footerInside="0" fillArea="PAPER">
+          <hp:offset left="0" right="0" top="0" bottom="0"/>
+        </hp:pageBorderFill>
+      </hp:secPr>
+      <hp:ctrl>
+        <hp:colPr id="" type="NEWSPAPER" layout="LEFT" colCount="1" sameSz="1" sameGap="0"/>
+      </hp:ctrl>
+    </hp:run>
+    <hp:run charPrIDRef="0"><hp:t/></hp:run>
+    <hp:linesegarray>
+      <hp:lineseg textpos="0" vertpos="0" vertsize="1100" textheight="1100" baseline="935"
+                  spacing="660" horzpos="0" horzsize="42520" flags="393216"/>
+    </hp:linesegarray>
+  </hp:p>`;
 }
 
 // ─── Section (body) XML ──────────────────────────────────────────────────────
 function xmlSection(printModel) {
   resetIds();
 
-  const paras  = [];
-  const empty  = ()     => paras.push(para(''));
-  const title  = (t)    => paras.push(para(t, { cid: 1, parid: 1, sid: 1 }));
-  const head   = (t)    => paras.push(para(t, { cid: 2, parid: 2, sid: 2 }));
-  const normal = (t)    => paras.push(para(t));
+  const paras      = [];
+  const empty      = ()       => paras.push(para(''));
+  const pageBreak  = ()       => { const pId = _pid++; paras.push(`  <hp:p id="${pId}" paraPrIDRef="0" styleIDRef="0" pageBreak="1" columnBreak="0" merged="0"/>`); };
+  const title      = (t)      => paras.push(para(t, { cid: 1, parid: 1, sid: 1 }));
+  const head       = (t)      => paras.push(para(t, { cid: 2, parid: 2, sid: 2 }));
+  const normal     = (t)      => paras.push(para(t));
+  const action     = (t)      => paras.push(para(t, { cid: 0, parid: 4 }));
+  const paren      = (t)      => paras.push(para(`(${t})`, { cid: 0, parid: 5 }));
+  const transition = (t)      => paras.push(para(t, { cid: 0, parid: 6 }));
+  const dialogue   = (n, c)   => paras.push(dialoguePara(n, c));
 
   const roleLabel = { lead: '주인공', support: '조연', extra: '단역' };
 
+  let firstSection = true;
   for (const sec of printModel.sections) {
+    if (!firstSection) pageBreak();
+    firstSection = false;
+
     switch (sec.type) {
       case 'cover': {
-        empty(); empty();
+        const subtitleField   = sec.fields.find(f => f.label === '부제목' || f.id === 'subtitle');
+        const secondaryFields = sec.fields.filter(f => f !== subtitleField);
+        empty(); empty(); empty();
         title(sec.title || '제목 없음');
-        empty();
-        for (const f of sec.fields) {
-          normal(`${f.label}: ${f.value}`);
+        if (subtitleField) paras.push(para(subtitleField.value, { cid: 0, parid: 1 }));
+        for (let i = 0; i < 8; i++) empty();
+        for (const f of secondaryFields) {
+          paras.push(para(`${f.label}: ${f.value}`, { cid: 0, parid: 1 }));
         }
-        empty(); empty();
+        empty();
         break;
       }
       case 'synopsis': {
@@ -232,27 +353,30 @@ function xmlSection(printModel) {
         empty();
         head(`${sec.episodeNumber}회${sec.episodeTitle ? ' ' + sec.episodeTitle : ''}`);
         empty();
+        let prevBlock = null;
         for (const block of sec.blocks) {
+          // Add blank line only on type changes (same-type blocks flow without gaps)
+          if (prevBlock !== null && prevBlock.type !== block.type) empty();
           switch (block.type) {
             case 'scene_number':
-              empty();
-              normal(block.label || block.content || '');
+              head(`${block.label || ''} ${block.content || ''}`.trim());
               break;
             case 'action':
-              if (block.content) normal(block.content);
+              if (block.content) block.content.split('\n').forEach(l => action(l));
               break;
             case 'dialogue':
-              normal(`${block.charName ? block.charName + '   ' : ''}${block.content || ''}`);
+              dialogue(block.charName, block.content);
               break;
             case 'parenthetical':
-              if (block.content) normal(`(${block.content})`);
+              if (block.content) paren(block.content);
               break;
             case 'transition':
-              if (block.content) normal(block.content);
+              if (block.content) transition(block.content);
               break;
             default:
               if (block.content) normal(block.content);
           }
+          prevBlock = block;
         }
         empty();
         break;
@@ -274,17 +398,23 @@ function xmlSection(printModel) {
 
   if (paras.length === 0) empty();
 
+  // All standard HWPX namespaces on root element + secPr first paragraph (verified from Skeleton.hwpx)
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<hs:sec xmlns:hs="http://www.hancom.co.kr/hwpml/2012/section"
-        xmlns:hp="http://www.hancom.co.kr/hwpml/2012/paragraph">
-  <hs:secPr>
-    <hs:pagePr orientation="Portrait" width="${A4_W}" height="${A4_H}" gutterType="Left">
-      <hs:margin header="${M_HF}" footer="${M_HF}" gutter="0"
-                 left="${M_LR}" right="${M_LR}" top="${M_TOP}" bottom="${M_BOT}"/>
-    </hs:pagePr>
-    <hs:footerIDRef foot="0" odd="0" even="0"/>
-    <hs:headerIDRef head="0" odd="0" even="0"/>
-  </hs:secPr>
+<hs:sec xmlns:hs="http://www.hancom.co.kr/hwpml/2011/section"
+        xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph"
+        xmlns:hc="http://www.hancom.co.kr/hwpml/2011/core"
+        xmlns:ha="http://www.hancom.co.kr/hwpml/2011/app"
+        xmlns:hh="http://www.hancom.co.kr/hwpml/2011/head"
+        xmlns:hhs="http://www.hancom.co.kr/hwpml/2011/headersection"
+        xmlns:hm="http://www.hancom.co.kr/hwpml/2011/masterpage"
+        xmlns:hpf="http://www.hancom.co.kr/schema/2011/hpf"
+        xmlns:opf="http://www.idpf.org/2007/opf/"
+        xmlns:dc="http://purl.org/dc/elements/1.1/"
+        xmlns:config="urn:oasis:names:tc:opendocument:xmlns:config:1.0"
+        xmlns:ooxmlchart="urn:schemas-microsoft-com:office:office"
+        xmlns:hwpunitchar="http://www.hancom.co.kr/hwpml/2016/HwpUnitChar"
+        xmlns:epub="http://www.idpf.org/2007/ops">
+${secPrPara()}
 ${paras.join('\n')}
 </hs:sec>`;
 }
@@ -298,6 +428,9 @@ export async function buildHwpx(appState, selections) {
   const preset    = appState.stylePreset || {};
   const fontName  = preset.fontFamily || '함초롱바탕';
   const fontSize  = preset.fontSize   || 11;
+  // dialogueGap: em → pt → HWP units (1pt = 100 HWP units)
+  const dialogueEm     = parseFloat(preset.dialogueGap || '7');
+  const dialogueTabHwp = Math.round(dialogueEm * fontSize * 100);
 
   const printModel   = buildPrintModel(appState, selections, preset);
   const { projectTitle } = printModel;
@@ -306,10 +439,13 @@ export async function buildHwpx(appState, selections) {
 
   // mimetype must be first and uncompressed
   zip.file('mimetype', xmlMimetype(), { compression: 'STORE' });
-  zip.file('META-INF/container.xml', xmlContainer());
-  zip.file('Contents/content.hpf',   xmlContentHpf(projectTitle));
-  zip.file('Contents/header.xml',    xmlHeader(fontName, fontSize));
-  zip.file('Contents/section0.xml',  xmlSection(printModel));
+  zip.file('version.xml',             xmlVersion());
+  zip.file('settings.xml',            xmlSettings());
+  zip.file('META-INF/manifest.xml',   xmlManifest());
+  zip.file('META-INF/container.xml',  xmlContainer());
+  zip.file('Contents/content.hpf',    xmlContentHpf(projectTitle));
+  zip.file('Contents/header.xml',     xmlHeader(fontName, fontSize, dialogueTabHwp));
+  zip.file('Contents/section0.xml',   xmlSection(printModel));
 
   return zip.generateAsync({ type: 'blob', mimeType: 'application/hwp+zip' });
 }
