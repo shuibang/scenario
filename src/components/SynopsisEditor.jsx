@@ -214,7 +214,6 @@ export default function SynopsisEditor() {
       <div
         className="flex items-center gap-2 shrink-0"
         style={{ padding: '10px', borderBottom: '1px solid var(--c-border2)' }}
-        style={{ borderBottom: '1px solid var(--c-border2)' }}
       >
         <span className="text-sm font-medium" style={{ color: 'var(--c-text2)' }}>작품 시놉시스</span>
         <span className="ml-auto text-xs flex items-center gap-2" style={{ color: 'var(--c-text6)' }}>
