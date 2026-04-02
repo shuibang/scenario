@@ -1,0 +1,88 @@
+name: Daily Error Report
+
+on:
+  schedule:
+    # 매일 오전 9시 KST (= 00:00 UTC)
+    - cron: '0 0 * * *'
+  workflow_dispatch: # 수동 실행 가능
+
+jobs:
+  send-report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send daily error report
+        uses: actions/github-script@v7
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          REPORT_EMAIL: ${{ secrets.REPORT_EMAIL }}
+        with:
+          script: |
+            const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+            // Supabase에서 최근 24시간 오류 조회
+            const res = await fetch(
+              `${process.env.SUPABASE_URL}/rest/v1/error_reports?created_at=gte.${since}&order=created_at.desc`,
+              {
+                headers: {
+                  apikey: process.env.SUPABASE_SERVICE_KEY,
+                  Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
+                },
+              }
+            );
+            const reports = await res.json();
+
+            if (!Array.isArray(reports) || reports.length === 0) {
+              console.log('오류 제출 없음 — 이메일 전송 생략');
+              return;
+            }
+
+            const typeLabel = { bug: '🐞 버그', ui: '🎨 화면 오류', feature: '💡 기능 제안', other: '📝 기타' };
+
+            const rows = reports.map(r => `
+              <tr style="border-bottom:1px solid #eee">
+                <td style="padding:8px 12px">${typeLabel[r.type] ?? r.type}</td>
+                <td style="padding:8px 12px">${r.page || '-'}</td>
+                <td style="padding:8px 12px">${r.description}</td>
+                <td style="padding:8px 12px;color:#888;font-size:12px">${new Date(r.created_at).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}</td>
+              </tr>
+            `).join('');
+
+            const html = `
+              <h2 style="font-family:sans-serif">대본 작업실 — 오늘의 오류 리포트</h2>
+              <p style="font-family:sans-serif;color:#555">지난 24시간 동안 <strong>${reports.length}건</strong>의 제출이 있었습니다.</p>
+              <table style="border-collapse:collapse;font-family:sans-serif;font-size:14px;width:100%">
+                <thead>
+                  <tr style="background:#f5f5f5">
+                    <th style="padding:8px 12px;text-align:left">유형</th>
+                    <th style="padding:8px 12px;text-align:left">페이지</th>
+                    <th style="padding:8px 12px;text-align:left">내용</th>
+                    <th style="padding:8px 12px;text-align:left">시간</th>
+                  </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+              </table>
+            `;
+
+            // Resend로 이메일 전송
+            const emailRes = await fetch('https://api.resend.com/emails', {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                from: 'onboarding@resend.dev',
+                to: process.env.REPORT_EMAIL,
+                subject: `[대본 작업실] 오류 리포트 ${reports.length}건 — ${new Date().toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' })}`,
+                html,
+              }),
+            });
+
+            const emailResult = await emailRes.json();
+            if (emailRes.ok) {
+              console.log('이메일 전송 완료:', emailResult.id);
+            } else {
+              core.setFailed(`이메일 전송 실패: ${JSON.stringify(emailResult)}`);
+            }
