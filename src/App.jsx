@@ -320,9 +320,8 @@ function LoginModal({ onClose, onLogin }) {
             <div ref={googleBtnRef} />
           </div>
         ) : (
-          <div className="text-xs text-center py-2 rounded" style={{ color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a' }}>
-            VITE_GOOGLE_CLIENT_ID 환경변수가 설정되지 않았습니다.<br />
-            <code className="text-[10px]">.env</code> 파일에 추가하세요.
+          <div className="text-xs text-center py-2" style={{ color: 'var(--c-text5)' }}>
+            로그인 기능을 준비 중입니다.
           </div>
         )}
         {error && <div className="text-xs text-center" style={{ color: 'var(--c-error, #ef4444)' }}>{error}</div>}
