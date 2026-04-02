@@ -8,6 +8,7 @@ import {
   getFontByCssFamily,
 } from './print/FontRegistry';
 import { getItem, setItem, clearDramaStorage, isPublicPcMode } from './store/db';
+import { setAccessToken, clearAccessToken, loadFromDrive } from './store/googleDrive';
 import LeftPanel from './components/LeftPanel';
 import RightPanel from './components/RightPanel';
 import ScriptEditor from './components/ScriptEditor';
@@ -23,6 +24,8 @@ import BiographyPage from './components/BiographyPage';
 import RelationshipsPage from './components/RelationshipsPage';
 import MyPage from './components/MyPage';
 import OnboardingTour from './components/OnboardingTour';
+import SharedReviewView from './components/SharedReviewView';
+import AdBanner from './components/AdBanner';
 
 // ─── Panel width persistence ───────────────────────────────────────────────────
 const PANEL_WIDTHS_KEY = 'panelWidths';
@@ -144,9 +147,8 @@ function applyInlineFormat(tag) {
 }
 
 // ─── Share helper ─────────────────────────────────────────────────────────────
-function buildShareURL(state) {
-  const { projects, episodes, characters, scenes, scriptBlocks, coverDocs, synopsisDocs, activeProjectId } = state;
-  // Only share data for the active project
+export function buildReviewURL(state, selections) {
+  const { projects, episodes, characters, scenes, scriptBlocks, coverDocs, synopsisDocs, activeProjectId, stylePreset } = state;
   const payload = {
     projects:     projects.filter(p => p.id === activeProjectId),
     episodes:     episodes.filter(e => e.projectId === activeProjectId),
@@ -155,9 +157,12 @@ function buildShareURL(state) {
     scriptBlocks: scriptBlocks.filter(b => b.projectId === activeProjectId),
     coverDocs:    coverDocs.filter(d => d.projectId === activeProjectId),
     synopsisDocs: synopsisDocs.filter(d => d.projectId === activeProjectId),
+    activeProjectId,
+    stylePreset:  stylePreset || {},
+    selections,
   };
   const encoded = encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(payload)))));
-  return `${window.location.origin}${window.location.pathname}#share=${encoded}`;
+  return `${window.location.origin}${window.location.pathname}#review=${encoded}`;
 }
 
 // ─── Realtime clock ───────────────────────────────────────────────────────────
@@ -282,7 +287,9 @@ function LoginModal({ onClose, onLogin }) {
       callback: (response) => {
         const payload = decodeJwt(response.credential);
         if (payload) {
-          onLogin?.({ name: payload.name, email: payload.email, picture: payload.picture });
+          const userData = { name: payload.name, email: payload.email, picture: payload.picture };
+          localStorage.setItem('drama_auth_user', JSON.stringify(userData));
+          onLogin?.(userData);
           onClose();
         } else {
           setError('로그인 실패: 토큰 파싱 오류');
@@ -334,32 +341,77 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave }) {
   const { saveStatus, saveErrorMsg, activeProjectId, stylePreset, undoStack, redoStack } = state;
   const canUndo = undoStack?.length > 0;
   const canRedo = redoStack?.length > 0;
-  const [shareMsg, setShareMsg]          = useState('');
   const [fontAvailability, setFontAvail] = useState(null);
   const [loginOpen, setLoginOpen]        = useState(false);
-  const [authUser, setAuthUser]          = useState(null);
+  const [authUser, setAuthUser]          = useState(() => {
+    try {
+      const saved = localStorage.getItem('drama_auth_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
+  const [driveStatus, setDriveStatus]    = useState('none'); // 'none'|'syncing'|'synced'|'error'
+  const tokenClientRef  = useRef(null);
+  const driveHandlerRef = useRef(null);
+
+  // Drive 토큰 콜백 (항상 최신 state 참조를 위해 ref 사용)
+  driveHandlerRef.current = async (tokenResponse) => {
+    if (tokenResponse.error) {
+      if (tokenResponse.error !== 'interaction_required' &&
+          tokenResponse.error !== 'access_denied') {
+        setDriveStatus('error');
+      }
+      return;
+    }
+    setAccessToken(tokenResponse.access_token, tokenResponse.expires_in);
+    setDriveStatus('syncing');
+    try {
+      const driveData = await loadFromDrive();
+      if (driveData?.savedAt) {
+        const driveSavedAt = new Date(driveData.savedAt).getTime();
+        const localSavedAt = new Date(localStorage.getItem('drama_saved_at') || 0).getTime();
+        if (driveSavedAt > localSavedAt) {
+          dispatch({ type: 'LOAD_FROM_DRIVE', payload: driveData });
+        }
+      }
+      setDriveStatus('synced');
+    } catch (e) {
+      console.warn('[Drive] 불러오기 실패:', e);
+      setDriveStatus('error');
+    }
+  };
+
+  // GIS 로드 후 Drive 토큰 클라이언트 초기화
+  useEffect(() => {
+    if (!GOOGLE_CLIENT_ID) return;
+    const tryInit = () => {
+      if (!window.google?.accounts?.oauth2) {
+        setTimeout(tryInit, 800);
+        return;
+      }
+      tokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
+        client_id: GOOGLE_CLIENT_ID,
+        scope: 'https://www.googleapis.com/auth/drive.appdata',
+        callback: (tr) => driveHandlerRef.current(tr),
+      });
+      // 기존 로그인 유저 → 자동 silent 재인증 시도
+      if (localStorage.getItem('drama_auth_user')) {
+        tokenClientRef.current.requestAccessToken({ prompt: '' });
+      }
+    };
+    tryInit();
+  }, []);
+
+  // 새 로그인 시 Drive 인증 요청
+  useEffect(() => {
+    if (authUser && tokenClientRef.current && driveStatus === 'none') {
+      tokenClientRef.current.requestAccessToken({ prompt: '' });
+    }
+  }, [authUser]);
 
   useEffect(() => {
     checkFontsAvailability().then(setFontAvail);
   }, []);
 
-  const handleShare = async () => {
-    if (!activeProjectId) return;
-    const url = buildShareURL(state);
-    try {
-      await navigator.clipboard.writeText(url);
-      setShareMsg('링크 복사됨');
-    } catch {
-      const inp = document.createElement('input');
-      inp.value = url;
-      document.body.appendChild(inp);
-      inp.select();
-      document.execCommand('copy');
-      document.body.removeChild(inp);
-      setShareMsg('링크 복사됨');
-    }
-    setTimeout(() => setShareMsg(''), 2500);
-  };
 
   const handleFontSize   = (e) => dispatch({ type: 'SET_STYLE_PRESET', payload: { fontSize: Number(e.target.value) } });
   const handleFontFamily = (e) => dispatch({ type: 'SET_STYLE_PRESET', payload: { fontFamily: e.target.value } });
@@ -399,8 +451,29 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave }) {
           <div className="flex items-center gap-1.5 shrink-0">
             {authUser.picture && <img src={authUser.picture} alt="" className="w-5 h-5 rounded-full" />}
             <span className="text-xs" style={{ color: 'var(--c-text3)' }}>{authUser.name}</span>
+            {driveStatus === 'syncing' && (
+              <span className="text-[10px]" style={{ color: 'var(--c-text5)' }}>☁ 동기화 중…</span>
+            )}
+            {driveStatus === 'synced' && (
+              <span className="text-[10px]" style={{ color: '#4ade80' }}>☁ 동기화됨</span>
+            )}
+            {driveStatus === 'error' && (
+              <span
+                className="text-[10px] cursor-pointer"
+                style={{ color: '#f87171' }}
+                title="Drive 연동 실패. 클릭해서 재시도"
+                onClick={() => {
+                  setDriveStatus('none');
+                  tokenClientRef.current?.requestAccessToken({ prompt: '' });
+                }}
+              >☁ 연동 실패 (재시도)</span>
+            )}
             <button onClick={() => {
                 if (isPublicPcMode()) clearDramaStorage();
+                localStorage.removeItem('drama_auth_user');
+                window.google?.accounts.id.disableAutoSelect();
+                clearAccessToken();
+                setDriveStatus('none');
                 setAuthUser(null);
               }}
               className="text-[10px] px-1.5 py-0.5 rounded"
@@ -430,8 +503,6 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave }) {
           마이페이지
         </button>
 
-        <Breadcrumb />
-
         <div className="ml-auto flex items-center gap-3 shrink-0">
           <RealtimeClock />
           {activeProjectId && <WorkTimer key={activeProjectId} projectId={activeProjectId} documentId={state.activeEpisodeId || state.activeDoc} />}
@@ -448,7 +519,6 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave }) {
           title={saveStatus === 'error' && saveErrorMsg ? saveErrorMsg : undefined}
           style={saveStatus === 'error' ? { color: '#c00', borderColor: '#f99' } : undefined}
         />
-        <MenuButton label={shareMsg || '공유'} onClick={handleShare} disabled={!activeProjectId} fixedWidth="4rem" />
         <MenuButton label="출력 미리보기" onClick={onPrintPreview} disabled={!activeProjectId} accent />
 
         {sep}
@@ -514,6 +584,20 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave }) {
           {[9,10,11,12,13,14,16,18].map(s => <option key={s} value={s}>{s}pt</option>)}
         </select>
 
+        {sep}
+
+        <label className="text-[10px] shrink-0" style={{ color: 'var(--c-text6)' }}>인물/대사 간격</label>
+        <input
+          type="range" min="4" max="14" step="0.5"
+          value={parseFloat(stylePreset?.dialogueGap ?? '7')}
+          onChange={e => dispatch({ type: 'SET_STYLE_PRESET', payload: { dialogueGap: `${e.target.value}em` } })}
+          className="w-16 shrink-0"
+          style={{ accentColor: 'var(--c-accent)', cursor: 'pointer' }}
+        />
+        <span className="text-[10px] shrink-0" style={{ color: 'var(--c-text5)', minWidth: '2.5rem' }}>
+          {stylePreset?.dialogueGap ?? '7em'}
+        </span>
+
         <div className="ml-auto shrink-0">
           <button
             onClick={onToggleTheme}
@@ -551,40 +635,53 @@ function MenuButton({ label, onClick, disabled, accent, fixedWidth, title, style
   );
 }
 
-function Breadcrumb() {
-  const { state } = useApp();
-  const { projects, activeProjectId, activeEpisodeId, episodes } = state;
-  const project = projects.find(p => p.id === activeProjectId);
-  const episode = episodes.find(e => e.id === activeEpisodeId);
-  return (
-    <div className="ml-auto flex items-center gap-1 text-xs" style={{ color: 'var(--c-text6)' }}>
-      {project && <span style={{ color: 'var(--c-text4)' }}>{project.title}</span>}
-      {episode && <>
-        <span style={{ color: 'var(--c-dim)' }}>/</span>
-        <span style={{ color: 'var(--c-text5)' }}>{episode.number}회 {episode.title || ''}</span>
-      </>}
-    </div>
-  );
-}
 
 // ─── CollapseButton ───────────────────────────────────────────────────────────
-// Thin vertical strip used on tablet to collapse/expand left or right panel
 function CollapseButton({ side, collapsed, onToggle }) {
+  const isOpen = !collapsed;
+  // 왼쪽 패널: 열림=‹ 닫힘=›  /  오른쪽 패널: 열림=› 닫힘=‹
+  const icon = side === 'left'
+    ? (isOpen ? '‹' : '›')
+    : (isOpen ? '›' : '‹');
+
   return (
-    <button
-      onClick={onToggle}
-      title={collapsed ? '패널 펼치기' : '패널 접기'}
+    <div
       style={{
-        width: '14px', flexShrink: 0, border: 'none', cursor: 'pointer',
-        background: 'var(--c-border2)', color: 'var(--c-text6)', fontSize: '9px',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        transition: 'background 0.1s', zIndex: 10,
+        width: '18px', flexShrink: 0, position: 'relative',
+        display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+        paddingTop: '40px', zIndex: 10,
       }}
-      onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-accent)'; e.currentTarget.style.opacity = '0.5'; }}
-      onMouseLeave={e => { e.currentTarget.style.background = 'var(--c-border2)'; e.currentTarget.style.opacity = '1'; }}
     >
-      {side === 'left' ? (collapsed ? '›' : '‹') : (collapsed ? '‹' : '›')}
-    </button>
+      <button
+        onClick={onToggle}
+        title={collapsed ? '패널 열기' : '패널 닫기'}
+        style={{
+          width: '20px', height: '44px',
+          border: '1px solid var(--c-border3)',
+          borderRadius: '10px',
+          background: 'var(--c-panel)',
+          color: 'var(--c-text4)',
+          cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '11px', lineHeight: 1,
+          transition: 'background 0.15s, color 0.15s, border-color 0.15s',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.15)',
+          padding: 0,
+        }}
+        onMouseEnter={e => {
+          e.currentTarget.style.background = 'var(--c-accent)';
+          e.currentTarget.style.color = '#fff';
+          e.currentTarget.style.borderColor = 'var(--c-accent)';
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.background = 'var(--c-panel)';
+          e.currentTarget.style.color = 'var(--c-text4)';
+          e.currentTarget.style.borderColor = 'var(--c-border3)';
+        }}
+      >
+        {icon}
+      </button>
+    </div>
   );
 }
 
@@ -663,7 +760,11 @@ function MobileBottomPanel({ open, onToggle, tab, onTabChange, onScrollToScene }
 // ─── Shell ────────────────────────────────────────────────────────────────────
 function Shell() {
   const [scrollToSceneId, setScrollToSceneId] = useState(null);
-  const [isDark, setIsDark] = useState(true);
+  const [isDark, setIsDark] = useState(() => {
+    const saved = localStorage.getItem('drama_theme');
+    if (saved !== null) return saved === 'dark';
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false);
   const { state, dispatch } = useApp();
 
@@ -683,6 +784,14 @@ function Shell() {
   // ── Tablet panel collapse state
   const [leftCollapsed,  setLeftCollapsed]  = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
+
+  // 트리트먼트·씬리스트 페이지 전환 시 오른쪽 패널 자동 닫기
+  useEffect(() => {
+    const { activeDoc } = state;
+    if (activeDoc === 'treatment' || activeDoc === 'scenelist') {
+      setRightCollapsed(true);
+    }
+  }, [state.activeDoc]);
 
   // ── Mobile bottom panel state
   const [mobileBottomOpen, setMobileBottomOpen] = useState(true);
@@ -724,18 +833,41 @@ function Shell() {
     return () => window.removeEventListener('keydown', onKey);
   }, [dispatch]);
 
+  // Apply theme on mount and whenever isDark changes
+  useEffect(() => {
+    const theme = isDark ? 'dark' : 'light';
+    document.getElementById('root').dataset.theme = theme;
+  }, [isDark]);
+
   const toggleTheme = useCallback(() => {
     setIsDark(prev => {
       const next = !prev;
-      document.getElementById('root').dataset.theme = next ? 'dark' : 'light';
+      localStorage.setItem('drama_theme', next ? 'dark' : 'light');
       return next;
     });
   }, []);
 
+  const [saveToast, setSaveToast] = useState(false);
+  const saveToastTimer = useRef(null);
+
   const handleSave = useCallback(() => {
-    dispatch({ type: 'SET_SAVE_STATUS', payload: 'saving' });
-    setTimeout(() => dispatch({ type: 'SET_SAVE_STATUS', payload: 'saved' }), 400);
-  }, [dispatch]);
+    window.dispatchEvent(new Event('script:requestSave'));
+    clearTimeout(saveToastTimer.current);
+    setSaveToast(true);
+    saveToastTimer.current = setTimeout(() => setSaveToast(false), 2000);
+  }, []);
+
+  // 전역 Ctrl+S 단축키 → 토스트 포함 저장
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.code === 'KeyS' && !e.shiftKey) {
+        e.preventDefault();
+        handleSave();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [handleSave]);
 
   const contextSceneId = state.scrollToSceneId;
   useEffect(() => {
@@ -756,7 +888,19 @@ function Shell() {
   const modals = (
     <>
       {printPreviewOpen && <PrintPreviewModal onClose={() => setPrintPreviewOpen(false)} />}
-      <OnboardingTour />
+      {/* <OnboardingTour /> */}
+      {saveToast && (
+        <div style={{
+          position: 'fixed', bottom: '32px', left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--c-accent)', color: '#fff',
+          padding: '8px 20px', borderRadius: '8px',
+          fontSize: '13px', zIndex: 9999,
+          boxShadow: '0 2px 12px rgba(0,0,0,0.2)',
+          pointerEvents: 'none',
+        }}>
+          저장되었습니다
+        </div>
+      )}
     </>
   );
 
@@ -812,6 +956,15 @@ function Shell() {
 
           <CollapseButton side="right" collapsed={rightCollapsed} onToggle={() => setRightCollapsed(v => !v)} />
         </div>
+
+        <AdBanner
+          slot="bottom-fixed"
+          mobileHide={false}
+          height={48}
+          className="no-print"
+          style={{ margin: '0 8px 6px', borderRadius: 6 }}
+        />
+
         {modals}
       </div>
     );
@@ -839,19 +992,111 @@ function Shell() {
           />
         </div>
 
-        <DragHandle onDrag={updateRightWidth} />
+        <CollapseButton side="right" collapsed={rightCollapsed} onToggle={() => setRightCollapsed(v => !v)} />
 
-        <div data-tour-id="right-panel" style={{ width: panelWidths.right, flexShrink: 0, overflow: 'hidden' }}>
-          <RightPanel onScrollToScene={id => setScrollToSceneId(id)} />
-        </div>
+        {!rightCollapsed && (
+          <>
+            <DragHandle onDrag={updateRightWidth} />
+            <div data-tour-id="right-panel" style={{ width: panelWidths.right, flexShrink: 0, overflow: 'hidden' }}>
+              <RightPanel onScrollToScene={id => setScrollToSceneId(id)} />
+            </div>
+          </>
+        )}
       </div>
+
+      <AdBanner
+        slot="bottom-fixed"
+        mobileHide={false}
+        height={48}
+        className="no-print"
+        style={{ margin: '0 8px 6px', borderRadius: 6 }}
+      />
 
       {modals}
     </div>
   );
 }
 
+// ─── LogShareView — 읽기 전용 작업통계 ────────────────────────────────────────
+function LogShareView() {
+  const hash = window.location.hash;
+  let data = null;
+  try {
+    data = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(hash.slice(5))))));
+  } catch { /* decode 실패 */ }
+
+  if (!data || data.type !== 'log-export') {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: 'sans-serif', color: '#888' }}>
+        유효하지 않은 링크입니다.
+      </div>
+    );
+  }
+
+  const { logs = [], projects = [], exportedAt } = data;
+  const totalSec = logs.reduce((s, l) => s + (l.activeDurationSec || 0), 0);
+  const totalDays = new Set(logs.map(l => l.dateKey)).size;
+  const sorted = [...logs].sort((a, b) => b.completedAt - a.completedAt);
+
+  const fmt = (sec) => {
+    const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
+    if (h > 0) return `${h}시간 ${m}분`;
+    if (m > 0) return `${m}분 ${sec % 60}초`;
+    return `${sec % 60}초`;
+  };
+  const fmtTs = (ts) => {
+    const d = new Date(ts);
+    return `${d.getFullYear()}.${d.getMonth()+1}.${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  };
+
+  const s = { fontFamily: 'Pretendard, Apple SD Gothic Neo, sans-serif', maxWidth: 640, margin: '0 auto', padding: '40px 24px', color: '#1a1a1a' };
+
+  return (
+    <div style={s}>
+      <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>작업 기록 증빙</div>
+      {exportedAt && <div style={{ fontSize: 12, color: '#999', marginBottom: 24 }}>내보내기: {fmtTs(exportedAt)}</div>}
+
+      <div style={{ display: 'flex', gap: 16, marginBottom: 32 }}>
+        {[['총 작업시간', fmt(totalSec)], ['작업 일수', `${totalDays}일`], ['세션 수', `${logs.length}회`]].map(([label, val]) => (
+          <div key={label} style={{ flex: 1, border: '1px solid #e0e0e0', borderRadius: 8, padding: '12px 16px' }}>
+            <div style={{ fontSize: 11, color: '#999', marginBottom: 4 }}>{label}</div>
+            <div style={{ fontSize: 18, fontWeight: 700 }}>{val}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: '#555' }}>세션 목록</div>
+      <div style={{ border: '1px solid #e8e8e8', borderRadius: 8, overflow: 'hidden' }}>
+        {sorted.map((log, i) => {
+          const proj = projects.find(p => p.id === log.projectId);
+          const snapshot = log.completedChecklistSnapshot || [];
+          return (
+            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 16px', borderBottom: i < sorted.length - 1 ? '1px solid #f0f0f0' : 'none', background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
+              <span style={{ fontSize: 11, color: '#999', minWidth: 120, flexShrink: 0 }}>{fmtTs(log.completedAt)}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13 }}>{proj?.title || '삭제된 작품'}</div>
+                {snapshot.length > 0 && (
+                  <div style={{ fontSize: 11, color: '#999', marginTop: 2 }}>
+                    완료: {snapshot.map(s => s.text).join(', ')}
+                  </div>
+                )}
+              </div>
+              <span style={{ fontSize: 13, fontWeight: 600, color: '#5a5af5', flexShrink: 0 }}>{fmt(log.activeDurationSec || 0)}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
+  if (window.location.hash.startsWith('#review=')) {
+    return <SharedReviewView />;
+  }
+  if (window.location.hash.startsWith('#log=')) {
+    return <LogShareView />;
+  }
   return (
     <AppProvider>
       <Shell />

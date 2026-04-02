@@ -1,9 +1,11 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
+import AdBanner from './AdBanner';
 import { exportPdf }              from '../print/printPdf';
 import { exportDocx }             from '../print/printDocx';
 import { exportHancom, exportHwpx } from '../print/hancomExporter';
 import PreviewRenderer  from '../print/PreviewRenderer';
+import { buildReviewURL } from '../App';
 import {
   checkFontsAvailability,
   getFontWarnings,
@@ -70,11 +72,12 @@ export default function PrintPreviewModal({ onClose }) {
   const [sel, setSel] = useState(() => {
     const episodesMap = {};
     allEpisodes.forEach(ep => { episodesMap[ep.id] = true; });
-    return { cover: true, synopsis: true, episodes: episodesMap, chars: true };
+    return { cover: true, synopsis: true, episodes: episodesMap, chars: true, biography: false, treatment: false, scenelist: false };
   });
 
   const [format, setFormat]       = useState('pdf');
   const [exporting, setExporting] = useState(false);
+  const [shareMsg, setShareMsg]   = useState('');
   const [exportStep, setExportStep] = useState('');  // '직렬화' | '레이아웃' | '파일 생성' | '다운로드'
   const [error, setError]         = useState(null);
 
@@ -122,6 +125,19 @@ export default function PrintPreviewModal({ onClose }) {
       setExporting(false);
     }
   }, [format, state, sel, onClose]);
+
+  const handleShare = useCallback(async () => {
+    const url = buildReviewURL(state, sel);
+    try { await navigator.clipboard.writeText(url); }
+    catch {
+      const inp = document.createElement('input');
+      inp.value = url; document.body.appendChild(inp);
+      inp.select(); document.execCommand('copy');
+      document.body.removeChild(inp);
+    }
+    setShareMsg('링크 복사됨');
+    setTimeout(() => setShareMsg(''), 2500);
+  }, [state, sel]);
 
   const handleBackdrop = e => { if (e.target === e.currentTarget) onClose(); };
 
@@ -173,10 +189,12 @@ export default function PrintPreviewModal({ onClose }) {
             <div className="mt-2 text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--c-text6)' }}>
               참고자료
             </div>
-            <Checkbox label="인물소개"   checked={sel.chars} onChange={() => toggle('chars')} indent />
-            <Checkbox label="인물이력서" checked={false}     onChange={() => {}} indent disabled />
-            <Checkbox label="인물관계도" checked={false}     onChange={() => {}} indent disabled />
-            <Checkbox label="자료수집"   checked={false}     onChange={() => {}} indent disabled />
+            <Checkbox label="인물소개"   checked={sel.chars}      onChange={() => toggle('chars')} indent />
+            <Checkbox label="인물이력서" checked={sel.biography}  onChange={() => toggle('biography')} indent />
+            <Checkbox label="트리트먼트" checked={sel.treatment}  onChange={() => toggle('treatment')} indent />
+            <Checkbox label="씬리스트"   checked={sel.scenelist}  onChange={() => toggle('scenelist')} indent />
+            <Checkbox label="인물관계도" checked={false}          onChange={() => {}} indent disabled />
+            <Checkbox label="자료수집"   checked={false}          onChange={() => {}} indent disabled />
           </Section>
 
           {/* Format */}
@@ -237,17 +255,34 @@ export default function PrintPreviewModal({ onClose }) {
             </div>
           )}
 
+          {/* Share button */}
+          <button
+            onClick={handleShare}
+            className="w-full py-2 rounded-lg text-sm font-medium transition-opacity hover:opacity-90"
+            style={{
+              background: 'transparent',
+              border: '1px solid var(--c-border3)',
+              color: 'var(--c-text3)',
+              marginTop: '0.5rem',
+              cursor: 'pointer',
+            }}
+          >
+            {shareMsg || '검토 링크 공유'}
+          </button>
+
           {/* Export button */}
           <button
             onClick={handleExport}
             disabled={exporting}
-            className="mt-auto w-full py-2 rounded-lg text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-            style={{ background: 'var(--c-accent)', marginTop: '1rem' }}
+            className="w-full py-2 rounded-lg text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            style={{ background: 'var(--c-accent)', marginTop: '0.5rem' }}
           >
             {exporting
               ? `${exportStep || '처리'} 중…`
               : format === 'pdf' ? '인쇄 / PDF 저장' : '파일 다운로드'}
           </button>
+
+          <AdBanner slot="print-modal-left" mobileHide={false} height={60} style={{ marginTop: 12, borderRadius: 6 }} />
         </div>
 
         {/* ── Right: Preview ──────────────────────────────────────────────────── */}
@@ -260,6 +295,8 @@ export default function PrintPreviewModal({ onClose }) {
             selections={sel}
             columnWidth={340}
           />
+
+          <AdBanner slot="print-modal-right" mobileHide={false} height={72} style={{ margin: '12px 16px 16px', borderRadius: 4 }} />
         </div>
       </div>
     </div>

@@ -38,19 +38,26 @@ function resolveCharName(block, characters) {
 
 // ─── Normalize a single script block for print
 function normalizeBlock(block, characters) {
+  const charName = resolveCharName(block, characters);
+  let content = block.content || '';
+  // Migration: old badge-span format stored charName at start of content
+  if (block.type === 'dialogue' && charName && content.startsWith(charName)) {
+    content = content.slice(charName.length).trimStart();
+  }
   return {
-    id:       block.id,
-    type:     block.type,
-    label:    block.label || '',
-    content:  block.content || '',  // always use .content, never .text
-    charName: resolveCharName(block, characters),
-    sceneId:  block.sceneId,
+    id:         block.id,
+    type:       block.type,
+    label:      block.label || '',
+    content,
+    charName,
+    sceneId:    block.sceneId,
+    refSceneId: block.refSceneId || '',
   };
 }
 
 // ─── Main builder
 export function buildPrintModel(appState, selections, preset) {
-  const { projects, episodes, scriptBlocks, characters, coverDocs, synopsisDocs, activeProjectId } = appState;
+  const { projects, episodes, scriptBlocks, characters, coverDocs, synopsisDocs, scenes, activeProjectId } = appState;
 
   const project    = projects.find(p => p.id === activeProjectId);
   const coverDoc   = coverDocs.find(d => d.projectId === activeProjectId);
@@ -132,6 +139,62 @@ export function buildPrintModel(appState, selections, preset) {
         })),
       });
     }
+  }
+
+  // ── 5. Biography (인물이력서)
+  if (selections.biography) {
+    const charsWithBio = projectChars.filter(c => c.biographyItems?.length > 0);
+    if (charsWithBio.length) {
+      sections.push({
+        type: 'biography',
+        characters: charsWithBio.map(c => ({
+          id:    c.id,
+          name:  charFullName(c),
+          items: [...(c.biographyItems || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+        })),
+      });
+    }
+  }
+
+  // ── 6. Treatment (트리트먼트) — per episode
+  if (selections.treatment) {
+    allEpisodes.forEach(ep => {
+      const items = (ep.summaryItems || [])
+        .filter(it => it.text)
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      if (!items.length) return;
+      sections.push({
+        type:          'treatment',
+        episodeId:     ep.id,
+        episodeNumber: ep.number,
+        episodeTitle:  ep.title || '',
+        items,
+      });
+    });
+  }
+
+  // ── 7. SceneList (씬리스트) — per episode
+  if (selections.scenelist) {
+    allEpisodes.forEach(ep => {
+      const epScenes = (scenes || [])
+        .filter(s => s.episodeId === ep.id)
+        .sort((a, b) => (a.sceneSeq ?? 0) - (b.sceneSeq ?? 0));
+      if (!epScenes.length) return;
+      sections.push({
+        type:          'scenelist',
+        episodeId:     ep.id,
+        episodeNumber: ep.number,
+        episodeTitle:  ep.title || '',
+        scenes: epScenes.map(s => ({
+          id:              s.id,
+          content:         s.content         || '',
+          location:        s.location        || '',
+          subLocation:     s.subLocation     || '',
+          timeOfDay:       s.timeOfDay       || '',
+          sceneListContent: s.sceneListContent || '',
+        })),
+      });
+    });
   }
 
   return {

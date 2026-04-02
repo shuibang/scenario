@@ -38,8 +38,9 @@ export function getLayoutMetrics(preset) {
   const m = (preset?.dialogueGap || '7em').match(/^([\d.]+)em$/);
   if (m) dialogueGapPt = parseFloat(m[1]) * fontSize;
 
-  // Average glyph width: Korean ≈ fontSize, Latin ≈ 0.6*fontSize → avg ~0.78*fontSize
-  const avgCharPt      = fontSize * 0.78;
+  // Korean characters are full-width: each glyph is exactly fontSize pt wide.
+  // Using fontSize directly (ratio 1.0) ensures pre-wrapped tokens never exceed the content width in pdfkit.
+  const avgCharPt      = fontSize * 1.0;
   const charsPerLine   = Math.floor(contentWpt / avgCharPt);
   const speechWpt      = contentWpt - dialogueGapPt;
   const charsInSpeech  = Math.max(20, Math.floor(speechWpt / avgCharPt));
@@ -122,10 +123,26 @@ export function tokenizeSection(section, metrics) {
 
   // ── Synopsis
   if (section.type === 'synopsis') {
+    // blockText + blockLineCount on the first token of each wrapped group lets
+    // the PDF renderer pass the full paragraph to pdfkit when the block fits
+    // entirely on one page (enabling justify on interior lines).
     const addSection = (label, text) => {
       if (!text) return;
       tokens.push(T('heading', label, { bold: true }));
-      wrapText(text, charsPerLine).forEach(t => tokens.push(T('body', t)));
+      // Split by newline paragraphs; each paragraph is its own blockText block
+      // so the PDF renderer can justify interior lines when the para fits on one page.
+      const paras = text.split('\n');
+      paras.forEach(para => {
+        if (!para.trim()) return;
+        const lines = wrapText(para, charsPerLine);
+        lines.forEach((t, i) =>
+          tokens.push(T('body', t, {
+            isFirstOfBlock: i === 0,
+            blockText:      i === 0 ? para : undefined,
+            blockLineCount: i === 0 ? lines.length : undefined,
+          }))
+        );
+      });
       tokens.push(B());
     };
     addSection('장르',     section.genre);
@@ -136,12 +153,22 @@ export function tokenizeSection(section, metrics) {
       section.characters.forEach(c => {
         const agePart = [c.gender, c.age].filter(Boolean).join(' / ');
         const nameLine = `${c.name}${agePart ? ` (${agePart})` : ''}${c.job ? ` ${c.job}` : ''}`;
-        wrapText(nameLine, charsPerLine - 2).forEach((t, i) =>
-          tokens.push(T('body', (i === 0 ? '  ' : '    ') + t))
+        const nameLines = wrapText(nameLine, charsPerLine - 2);
+        nameLines.forEach((t, i) =>
+          tokens.push(T('body', (i === 0 ? '  ' : '    ') + t, {
+            isFirstOfBlock: i === 0,
+            blockText:      i === 0 ? ('  ' + nameLine) : undefined,
+            blockLineCount: i === 0 ? nameLines.length : undefined,
+          }))
         );
         if (c.description) {
-          wrapText(c.description, charsPerLine - 4).forEach(t =>
-            tokens.push(T('body', '    ' + t))
+          const descLines = wrapText(c.description, charsPerLine - 4);
+          descLines.forEach((t, i) =>
+            tokens.push(T('body', '    ' + t, {
+              isFirstOfBlock: i === 0,
+              blockText:      i === 0 ? ('    ' + c.description) : undefined,
+              blockLineCount: i === 0 ? descLines.length : undefined,
+            }))
           );
         }
       });
@@ -168,24 +195,40 @@ export function tokenizeSection(section, metrics) {
           break;
         }
         case 'action': {
-          wrapText(block.content, charsPerLine - 2).forEach(t =>
-            tokens.push(T('action', t, { indent: 1 }))
+          const wrappedA = wrapText(block.content, charsPerLine - 2);
+          wrappedA.forEach((t, i) =>
+            tokens.push(T('action', t, {
+              indent: 1,
+              isFirstOfBlock: i === 0,
+              blockText:      i === 0 ? (block.content || '') : undefined,
+              blockLineCount: i === 0 ? wrappedA.length : undefined,
+            }))
           );
           break;
         }
         case 'dialogue': {
-          const wrapped = wrapText(block.content, charsInSpeech);
-          wrapped.forEach((t, i) =>
+          const wrappedD = wrapText(block.content, charsInSpeech);
+          wrappedD.forEach((t, i) =>
             tokens.push(T('dialogue', t, {
-              charName:    i === 0 ? block.charName : '',
-              isFirstLine: i === 0,
+              charName:       i === 0 ? block.charName : '',
+              isFirstLine:    i === 0,
+              isFirstOfBlock: i === 0,
+              blockText:      i === 0 ? (block.content || '') : undefined,
+              blockLineCount: i === 0 ? wrappedD.length : undefined,
             }))
           );
           break;
         }
         case 'parenthetical': {
-          wrapText(`(${block.content})`, charsInSpeech).forEach(t =>
-            tokens.push(T('parenthetical', t, { italic: true, indent: 1 }))
+          const parenText = `(${block.content || ''})`;
+          const wrappedP = wrapText(parenText, charsInSpeech);
+          wrappedP.forEach((t, i) =>
+            tokens.push(T('parenthetical', t, {
+              italic: true, indent: 1,
+              isFirstOfBlock: i === 0,
+              blockText:      i === 0 ? parenText : undefined,
+              blockLineCount: i === 0 ? wrappedP.length : undefined,
+            }))
           );
           break;
         }
@@ -206,6 +249,62 @@ export function tokenizeSection(section, metrics) {
       }
       prevBlock = block;
     }
+    return tokens;
+  }
+
+  // ── Biography (인물이력서)
+  if (section.type === 'biography') {
+    tokens.push(T('ep_title', '인물이력서', { bold: true, center: true }));
+    tokens.push(B());
+    section.characters.forEach(c => {
+      tokens.push(T('char_name', c.name, { bold: true }));
+      c.items.forEach(item => {
+        const line = `${item.year ? item.year + '  ' : ''}${item.event || ''}`;
+        wrapText(line, charsPerLine - 2).forEach(t =>
+          tokens.push(T('body', '  ' + t))
+        );
+      });
+      tokens.push(B());
+    });
+    return tokens;
+  }
+
+  // ── Treatment (트리트먼트)
+  if (section.type === 'treatment') {
+    const epTitle = `${section.episodeNumber}회 트리트먼트${section.episodeTitle ? ` — ${section.episodeTitle}` : ''}`;
+    tokens.push(T('ep_title', epTitle, { bold: true, center: true }));
+    tokens.push(B());
+    section.items.forEach((item, i) => {
+      const prefix = `${i + 1}. `;
+      const lines = wrapText(item.text || '', charsPerLine - prefix.length);
+      lines.forEach((t, li) =>
+        tokens.push(T('body', li === 0 ? prefix + t : '   ' + t))
+      );
+    });
+    tokens.push(B());
+    return tokens;
+  }
+
+  // ── SceneList (씬리스트)
+  if (section.type === 'scenelist') {
+    const epTitle = `${section.episodeNumber}회 씬리스트${section.episodeTitle ? ` — ${section.episodeTitle}` : ''}`;
+    tokens.push(T('ep_title', epTitle, { bold: true, center: true }));
+    tokens.push(B());
+    section.scenes.forEach((scene, i) => {
+      const loc = [scene.location, scene.subLocation].filter(Boolean).join(' / ');
+      const sceneHead = [`S#${i + 1}`, loc, scene.timeOfDay].filter(Boolean).join('  ');
+      tokens.push(T('scene_number', sceneHead, { bold: true }));
+      const desc = scene.sceneListContent || scene.content || '';
+      if (desc) {
+        wrapText(desc, charsPerLine - 2).forEach((t, li) =>
+          tokens.push(T('action', '  ' + t, {
+            isFirstOfBlock: li === 0,
+            blockText:      li === 0 ? desc : undefined,
+            blockLineCount: li === 0 ? wrapText(desc, charsPerLine - 2).length : undefined,
+          }))
+        );
+      }
+    });
     return tokens;
   }
 
@@ -231,14 +330,35 @@ export function tokenizeSection(section, metrics) {
 }
 
 // ─── LineToken[] → Page[] (each page = LineToken[]) ──────────────────────────
+// Keep-with-next: heading/scene/ep_title tokens are never left as the last
+// non-blank content on a page. If a heading wouldn't be followed by at least
+// one body token on the same page, it is pushed to the next page instead.
+const HEADING_KINDS = new Set(['heading', 'scene_number', 'ep_title', 'char_name']);
+
 export function paginate(tokens, metrics) {
   const { linesPerPage } = metrics;
   const pages = [];
   let page = [];
   let used = 0;
 
-  for (const token of tokens) {
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
     const h = token.height || 1;
+
+    // Keep-with-next: before placing a heading on a non-empty page, verify there
+    // is room for it plus the next non-blank token. If not, flush the page first.
+    if (HEADING_KINDS.has(token.kind) && page.length > 0) {
+      let nextH = 0;
+      for (let j = i + 1; j < tokens.length; j++) {
+        if (tokens[j].kind !== 'blank') { nextH = tokens[j].height || 1; break; }
+      }
+      if (used + h + nextH > linesPerPage) {
+        pages.push(page);
+        page = [];
+        used = 0;
+      }
+    }
+
     if (used + h > linesPerPage && page.length > 0) {
       pages.push(page);
       page = [];

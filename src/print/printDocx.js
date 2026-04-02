@@ -82,7 +82,8 @@ function para(text, dp, opts = {}) {
     children:  [run],
     alignment: opts.center ? AlignmentType.CENTER
              : opts.right  ? AlignmentType.RIGHT
-             : AlignmentType.LEFT,
+             : opts.noJustify ? AlignmentType.LEFT
+             : AlignmentType.BOTH,
     spacing: lineSpacing(dp),
     indent: opts.indent ? { left: convertMillimetersToTwip(opts.indent) } : undefined,
   });
@@ -115,6 +116,7 @@ function dialoguePara(charName, speech, dp) {
       { type: TabStopType.LEFT, position: gapTwips },
     ],
     indent: { left: gapTwips, hanging: gapTwips },
+    alignment: AlignmentType.BOTH,
     spacing: lineSpacing(dp),
   });
 }
@@ -222,7 +224,7 @@ function buildDocxSections(printModel, dp) {
         if (prevBlock !== null && prevBlock.type !== block.type) paras.push(blankPara(dp));
         switch (block.type) {
           case 'scene_number':
-            paras.push(para(`${block.label} ${block.content}`.trim(), dp, { bold: true }));
+            paras.push(para(`${block.label} ${block.content}`.trim(), dp, { bold: true, noJustify: true }));
             break;
           case 'action':
             block.content.split('\n').forEach(l =>

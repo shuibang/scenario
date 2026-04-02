@@ -146,7 +146,10 @@ export default function CoverEditor() {
   const [values, setValues] = useState(defaultValues());
   const [customFields, setCustomFields] = useState([]);
   const [dirty, setDirty] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const valuesRef = React.useRef(values);
+  const customFieldsRef = React.useRef(customFields);
+  valuesRef.current = values;
+  customFieldsRef.current = customFields;
 
   // Load / migrate on project change
   useEffect(() => {
@@ -158,12 +161,12 @@ export default function CoverEditor() {
 
   const setVal = (id, v) => {
     setValues(prev => ({ ...prev, [id]: v }));
-    setDirty(true); setSaved(false);
+    setDirty(true);
   };
 
   const setCustomVal = (idx, v) => {
     setCustomFields(prev => prev.map((f, i) => i === idx ? { ...f, value: v } : f));
-    setDirty(true); setSaved(false);
+    setDirty(true);
   };
 
   const addCustomField = () => {
@@ -181,45 +184,44 @@ export default function CoverEditor() {
     setDirty(true);
   };
 
-  const handleSave = () => {
-    const fields = [
-      ...DEFAULT_FIELDS.map(f => ({ id: f.id, label: f.label, value: values[f.id] || '' })),
-    ];
+  const handleSave = React.useCallback(() => {
+    const v = valuesRef.current;
+    const cf = customFieldsRef.current;
+    const fields = DEFAULT_FIELDS.map(f => ({ id: f.id, label: f.label, value: v[f.id] || '' }));
     const doc = {
       ...(existing || { id: genId(), createdAt: now() }),
       projectId: activeProjectId,
-      // Keep flat fields for backward compat
-      title: values.title, subtitle: values.subtitle, writer: values.writer,
-      coWriter: values.coWriter, genre: values.genre, broadcaster: values.broadcaster,
-      note: values.note,
-      // New structured format
-      fields,
-      customFields,
+      title: v.title, subtitle: v.subtitle, writer: v.writer,
+      coWriter: v.coWriter, genre: v.genre, broadcaster: v.broadcaster,
+      note: v.note,
+      fields, customFields: cf,
       updatedAt: now(),
     };
     dispatch({ type: 'SET_COVER', payload: doc });
-    // Sync cover title → project title
     const project = projects.find(p => p.id === activeProjectId);
-    if (project && values.title && project.title !== values.title) {
-      dispatch({ type: 'UPDATE_PROJECT', payload: { id: activeProjectId, title: values.title } });
+    if (project && v.title && project.title !== v.title) {
+      dispatch({ type: 'UPDATE_PROJECT', payload: { id: activeProjectId, title: v.title } });
     }
-    setDirty(false); setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  };
+    setDirty(false);
+  }, [existing, activeProjectId, projects, dispatch]);
+
+  // 상단바 저장 버튼 이벤트 수신
+  useEffect(() => {
+    const onSave = () => handleSave();
+    window.addEventListener('script:requestSave', onSave);
+    return () => window.removeEventListener('script:requestSave', onSave);
+  }, [handleSave]);
 
   if (!activeProjectId) return null;
 
   const inputCls = 'w-full text-sm px-3 py-2 rounded outline-none t-input-field';
 
   return (
-    <div className="h-full overflow-y-auto" style={{ background: 'var(--c-bg)' }}>
-      <div className="max-w-xl mx-auto py-12 px-8">
-
-        {/* Preview — identical fields as output */}
-        <CoverPreview values={values} customFields={customFields} />
+    <div className="h-full overflow-y-auto relative" style={{ background: 'var(--c-bg)' }}>
+      <div className="max-w-xl mx-auto py-4 px-8">
 
         {/* Form */}
-        <div className="mt-10 space-y-4">
+        <div className="space-y-3">
           {DEFAULT_FIELDS.map(f => (
             <div key={f.id} className="flex items-start gap-2">
               <div className="flex-1">
@@ -292,22 +294,7 @@ export default function CoverEditor() {
           </button>
         </div>
 
-        {/* Save */}
-        <div className="mt-6 flex items-center gap-3">
-          <button
-            onClick={handleSave}
-            disabled={!dirty}
-            className="px-4 py-2 text-sm rounded text-white"
-            style={{
-              background: 'var(--c-accent)',
-              opacity: dirty ? 1 : 0.4,
-              cursor: dirty ? 'pointer' : 'not-allowed',
-            }}
-          >
-            저장
-          </button>
-          {saved && <span className="text-xs" style={{ color: 'var(--c-success)' }}>저장됨</span>}
-        </div>
+        <div className="h-8" />
       </div>
     </div>
   );

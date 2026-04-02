@@ -5,6 +5,7 @@ import { CoverPreview } from './CoverEditor';
 import { charDisplayName } from './CharacterPanel';
 import { resolveSceneLabel, TIME_OF_DAY_OPTIONS } from '../utils/sceneResolver';
 import { GuidePanel } from './StructurePage';
+import AdBanner from './AdBanner';
 
 const STATUS_COLORS = { done: '#22c55e', writing: '#eab308', draft: 'var(--c-border3)' };
 const STATUS_LABELS = { done: '완료', writing: '작성 중', draft: '초안' };
@@ -65,16 +66,21 @@ function TagEditor({ tags, onSave }) {
 }
 
 // ─── Scene Item ────────────────────────────────────────────────────────────────
-function SceneItem({ scene, sceneContent, segmentBlocks, isActive, onClick, onStatusChange, onTagsChange, onMetaChange }) {
-  const [showTags, setShowTags] = useState(false);
-  const [showMeta, setShowMeta] = useState(false);
-  const dialogueCount = segmentBlocks.filter(b => b.type === 'dialogue').length;
-  const actionCount = segmentBlocks.filter(b => b.type === 'action').length;
+function SceneItem({ scene, sceneContent, isActive, onClick, onStatusChange, onTagsChange }) {
+  const [addingTag, setAddingTag] = useState(false);
+  const [tagInput, setTagInput] = useState('');
   const tags = scene.tags || [];
+
+  const commitTag = () => {
+    const tag = tagInput.trim().replace(/^#/, '');
+    if (tag && !tags.includes(tag)) onTagsChange([...tags, tag]);
+    setTagInput('');
+    setAddingTag(false);
+  };
 
   return (
     <div
-      className="px-3 py-2.5 cursor-pointer transition-all"
+      className="px-3 py-2 cursor-pointer transition-all"
       style={{
         borderLeft: `2px solid ${isActive ? 'var(--c-accent)' : 'transparent'}`,
         background: isActive ? 'var(--c-active)' : 'transparent',
@@ -101,79 +107,41 @@ function SceneItem({ scene, sceneContent, segmentBlocks, isActive, onClick, onSt
               {resolveSceneLabel({ ...scene, label: '', content: sceneContent }) || <span style={{ color: 'var(--c-text6)', fontStyle: 'italic' }}>장소 미입력</span>}
             </span>
           </div>
-          {(dialogueCount > 0 || actionCount > 0) && (
-            <div className="mt-0.5 text-[10px] flex gap-2" style={{ color: 'var(--c-text6)' }}>
-              {actionCount > 0 && <span>지문 {actionCount}</span>}
-              {dialogueCount > 0 && <span>대사 {dialogueCount}</span>}
-            </div>
-          )}
-          {/* Tags display */}
-          {tags.length > 0 && (
-            <div className="mt-1 flex flex-wrap gap-1">
-              {tags.map(t => (
-                <span key={t} className="text-[10px] px-1.5 rounded" style={{ background: 'var(--c-tag)', color: 'var(--c-accent2)' }}>
-                  #{t}
-                </span>
-              ))}
-            </div>
-          )}
-          {/* Tag edit toggle */}
-          <button
-            onClick={e => { e.stopPropagation(); setShowTags(v => !v); }}
-            className="mt-0.5 text-[10px] opacity-50 hover:opacity-100"
-            style={{ color: 'var(--c-text5)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-          >
-            {showTags ? '태그 닫기' : '+ 태그'}
-          </button>
-          {showTags && (
-            <div onClick={e => e.stopPropagation()}>
-              <TagEditor tags={tags} onSave={onTagsChange} />
-            </div>
-          )}
-          {/* Scene metadata toggle */}
-          <button
-            onClick={e => { e.stopPropagation(); setShowMeta(v => !v); }}
-            className="mt-0.5 text-[10px] opacity-50 hover:opacity-100"
-            style={{ color: 'var(--c-text5)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-          >
-            {showMeta ? '씬 정보 닫기' : '+ 씬 정보'}
-          </button>
-          {showMeta && (
-            <div onClick={e => e.stopPropagation()} className="mt-1.5 space-y-1">
+          {/* Tags — one line, compact */}
+          <div className="mt-0.5 flex flex-wrap items-center gap-1" onClick={e => e.stopPropagation()}>
+            {tags.map(t => (
+              <span
+                key={t}
+                className="text-[10px] px-1 rounded flex items-center gap-0.5"
+                style={{ background: 'var(--c-tag)', color: 'var(--c-accent2)', border: '1px solid var(--c-border4)', lineHeight: '1.4' }}
+              >
+                #{t}
+                <span onClick={() => onTagsChange(tags.filter(x => x !== t))} style={{ cursor: 'pointer', opacity: 0.5 }}>×</span>
+              </span>
+            ))}
+            {addingTag ? (
               <input
-                placeholder="장소"
-                value={scene.location || ''}
-                onChange={e => onMetaChange({ location: e.target.value })}
-                className="w-full text-[10px] px-1.5 py-0.5 rounded outline-none"
-                style={{ background: 'var(--c-input)', color: 'var(--c-text3)', border: '1px solid var(--c-border3)' }}
+                autoFocus
+                value={tagInput}
+                onChange={e => setTagInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.nativeEvent.isComposing) return;
+                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); commitTag(); }
+                  if (e.key === 'Escape') { setAddingTag(false); setTagInput(''); }
+                }}
+                onBlur={commitTag}
+                placeholder="태그"
+                className="text-[10px] px-1 rounded outline-none"
+                style={{ width: '4rem', background: 'var(--c-input)', color: 'var(--c-text3)', border: '1px solid var(--c-accent)' }}
               />
-              <input
-                placeholder="세부장소"
-                value={scene.subLocation || ''}
-                onChange={e => onMetaChange({ subLocation: e.target.value })}
-                className="w-full text-[10px] px-1.5 py-0.5 rounded outline-none"
-                style={{ background: 'var(--c-input)', color: 'var(--c-text3)', border: '1px solid var(--c-border3)' }}
-              />
-              <div className="flex gap-1">
-                <select
-                  value={scene.timeOfDay || ''}
-                  onChange={e => onMetaChange({ timeOfDay: e.target.value })}
-                  className="flex-1 text-[10px] px-1 py-0.5 rounded outline-none"
-                  style={{ background: 'var(--c-input)', color: 'var(--c-text3)', border: '1px solid var(--c-border3)' }}
-                >
-                  <option value="">시간대</option>
-                  {TIME_OF_DAY_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-                <input
-                  placeholder="특수상황(예:회상)"
-                  value={scene.specialSituation || ''}
-                  onChange={e => onMetaChange({ specialSituation: e.target.value })}
-                  className="flex-1 text-[10px] px-1.5 py-0.5 rounded outline-none"
-                  style={{ background: 'var(--c-input)', color: 'var(--c-text3)', border: '1px solid var(--c-border3)' }}
-                />
-              </div>
-            </div>
-          )}
+            ) : (
+              <button
+                onClick={() => setAddingTag(true)}
+                className="text-[10px] opacity-40 hover:opacity-80"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--c-text5)', padding: 0 }}
+              >+태그</button>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -189,11 +157,18 @@ function CharacterUsagePanel({ charId, onScrollToScene }) {
   if (!char) return null;
 
   const dialogueBlocks = scriptBlocks.filter(b => b.type === 'dialogue' && b.characterId === charId);
+  // 패널에 표시되는 씬 기준으로 카운트 (선행 scene_number 블록 ID 기준)
   const sceneCount = useMemo(() => {
-    const sceneIds = new Set();
-    dialogueBlocks.forEach(b => { if (b.sceneId) sceneIds.add(b.sceneId); });
-    return sceneIds.size;
-  }, [dialogueBlocks]);
+    const seenSceneBlockIds = new Set();
+    dialogueBlocks.forEach(b => {
+      const epBlocks = scriptBlocks.filter(x => x.episodeId === b.episodeId);
+      const bIdx = epBlocks.findIndex(x => x.id === b.id);
+      for (let i = bIdx - 1; i >= 0; i--) {
+        if (epBlocks[i].type === 'scene_number') { seenSceneBlockIds.add(epBlocks[i].id); break; }
+      }
+    });
+    return seenSceneBlockIds.size;
+  }, [dialogueBlocks, scriptBlocks]);
 
   // Group by episode
   const byEpisode = useMemo(() => {
@@ -212,7 +187,8 @@ function CharacterUsagePanel({ charId, onScrollToScene }) {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto">
+    <div className="flex flex-col flex-1 min-h-0">
+      <div className="flex-1 overflow-y-auto">
       {/* Summary */}
       <div className="px-3 py-3" style={{ borderBottom: '1px solid var(--c-border)' }}>
         <div className="font-semibold text-sm mb-1" style={{ color: 'var(--c-text)' }}>{charDisplayName(char)}</div>
@@ -263,6 +239,8 @@ function CharacterUsagePanel({ charId, onScrollToScene }) {
           })}
         </div>
       )}
+      </div>
+      <AdBanner slot={`char-${charId}`} mobileHide style={{ margin: '6px 8px' }} />
     </div>
   );
 }
@@ -382,6 +360,7 @@ function ChecklistPanel({ projectId, docId }) {
           </div>
         )}
       </div>
+      <AdBanner slot="checklist" mobileHide style={{ margin: '6px 8px' }} />
     </div>
   );
 }
@@ -389,53 +368,14 @@ function ChecklistPanel({ projectId, docId }) {
 // ─── CoverMiniPreview ─────────────────────────────────────────────────────────
 function CoverMiniPreview() {
   const { state } = useApp();
-  const { coverDocs, synopsisDocs, activeProjectId, activeDoc } = state;
+  const { activeDoc } = state;
 
   if (activeDoc === 'cover') {
-    const doc = coverDocs.find(d => d.projectId === activeProjectId);
-    if (!doc) {
-      return (
-        <div className="flex-1 flex items-center justify-center px-4 text-center text-xs" style={{ color: 'var(--c-text6)' }}>
-          표지를 작성하면<br/>미리보기가 표시됩니다
-        </div>
-      );
-    }
-    // Build values/customFields from doc
-    const values = {
-      title: doc.title || '', subtitle: doc.subtitle || '', writer: doc.writer || '',
-      coWriter: doc.coWriter || '', genre: doc.genre || '', broadcaster: doc.broadcaster || '',
-      note: doc.note || '',
-    };
-    if (doc.fields) {
-      doc.fields.forEach(f => { if (f.id in values) values[f.id] = f.value || ''; });
-    }
-    return (
-      <div className="flex-1 overflow-y-auto p-3">
-        <div className="text-[10px] uppercase tracking-widest mb-2 text-center" style={{ color: 'var(--c-text6)' }}>표지 미리보기</div>
-        <CoverPreview values={values} customFields={doc.customFields || []} />
-      </div>
-    );
+    return <AdBanner slot="cover-panel" mobileHide={false} height={120} style={{ margin: 12 }} />;
   }
 
   if (activeDoc === 'synopsis') {
-    const doc = synopsisDocs.find(d => d.projectId === activeProjectId);
-    const fieldCount = doc
-      ? [doc.genre, doc.theme, doc.intent, doc.story].filter(Boolean).length
-      : 0;
-    return (
-      <div className="flex-1 flex flex-col items-center justify-center px-4 text-center gap-2">
-        <div className="text-2xl" style={{ color: 'var(--c-border3)' }}>📄</div>
-        <div className="text-xs" style={{ color: 'var(--c-text5)' }}>시놉시스</div>
-        {fieldCount > 0 ? (
-          <div className="text-[10px]" style={{ color: 'var(--c-text6)' }}>
-            {fieldCount}개 항목 입력됨
-            {doc?.characters?.length > 0 && ` · 인물 ${doc.characters.length}명`}
-          </div>
-        ) : (
-          <div className="text-[10px]" style={{ color: 'var(--c-text6)' }}>내용을 입력하세요</div>
-        )}
-      </div>
-    );
+    return <AdBanner slot="synopsis-panel" mobileHide={false} height={120} style={{ margin: 12 }} />;
   }
 
   return null;
@@ -460,14 +400,13 @@ function DocMemo({ projectId, docKey }) {
   };
 
   return (
-    <div className="px-3 py-2 shrink-0" style={{ borderTop: '1px solid var(--c-border)' }}>
-      <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: 'var(--c-text6)' }}>메모 (출력 미포함)</div>
+    <div className="px-3 py-2 flex-1 flex flex-col min-h-0" style={{ borderTop: '1px solid var(--c-border)' }}>
+      <div className="text-[10px] uppercase tracking-widest mb-1 shrink-0" style={{ color: 'var(--c-text6)' }}>코멘트</div>
       <textarea
         value={memo}
         onChange={handleChange}
-        placeholder="내부 메모..."
-        rows={3}
-        className="w-full text-xs rounded outline-none resize-none"
+        placeholder="코멘트 입력..."
+        className="flex-1 w-full text-xs rounded outline-none resize-none"
         style={{
           background: 'var(--c-input)',
           color: 'var(--c-text2)',
@@ -475,6 +414,7 @@ function DocMemo({ projectId, docKey }) {
           padding: '4px 6px',
           lineHeight: 1.5,
           fontFamily: 'inherit',
+          minHeight: '60px',
         }}
       />
     </div>
@@ -484,7 +424,7 @@ function DocMemo({ projectId, docKey }) {
 // ─── Page context info panels ─────────────────────────────────────────────────
 function PageInfoPanel({ icon, title, items }) {
   return (
-    <div className="flex-1 flex flex-col overflow-y-auto px-4 py-4 gap-3">
+    <div className="shrink-0 flex flex-col px-4 py-4 gap-3">
       <div className="flex items-center gap-2 mb-1">
         <span className="text-xl" style={{ color: 'var(--c-border3)' }}>{icon}</span>
         <span className="text-xs font-semibold" style={{ color: 'var(--c-text4)' }}>{title}</span>
@@ -591,20 +531,31 @@ export default function RightPanel({ onScrollToScene }) {
       'resources'
     );
   } else if (activeDoc === 'treatment') {
+    const designTool = localStorage.getItem('drama_designTool') || 'treatment';
+    const isPrimary = designTool === 'treatment';
     contextContent = withMemo(
-      <PageInfoPanel icon="📝" title="트리트먼트 작성 팁" items={[
+      <PageInfoPanel icon="📝" title="트리트먼트" items={[
         '각 씬의 주요 행동과 감정 변화를 간결하게 서술하세요.',
         '대사보다는 장면의 흐름과 인물의 의도에 집중하세요.',
-        '한 씬 = 2~5줄이 적당합니다.',
+        isPrimary
+          ? '✓ 주 설계 도구 — 대본으로 가져오기가 활성화되어 있습니다.'
+          : '트리트먼트를 먼저 쓰고 대본으로 발전시키는 방식이라면 마이페이지 설정에서 주 설계 도구로 지정하세요.',
       ]} />,
       'treatment'
     );
   } else if (activeDoc === 'scenelist') {
+    const designTool = localStorage.getItem('drama_designTool') || 'treatment';
+    const isPrimary = designTool === 'scenelist';
     contextContent = withMemo(
-      <PageInfoPanel icon="🎬" title="씬리스트 안내" items={[
+      <PageInfoPanel icon="🎬" title="씬리스트" items={[
         '씬 번호, 장소, 시간대, 등장인물을 정리하세요.',
         '씬리스트는 대본 전체 구조 파악에 도움이 됩니다.',
-        '구조 페이지에서 비트 태그를 씬에 연결할 수 있습니다.',
+        '씬번호 클릭 시 대본의 해당 씬으로 이동합니다.',
+        '장소·시간대는 대본과 자동 동기화됩니다.',
+        '내용 컬럼은 씬리스트 전용으로 자유롭게 메모하세요.',
+        isPrimary
+          ? '✓ 주 설계 도구 — 대본으로 가져오기가 활성화되어 있습니다.'
+          : '씬리스트를 먼저 짜고 대본으로 발전시키는 방식이라면 마이페이지 설정에서 주 설계 도구로 지정하세요.',
       ]} />,
       'scenelist'
     );
@@ -619,33 +570,16 @@ export default function RightPanel({ onScrollToScene }) {
       </div>
     );
   } else if (isCharView && selectedCharacterId) {
-    contextContent = (
-      <>
-        {/* Sub-tabs: scene outline vs character usage */}
-        <div className="flex shrink-0" style={{ borderBottom: '1px solid var(--c-border)' }}>
-          {[['scenes', '씬 개요'], ['character', '인물 현황']].map(([t, l]) => (
-            <button key={t} onClick={() => setTab(t)}
-              className="flex-1 py-2 text-[11px] font-medium"
-              style={{ background: 'transparent', border: 'none',
-                borderBottom: tab === t ? '2px solid var(--c-accent)' : '2px solid transparent',
-                color: tab === t ? 'var(--c-accent)' : 'var(--c-text5)', cursor: 'pointer' }}>
-              {l}
-            </button>
-          ))}
-        </div>
-        {tab === 'character'
-          ? <CharacterUsagePanel charId={selectedCharacterId} onScrollToScene={onScrollToScene} />
-          : <SceneOutlineContent />}
-      </>
-    );
+    contextContent = <CharacterUsagePanel charId={selectedCharacterId} onScrollToScene={onScrollToScene} />;
   } else if (isScriptView) {
     contextContent = <SceneOutlineContent />;
   } else if (activeDoc === 'characters') {
     contextContent = (
-      <PageInfoPanel icon="👥" title="인물 패널 안내" items={[
-        '인물을 선택하면 해당 인물의 대사 목록이 표시됩니다.',
-        '인물관계도에서 인물 간 관계를 시각적으로 확인하세요.',
-      ]} />
+      <div className="flex-1 flex items-center justify-center">
+        <span className="text-xs text-center px-4" style={{ color: 'var(--c-text6)' }}>
+          인물을 선택하면<br/>인물현황이 표시됩니다
+        </span>
+      </div>
     );
   } else {
     contextContent = (
@@ -722,12 +656,10 @@ export default function RightPanel({ onScrollToScene }) {
                   key={scene.id}
                   scene={scene}
                   sceneContent={sceneNumBlock?.content || scene.content}
-                  segmentBlocks={segmentBlocks}
                   isActive={activeSceneId === scene.id}
                   onClick={() => handleSceneClick(scene)}
                   onStatusChange={status => handleStatusChange(scene.id, status)}
                   onTagsChange={tags => handleTagsChange(scene.id, tags)}
-                  onMetaChange={meta => handleMetaChange(scene.id, meta)}
                 />
               );
             })
@@ -747,9 +679,9 @@ export default function RightPanel({ onScrollToScene }) {
 
   return (
     <div className="h-full flex flex-col" style={{ background: 'var(--c-panel)', borderLeft: '1px solid var(--c-border)' }}>
-      {/* Top-level tabs: 문맥 | 체크리스트 */}
+      {/* Top-level tabs: 문맥(인물현황) | 체크리스트 */}
       <div className="flex shrink-0" style={{ borderBottom: '1px solid var(--c-border)' }}>
-        {[['context', '문맥'], ['checklist', '체크리스트']].map(([t, l]) => (
+        {[['context', isCharView ? '인물현황' : '문맥'], ['checklist', '체크리스트']].map(([t, l]) => (
           <button key={t} onClick={() => setMainTab(t)}
             className="flex-1 py-2 text-[11px] font-medium"
             style={{

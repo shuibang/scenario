@@ -75,17 +75,24 @@ export const FONTS = [
     cssFallback:  "'Noto Sans', sans-serif",
   },
 
-  // ── System fonts ─────────────────────────────────────────────────────────────
+  // ── Bundled: 맑은 고딕 ─────────────────────────────────────────────────────
+  // italic/boldItalic 파일 미제공 → null
   {
-    id:            'malgun-gothic',
-    displayName:   '맑은 고딕',
-    sourceType:    'system',
-    cssFamily:     'Malgun Gothic',
-    pdfFiles:      null,
-    docxFontName:  '맑은 고딕',
-    cssFallback:   "'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif",
-    pdfFallbackId: 'noto-sans-kr',
+    id:          'malgun-gothic',
+    displayName: '맑은 고딕',
+    sourceType:  'bundled',
+    cssFamily:   'Malgun Gothic',
+    pdfFiles: {
+      normal:     '/fonts/malgun.ttf',
+      bold:       '/fonts/malgunbd.ttf',
+      italic:     null,
+      boldItalic: null,
+    },
+    docxFontName: '맑은 고딕',
+    cssFallback:  "'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif",
   },
+
+  // ── System fonts ─────────────────────────────────────────────────────────────
   {
     id:            'nanum-myeongjo',
     displayName:   '나눔명조',

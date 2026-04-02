@@ -313,29 +313,51 @@ textarea {
   color: var(--c-text2);
 }
 
-/* Dialogue row */
+/* Dialogue row — 인물명은 ::before pseudo-element로 표시 (씬번호와 동일 패턴) */
 .ce-block[data-block-type="dialogue"] {
-  display: flex;
-  align-items: flex-start;
-}
-.ce-char-badge {
-  min-width: var(--c-dialogue-gap, 7em);
-  font-weight: bold;
-  flex-shrink: 0;
-  cursor: pointer;
-  user-select: none;
-  color: var(--c-text);
-  padding-right: 0.5em;
-}
-.ce-char-badge:hover {
-  color: var(--c-accent);
-}
-.ce-speech {
-  flex: 1;
-  outline: none;
+  display: block;
+  padding-left: var(--dialogue-gap, 7em);
+  position: relative;
   color: var(--c-text);
   white-space: pre-wrap;
   word-break: break-word;
+}
+.ce-block[data-block-type="dialogue"]::before {
+  content: attr(data-char-name);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--dialogue-gap, 7em);
+  font-weight: bold;
+  color: var(--c-text);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ce-block[data-block-type="dialogue"]:hover::before {
+  color: var(--c-accent);
+}
+
+/* Scene ref — 씬연결 블록 */
+.ce-block[data-block-type="scene_ref"] {
+  color: var(--c-accent);
+  font-style: italic;
+  opacity: 0.85;
+  cursor: default;
+}
+
+/* Inline scene reference chip (within any block) */
+.scene-ref-chip {
+  color: inherit;
+  font-style: inherit;
+  font-size: inherit;
+  opacity: 0.7;
+  cursor: default;
+  user-select: none;
+  text-decoration: underline dotted currentColor;
+  text-underline-offset: 2px;
 }
 
 /* Parenthetical */

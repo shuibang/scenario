@@ -44,12 +44,12 @@ function resetIds() { _pid = 0; }
  */
 function para(text, { cid = 0, parid = 0, sid = 0 } = {}) {
   const pId = _pid++;
-  if (!text) {
-    return `  <hp:p id="${pId}" paraPrIDRef="${parid}" styleIDRef="${sid}" pageBreak="0" columnBreak="0" merged="0"/>`;
-  }
+  // Always include an explicit hp:run so HWP respects charPr height (e.g. 11pt)
+  // instead of falling back to its built-in default (10pt) for empty paragraphs.
+  const tEl = text ? `<hp:t xml:space="preserve">${esc(text)}</hp:t>` : `<hp:t/>`;
   return `  <hp:p id="${pId}" paraPrIDRef="${parid}" styleIDRef="${sid}" pageBreak="0" columnBreak="0" merged="0">
     <hp:run charPrIDRef="${cid}">
-      <hp:t xml:space="preserve">${esc(text)}</hp:t>
+      ${tEl}
     </hp:run>
   </hp:p>`;
 }

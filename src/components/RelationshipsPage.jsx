@@ -22,7 +22,7 @@ function rectEdge(cx, cy, nx, ny) {
 }
 
 // ─── EdgeArrow ─────────────────────────────────────────────────────────────────
-function EdgeArrow({ from, to, label }) {
+function EdgeArrow({ from, to, label, sideOffset = 0 }) {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
   const dist = Math.sqrt(dx * dx + dy * dy);
@@ -30,11 +30,16 @@ function EdgeArrow({ from, to, label }) {
   const nx = dx / dist;
   const ny = dy / dist;
 
-  const p1 = rectEdge(from.x, from.y, nx, ny);
-  const p2 = rectEdge(to.x, to.y, -nx, -ny);
-  // Pull p2 back by arrowhead length so line ends behind arrowhead
-  const x2 = p2.x - nx * ARROW_LEN;
-  const y2 = p2.y - ny * ARROW_LEN;
+  // Perpendicular unit vector (rotate 90°)
+  const perpX = -ny * sideOffset;
+  const perpY =  nx * sideOffset;
+
+  const p1raw = rectEdge(from.x, from.y, nx, ny);
+  const p2raw = rectEdge(to.x, to.y, -nx, -ny);
+
+  const p1 = { x: p1raw.x + perpX, y: p1raw.y + perpY };
+  const x2  = p2raw.x - nx * ARROW_LEN + perpX;
+  const y2  = p2raw.y - ny * ARROW_LEN + perpY;
 
   // Skip if line would be too short
   const lineDist = Math.sqrt((x2 - p1.x) ** 2 + (y2 - p1.y) ** 2);
@@ -42,9 +47,9 @@ function EdgeArrow({ from, to, label }) {
 
   const mx = (p1.x + x2) / 2;
   const my = (p1.y + y2) / 2;
-  // Perpendicular offset for label (above the line)
-  const px = -ny * 12;
-  const py = nx * 12;
+  // Label offset: perpendicular to line, opposite side from sideOffset
+  const lx = -ny * (sideOffset !== 0 ? Math.sign(sideOffset) * 12 : 12);
+  const ly =  nx * (sideOffset !== 0 ? Math.sign(sideOffset) * 12 : 12);
   const lw = label ? Math.max(label.length * 6 + 10, 24) : 0;
 
   return (
@@ -57,12 +62,12 @@ function EdgeArrow({ from, to, label }) {
       {label && (
         <>
           <rect
-            x={mx + px - lw / 2} y={my + py - 8}
+            x={mx + lx - lw / 2} y={my + ly - 8}
             width={lw} height={14} rx="3"
             fill="var(--c-input)" opacity="0.9"
           />
           <text
-            x={mx + px} y={my + py + 2}
+            x={mx + lx} y={my + ly + 2}
             textAnchor="middle"
             fontSize="10" fill="var(--c-text4)"
             style={{ userSelect: 'none', pointerEvents: 'none' }}
@@ -161,12 +166,18 @@ function GraphCanvas({ chars, edges, positions, containerRef, onDragStart, print
             <path d="M0,0 L8,3 L0,6 Z" fill="var(--c-accent)" opacity="0.7" />
           </marker>
         </defs>
-        {edges.map(edge => {
-          const from = positions[edge.fromId];
-          const to = positions[edge.toId];
-          if (!from || !to) return null;
-          return <EdgeArrow key={edge.id} from={from} to={to} label={edge.label} />;
-        })}
+        {(() => {
+          const pairSet = new Set(edges.map(e => `${e.fromId}→${e.toId}`));
+          return edges.map(edge => {
+            const from = positions[edge.fromId];
+            const to   = positions[edge.toId];
+            if (!from || !to) return null;
+            const hasPair = pairSet.has(`${edge.toId}→${edge.fromId}`);
+            // 쌍방이면 각각 +8 / -8px 옆으로 분리
+            const sideOffset = hasPair ? 8 : 0;
+            return <EdgeArrow key={edge.id} from={from} to={to} label={edge.label} sideOffset={sideOffset} />;
+          });
+        })()}
       </svg>
 
       {/* Character nodes */}

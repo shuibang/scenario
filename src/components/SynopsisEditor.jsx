@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useApp } from '../store/AppContext';
 import { genId, now } from '../store/db';
 
@@ -20,6 +20,18 @@ function migrateDoc(doc) {
 
 // ─── Section field
 function SectionField({ sec, value, onChange, readOnly }) {
+  const taRef = useRef(null);
+
+  const autoResize = useCallback((el) => {
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = el.scrollHeight + 'px';
+  }, []);
+
+  useEffect(() => {
+    autoResize(taRef.current);
+  }, [value, autoResize]);
+
   const inputStyle = {
     background: 'var(--c-input)',
     color: 'var(--c-text)',
@@ -30,8 +42,9 @@ function SectionField({ sec, value, onChange, readOnly }) {
     padding: '0.5rem 0.75rem',
     fontSize: '0.875rem',
     lineHeight: 1.7,
-    resize: 'vertical',
+    resize: 'none',
     fontFamily: 'inherit',
+    overflow: 'hidden',
   };
 
   return (
@@ -45,12 +58,13 @@ function SectionField({ sec, value, onChange, readOnly }) {
           onChange={e => onChange(e.target.value)}
           placeholder={sec.placeholder}
           readOnly={readOnly}
-          style={{ ...inputStyle, resize: undefined }}
+          style={{ ...inputStyle, resize: undefined, overflow: undefined, height: undefined }}
         />
       ) : (
         <textarea
+          ref={taRef}
           value={value}
-          onChange={e => onChange(e.target.value)}
+          onChange={e => { onChange(e.target.value); autoResize(e.target); }}
           placeholder={sec.placeholder}
           rows={5}
           readOnly={readOnly}
@@ -118,7 +132,7 @@ function CharacterSettings({ characters }) {
 // ─── SynopsisEditor
 export default function SynopsisEditor() {
   const { state, dispatch } = useApp();
-  const { activeProjectId, synopsisDocs, characters } = state;
+  const { activeProjectId, synopsisDocs, characters, stylePreset } = state;
 
   const existing = synopsisDocs.find(d => d.projectId === activeProjectId);
   const [sections, setSections] = useState({ genre: '', theme: '', intent: '', story: '' });
@@ -159,6 +173,38 @@ export default function SynopsisEditor() {
   const wordCount = Object.values(sections).join(' ')
     .replace(/\s+/g, ' ').trim().split(' ').filter(Boolean).length;
 
+  const pageEst = (() => {
+    const text = Object.values(sections).filter(Boolean).join(' ');
+    if (!text.trim()) return 0;
+    const fontSize = stylePreset?.fontSize ?? 11;
+    const lineHeight = stylePreset?.lineHeight ?? 1.6;
+    const margins = stylePreset?.pageMargins ?? { top: 35, bottom: 30 };
+    const usablePt = 841.89 - (margins.top + margins.bottom) * 2.835;
+    const linesPerPage = Math.floor(usablePt / (fontSize * lineHeight));
+    const charsPerLine = Math.round(50 * (11 / fontSize));
+    return Math.max(1, Math.ceil(Math.ceil(text.length / charsPerLine) / linesPerPage));
+  })();
+
+  const scrollRef = useRef(null);
+
+  // Typewriter mode: center focused field in scroll container
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (!container) return;
+    const onFocusin = (e) => {
+      const target = e.target;
+      if (target.tagName !== 'TEXTAREA' && target.tagName !== 'INPUT') return;
+      requestAnimationFrame(() => {
+        const containerRect = container.getBoundingClientRect();
+        const targetRect    = target.getBoundingClientRect();
+        const targetCenter  = targetRect.top + targetRect.height / 2 - containerRect.top;
+        container.scrollTop += targetCenter - containerRect.height / 2;
+      });
+    };
+    container.addEventListener('focusin', onFocusin);
+    return () => container.removeEventListener('focusin', onFocusin);
+  }, []);
+
   if (!activeProjectId) return null;
 
   return (
@@ -169,13 +215,14 @@ export default function SynopsisEditor() {
         style={{ borderBottom: '1px solid var(--c-border2)' }}
       >
         <span className="text-sm font-medium" style={{ color: 'var(--c-text2)' }}>작품 시놉시스</span>
-        <span className="ml-auto text-xs" style={{ color: 'var(--c-text6)' }}>
+        <span className="ml-auto text-xs flex items-center gap-2" style={{ color: 'var(--c-text6)' }}>
+          {pageEst > 0 && <span className="tabular-nums">약 {pageEst}p</span>}
           {dirty ? '저장 중…' : '● 저장됨'} · {wordCount}어
         </span>
       </div>
 
       {/* Sections */}
-      <div className="flex-1 overflow-y-auto">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto">
         <div className="max-w-2xl mx-auto py-8 px-8 space-y-8">
           {/* Regular sections */}
           {SECTIONS.map(sec => (

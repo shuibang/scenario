@@ -18,7 +18,8 @@ const A4_W_PX = 794;  // 210 mm
 const A4_H_PX = 1123; // 297 mm
 
 // ─── Token → DOM element ──────────────────────────────────────────────────────
-function TokenRow({ token, metrics, fontFamily, fontSize, lineHeight }) {
+function TokenRow({ token, text: textProp, metrics, fontFamily, fontSize, lineHeight }) {
+  const content = textProp ?? token.text;
   const { dialogueGapPt } = metrics;
   const lineHpx = fontSize * lineHeight;
   const style = {
@@ -36,24 +37,24 @@ function TokenRow({ token, metrics, fontFamily, fontSize, lineHeight }) {
     case 'ep_title':
       return (
         <div style={{ ...style, fontSize: `${fontSize + 2}pt`, fontWeight: 700, textAlign: 'center', marginBottom: '14pt' }}>
-          {token.text}
+          {content}
         </div>
       );
 
     case 'scene_number':
-      return <div style={{ ...style, fontWeight: 700, marginTop: '10pt', marginBottom: '2pt' }}>{token.text}</div>;
+      return <div style={{ ...style, fontWeight: 700, marginTop: '10pt', marginBottom: '2pt' }}>{content}</div>;
 
     case 'action':
-      return <div style={{ ...style, marginLeft: '8mm', marginBottom: '1pt' }}>{token.text}</div>;
+      return <div style={{ ...style, marginLeft: '8mm', marginBottom: '1pt', textAlign: 'justify', whiteSpace: 'pre-wrap' }}>{content}</div>;
 
     case 'dialogue':
       return (
-        <div style={{ display: 'flex', alignItems: 'flex-start', ...style, margin: '1pt 0' }}>
+        <div style={{ ...style, display: 'flex', alignItems: 'flex-start', marginBottom: '1pt' }}>
           <span style={{ width: `${dialogueGapPt}pt`, fontWeight: 700, flexShrink: 0, fontFamily: style.fontFamily, fontSize: style.fontSize }}>
             {token.charName || ''}
           </span>
-          <span style={{ flex: 1, fontFamily: style.fontFamily, fontSize: style.fontSize }}>
-            {token.text}
+          <span style={{ flex: 1, fontFamily: style.fontFamily, fontSize: style.fontSize, textAlign: 'justify', whiteSpace: 'pre-wrap' }}>
+            {content}
           </span>
         </div>
       );
@@ -61,36 +62,39 @@ function TokenRow({ token, metrics, fontFamily, fontSize, lineHeight }) {
     case 'parenthetical':
       return (
         <div style={{ ...style, marginLeft: `${dialogueGapPt}pt`, fontStyle: 'italic', fontSize: `${fontSize - 1}pt` }}>
-          {token.text}
+          {content}
         </div>
       );
 
+    case 'scene_ref':
+      return <div style={{ ...style, color: '#666', fontStyle: 'italic' }}>{content}</div>;
+
     case 'transition':
-      return <div style={{ ...style, textAlign: 'right', margin: '4pt 0' }}>{token.text}</div>;
+      return <div style={{ ...style, textAlign: 'right', margin: '4pt 0' }}>{content}</div>;
 
     case 'heading':
-      return <div style={{ ...style, fontWeight: 700, marginTop: '8pt', marginBottom: '2pt' }}>{token.text}</div>;
+      return <div style={{ ...style, fontWeight: 700, marginTop: '8pt', marginBottom: '2pt' }}>{content}</div>;
 
     case 'char_name':
-      return <div style={{ ...style, fontWeight: 700, marginTop: '6pt' }}>{token.text}</div>;
+      return <div style={{ ...style, fontWeight: 700, marginTop: '6pt' }}>{content}</div>;
 
     case 'cover_title':
       return (
         <div style={{ ...style, fontSize: `${fontSize + 11}pt`, fontWeight: 700, textAlign: 'center', marginBottom: '12pt' }}>
-          {token.text}
+          {content}
         </div>
       );
 
     case 'cover_field':
       return (
         <div style={{ ...style, textAlign: 'center', marginBottom: '3pt' }}>
-          {token.text}
+          {content}
         </div>
       );
 
     case 'body':
     default:
-      return <div style={{ ...style, marginBottom: '1pt' }}>{token.text}</div>;
+      return <div style={{ ...style, marginBottom: '1pt', textAlign: 'justify', whiteSpace: 'pre-wrap' }}>{content}</div>;
   }
 }
 
@@ -98,6 +102,34 @@ function TokenRow({ token, metrics, fontFamily, fontSize, lineHeight }) {
 function A4Page({ tokens, pageNum, showPageNum, margins, metrics, fontFamily, fontSize, lineHeight, scale }) {
   const { top, right, bottom, left } = margins;
   const mmToPx = (mm) => (mm / 210) * A4_W_PX;
+
+  // Build renderList: same blockText grouping as PdfPage in printPdf.jsx.
+  // When all lines of a wrapped block fit on this page, pass the full paragraph
+  // text (blockText) so the browser justifies interior lines naturally.
+  const renderList = [];
+  const absorbedKinds = new Set();
+  for (let i = 0; i < tokens.length; i++) {
+    const tok = tokens[i];
+    if (tok.isFirstOfBlock === false) {
+      if (absorbedKinds.has(tok.kind)) continue;
+      renderList.push({ token: tok, text: tok.text });
+      continue;
+    }
+    absorbedKinds.clear();
+    if (tok.isFirstOfBlock === true && tok.blockLineCount > 1) {
+      let onPage = 0;
+      for (let j = i + 1; j < tokens.length; j++) {
+        const t = tokens[j];
+        if (t.isFirstOfBlock === false && t.kind === tok.kind) onPage++;
+        else break;
+      }
+      const fullyOnPage = onPage >= tok.blockLineCount - 1;
+      if (fullyOnPage) absorbedKinds.add(tok.kind);
+      renderList.push({ token: tok, text: fullyOnPage ? (tok.blockText ?? tok.text) : tok.text });
+    } else {
+      renderList.push({ token: tok, text: tok.text });
+    }
+  }
 
   return (
     <div
@@ -125,10 +157,11 @@ function A4Page({ tokens, pageNum, showPageNum, margins, metrics, fontFamily, fo
           overflow: 'hidden',
         }}
       >
-        {tokens.map((tok, i) => (
+        {renderList.map((item, i) => (
           <TokenRow
             key={i}
-            token={tok}
+            token={item.token}
+            text={item.text}
             metrics={metrics}
             fontFamily={fontFamily}
             fontSize={fontSize}

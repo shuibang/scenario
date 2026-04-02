@@ -63,6 +63,10 @@ export default function TreatmentPage() {
   const textareaRefs   = useRef({});
   const pendingFocus   = useRef(null); // { id, cursor }
 
+  // Keep a ref to scriptBlocks so save() can access the latest value without re-creating
+  const scriptBlocksRef = useRef(scriptBlocks);
+  useEffect(() => { scriptBlocksRef.current = scriptBlocks; }, [scriptBlocks]);
+
   // ─── stale-epId guard (회차 삭제 시 fallback) ────────────────────────────
   useEffect(() => {
     if (!selectedEpId) return;
@@ -94,6 +98,24 @@ export default function TreatmentPage() {
   const save = useCallback((newItems, record = false) => {
     setItems(newItems);
     dispatch({ type: 'UPDATE_EPISODE', payload: { id: epId, summaryItems: newItems }, _record: record });
+
+    // ── Auto-sync: importedSceneId가 있는 항목의 action 블록을 즉시 갱신
+    if (localStorage.getItem('drama_treatmentSync') === 'sync') {
+      const epBlocks = scriptBlocksRef.current.filter(b => b.episodeId === epId);
+      let changed = false;
+      const updatedBlocks = epBlocks.map(block => {
+        if (block.type !== 'action') return block;
+        const item = newItems.find(it => it.importedSceneId === block.sceneId);
+        if (item && item.text.trim() !== block.content?.trim()) {
+          changed = true;
+          return { ...block, content: item.text.trim(), updatedAt: now() };
+        }
+        return block;
+      });
+      if (changed) {
+        dispatch({ type: 'SET_BLOCKS', episodeId: epId, payload: updatedBlocks });
+      }
+    }
   }, [epId, dispatch]);
 
   // ─── Auto-resize textarea ─────────────────────────────────────────────────
@@ -294,7 +316,7 @@ export default function TreatmentPage() {
       <div className="max-w-2xl mx-auto py-10 px-8">
 
         {/* Header */}
-        <div className="flex items-center gap-3 mb-6">
+        <div className="flex items-center gap-3 mb-6 flex-wrap">
           <span className="text-sm font-medium" style={{ color: 'var(--c-text2)' }}>트리트먼트</span>
           <select
             value={epId || ''}
@@ -306,6 +328,30 @@ export default function TreatmentPage() {
               <option key={ep.id} value={ep.id}>{ep.number}회 {ep.title || ''}</option>
             ))}
           </select>
+          {!importing ? (
+            <button
+              onClick={() => setImporting(true)}
+              className="px-3 py-1 rounded text-xs"
+              style={{ background: 'transparent', color: 'var(--c-text3)', border: '1px solid var(--c-border3)', cursor: 'pointer' }}
+            >대본으로 가져오기</button>
+          ) : (
+            <span className="flex items-center gap-2">
+              <span className="text-xs" style={{ color: 'var(--c-text4)' }}>
+                {items.filter(it => it.text.trim()).length}개 항목 → {episode?.number}회 대본에 추가
+              </span>
+              <button
+                onClick={handleImportToScript}
+                className="px-2 py-0.5 rounded text-xs text-white"
+                style={{ background: 'var(--c-accent)', border: 'none', cursor: 'pointer' }}
+              >확인</button>
+              <button
+                onClick={() => setImporting(false)}
+                className="px-2 py-0.5 rounded text-xs"
+                style={{ color: 'var(--c-text4)', border: '1px solid var(--c-border3)', background: 'transparent', cursor: 'pointer' }}
+              >취소</button>
+            </span>
+          )}
+          {importMsg && <span className="text-xs" style={{ color: 'var(--c-accent2)' }}>{importMsg}</span>}
         </div>
 
         {episode && (
@@ -400,37 +446,6 @@ export default function TreatmentPage() {
           + 항목 추가
         </button>
 
-        {/* 대본으로 가져오기 */}
-        <div className="mt-6 flex items-center gap-3 flex-wrap">
-          {!importing ? (
-            <button
-              onClick={() => setImporting(true)}
-              className="px-4 py-2 rounded text-sm"
-              style={{ background: 'var(--c-accent)', color: '#fff', border: 'none', cursor: 'pointer' }}
-            >
-              대본으로 가져오기
-            </button>
-          ) : (
-            <>
-              <span className="text-xs" style={{ color: 'var(--c-text4)' }}>
-                {items.filter(it => it.text.trim()).length}개 항목 → {episode?.number}회 대본에 씬번호+지문 블록으로 추가
-              </span>
-              <button
-                onClick={handleImportToScript}
-                className="px-3 py-1.5 rounded text-sm text-white"
-                style={{ background: 'var(--c-accent)', border: 'none', cursor: 'pointer' }}
-              >확인</button>
-              <button
-                onClick={() => setImporting(false)}
-                className="px-3 py-1.5 rounded text-sm"
-                style={{ color: 'var(--c-text4)', border: '1px solid var(--c-border3)', background: 'transparent', cursor: 'pointer' }}
-              >취소</button>
-            </>
-          )}
-          {importMsg && (
-            <span className="text-xs" style={{ color: 'var(--c-accent2)' }}>{importMsg}</span>
-          )}
-        </div>
 
         <div className="mt-2 text-[10px]" style={{ color: 'var(--c-text6)' }}>
           Enter: 항목 분리 · Shift+Enter: 줄바꿈 · Backspace(줄 앞): 앞 항목 병합

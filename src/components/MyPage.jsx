@@ -1,14 +1,24 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY,
+);
+import { QRCodeSVG } from 'qrcode.react';
 import { useApp } from '../store/AppContext';
 import QnATab from './QnATab';
 import { Document, Page, Text, View, StyleSheet, pdf, Font } from '@react-pdf/renderer';
+import { ensureFontsRegistered } from '../print/printPdf';
 import {
   storeFont, removeFont, loadFontMeta, saveFontMeta,
 } from '../print/fontStorage';
 
 // ─── Log PDF ──────────────────────────────────────────────────────────────────
+const LOG_PDF_FONT = '함초롱바탕';
+
 const logPdfStyles = StyleSheet.create({
-  page:    { padding: '30mm 25mm', fontFamily: 'Helvetica', fontSize: 10 },
+  page:    { padding: '30mm 25mm', fontFamily: LOG_PDF_FONT, fontSize: 10 },
   title:   { fontSize: 16, fontWeight: 'bold', marginBottom: 12 },
   sub:     { fontSize: 11, fontWeight: 'bold', marginBottom: 4, marginTop: 10 },
   row:     { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3, borderBottomWidth: 0.5, borderBottomColor: '#e0e0e0' },
@@ -62,17 +72,27 @@ function LogPdfDoc({ logs, projects }) {
 
         <Text style={logPdfStyles.sub}>세션 목록</Text>
         <View style={{ ...logPdfStyles.row, borderBottomWidth: 1, borderBottomColor: '#999' }}>
-          <Text style={{ ...logPdfStyles.gray, width: '35%' }}>날짜/시간</Text>
-          <Text style={{ ...logPdfStyles.gray, width: '35%' }}>작품</Text>
-          <Text style={{ ...logPdfStyles.gray, width: '15%', textAlign: 'right' }}>활동시간</Text>
+          <Text style={{ ...logPdfStyles.gray, width: '30%' }}>날짜/시간</Text>
+          <Text style={{ ...logPdfStyles.gray, width: '25%' }}>작품</Text>
+          <Text style={{ ...logPdfStyles.gray, width: '32%' }}>완료 항목</Text>
+          <Text style={{ ...logPdfStyles.gray, width: '13%', textAlign: 'right' }}>활동시간</Text>
         </View>
         {sorted.map((log, i) => {
           const proj = projects.find(p => p.id === log.projectId);
+          const snapshot = log.completedChecklistSnapshot || [];
           return (
-            <View key={i} style={logPdfStyles.row}>
-              <Text style={{ ...logPdfStyles.cell, width: '35%' }}>{fmtTs(log.completedAt)}</Text>
-              <Text style={{ ...logPdfStyles.cell, width: '35%' }}>{proj?.title || '삭제된 작품'}</Text>
-              <Text style={{ ...logPdfStyles.cell, width: '15%', textAlign: 'right' }}>{fmtSec(log.activeDurationSec || 0)}</Text>
+            <View key={i} style={{ ...logPdfStyles.row, alignItems: 'flex-start' }}>
+              <Text style={{ ...logPdfStyles.cell, width: '30%' }}>{fmtTs(log.completedAt)}</Text>
+              <Text style={{ ...logPdfStyles.cell, width: '25%' }}>{proj?.title || '삭제된 작품'}</Text>
+              <View style={{ width: '32%' }}>
+                {snapshot.length > 0
+                  ? snapshot.map((item, j) => (
+                      <Text key={j} style={{ ...logPdfStyles.cell, fontSize: 8 }}>✓ {item.text}</Text>
+                    ))
+                  : <Text style={{ ...logPdfStyles.gray, fontSize: 8 }}>—</Text>
+                }
+              </View>
+              <Text style={{ ...logPdfStyles.cell, width: '13%', textAlign: 'right' }}>{fmtSec(log.activeDurationSec || 0)}</Text>
             </View>
           );
         })}
@@ -82,6 +102,7 @@ function LogPdfDoc({ logs, projects }) {
 }
 
 async function downloadLogPdf(logs, projects) {
+  ensureFontsRegistered();
   const blob = await pdf(<LogPdfDoc logs={logs} projects={projects} />).toBlob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -100,6 +121,57 @@ function buildLogShareUrl(logs, projects) {
   };
   const encoded = encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(payload)))));
   return `${window.location.origin}${window.location.pathname}#log=${encoded}`;
+}
+
+// ─── LogItem ─────────────────────────────────────────────────────────────────
+function LogItem({ log, proj, epLabel, snapshot, fmt, fmtDate }) {
+  const [expanded, setExpanded] = useState(false);
+  const hasSnapshot = snapshot.length > 0;
+  return (
+    <div>
+      <div
+        className="flex items-start gap-3 rounded px-1 py-1"
+        onClick={() => hasSnapshot && setExpanded(v => !v)}
+        style={{ cursor: hasSnapshot ? 'pointer' : 'default', background: expanded ? 'var(--c-hover)' : 'transparent' }}
+      >
+        <span className="text-[10px] shrink-0 tabular-nums" style={{ color: 'var(--c-text6)', minWidth: '80px' }}>
+          {fmtDate(log.completedAt)}
+        </span>
+        <div className="flex-1 min-w-0">
+          <span className="text-xs block" style={{ color: 'var(--c-text4)' }}>
+            {proj?.title || '삭제된 작품'}
+            {epLabel && <span className="ml-1 text-[10px]" style={{ color: 'var(--c-text6)' }}>{epLabel}</span>}
+          </span>
+          {hasSnapshot && !expanded && (
+            <span className="text-[10px]" style={{ color: 'var(--c-text6)' }}>
+              완료 {snapshot.length}항목 · 클릭해서 보기
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="text-xs tabular-nums" style={{ color: 'var(--c-accent2)' }}>
+            {fmt(log.activeDurationSec || 0)}
+          </span>
+          {hasSnapshot && (
+            <span className="text-[10px]" style={{ color: 'var(--c-text6)' }}>{expanded ? '▲' : '▼'}</span>
+          )}
+        </div>
+      </div>
+      {expanded && (
+        <ul className="mt-1 mb-2 ml-[88px] space-y-0.5">
+          {snapshot.map((item, idx) => (
+            <li key={item.id || idx} className="text-[11px] flex items-start gap-1" style={{ color: 'var(--c-text4)' }}>
+              <span style={{ color: 'var(--c-accent2)', flexShrink: 0 }}>✓</span>
+              <span>{item.text}</span>
+              {item.docId && typeof item.docId !== 'undefined' && (
+                <span className="text-[10px] ml-1" style={{ color: 'var(--c-text6)' }}>({item.docId})</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 // ─── Stats tab ────────────────────────────────────────────────────────────────
@@ -272,35 +344,16 @@ function StatsTab() {
       {recentLogs.length > 0 && (
         <div style={cardStyle}>
           <div style={labelStyle}>최근 세션</div>
-          <div className="mt-3 space-y-1.5">
+          <div className="mt-3 space-y-1">
             {recentLogs.map((log, i) => {
               const proj = projects.find(p => p.id === log.projectId);
               const snapshot = log.completedChecklistSnapshot || [];
-              return (
-                <div key={log.startedAt + i} className="flex items-start gap-3">
-                  <span className="text-[10px] shrink-0 tabular-nums" style={{ color: 'var(--c-text6)', minWidth: '80px' }}>
-                    {fmtDate(log.completedAt)}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <span className="text-xs truncate block" style={{ color: 'var(--c-text4)' }}>
-                      {proj?.title || '삭제된 작품'}
-                      {log.documentId && typeof log.documentId === 'string' && !log.documentId.match(/^[a-z]+$/) && (
-                        <span className="ml-1 text-[10px]" style={{ color: 'var(--c-text6)' }}>
-                          {(() => { const ep = episodes.find(e => e.id === log.documentId); return ep ? `${ep.number}회` : ''; })()}
-                        </span>
-                      )}
-                    </span>
-                    {snapshot.length > 0 && (
-                      <span className="text-[9px]" style={{ color: 'var(--c-text6)' }}>
-                        완료 항목: {snapshot.map(s => s.text).join(', ').slice(0, 60)}
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-xs tabular-nums shrink-0" style={{ color: 'var(--c-accent2)' }}>
-                    {fmt(log.activeDurationSec || 0)}
-                  </span>
-                </div>
-              );
+              const epLabel = (() => {
+                if (!log.documentId || typeof log.documentId !== 'string' || log.documentId.match(/^[a-z]+$/)) return '';
+                const ep = episodes.find(e => e.id === log.documentId);
+                return ep ? `${ep.number}회` : '';
+              })();
+              return <LogItem key={log.startedAt + i} log={log} proj={proj} epLabel={epLabel} snapshot={snapshot} fmt={fmt} fmtDate={fmtDate} />;
             })}
           </div>
         </div>
@@ -318,8 +371,9 @@ function StatsTab() {
 
 // ─── Settings tab ─────────────────────────────────────────────────────────────
 const PUBLIC_PC_KEY     = 'drama_publicPcMode';
-const DESIGN_TOOL_KEY   = 'drama_designTool';   // 'treatment' | 'scenelist'
-const REFLECT_MODE_KEY  = 'drama_reflectMode';  // 'draft' | 'sync'
+const DESIGN_TOOL_KEY        = 'drama_designTool';       // 'treatment' | 'scenelist'
+const TREATMENT_SYNC_KEY     = 'drama_treatmentSync';    // 'off' | 'sync'
+const SCENELIST_SYNC_KEY     = 'drama_scenelistSync';    // 'off' | 'sync'
 
 // ─── Font Management ──────────────────────────────────────────────────────────
 function formatBytes(n) {
@@ -470,9 +524,26 @@ function FontManagementSection() {
 }
 
 function SettingsTab() {
+  const { state, dispatch } = useApp();
+  const preset = state.stylePreset || {};
+  const margins = preset.pageMargins || { top: 35, right: 30, bottom: 30, left: 30 };
+  const isLoggedIn = !!localStorage.getItem('drama_auth_user');
+
+  const setPreset = (key, val) => dispatch({ type: 'SET_STYLE_PRESET', payload: { [key]: val } });
+  const setMargin = (side, val) => dispatch({ type: 'SET_STYLE_PRESET', payload: { pageMargins: { ...margins, [side]: Number(val) } } });
+
+  const [symInput, setSymInput] = useState('');
+  const customSymbols = preset.customSymbols || [];
+  const addSymbol = () => {
+    const s = symInput.trim();
+    if (s && !customSymbols.includes(s)) setPreset('customSymbols', [...customSymbols, s]);
+    setSymInput('');
+  };
+
   const [publicPc, setPublicPc] = useState(() => localStorage.getItem(PUBLIC_PC_KEY) === 'true');
-  const [designTool, setDesignTool] = useState(() => localStorage.getItem(DESIGN_TOOL_KEY) || 'treatment');
-  const [reflectMode, setReflectMode] = useState(() => localStorage.getItem(REFLECT_MODE_KEY) || 'draft');
+  const [designTool, setDesignTool]       = useState(() => localStorage.getItem(DESIGN_TOOL_KEY) || 'treatment');
+  const [treatmentSync, setTreatmentSync] = useState(() => localStorage.getItem(TREATMENT_SYNC_KEY) || 'off');
+  const [scenelistSync, setScenelistSync] = useState(() => localStorage.getItem(SCENELIST_SYNC_KEY) || 'off');
 
   const togglePublicPc = () => {
     const next = !publicPc;
@@ -485,13 +556,114 @@ function SettingsTab() {
     localStorage.setItem(DESIGN_TOOL_KEY, val);
   };
 
-  const handleReflectMode = (val) => {
-    setReflectMode(val);
-    localStorage.setItem(REFLECT_MODE_KEY, val);
+  const toggleSync = (tool) => {
+    if (tool === 'treatment') {
+      const next = treatmentSync === 'sync' ? 'off' : 'sync';
+      setTreatmentSync(next);
+      localStorage.setItem(TREATMENT_SYNC_KEY, next);
+    } else {
+      const next = scenelistSync === 'sync' ? 'off' : 'sync';
+      setScenelistSync(next);
+      localStorage.setItem(SCENELIST_SYNC_KEY, next);
+    }
   };
+
+  const inputStyle = {
+    background: 'var(--c-input)', color: 'var(--c-text3)',
+    border: '1px solid var(--c-border3)', borderRadius: '0.25rem',
+    padding: '3px 8px', fontSize: '12px', outline: 'none', width: '100%',
+  };
+  const labelStyle = { fontSize: '11px', color: 'var(--c-text5)', marginBottom: '2px', display: 'block' };
 
   return (
     <div className="space-y-4">
+
+      {/* 스타일 설정 */}
+      <div className="p-4 rounded-lg" style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)' }}>
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-sm font-semibold" style={{ color: 'var(--c-text)' }}>스타일 설정</div>
+          {!isLoggedIn && (
+            <span className="text-[10px] px-2 py-0.5 rounded" style={{ background: 'var(--c-tag)', color: 'var(--c-text5)', border: '1px solid var(--c-border3)' }}>
+              로그인 시 저장됩니다
+            </span>
+          )}
+        </div>
+        <div className="text-[10px] mb-3 px-3 py-2 rounded" style={{ background: 'var(--c-tag)', color: 'var(--c-text5)', border: '1px solid var(--c-border3)' }}>
+          공모전 등 정확한 지침이 있는 경우, 규격에 맞는지 직접 확인하시길 권장합니다.
+        </div>
+        <div className="space-y-4">
+          {/* 기본 스타일 */}
+          <div>
+            <div className="text-xs font-semibold mb-2" style={{ color: 'var(--c-accent2)' }}>기본 스타일</div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label style={labelStyle}>글씨 크기 (pt)</label>
+                <input type="number" min="8" max="20" value={preset.fontSize ?? 11}
+                  onChange={e => setPreset('fontSize', Number(e.target.value))} style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>줄간격 (%)</label>
+                <input type="number" min="100" max="300" step="10"
+                  value={Math.round((preset.lineHeight ?? 1.6) * 100)}
+                  onChange={e => setPreset('lineHeight', Number(e.target.value) / 100)} style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>장평 (%)</label>
+                <input type="number" min="50" max="200" step="5"
+                  value={preset.characterWidth ?? 100}
+                  onChange={e => setPreset('characterWidth', Number(e.target.value))} style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>인물/대사 간격 (em)</label>
+                <input type="number" min="4" max="14" step="0.5"
+                  value={parseFloat(preset.dialogueGap ?? '7')}
+                  onChange={e => setPreset('dialogueGap', `${e.target.value}em`)} style={inputStyle} />
+              </div>
+            </div>
+          </div>
+
+          {/* 여백 */}
+          <div>
+            <div className="text-xs font-semibold mb-2" style={{ color: 'var(--c-accent2)' }}>여백 (mm)</div>
+            <div className="grid grid-cols-2 gap-3">
+              {[['top','위'], ['bottom','아래'], ['left','왼쪽'], ['right','오른쪽']].map(([side, label]) => (
+                <div key={side}>
+                  <label style={labelStyle}>{label}</label>
+                  <input type="number" min="5" max="60" value={margins[side] ?? 30}
+                    onChange={e => setMargin(side, e.target.value)} style={inputStyle} />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 나의 태그 */}
+          <div>
+            <div className="text-xs font-semibold mb-1" style={{ color: 'var(--c-accent2)' }}>나의 태그</div>
+            <div className="text-[10px] mb-2" style={{ color: 'var(--c-text6)' }}>
+              예) 클라이막스, 초목표, 도전 — 대본 씬에 붙일 나만의 태그를 추가하세요.
+            </div>
+            <div className="flex flex-wrap gap-1 mb-2">
+              {customSymbols.map(s => (
+                <span key={s} className="text-[11px] px-2 py-0.5 rounded flex items-center gap-1"
+                  style={{ background: 'var(--c-tag)', color: 'var(--c-text3)', border: '1px solid var(--c-border3)' }}>
+                  {s}
+                  <button onClick={() => setPreset('customSymbols', customSymbols.filter(x => x !== s))}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--c-text6)', lineHeight: 1 }}>×</button>
+                </span>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <input value={symInput} onChange={e => setSymInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') addSymbol(); }}
+                placeholder="태그 입력 후 Enter (예: 클라이막스)"
+                style={{ ...inputStyle, width: 'auto', flex: 1 }} />
+              <button onClick={addSymbol} className="px-3 py-1 rounded text-xs"
+                style={{ background: 'var(--c-accent)', color: '#fff', border: 'none', cursor: 'pointer' }}>추가</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* 사용 가이드 다시 보기 */}
       <div
         className="flex items-start gap-4 p-4 rounded-lg"
@@ -546,60 +718,66 @@ function SettingsTab() {
         className="p-4 rounded-lg"
         style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)' }}
       >
-        <div className="text-sm font-medium mb-3" style={{ color: 'var(--c-text)' }}>설계 도구 설정</div>
-
-        {/* 주 설계 도구 */}
-        <div className="flex items-start gap-3 mb-4">
-          <div className="flex-1">
-            <div className="text-xs font-medium mb-0.5" style={{ color: 'var(--c-text2)' }}>주 설계 도구</div>
-            <div className="text-xs" style={{ color: 'var(--c-text5)' }}>
-              작업 시 기본으로 열리는 설계 탭을 선택합니다.
-            </div>
-          </div>
-          <div className="flex gap-1 shrink-0">
-            {[['treatment', '트리트먼트'], ['scenelist', '씬리스트']].map(([val, label]) => (
-              <button
-                key={val}
-                onClick={() => handleDesignTool(val)}
-                className="text-xs px-3 py-1 rounded"
-                style={{
-                  background: designTool === val ? 'var(--c-accent)' : 'transparent',
-                  color: designTool === val ? '#fff' : 'var(--c-text4)',
-                  border: `1px solid ${designTool === val ? 'var(--c-accent)' : 'var(--c-border3)'}`,
-                  cursor: 'pointer',
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+        <div className="text-sm font-medium mb-1" style={{ color: 'var(--c-text)' }}>설계 도구 설정</div>
+        <div className="text-xs mb-4" style={{ color: 'var(--c-text5)' }}>
+          주 설계 도구는 씬 추가·가져오기가 활성화됩니다. 연동을 켜면 변경사항이 대본에 자동 반영됩니다.
         </div>
 
-        {/* 대본 반영 방식 */}
-        <div className="flex items-start gap-3">
-          <div className="flex-1">
-            <div className="text-xs font-medium mb-0.5" style={{ color: 'var(--c-text2)' }}>대본 반영 방식</div>
-            <div className="text-xs" style={{ color: 'var(--c-text5)' }}>
-              씬리스트/트리트먼트 변경이 대본에 반영되는 방식을 설정합니다.
-            </div>
-          </div>
-          <div className="flex gap-1 shrink-0">
-            {[['draft', '초안 유지'], ['sync', '대본 연동']].map(([val, label]) => (
-              <button
-                key={val}
-                onClick={() => handleReflectMode(val)}
-                className="text-xs px-3 py-1 rounded"
+        <div className="flex flex-col gap-3">
+          {[['treatment', '트리트먼트'], ['scenelist', '씬리스트']].map(([tool, label]) => {
+            const isPrimary = designTool === tool;
+            const syncVal = tool === 'treatment' ? treatmentSync : scenelistSync;
+            const isSynced = syncVal === 'sync';
+            return (
+              <div
+                key={tool}
+                className="rounded-lg p-3"
                 style={{
-                  background: reflectMode === val ? 'var(--c-accent)' : 'transparent',
-                  color: reflectMode === val ? '#fff' : 'var(--c-text4)',
-                  border: `1px solid ${reflectMode === val ? 'var(--c-accent)' : 'var(--c-border3)'}`,
-                  cursor: 'pointer',
+                  border: `1px solid ${isPrimary ? 'var(--c-accent)' : 'var(--c-border3)'}`,
+                  background: isPrimary ? 'color-mix(in srgb, var(--c-accent) 6%, transparent)' : 'transparent',
                 }}
               >
-                {label}
-              </button>
-            ))}
-          </div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold" style={{ color: isPrimary ? 'var(--c-accent)' : 'var(--c-text2)' }}>{label}</span>
+                    {isPrimary && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'var(--c-accent)', color: '#fff' }}>주 설계 도구</span>
+                    )}
+                  </div>
+                  {!isPrimary && (
+                    <button
+                      onClick={() => handleDesignTool(tool)}
+                      className="text-[10px] px-2 py-0.5 rounded"
+                      style={{ background: 'transparent', color: 'var(--c-text5)', border: '1px solid var(--c-border3)', cursor: 'pointer' }}
+                    >
+                      주 도구로 설정
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    {isPrimary && (
+                      <div className="text-[11px] mb-0.5" style={{ color: 'var(--c-accent)' }}>✓ 씬 추가 / 가져오기 활성화됨</div>
+                    )}
+                    <div className="text-[11px]" style={{ color: 'var(--c-text3)' }}>대본 자동 연동</div>
+                    <div className="text-[10px]" style={{ color: 'var(--c-text6)' }}>변경사항이 대본에 자동 반영됩니다</div>
+                  </div>
+                  <button
+                    onClick={() => toggleSync(tool)}
+                    className="w-9 h-5 rounded-full relative shrink-0"
+                    style={{ background: isSynced ? 'var(--c-accent)' : 'var(--c-border3)', border: 'none', cursor: 'pointer' }}
+                  >
+                    <span style={{
+                      position: 'absolute', top: '2px', width: '16px', height: '16px',
+                      borderRadius: '50%', background: '#fff',
+                      left: isSynced ? '18px' : '2px', transition: 'left 0.15s',
+                    }} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -610,6 +788,159 @@ function SettingsTab() {
 }
 
 // ─── Placeholder tabs ─────────────────────────────────────────────────────────
+const KAKAO_PAY_URL = 'https://qr.kakaopay.com/Ej8gwMmym';
+const isMobile = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+function SupportCard() {
+  const mobile = isMobile();
+  return (
+    <div className="w-full max-w-sm rounded-xl px-8 py-7 flex flex-col items-center gap-4"
+      style={{ background: 'var(--c-panel)', border: '1px solid var(--c-border2)' }}>
+      <div className="text-sm text-center leading-relaxed" style={{ color: 'var(--c-text3)' }}>
+        이 툴은 드라마 작가 지망생 개발자 혼자 만들고 있어요.<br />
+        커피 한 잔 값의 응원이 큰 힘이 됩니다. ☕
+      </div>
+      {mobile ? (
+        <a href={KAKAO_PAY_URL} target="_blank" rel="noopener noreferrer"
+          className="px-5 py-2 rounded-lg text-sm font-semibold"
+          style={{ background: '#FEE500', color: '#3C1E1E', textDecoration: 'none' }}>
+          개발자 응원하기 💛
+        </a>
+      ) : (
+        <div className="flex flex-col items-center gap-2">
+          <div className="p-3 rounded-lg" style={{ background: '#fff' }}>
+            <QRCodeSVG value={KAKAO_PAY_URL} size={140} />
+          </div>
+          <div className="text-xs text-center" style={{ color: 'var(--c-text5)' }}>
+            카카오페이 앱으로 QR 스캔
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── ErrorReportTab ───────────────────────────────────────────────────────────
+const ERROR_TYPES = [
+  { id: 'bug',     label: '🐞 버그',       desc: '기능이 작동하지 않아요' },
+  { id: 'ui',      label: '🎨 화면 오류',   desc: '화면이 이상하게 보여요' },
+  { id: 'feature', label: '💡 기능 제안',   desc: '이런 기능이 있으면 좋겠어요' },
+  { id: 'other',   label: '📝 기타',        desc: '그 외 문의사항' },
+];
+
+function ErrorReportTab() {
+  const [type, setType] = useState('bug');
+  const [description, setDescription] = useState('');
+  const [page, setPage] = useState('');
+  const [status, setStatus] = useState('idle'); // 'idle' | 'sending' | 'done' | 'error'
+
+  const handleSubmit = async () => {
+    if (!description.trim()) return;
+    setStatus('sending');
+    const { error } = await supabase.from('error_reports').insert({
+      type,
+      description: description.trim(),
+      page: page.trim() || null,
+    });
+    setStatus(error ? 'error' : 'done');
+  };
+
+  if (status === 'done') {
+    return (
+      <div className="flex flex-col items-center gap-4 py-20">
+        <div className="text-4xl">✅</div>
+        <div className="text-sm font-medium" style={{ color: 'var(--c-text2)' }}>제출 완료!</div>
+        <div className="text-xs text-center" style={{ color: 'var(--c-text5)' }}>소중한 피드백 감사합니다.<br />빠르게 검토하겠습니다.</div>
+        <button
+          onClick={() => { setStatus('idle'); setDescription(''); setPage(''); setType('bug'); }}
+          className="mt-2 text-xs px-4 py-1.5 rounded"
+          style={{ border: '1px solid var(--c-border3)', color: 'var(--c-text4)', background: 'transparent', cursor: 'pointer' }}
+        >
+          추가 제출
+        </button>
+      </div>
+    );
+  }
+
+  const inputStyle = {
+    width: '100%', background: 'var(--c-input)', border: '1px solid var(--c-border3)',
+    borderRadius: 6, padding: '8px 10px', fontSize: 13, color: 'var(--c-text)',
+    outline: 'none', boxSizing: 'border-box',
+  };
+  const labelStyle = { fontSize: 11, fontWeight: 600, color: 'var(--c-text5)', marginBottom: 6, display: 'block' };
+
+  return (
+    <div className="flex flex-col gap-6" style={{ maxWidth: 480 }}>
+      <div>
+        <div className="text-sm font-semibold mb-1" style={{ color: 'var(--c-text2)' }}>오류 제출</div>
+        <div className="text-xs" style={{ color: 'var(--c-text5)' }}>불편한 점이나 개선 아이디어를 알려주세요.</div>
+      </div>
+
+      {/* 유형 */}
+      <div>
+        <span style={labelStyle}>유형</span>
+        <div className="grid grid-cols-2 gap-2">
+          {ERROR_TYPES.map(t => (
+            <button key={t.id} onClick={() => setType(t.id)}
+              className="text-left px-3 py-2.5 rounded-lg text-xs"
+              style={{
+                border: `1px solid ${type === t.id ? 'var(--c-accent)' : 'var(--c-border3)'}`,
+                background: type === t.id ? 'var(--c-active)' : 'var(--c-input)',
+                color: type === t.id ? 'var(--c-accent)' : 'var(--c-text3)',
+                cursor: 'pointer',
+              }}>
+              <div className="font-medium">{t.label}</div>
+              <div style={{ fontSize: 10, color: 'var(--c-text6)', marginTop: 2 }}>{t.desc}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 내용 */}
+      <div>
+        <span style={labelStyle}>내용 *</span>
+        <textarea
+          value={description}
+          onChange={e => setDescription(e.target.value)}
+          placeholder="어떤 문제가 있었는지 자세히 알려주세요."
+          rows={5}
+          style={{ ...inputStyle, resize: 'vertical' }}
+        />
+      </div>
+
+      {/* 발생 화면 */}
+      <div>
+        <span style={labelStyle}>발생 화면 (선택)</span>
+        <input
+          value={page}
+          onChange={e => setPage(e.target.value)}
+          placeholder="예: 대본 편집, 출력 미리보기, 인물 페이지 …"
+          style={inputStyle}
+        />
+      </div>
+
+      {status === 'error' && (
+        <div className="text-xs px-3 py-2 rounded" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>
+          전송 실패. 잠시 후 다시 시도해주세요.
+        </div>
+      )}
+
+      <button
+        onClick={handleSubmit}
+        disabled={!description.trim() || status === 'sending'}
+        className="px-5 py-2.5 rounded-lg text-sm font-semibold"
+        style={{
+          background: description.trim() ? 'var(--c-accent)' : 'var(--c-border3)',
+          color: description.trim() ? '#fff' : 'var(--c-text6)',
+          border: 'none', cursor: description.trim() ? 'pointer' : 'not-allowed',
+        }}
+      >
+        {status === 'sending' ? '전송 중…' : '제출하기'}
+      </button>
+    </div>
+  );
+}
+
 function PlaceholderTab({ icon, title, desc }) {
   return (
     <div className="flex flex-col items-center justify-center py-20 gap-3">
@@ -636,15 +967,15 @@ export default function MyPage() {
     <div className="h-full flex overflow-hidden" style={{ background: 'var(--c-bg)' }}>
       {/* Sidebar */}
       <div
-        className="w-36 shrink-0 flex flex-col pt-8 pb-4"
+        className="w-24 shrink-0 flex flex-col pt-8 pb-4"
         style={{ borderRight: '1px solid var(--c-border)', background: 'var(--c-panel)' }}
       >
-        <div className="px-4 mb-4 text-xs font-bold" style={{ color: 'var(--c-text4)', letterSpacing: '0.05em' }}>마이페이지</div>
+        <div className="px-3 mb-4 text-[10px] font-bold" style={{ color: 'var(--c-text4)', letterSpacing: '0.05em' }}>마이페이지</div>
         {TABS.map(t => (
           <button
             key={t.id}
             onClick={() => setActiveTab(t.id)}
-            className="w-full text-left px-4 py-2 text-sm"
+            className="w-full text-left px-3 py-2 text-xs"
             style={{
               background: activeTab === t.id ? 'var(--c-active)' : 'transparent',
               color: activeTab === t.id ? 'var(--c-accent)' : 'var(--c-text4)',
@@ -662,15 +993,16 @@ export default function MyPage() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-2xl mx-auto py-8 px-6">
+        <div className="max-w-2xl mx-auto pt-16 pb-10 px-10">
           {activeTab === 'stats' && <StatsTab />}
           {activeTab === 'settings' && <SettingsTab />}
           {activeTab === 'qa' && <QnATab />}
-          {activeTab === 'errors' && (
-            <PlaceholderTab icon="🐞" title="오류 제출" desc="버그나 개선사항을 발견하셨나요? 준비 중입니다." />
-          )}
+          {activeTab === 'errors' && <ErrorReportTab />}
           {activeTab === 'membership' && (
-            <PlaceholderTab icon="⭐" title="멤버십" desc="멤버십 기능은 준비 중입니다." />
+            <div className="flex flex-col items-center gap-8">
+              <PlaceholderTab icon="⭐" title="멤버십" desc="멤버십 기능은 준비 중입니다." />
+              <SupportCard />
+            </div>
           )}
         </div>
       </div>

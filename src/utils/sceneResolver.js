@@ -46,8 +46,8 @@ export function resolveSceneLabel(scene) {
     return `${label} ${spPart}${locFull}${timePart}`.trim();
   }
 
-  // Fallback to legacy content string
-  const content = scene.content?.trim() || '';
+  // Fallback to legacy content string (content에서 label prefix 제거 후 합침)
+  const content = (scene.content?.trim() || '').replace(/^S#\d+\.?\s*/, '');
   if (content) return `${label} ${content}`.trim();
 
   return label;

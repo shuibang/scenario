@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
 import { getAll, setAll, getItem, setItem, DB_KEYS, genId, now } from './db';
 import { createSeedData } from '../data/seed';
+import { isTokenValid, saveToDrive } from './googleDrive';
 
 // ─── Default style preset ────────────────────────────────────────────────────
 export const DEFAULT_STYLE_PRESET = {
@@ -8,8 +9,11 @@ export const DEFAULT_STYLE_PRESET = {
   fontFamily: '함초롱바탕',
   fontSize: 11,                // pt
   lineHeight: 1.6,             // 160%
+  characterWidth: 100,         // 장평 %
   pageSize: 'A4',
   pageMargins: { top: 35, right: 30, bottom: 30, left: 30 },
+  structureGuidelines: '',     // 구조 지침 (사용자 입력)
+  customSymbols: [],           // 기타 기호 목록 (사용자 추가)
   pageNumberFormat: '-{n}-',
   pageNumberOffsetBottomMm: 15,
   fontWeightRules: {
@@ -54,6 +58,7 @@ const initialState = {
   activeDoc: null,           // 'cover' | 'synopsis' | 'script' | 'characters' | 'resources'
   selectedCharacterId: null,       // character selected in CharacterPanel → triggers usage panel
   selectedStructureSceneId: null,  // scene selected in StructurePage → shared with RightPanel guide
+  isPro: false,
   saveStatus: 'saved',
   scrollToSceneId: null,
   // Undo/Redo (session-only, not persisted)
@@ -222,6 +227,27 @@ function reducer(state, action) {
     case 'SET_SCROLL_TO_SCENE':
       return { ...state, scrollToSceneId: action.id };
 
+    case 'LOAD_FROM_DRIVE': {
+      const p = action.payload;
+      return {
+        ...state,
+        projects:       p.projects      ?? state.projects,
+        episodes:       p.episodes      ?? state.episodes,
+        characters:     p.characters    ?? state.characters,
+        scenes:         p.scenes        ?? state.scenes,
+        scriptBlocks:   p.scriptBlocks  ?? state.scriptBlocks,
+        coverDocs:      p.coverDocs     ?? state.coverDocs,
+        synopsisDocs:   p.synopsisDocs  ?? state.synopsisDocs,
+        resources:      p.resources     ?? state.resources,
+        workTimeLogs:   p.workTimeLogs  ?? state.workTimeLogs,
+        checklistItems: p.checklistItems ?? state.checklistItems,
+        stylePreset:    p.stylePreset   ?? state.stylePreset,
+        activeProjectId: null,
+        activeEpisodeId: null,
+        activeDoc: null,
+      };
+    }
+
     default:
       return state;
   }
@@ -355,7 +381,11 @@ export function AppProvider({ children }) {
         setAll(DB_KEYS.resources,     state.resources);
         setAll(DB_KEYS.workTimeLogs,    state.workTimeLogs);
         setAll(DB_KEYS.checklistItems,  state.checklistItems);
-        setItem(DB_KEYS.stylePresets, state.stylePreset);
+        // 로그인된 경우에만 스타일 설정 저장 (미로그인 시 세션 내에서만 유지)
+        if (localStorage.getItem('drama_auth_user')) {
+          setItem(DB_KEYS.stylePresets, state.stylePreset);
+        }
+        localStorage.setItem('drama_saved_at', new Date().toISOString());
       } catch (e) {
         console.error('[AppContext] 저장 실패:', e);
         // QuotaExceededError = localStorage 용량 초과
@@ -364,6 +394,27 @@ export function AppProvider({ children }) {
           : `저장 실패: ${e?.message || '알 수 없는 오류'}`;
         dispatch({ type: 'SET_SAVE_STATUS', payload: 'error' });
         dispatch({ type: 'SET_SAVE_ERROR_MSG', payload: msg });
+        return;
+      }
+      // Drive 자동저장 (토큰 유효할 때만)
+      if (isTokenValid()) {
+        saveToDrive({
+          projects:       state.projects,
+          episodes:       state.episodes,
+          characters:     state.characters,
+          scenes:         state.scenes,
+          scriptBlocks:   state.scriptBlocks,
+          coverDocs:      state.coverDocs,
+          synopsisDocs:   state.synopsisDocs,
+          resources:      state.resources,
+          workTimeLogs:   state.workTimeLogs,
+          checklistItems: state.checklistItems,
+          stylePreset:    state.stylePreset,
+        }).catch(e => {
+          if (e.message !== 'DRIVE_AUTH_REQUIRED') {
+            console.warn('[Drive] 자동저장 실패:', e);
+          }
+        });
       }
     }, 300);
   }, [

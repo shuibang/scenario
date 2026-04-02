@@ -6,9 +6,183 @@ import { useApp } from '../store/AppContext';
 import { genId, now } from '../store/db';
 import { resolveSceneLabel, parseSceneContent } from '../utils/sceneResolver';
 import { resolveFont } from '../print/FontRegistry';
+import { getLayoutMetrics } from '../print/LineTokenizer';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const CHAR_SUGGEST_KEY = 'drama_charSuggestInAction';
+
+const DEFAULT_SYMBOLS = ['(E)', '(F)', 'Flashback', 'Insert', 'Ins.', 'Subtitle)', 'S.T.', '(N)', 'N.A.'];
+
+// ─── Symbol Picker ────────────────────────────────────────────────────────────
+function SymbolPicker() {
+  const { state } = useApp();
+  const [open, setOpen] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(-1);
+  const ref = useRef(null);
+  const customSymbols = state.stylePreset?.customSymbols || [];
+  const allSymbols = [...DEFAULT_SYMBOLS, ...customSymbols];
+
+  useEffect(() => {
+    if (!open) { setActiveIdx(-1); return; }
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  // Ctrl+6 단축키로 열기
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.code === 'Digit6') {
+        e.preventDefault();
+        setOpen(v => !v);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // 방향키 / Enter / Escape 처리
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => {
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        setActiveIdx(i => (i + 1) % allSymbols.length);
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        setActiveIdx(i => (i - 1 + allSymbols.length) % allSymbols.length);
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setActiveIdx(i => (i + 3) % allSymbols.length);   // 한 줄 아래 (약 3열 기준)
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setActiveIdx(i => (i - 3 + allSymbols.length) % allSymbols.length);
+      } else if (e.key === 'Enter' && activeIdx >= 0) {
+        e.preventDefault();
+        insertSymbol(allSymbols[activeIdx]);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        setOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, activeIdx, allSymbols]);
+
+  const insertSymbol = (sym) => {
+    setOpen(false);
+    const surface = document.querySelector('[data-editor-surface]');
+    if (!surface) return;
+    surface.focus();
+    const sel = window.getSelection();
+    if (!sel?.rangeCount) return;
+    const range = sel.getRangeAt(0);
+    range.deleteContents();
+    range.insertNode(document.createTextNode(sym));
+    range.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(range);
+    surface.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+
+  return (
+    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+      <button
+        onMouseDown={e => { e.preventDefault(); setOpen(v => !v); }}
+        className="px-2 py-0.5 rounded text-xs ml-1"
+        style={{ color: 'var(--c-text3)', border: '1px solid var(--c-border3)', background: 'transparent', cursor: 'pointer' }}
+        onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-hover)'; }}
+        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+      >기타</button>
+      {open && (
+        <div
+          style={{
+            position: 'absolute', top: '100%', left: 0, zIndex: 200, marginTop: '4px',
+            background: 'var(--c-card)', border: '1px solid var(--c-border)',
+            borderRadius: '0.5rem', padding: '6px', display: 'flex', flexWrap: 'wrap',
+            gap: '4px', minWidth: '180px', maxWidth: '280px', boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+          }}
+        >
+          {allSymbols.map((sym, i) => (
+            <button
+              key={sym}
+              onMouseDown={e => { e.preventDefault(); insertSymbol(sym); }}
+              onMouseEnter={() => setActiveIdx(i)}
+              onMouseLeave={() => setActiveIdx(-1)}
+              className="text-xs px-2 py-1 rounded"
+              style={{
+                background: activeIdx === i ? 'var(--c-hover)' : 'var(--c-tag)',
+                color: activeIdx === i ? 'var(--c-accent)' : 'var(--c-text3)',
+                border: `1px solid ${activeIdx === i ? 'var(--c-accent)' : 'var(--c-border3)'}`,
+                cursor: 'pointer', whiteSpace: 'nowrap',
+              }}
+            >{sym}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Page counter (status bar) ────────────────────────────────────────────────
+function PageCounter({ blocks, stylePreset, scrollRef }) {
+  const totalPages = useMemo(() => {
+    if (!blocks.length) return 1;
+    const m = getLayoutMetrics(stylePreset);
+    const { charsPerLine, charsInSpeech, linesPerPage, fontSize, lineHeight } = m;
+    const lineHpt = fontSize * lineHeight;
+    let total = 0;
+    let prevType = null;
+    // ep_title 한 줄 (회차 제목) + blank
+    total += ((fontSize + 2) * lineHeight + 14) / lineHpt + 1;
+    for (const b of blocks) {
+      if (prevType !== null && prevType !== b.type) total += 1; // 타입 변경 시 빈줄
+      switch (b.type) {
+        case 'scene_number':
+          total += 1 + 12 / lineHpt;
+          break;
+        case 'action': {
+          const lines = Math.max(1, Math.ceil((b.content?.length || 0) / (charsPerLine - 2)));
+          total += lines * (1 + 1 / lineHpt);
+          break;
+        }
+        case 'dialogue': {
+          const lines = Math.max(1, Math.ceil((b.content?.length || 0) / charsInSpeech));
+          total += lines * (1 + 1 / lineHpt);
+          break;
+        }
+        default: {
+          const lines = Math.max(1, Math.ceil((b.content?.length || 0) / charsPerLine));
+          total += lines * (1 + 1 / lineHpt);
+        }
+      }
+      prevType = b.type;
+    }
+    return Math.max(1, Math.ceil(total / linesPerPage));
+  }, [blocks, stylePreset]);
+
+  const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => {
+    const el = scrollRef?.current;
+    if (!el) return;
+    const update = () => {
+      const { scrollTop, scrollHeight, clientHeight } = el;
+      const ratio = scrollHeight <= clientHeight ? 0 : scrollTop / (scrollHeight - clientHeight);
+      setCurrentPage(Math.min(totalPages, Math.max(1, Math.round(ratio * (totalPages - 1)) + 1)));
+    };
+    el.addEventListener('scroll', update, { passive: true });
+    update();
+    return () => el.removeEventListener('scroll', update);
+  }, [scrollRef, totalPages]);
+
+  if (!totalPages) return null;
+  return (
+    <span className="text-[10px] tabular-nums" style={{ color: 'var(--c-text6)' }} title="현재 페이지 / 전체 페이지">
+      {currentPage}/{totalPages}
+    </span>
+  );
+}
 
 // ─── syncLabels ───────────────────────────────────────────────────────────────
 function syncLabels(blocks) {
@@ -26,15 +200,41 @@ function esc(s) {
 
 // ─── Blocks → innerHTML ──────────────────────────────────────────────────────
 // For scene_number: strip the "S#n." prefix — label shown via CSS ::before
+// For dialogue: strip charName prefix from content (old format had name embedded in content)
 function blockDisplayContent(b) {
-  if (b.type !== 'scene_number') return b.content || '';
-  return (b.content || '').replace(/^S#\d+\.?\s*/, '');
+  if (b.type === 'scene_number') return (b.content || '').replace(/^S#\d+\.?\s*/, '');
+  if (b.type === 'dialogue') {
+    const name = b.characterName || b.charName || '';
+    const content = b.content || '';
+    if (name && content.startsWith(name)) return content.slice(name.length).trimStart();
+    return content;
+  }
+  return b.content || '';
+}
+
+// Rebuild block inner HTML, reinserting scene-ref-chip spans in-place
+function buildRichHtml(content, sceneRefs) {
+  if (!sceneRefs?.length) return esc(content);
+  let remaining = content;
+  let result = '';
+  for (const ref of sceneRefs) {
+    if (!ref.displayText) continue;
+    // displayText already includes parentheses e.g. "(S#3 거실)"
+    const idx = remaining.indexOf(ref.displayText);
+    if (idx < 0) continue;
+    result += esc(remaining.slice(0, idx));
+    result += `<span contenteditable="false" data-ref-scene-id="${esc(ref.sceneId)}" class="scene-ref-chip">${esc(ref.displayText)}</span>`;
+    remaining = remaining.slice(idx + ref.displayText.length);
+  }
+  result += esc(remaining);
+  return result;
 }
 
 function blocksToHtml(blocks) {
   return blocks.map(b => {
     const id = esc(b.id);
-    const dc = esc(blockDisplayContent(b));
+    const displayContent = blockDisplayContent(b);
+    const dc = b.sceneRefs?.length ? buildRichHtml(displayContent, b.sceneRefs) : esc(displayContent);
     switch (b.type) {
       case 'scene_number': {
         const label = esc(b.label || '');
@@ -44,7 +244,11 @@ function blocksToHtml(blocks) {
       case 'dialogue': {
         const cn = esc(b.characterName || b.charName || '');
         const ci = esc(b.characterId || '');
-        return `<div data-block-id="${id}" data-block-type="dialogue" data-char-name="${cn}" data-char-id="${ci}" class="ce-block ce-dialogue"><span contenteditable="false" class="ce-char-badge">${cn || '&nbsp;'}</span><span class="ce-speech">${dc}</span></div>`;
+        return `<div data-block-id="${id}" data-block-type="dialogue" data-char-name="${cn}" data-char-id="${ci}" class="ce-block ce-dialogue">${dc}</div>`;
+      }
+      case 'scene_ref': {
+        const refId = esc(b.refSceneId || '');
+        return `<div data-block-id="${id}" data-block-type="scene_ref" data-ref-scene-id="${refId}" class="ce-block ce-scene_ref">${dc}</div>`;
       }
       default:
         return `<div data-block-id="${id}" data-block-type="${b.type}" class="ce-block ce-${b.type}">${dc}</div>`;
@@ -64,30 +268,20 @@ function findBlockEl(node, surface) {
 
 function blockText(el) {
   if (!el) return '';
-  if (el.dataset.blockType === 'dialogue') {
-    const s = el.querySelector('.ce-speech');
-    return s ? s.innerText.replace(/\n$/, '') : '';
-  }
   return el.innerText.replace(/\n$/, '');
 }
 
 function setBlockText(el, text) {
   if (!el) return;
-  if (el.dataset.blockType === 'dialogue') {
-    const s = el.querySelector('.ce-speech');
-    if (s) { s.innerText = text; return; }
-  }
   el.innerText = text;
 }
 
 function caretOff(range, blockEl) {
   if (!range || !blockEl) return 0;
-  const type = blockEl.dataset.blockType;
-  const target = type === 'dialogue' ? (blockEl.querySelector('.ce-speech') || blockEl) : blockEl;
-  if (!target.contains(range.startContainer) && target !== range.startContainer) return 0;
+  if (!blockEl.contains(range.startContainer) && blockEl !== range.startContainer) return 0;
   try {
     const r = document.createRange();
-    r.selectNodeContents(target);
+    r.selectNodeContents(blockEl);
     r.setEnd(range.startContainer, range.startOffset);
     return r.toString().length;
   } catch { return 0; }
@@ -143,12 +337,7 @@ function insertBlockAfterEl(surface, refEl, type, text, charMeta = {}, epId, pro
   } else if (type === 'dialogue') {
     div.dataset.charName = charMeta.charName || '';
     div.dataset.charId = charMeta.charId || '';
-    const badge = document.createElement('span');
-    badge.contentEditable = 'false'; badge.className = 'ce-char-badge';
-    badge.textContent = charMeta.charName || '';
-    const speech = document.createElement('span');
-    speech.className = 'ce-speech'; speech.textContent = text;
-    div.append(badge, speech);
+    div.innerText = text;
   } else {
     div.innerText = text;
   }
@@ -166,7 +355,7 @@ function changeBlockTypeEl(blockEl, newType) {
   // Strip existing S# prefix when converting to scene_number to avoid double-labeling
   const displayText = newType === 'scene_number' ? text.replace(/^S#\d+\.?\s*/i, '') : text;
   if (newType === 'dialogue') {
-    blockEl.innerHTML = `<span contenteditable="false" class="ce-char-badge">&nbsp;</span><span class="ce-speech">${esc(displayText)}</span>`;
+    blockEl.innerText = displayText;
     blockEl.dataset.charName = ''; blockEl.dataset.charId = '';
   } else if (old === 'dialogue') {
     delete blockEl.dataset.charName; delete blockEl.dataset.charId;
@@ -187,6 +376,11 @@ function parseSurface(surface, metaRef, epId, projId) {
     const type = div.dataset.blockType;
     const prev = metaRef.current[id] || {};
     const rawText = blockText(div);
+    // Extract inline scene-ref-chip spans from DOM
+    const refSpans = [...div.querySelectorAll('span[data-ref-scene-id]')];
+    const sceneRefs = refSpans.length > 0
+      ? refSpans.map(s => ({ sceneId: s.dataset.refSceneId, displayText: s.textContent }))
+      : (prev.sceneRefs || []);
     const base = {
       id, type,
       episodeId: prev.episodeId || epId,
@@ -195,12 +389,20 @@ function parseSurface(surface, metaRef, epId, projId) {
       createdAt: prev.createdAt || now(),
       updatedAt: rawText !== prev.rawText ? now() : (prev.updatedAt || now()),
       rawText, // internal cache for change detection
-      sceneRefs: prev.sceneRefs || [],
+      sceneRefs,
     };
     if (type === 'scene_number') {
+      // rawText는 DOM 표시용(라벨 제거된 값)이므로 parsed는 순수 내용
       const parsed = parseSceneContent(rawText);
       const label = prev.label || div.dataset.label || '';
-      const content = resolveSceneLabel({ label, ...parsed });
+      // content에 label prefix가 있으면 제거 후 resolveSceneLabel 호출
+      const cleanContent = (parsed.location || parsed.specialSituation)
+        ? undefined // structured → resolveSceneLabel이 알아서 조합
+        : rawText.replace(/^S#\d+\.?\s*/, '');
+      const contentForResolve = cleanContent !== undefined
+        ? { label, location: '', subLocation: '', timeOfDay: '', specialSituation: '', content: cleanContent }
+        : { label, ...parsed };
+      const content = resolveSceneLabel(contentForResolve);
       return { ...base, ...parsed, content, sceneId: div.dataset.sceneId || prev.sceneId || genId() };
     }
     if (type === 'dialogue') {
@@ -211,6 +413,9 @@ function parseSurface(surface, metaRef, epId, projId) {
         characterId: div.dataset.charId || prev.characterId || undefined,
         charName: div.dataset.charName || prev.charName || '',
       };
+    }
+    if (type === 'scene_ref') {
+      return { ...base, content: rawText, refSceneId: div.dataset.refSceneId || prev.refSceneId || '' };
     }
     return { ...base, content: rawText };
   });
@@ -331,7 +536,9 @@ function SceneRefDropdown({ query, scenes, onSelect, onClose }) {
 // ─── CharPickerOverlay ────────────────────────────────────────────────────────
 function CharPickerOverlay({ anchor, projectChars, onSelect, onClose }) {
   const [query, setQuery] = useState('');
+  const [activeIdx, setActiveIdx] = useState(-1);
   const inputRef = useRef(null);
+  const listRef = useRef(null);
 
   useEffect(() => { setTimeout(() => inputRef.current?.focus(), 30); }, []);
   useEffect(() => {
@@ -344,6 +551,13 @@ function CharPickerOverlay({ anchor, projectChars, onSelect, onClose }) {
     ? projectChars.filter(c => (c.name || '').includes(query) || (c.givenName || '').includes(query))
     : projectChars
   ).slice(0, 10);
+
+  // Scroll active item into view
+  useEffect(() => {
+    if (activeIdx < 0 || !listRef.current) return;
+    const items = listRef.current.querySelectorAll('[data-char-item]');
+    items[activeIdx]?.scrollIntoView({ block: 'nearest' });
+  }, [activeIdx]);
 
   return (
     <div
@@ -358,30 +572,39 @@ function CharPickerOverlay({ anchor, projectChars, onSelect, onClose }) {
         <input
           ref={inputRef}
           value={query}
-          onChange={e => setQuery(e.target.value)}
+          onChange={e => { setQuery(e.target.value); setActiveIdx(-1); }}
           onKeyDown={e => {
             if (e.nativeEvent.isComposing) return;
-            if (e.key === 'Enter') {
+            if (e.key === 'ArrowDown') {
               e.preventDefault();
-              if (filtered.length > 0) onSelect(filtered[0]);
-              else if (query.trim()) onSelect({ id: undefined, name: query.trim(), givenName: query.trim() });
+              setActiveIdx(i => Math.min(i + 1, filtered.length - 1));
+            } else if (e.key === 'ArrowUp') {
+              e.preventDefault();
+              setActiveIdx(i => Math.max(i - 1, -1));
+            } else if (e.key === 'Enter') {
+              e.preventDefault();
+              if (activeIdx >= 0 && filtered[activeIdx]) {
+                onSelect(filtered[activeIdx]);
+              } else {
+                onClose();
+              }
             }
           }}
-          placeholder="인물명 검색"
+          placeholder="인물명 검색 / Enter로 닫기"
           className="w-full text-sm px-1 outline-none bg-transparent"
           style={{ color: 'var(--c-text)', caretColor: 'var(--c-accent)' }}
           spellCheck={false}
         />
       </div>
-      <div className="max-h-48 overflow-y-auto">
-        {filtered.map(c => (
+      <div ref={listRef} className="max-h-48 overflow-y-auto">
+        {filtered.map((c, i) => (
           <div
             key={c.id || c.name}
+            data-char-item
             onMouseDown={e => { e.preventDefault(); onSelect(c); }}
+            onMouseEnter={() => setActiveIdx(i)}
             className="px-3 py-1.5 text-sm cursor-pointer"
-            style={{ color: 'var(--c-text)' }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-active)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+            style={{ color: 'var(--c-text)', background: i === activeIdx ? 'var(--c-active)' : 'transparent' }}
           >
             {c.givenName || c.name}
             {c.surname && c.givenName && <span className="ml-2 text-[10px]" style={{ color: 'var(--c-text6)' }}>{c.surname}{c.givenName}</span>}
@@ -411,6 +634,7 @@ const EditorSurface = forwardRef(function EditorSurface({
   onBlocksChange,
   onBadgeClick,
   onCharSuggest,   // (blockId, charName) | null → for CharSuggestionPanel
+  onSelectionChange, // (blockType | null) → 툴바 하이라이트용
   dialogueGap,
   fontFamily,
   fontSize,
@@ -450,11 +674,30 @@ const EditorSurface = forwardRef(function EditorSurface({
     syncMeta(initialBlocks);
     const el = surfaceRef.current;
     if (!el) return;
-    const focused = document.activeElement;
+
+    // Detect episode switch: init effect may have rendered stale (previous episode)
+    // blocks before setBlocks fired. If first DOM block ID doesn't match first
+    // initialBlock ID, we need a full rebuild.
+    const firstDomId = el.querySelector('[data-block-id]')?.dataset.blockId;
+    const firstBlockId = initialBlocks[0]?.id;
+    if (firstBlockId && firstDomId !== firstBlockId) {
+      el.innerHTML = blocksToHtml(initialBlocks);
+      const first = el.querySelector('[data-block-id]');
+      if (first) setCaret(first, 0);
+      return;
+    }
+
+    // activeElement는 contenteditable 루트(surface)를 반환하므로
+    // selection range로 현재 커서가 있는 블록을 찾아야 함
+    const sel = window.getSelection();
+    let activeBlockEl = null;
+    if (sel?.rangeCount) {
+      activeBlockEl = findBlockEl(sel.getRangeAt(0).startContainer, el);
+    }
     initialBlocks.forEach(b => {
       const div = el.querySelector(`[data-block-id="${b.id}"]`);
       if (!div) return;
-      if (div === focused || div.contains(focused)) return; // skip active block
+      if (div === activeBlockEl) return; // skip block with cursor
       // Sync content
       const expected = blockDisplayContent(b);
       if (blockText(div) !== expected) setBlockText(div, expected);
@@ -464,9 +707,11 @@ const EditorSurface = forwardRef(function EditorSurface({
         if (div.dataset.charName !== cn) {
           div.dataset.charName = cn;
           div.dataset.charId = b.characterId || '';
-          const badge = div.querySelector('.ce-char-badge');
-          if (badge) badge.textContent = cn || '\u00a0';
         }
+      }
+      // Sync scene label (data-label → CSS ::before 로 "S#n." 표시)
+      if (b.type === 'scene_number' && b.label && div.dataset.label !== b.label) {
+        div.dataset.label = b.label;
       }
     });
   }, [initialBlocks]);
@@ -478,20 +723,47 @@ const EditorSurface = forwardRef(function EditorSurface({
     const blocks = parseSurface(el, metaRef, epIdRef.current, projIdRef.current);
     syncMeta(blocks);
     onBlocksChange(blocks);
-  }, [onBlocksChange, syncMeta]);
+    // 현재 커서의 블록 타입을 선택 상태 콜백으로 전달
+    const sel = window.getSelection();
+    if (sel?.rangeCount) {
+      const blockEl = findBlockEl(sel.getRangeAt(0).startContainer, el);
+      onSelectionChange?.(blockEl?.dataset.blockType || null);
+    }
+  }, [onBlocksChange, syncMeta, onSelectionChange]);
 
   // ── Imperative API for parent ──────────────────────────────────────────────
   useImperativeHandle(ref, () => ({
     applyBlockType(type) {
       const el = surfaceRef.current;
       if (!el) return false;
+
+      // 선택 영역에서 블록 찾기
       const sel = window.getSelection();
-      if (!sel?.rangeCount) return false;
-      const blockEl = findBlockEl(sel.getRangeAt(0).startContainer, el);
-      if (!blockEl) return false;
-      // Always change the current block's type (toolbar intent: change the focused block)
+      let blockEl = null;
+      if (sel?.rangeCount) {
+        blockEl = findBlockEl(sel.getRangeAt(0).startContainer, el);
+      }
+
+      // 선택 없으면 마지막 블록으로 fallback
+      if (!blockEl) {
+        const all = [...el.querySelectorAll('[data-block-id]')];
+        blockEl = all[all.length - 1] || null;
+      }
+
+      // 블록이 아예 없으면 새로 생성
+      if (!blockEl) {
+        blockEl = insertBlockAfterEl(el, null, type, '');
+        if (type === 'dialogue') onBadgeClick?.(blockEl.dataset.blockId, blockEl);
+        doParse();
+        return true;
+      }
+
       changeBlockTypeEl(blockEl, type);
-      if (type === 'dialogue') onBadgeClick?.(blockEl.dataset.blockId, blockEl);
+      if (type === 'dialogue') {
+        onBadgeClick?.(blockEl.dataset.blockId, blockEl);
+      } else {
+        setCaret(blockEl, blockText(blockEl).length);
+      }
       doParse();
       return true;
     },
@@ -508,28 +780,41 @@ const EditorSurface = forwardRef(function EditorSurface({
       if (!div) return;
       div.dataset.charName = charName;
       div.dataset.charId = charId || '';
-      const badge = div.querySelector('.ce-char-badge');
-      if (badge) badge.textContent = charName || '\u00a0';
+      // 커서를 블록 시작으로
+      try {
+        const r = document.createRange();
+        r.selectNodeContents(div);
+        r.collapse(true);
+        window.getSelection()?.removeAllRanges();
+        window.getSelection()?.addRange(r);
+      } catch (_) {}
       doParse();
-      // Re-focus speech
-      const speech = div.querySelector('.ce-speech');
-      if (speech) setTimeout(() => setCaret(div, 0), 30);
     },
     focus() {
       const el = surfaceRef.current;
       if (!el) return;
+      el.focus();
       const first = el.querySelector('[data-block-id]');
-      if (first) { first.focus(); setCaret(first, 0); }
+      if (first) setCaret(first, 0);
     },
     focusEnd() {
       const el = surfaceRef.current;
       if (!el) return;
+      el.focus();
       const all = [...el.querySelectorAll('[data-block-id]')];
       const last = all[all.length - 1];
-      if (last) { last.focus(); setCaret(last, blockText(last).length); }
-      else el.focus();
+      if (last) setCaret(last, blockText(last).length);
     },
-  }), [doParse, onBadgeClick]);
+    loadBlocks(blocks) {
+      const el = surfaceRef.current;
+      if (!el) return;
+      el.innerHTML = blocksToHtml(blocks);
+      // sync meta & labels
+      const synced = parseSurface(el, metaRef, epIdRef.current, projIdRef.current);
+      syncMeta(synced);
+      onBlocksChange(synced);
+    },
+  }), [doParse, onBadgeClick, syncMeta, onBlocksChange]);
 
   // ── Input handler ─────────────────────────────────────────────────────────
   const handleInput = useCallback(() => {
@@ -561,20 +846,9 @@ const EditorSurface = forwardRef(function EditorSurface({
     if (!blockEl) return;
     const type = blockEl.dataset.blockType;
 
-    // ── Ctrl+1/2/3: block type shortcuts
-    const typeMap = { '1': 'scene_number', '2': 'action', '3': 'dialogue' };
-    if (ctrl && e.key === '4') {
+    // Ctrl+Shift+1/2/3/4 는 window 레벨 핸들러에서 처리 (포커스 무관하게 동작)
+    if (ctrl && e.shiftKey && ['Digit1','Digit2','Digit3','Digit4'].includes(e.code)) {
       e.preventDefault();
-      // 등장체크 shortcut — handled by parent, surface just prevents default
-      return;
-    }
-    if (ctrl && typeMap[e.key]) {
-      e.preventDefault();
-      const newType = typeMap[e.key];
-      // Always change the current block's type (Ctrl+1/2/3: direct type assignment)
-      changeBlockTypeEl(blockEl, newType);
-      if (newType === 'dialogue') onBadgeClick?.(blockEl.dataset.blockId, blockEl);
-      doParse();
       return;
     }
 
@@ -649,15 +923,22 @@ const EditorSurface = forwardRef(function EditorSurface({
     }
   }, [doParse, onBadgeClick, onCharSuggest]);
 
-  // ── Click: badge click for char name editing
+  // ── Click: dialogue 블록 클릭 시 인물명(::before 영역) 클릭이면 피커 열기
   const handleClick = useCallback((e) => {
-    if (e.target.classList.contains('ce-char-badge') || e.target.closest('.ce-char-badge')) {
-      const badgeEl = e.target.closest('.ce-char-badge') || e.target;
+    const el = surfaceRef.current;
+    if (!el) return;
+    const blockEl = findBlockEl(e.target, el);
+    if (!blockEl || blockEl.dataset.blockType !== 'dialogue') return;
+    // ::before 영역은 blockEl 왼쪽 padding 안쪽
+    const rect = blockEl.getBoundingClientRect();
+    const style = window.getComputedStyle(blockEl);
+    const paddingLeft = parseFloat(style.paddingLeft) || 0;
+    if (e.clientX < rect.left + paddingLeft) {
       e.preventDefault();
-      const blockEl = findBlockEl(badgeEl, surfaceRef.current);
-      if (blockEl) onBadgeClick?.(blockEl.dataset.blockId, blockEl);
+      onBadgeClick?.(blockEl.dataset.blockId, blockEl);
     }
   }, [onBadgeClick]);
+
 
   return (
     <div
@@ -680,7 +961,7 @@ const EditorSurface = forwardRef(function EditorSurface({
       onCompositionEnd={() => { composingRef.current = false; doParse(); }}
       onInput={handleInput}
       onKeyDown={handleKeyDown}
-      onClick={handleClick}
+      onClick={(e) => { handleClick(e); doParse(); }}
       onPaste={onPaste}
     />
   );
@@ -706,9 +987,13 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
   const [charPickerState, setCharPickerState] = useState(null); // { blockId, top, left }
   const [charSuggestState, setCharSuggestState] = useState(null); // { blockId, blockEl, charName }
   const [suggestEnabled, setSuggestEnabled] = useState(() => localStorage.getItem(CHAR_SUGGEST_KEY) !== 'off');
+  const [pasteToast, setPasteToast] = useState(null);
+  const [sceneRefPicker, setSceneRefPicker] = useState(null); // { top, left, insertAfterId }
   const [pendingBlockType, setPendingBlockType] = useState(null); // for mobile / no-focus toolbar clicks
+  const [activeBlockType, setActiveBlockType] = useState(null);  // 현재 커서의 블록 타입 (툴바 하이라이트)
   const [charCheckPicker, setCharCheckPicker] = useState(null); // { sceneId, top, left }
   const charCheckBtnRef = useRef(null);
+  const editorScrollRef = useRef(null);
 
   // Keep refs in sync every render so unmount-flush sees latest values
   blocksRef.current = blocks;
@@ -730,14 +1015,15 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
   useEffect(() => {
     if (!activeEpisodeId || !initialized) return;
 
+    // 자동저장 타이머 무조건 취소 (새 화 ID로 이전 화 내용이 저장되는 버그 방지)
+    clearTimeout(saveTimer.current);
+
     // Flush unsaved data for the PREVIOUS episode before switching
-    // (handles the case where ScriptEditor stays mounted across episode switches)
     const prevEpId = prevEpisodeIdRef.current;
     if (prevEpId && prevEpId !== activeEpisodeId) {
       const prevBlocks = blocksRef.current;
       const prevSerialized = JSON.stringify(prevBlocks);
       if (prevBlocks.length > 0 && prevSerialized !== lastSavedBlocks.current) {
-        clearTimeout(saveTimer.current);
         dispatch({ type: 'SET_BLOCKS', episodeId: prevEpId, payload: prevBlocks });
         dispatch({ type: 'SET_SAVE_STATUS', payload: 'saved' });
       }
@@ -798,7 +1084,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
       const currentBlocks = blocksRef.current;
       if (!epId || !currentBlocks.length) return;
       const serialized = JSON.stringify(currentBlocks);
-      if (serialized === lastSavedBlocks.current) return;
+      // 변경사항 있든 없든 항상 flush (navigate away 시 데이터 유실 방지)
       clearTimeout(saveTimer.current);
       const currentScenes = scenesRef.current;
       const sceneBlocks = currentBlocks.filter(b => b.type === 'scene_number');
@@ -834,6 +1120,42 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
     onScrollHandled?.();
   }, [scrollToSceneId]);
 
+  // ── Typewriter mode — keep cursor line centered in scroll container
+  useEffect(() => {
+    let rafId = null;
+    const onSelectionChange = () => {
+      if (rafId) return; // throttle to one frame
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        const container = editorScrollRef.current;
+        if (!container) return;
+        const sel = window.getSelection();
+        if (!sel?.rangeCount) return;
+        const range = sel.getRangeAt(0);
+        // Only act when cursor is inside this editor
+        if (!container.contains(range.startContainer)) return;
+        // Find the block-level div containing the cursor
+        let node = range.startContainer;
+        while (node && node !== container) {
+          if (node.nodeType === 1 && node.dataset?.blockId) break;
+          node = node.parentElement;
+        }
+        const blockEl = (node && node !== container) ? node : null;
+        if (!blockEl) return;
+        const blockRect    = blockEl.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        const blockCenter   = blockRect.top + blockRect.height / 2 - containerRect.top;
+        const targetCenter  = containerRect.height / 2;
+        container.scrollTop += blockCenter - targetCenter;
+      });
+    };
+    document.addEventListener('selectionchange', onSelectionChange);
+    return () => {
+      document.removeEventListener('selectionchange', onSelectionChange);
+      if (rafId) cancelAnimationFrame(rafId);
+    };
+  }, []);
+
   // ── sceneRefs auto-update
   useEffect(() => {
     if (!blocks.length) return;
@@ -845,7 +1167,9 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
       const newRefs = b.sceneRefs.map(ref => {
         const scene = scenes.find(s => s.id === ref.sceneId);
         if (!scene) return ref;
-        const newText = scene.content || resolveSceneLabel({ ...scene, label: '' }) || scene.label;
+        const rawText = scene.content || resolveSceneLabel({ ...scene, label: '' }) || scene.label;
+        // displayText includes parentheses e.g. "(S#3 거실)"
+        const newText = rawText ? `(${rawText})` : ref.displayText;
         if (newText !== ref.displayText && ref.displayText && content.includes(ref.displayText)) {
           content = content.split(ref.displayText).join(newText);
           blockChanged = true;
@@ -857,7 +1181,21 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
       anyChanged = true;
       return { ...b, content, sceneRefs: newRefs };
     });
-    if (anyChanged) setBlocks(updated);
+    if (anyChanged) {
+      setBlocks(updated);
+      // Also update inline spans directly in the DOM
+      requestAnimationFrame(() => {
+        const surface = document.querySelector('[data-editor-surface]');
+        if (!surface) return;
+        updated.forEach(b => {
+          (b.sceneRefs || []).forEach(ref => {
+            surface.querySelectorAll(`span[data-ref-scene-id="${ref.sceneId}"]`).forEach(span => {
+              if (span.textContent !== ref.displayText) span.textContent = ref.displayText;
+            });
+          });
+        });
+      });
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scenes]);
 
@@ -906,16 +1244,142 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
     }
   }, [suggestEnabled, projectChars]);
 
-  // ── applyBlockType (toolbar): returns false when no editor focus → set pending
+  // ── applyBlockType (toolbar)
   const applyBlockType = useCallback((type) => {
-    const applied = surfaceApiRef.current?.applyBlockType(type);
-    if (applied === false) {
-      // Toggle: clicking same type again clears the pending state
-      setPendingBlockType(prev => prev === type ? null : type);
-    } else if (applied === true) {
-      setPendingBlockType(null);
-    }
+    surfaceApiRef.current?.applyBlockType(type);
+    setPendingBlockType(null);
+    // dialogue로 바꿀 때는 피커가 새로 열리므로 닫지 않음
+    if (type !== 'dialogue') setCharPickerState(null);
   }, []);
+
+  // ── flushSave: 즉시 저장 (자동저장 타이머 무시)
+  const flushSave = useCallback(() => {
+    if (!activeEpisodeId || !blocks.length) return;
+    clearTimeout(saveTimer.current);
+    const sceneBlocks = blocks.filter(b => b.type === 'scene_number');
+    const updatedScenes = sceneBlocks.map((b, idx) => {
+      const existing = scenes.find(s => s.id === b.sceneId);
+      return {
+        id: b.sceneId || genId(),
+        episodeId: activeEpisodeId, projectId: activeProjectId,
+        sceneSeq: idx + 1, label: `S#${idx + 1}.`,
+        status: existing?.status || 'draft',
+        tags: existing?.tags || [], characters: existing?.characters || [],
+        characterIds: existing?.characterIds || [],
+        content: b.content,
+        location: existing?.location ?? '', subLocation: existing?.subLocation ?? '',
+        timeOfDay: existing?.timeOfDay ?? '', specialSituation: existing?.specialSituation ?? '',
+        sourceTreatmentItemId: existing?.sourceTreatmentItemId ?? null,
+        sceneListContent: existing?.sceneListContent ?? '',
+        createdAt: existing?.createdAt || now(), updatedAt: now(),
+      };
+    });
+    dispatch({ type: 'SET_BLOCKS', episodeId: activeEpisodeId, payload: blocks });
+    dispatch({ type: 'SYNC_SCENES', episodeId: activeEpisodeId, payload: updatedScenes });
+    dispatch({ type: 'SET_SAVE_STATUS', payload: 'saved' });
+    lastSavedBlocks.current = JSON.stringify(blocks);
+  }, [activeEpisodeId, activeProjectId, blocks, scenes, dispatch]);
+
+  // ── 씬번호 블록에 인물 태그 표시 (등장체크 + 대사에서 감지된 인물)
+  useEffect(() => {
+    const surface = document.querySelector('[data-editor-surface]');
+    if (!surface || !blocks.length) return;
+
+    // 씬별로 대사 인물 수집
+    const dialogueCharsByScene = {};
+    let currentSceneId = null;
+    for (const b of blocks) {
+      if (b.type === 'scene_number') {
+        currentSceneId = b.sceneId;
+        if (!dialogueCharsByScene[currentSceneId]) dialogueCharsByScene[currentSceneId] = new Set();
+      } else if (b.type === 'dialogue' && currentSceneId) {
+        const name = b.characterName || b.charName || '';
+        if (name) dialogueCharsByScene[currentSceneId].add(name);
+      }
+    }
+
+    // 씬번호 DOM 업데이트
+    surface.querySelectorAll('[data-block-type="scene_number"]').forEach(div => {
+      const sceneId = div.dataset.sceneId;
+      if (!sceneId) return;
+
+      const detected = dialogueCharsByScene[sceneId] || new Set();
+
+      // 등장체크로 등록된 인물 (characterIds → 이름 resolve)
+      const scene = episodeScenes.find(s => s.id === sceneId);
+      const checkedNames = (scene?.characterIds || [])
+        .map(id => {
+          const c = projectChars.find(ch => ch.id === id);
+          return c ? (c.givenName || c.name || '') : '';
+        })
+        .filter(Boolean);
+
+      // 합치기 (등장체크 우선, 중복 제거)
+      const all = [...new Set([...checkedNames, ...detected])];
+
+      if (all.length) {
+        div.dataset.charTags = all.join(' · ');
+      } else {
+        delete div.dataset.charTags;
+      }
+    });
+  }, [blocks, episodeScenes, projectChars]);
+
+  const handleCharCheckRef = useRef(null);
+
+  // ── Esc/Enter로 씬연결 피커 닫기
+  useEffect(() => {
+    if (!sceneRefPicker) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape' || e.key === 'Enter') {
+        e.preventDefault();
+        setSceneRefPicker(null);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [sceneRefPicker]);
+
+  // ── Ctrl+Shift+1/2/3/4 단축키 + 상단바 저장 버튼 이벤트
+  useEffect(() => {
+    const blockTypeMap = { 'Digit1': 'scene_number', 'Digit2': 'action', 'Digit3': 'dialogue' };
+    const onKey = (e) => {
+      if (!(e.ctrlKey || e.metaKey) || !e.shiftKey) return;
+      const type = blockTypeMap[e.code];
+      if (type) {
+        e.preventDefault();
+        applyBlockType(type);
+      } else if (e.code === 'Digit4') {
+        e.preventDefault();
+        handleCharCheckRef.current?.();
+      } else if (e.code === 'Digit5') {
+        e.preventDefault();
+        // 커서 위치 기준 씬연결 피커 열기
+        const surface = document.querySelector('[data-editor-surface]');
+        const sel = window.getSelection();
+        let insertAfterId = null;
+        let anchorEl = null;
+        if (sel?.rangeCount && surface) {
+          let node = sel.getRangeAt(0).startContainer;
+          node = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+          while (node && node !== surface) {
+            if (node.dataset?.blockId) { anchorEl = node; insertAfterId = node.dataset.blockId; break; }
+            node = node.parentElement;
+          }
+        }
+        const rect = anchorEl?.getBoundingClientRect() || { bottom: 120, left: 200 };
+        const savedRange = sel?.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
+        setSceneRefPicker({ top: rect.bottom + 4, left: rect.left, insertAfterId, savedRange });
+      }
+    };
+    const onSave = () => flushSave();
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('script:requestSave', onSave);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('script:requestSave', onSave);
+    };
+  }, [flushSave, applyBlockType]);
 
   // ── getCurrentSceneId: find the scene_number block's sceneId before the cursor ─
   const getCurrentSceneId = useCallback(() => {
@@ -940,6 +1404,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
     const rect = charCheckBtnRef.current?.getBoundingClientRect();
     setCharCheckPicker({ sceneId, top: rect ? rect.bottom + 4 : 60, left: rect ? rect.left : 0 });
   }, [getCurrentSceneId]);
+  handleCharCheckRef.current = handleCharCheck;
 
   const handleCharCheckSelect = useCallback((char) => {
     if (char?.id && charCheckPicker?.sceneId) {
@@ -1015,56 +1480,132 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
     });
   }, [blocks, episodeScenes, projectChars]);
 
-  // ── Paste: detect structured content
+  // ── Paste: 시나리오 자동 파싱
   const handleEditorPaste = useCallback((e) => {
     const text = e.clipboardData?.getData('text/plain') || '';
-    if (!text.includes('\n')) return;
-    const lines = text.split('\n').filter(l => l.trim());
-    if (lines.length <= 1) return;
+    const lines = text.split('\n');
+    const nonEmpty = lines.filter(l => l.trim());
+    if (nonEmpty.length <= 1) return; // 단일 행은 기본 동작
 
-    const SCENE_RE = /^(S#\d+\.?|s#\d+|씬\s*\d+|scene\s*\d+)/i;
-    const DIAG_TAB_RE = /^([^\t\n]+)\t(.+)$/;
-    const DIAG_SPACE_RE = /^(\S+)\s{3,}(.+)$/;
-    const charNameSet = new Set(projectChars.flatMap(c => [c.name, c.givenName].filter(Boolean)));
-    const anyScene = lines.some(l => SCENE_RE.test(l.trim()));
-    const anyDialogue = lines.some(l => {
-      const s = l.trim();
-      const m = s.match(DIAG_TAB_RE) || s.match(DIAG_SPACE_RE);
-      return m && charNameSet.has(m[1].trim());
-    });
-    if (!anyScene && !anyDialogue) return;
     e.preventDefault();
 
-    const newBlocks = lines.map(line => {
-      const stripped = line.trim();
-      if (!stripped) return null;
-      if (SCENE_RE.test(stripped)) {
-        return { id: genId(), episodeId: activeEpisodeId, projectId: activeProjectId,
-          type: 'scene_number', content: stripped.replace(SCENE_RE, '').trim(), label: '', sceneId: genId(), createdAt: now(), updatedAt: now() };
+    // ── 패턴 정의
+    const SCENE_RE = /^(S#\d+\.?|s#\d+\.?|씬\s*\d+\.?|\d+씬\.?|#\d+\.?|\d+\.\s)/i;
+    const PAREN_RE = /^\s*\(.*\)\s*$/;
+
+    const charNameSet = new Set(projectChars.flatMap(c =>
+      [c.name, c.givenName, c.surname ? (c.surname + c.givenName) : null].filter(Boolean)
+    ));
+
+    // 대사 감지: 탭/콜론/"이름  대사" 형식
+    const detectDialogue = (line) => {
+      const s = line.trim();
+      // 탭 구분: "이름\t대사"
+      const tabM = s.match(/^([^\t]+)\t(.+)$/);
+      if (tabM) return { name: tabM[1].trim(), text: tabM[2].trim() };
+      // 콜론 구분: "이름: 대사" (이름 6자 이하)
+      const colonM = s.match(/^([가-힣A-Za-z·\s]{1,8})\s*[：:]\s*(.+)$/);
+      if (colonM) return { name: colonM[1].trim(), text: colonM[2].trim() };
+      // 등록된 인물명 + 2칸 이상 공백: "이름  대사"
+      for (const name of charNameSet) {
+        if (s.startsWith(name) && s.length > name.length) {
+          const after = s.slice(name.length);
+          if (/^\s{2,}/.test(after)) return { name, text: after.trim() };
+        }
       }
-      const dm = stripped.match(DIAG_TAB_RE) || stripped.match(DIAG_SPACE_RE);
-      if (dm && charNameSet.has(dm[1].trim())) {
-        const charName = dm[1].trim();
-        const char = projectChars.find(c => c.name === charName || c.givenName === charName);
-        return { id: genId(), episodeId: activeEpisodeId, projectId: activeProjectId,
-          type: 'dialogue', content: dm[2].trim(), label: '', characterId: char?.id, characterName: char?.name || charName, createdAt: now(), updatedAt: now() };
+      return null;
+    };
+
+    const makeBase = (sceneId) => ({
+      id: genId(), episodeId: activeEpisodeId, projectId: activeProjectId,
+      label: '', sceneId: sceneId || genId(), createdAt: now(), updatedAt: now(),
+    });
+
+    // ── 씬 안에서 공유할 sceneId (씬번호 블록 생성 시 갱신)
+    let currentSceneId = genId();
+    const newBlocks = nonEmpty.map(line => {
+      const s = line.trim();
+      if (!s) return null;
+
+      if (SCENE_RE.test(s)) {
+        currentSceneId = genId();
+        const content = s.replace(SCENE_RE, '').trim();
+        return { ...makeBase(currentSceneId), type: 'scene_number', content };
       }
-      return { id: genId(), episodeId: activeEpisodeId, projectId: activeProjectId,
-        type: 'action', content: stripped, label: '', createdAt: now(), updatedAt: now() };
+
+      if (PAREN_RE.test(s)) {
+        return { ...makeBase(currentSceneId), type: 'parenthetical',
+          content: s.replace(/^\s*\(|\)\s*$/g, '').trim() };
+      }
+
+      const diag = detectDialogue(line);
+      if (diag) {
+        const char = projectChars.find(c =>
+          [c.name, c.givenName, c.surname ? c.surname + c.givenName : null]
+            .filter(Boolean).includes(diag.name)
+        );
+        return { ...makeBase(currentSceneId), type: 'dialogue',
+          content: diag.text,
+          characterId: char?.id || '',
+          characterName: char?.givenName || char?.name || diag.name,
+          charName:      char?.givenName || char?.name || diag.name,
+        };
+      }
+
+      // 인식 안된 부분 → 지문으로 보존 (Ctrl+Shift+1/2/3으로 수동 변경 가능)
+      return { ...makeBase(currentSceneId), type: 'action', content: s };
     }).filter(Boolean);
 
     if (!newBlocks.length) return;
-    setBlocks(prev => syncLabels([...prev, ...newBlocks]));
-  }, [blocks, activeEpisodeId, activeProjectId, projectChars]);
+
+    // ── 커서 위치 이후에 삽입
+    const surface = document.querySelector('[data-editor-surface]');
+    const sel = window.getSelection();
+    let insertAfterId = null;
+    if (sel?.rangeCount && surface) {
+      const blockEl = surface.querySelector('[data-block-id]') &&
+        (() => {
+          let el = sel.getRangeAt(0).startContainer;
+          el = el.nodeType === Node.TEXT_NODE ? el.parentElement : el;
+          while (el && el !== surface) {
+            if (el.dataset?.blockId) return el;
+            el = el.parentElement;
+          }
+          return null;
+        })();
+      if (blockEl) insertAfterId = blockEl.dataset.blockId;
+    }
+
+    setBlocks(prev => {
+      const merged = (() => {
+        const labelled = newBlocks;
+        if (!insertAfterId) return syncLabels([...prev, ...labelled]);
+        const idx = prev.findIndex(b => b.id === insertAfterId);
+        if (idx < 0) return syncLabels([...prev, ...labelled]);
+        return syncLabels([...prev.slice(0, idx + 1), ...labelled, ...prev.slice(idx + 1)]);
+      })();
+      // DOM도 즉시 갱신
+      requestAnimationFrame(() => surfaceApiRef.current?.loadBlocks(merged));
+      return merged;
+    });
+
+    // 붙여넣기 결과 피드백
+    const nScenes    = newBlocks.filter(b => b.type === 'scene_number').length;
+    const nDialogue  = newBlocks.filter(b => b.type === 'dialogue').length;
+    const nAction    = newBlocks.filter(b => b.type === 'action').length;
+    const nUnknown   = nAction; // 지문으로 분류된 것 중 인식 불확실
+    setPasteToast(`붙여넣기 완료 — 씬 ${nScenes}, 대사 ${nDialogue}, 지문 ${nAction}${nUnknown ? ' (지문은 Ctrl+Shift+1/2/3으로 형식 변경)' : ''}`);
+    setTimeout(() => setPasteToast(null), 4000);
+  }, [activeEpisodeId, activeProjectId, projectChars, setBlocks]);
 
   const editorFontSize = stylePreset?.fontSize ? `${stylePreset.fontSize}pt` : '11pt';
   const editorLineHeight = stylePreset?.lineHeight ?? 1.6;
   const { cssStack: editorFontFamily } = resolveFont(stylePreset, 'editor');
 
   const BLOCK_TYPE_BTNS = [
-    { type: 'scene_number', label: 'S#', title: '씬번호 (Ctrl+1)' },
-    { type: 'action',       label: '지문', title: '지문 (Ctrl+2)' },
-    { type: 'dialogue',     label: '대사', title: '대사 (Ctrl+3)' },
+    { type: 'scene_number', label: 'S#', title: '씬번호 (Ctrl+Shift+1)' },
+    { type: 'action',       label: '지문', title: '지문 (Ctrl+Shift+2)' },
+    { type: 'dialogue',     label: '대사', title: '대사 (Ctrl+Shift+3)' },
   ];
 
   if (!activeEpisodeId) {
@@ -1080,13 +1621,10 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
       {/* Toolbar */}
       <div className="px-6 py-2 flex items-center gap-2 text-xs shrink-0" style={{ borderBottom: '1px solid var(--c-border2)' }}>
         <span style={{ color: 'var(--c-text3)' }}>{episode?.number}회 {episode?.title || ''}</span>
-        <span style={{ color: 'var(--c-text5)' }}>
-          {blocks.filter(b => b.type === 'scene_number').length}개 씬
-          · {blocks.filter(b => b.type === 'dialogue').length}개 대사
-        </span>
         <div data-tour-id="scene-block-btns" className="flex gap-1 ml-2">
           {BLOCK_TYPE_BTNS.map(({ type, label, title }) => {
             const isPending = pendingBlockType === type;
+            const isActive  = !isPending && activeBlockType === type;
             return (
               <button
                 key={type}
@@ -1094,28 +1632,56 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
                 onMouseDown={e => { e.preventDefault(); applyBlockType(type); }}
                 className="px-2 py-0.5 rounded text-xs"
                 style={{
-                  color: isPending ? '#fff' : 'var(--c-text3)',
-                  border: `1px solid ${isPending ? 'var(--c-accent)' : 'var(--c-border3)'}`,
+                  color:      isPending ? '#fff' : isActive ? 'var(--c-accent)' : 'var(--c-text3)',
+                  border:     `1px solid ${isPending || isActive ? 'var(--c-accent)' : 'var(--c-border3)'}`,
                   background: isPending ? 'var(--c-accent)' : 'transparent',
+                  fontWeight: isActive ? '600' : 'normal',
                   cursor: 'pointer',
                   transition: 'background 0.1s, color 0.1s, border-color 0.1s',
                 }}
-                onMouseEnter={e => { if (!isPending) { e.currentTarget.style.background = 'var(--c-hover)'; e.currentTarget.style.color = 'var(--c-accent)'; } }}
-                onMouseLeave={e => { if (!isPending) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--c-text3)'; } }}
+                onMouseEnter={e => { if (!isPending && !isActive) { e.currentTarget.style.background = 'var(--c-hover)'; e.currentTarget.style.color = 'var(--c-accent)'; } }}
+                onMouseLeave={e => { if (!isPending && !isActive) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--c-text3)'; } }}
               >{label}</button>
             );
           })}
           <button
             ref={charCheckBtnRef}
-            title="등장체크 — 현재 씬 등장인물 추가 (Ctrl+4)"
+            title="등장체크 — 현재 씬 등장인물 추가 (Ctrl+Shift+4)"
             onMouseDown={e => { e.preventDefault(); handleCharCheck(); }}
             className="px-2 py-0.5 rounded text-xs ml-1"
             style={{ color: 'var(--c-text3)', border: '1px solid var(--c-border3)', background: 'transparent', cursor: 'pointer' }}
             onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-hover)'; e.currentTarget.style.color = 'var(--c-accent2)'; }}
             onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--c-text3)'; }}
           >등장체크</button>
+          <button
+            title="씬연결 — 현재 위치에 다른 씬 참조 삽입 (Ctrl+Shift+5)"
+            onMouseDown={e => {
+              e.preventDefault();
+              const surface = document.querySelector('[data-editor-surface]');
+              const sel = window.getSelection();
+              let insertAfterId = null;
+              let anchorEl = null;
+              if (sel?.rangeCount && surface) {
+                let node = sel.getRangeAt(0).startContainer;
+                node = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+                while (node && node !== surface) {
+                  if (node.dataset?.blockId) { anchorEl = node; insertAfterId = node.dataset.blockId; break; }
+                  node = node.parentElement;
+                }
+              }
+              const btn = e.currentTarget;
+              const rect = anchorEl?.getBoundingClientRect() || btn.getBoundingClientRect();
+              const savedRange = sel?.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
+              setSceneRefPicker({ top: rect.bottom + 4, left: rect.left, insertAfterId, savedRange });
+            }}
+            className="px-2 py-0.5 rounded text-xs ml-1"
+            style={{ color: 'var(--c-text3)', border: '1px solid var(--c-border3)', background: 'transparent', cursor: 'pointer' }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-hover)'; e.currentTarget.style.color = 'var(--c-accent)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--c-text3)'; }}
+          >씬연결</button>
+          <SymbolPicker />
         </div>
-        <span className="ml-auto flex items-center gap-2">
+        <span className="ml-auto flex items-center gap-3">
           {brokenSceneRefs.length > 0 && (
             <button
               onClick={() => { setReconnectIdx(0); setReconnectTarget(brokenSceneRefs[0]); }}
@@ -1123,6 +1689,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
               style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', cursor: 'pointer' }}
             >⚠ S# 참조 {brokenSceneRefs.length}개 끊김</button>
           )}
+          <PageCounter blocks={blocks} stylePreset={stylePreset} scrollRef={editorScrollRef} />
           {saveStatus === 'saving'
             ? <span style={{ color: 'var(--c-text6)' }}>저장 중…</span>
             : saveStatus === 'error'
@@ -1188,6 +1755,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
 
       {/* Editor */}
       <div
+        ref={editorScrollRef}
         className="flex-1 overflow-y-auto relative"
         onClick={(e) => {
           const inSurface = !!e.target.closest('[data-editor-surface]');
@@ -1220,6 +1788,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
             onBlocksChange={setBlocks}
             onBadgeClick={handleBadgeClick}
             onCharSuggest={handleCharSuggest}
+            onSelectionChange={setActiveBlockType}
             dialogueGap={dialogueGap}
             fontFamily={editorFontFamily}
             fontSize={editorFontSize}
@@ -1299,11 +1868,100 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
         />
       )}
 
+      {/* 씬연결 피커 */}
+      {sceneRefPicker && (() => {
+        const getDisplay = (s) => s.content || resolveSceneLabel({ ...s, label: '' }) || s.label;
+        // 커서 이전에 등장한 씬만 포함
+        const cursorIdx = sceneRefPicker.insertAfterId
+          ? blocks.findIndex(b => b.id === sceneRefPicker.insertAfterId)
+          : blocks.length - 1;
+        const seenSceneIds = new Set(
+          blocks.slice(0, cursorIdx + 1)
+            .filter(b => b.type === 'scene_number' && b.sceneId)
+            .map(b => b.sceneId)
+        );
+        const sceneItems = episodeScenes.filter(s => seenSceneIds.has(s.id)).slice(0, 8);
+        const handleSceneSelect = (scene) => {
+          const label = scene.label || '';
+          const sceneText = getDisplay(scene);
+          const rawText = label ? `${label} ${sceneText}` : sceneText;
+          const displayText = `(${rawText})`;
+          const { savedRange } = sceneRefPicker;
+          setSceneRefPicker(null);
+          requestAnimationFrame(() => {
+            const sel = window.getSelection();
+            if (savedRange && sel) {
+              sel.removeAllRanges();
+              sel.addRange(savedRange.cloneRange());
+            }
+            const range = sel?.rangeCount ? sel.getRangeAt(0) : null;
+            if (!range) return;
+            const span = document.createElement('span');
+            span.contentEditable = 'false';
+            span.dataset.refSceneId = scene.id;
+            span.className = 'scene-ref-chip';
+            span.textContent = displayText;
+            range.insertNode(span);
+            range.setStartAfter(span);
+            range.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(range);
+          });
+        };
+        return (
+          <div
+            className="fixed z-[100] rounded shadow-xl"
+            style={{
+              top: sceneRefPicker.top, left: sceneRefPicker.left,
+              background: 'var(--c-tag)', border: '1px solid var(--c-border4)',
+              minWidth: '220px',
+            }}
+          >
+            <div className="px-3 py-1.5 text-[10px] font-semibold" style={{ color: 'var(--c-text5)', borderBottom: '1px solid var(--c-border)' }}>
+              씬연결 — 씬 선택
+            </div>
+            <div style={{ maxHeight: '192px', overflowY: 'auto' }}>
+              {sceneItems.length === 0 ? (
+                <div className="px-3 py-2 text-xs" style={{ color: 'var(--c-text6)' }}>씬 없음</div>
+              ) : sceneItems.map(s => {
+                const display = getDisplay(s);
+                return (
+                  <div
+                    key={s.id}
+                    onMouseDown={e => { e.preventDefault(); handleSceneSelect(s); }}
+                    className="px-3 py-1.5 text-xs cursor-pointer"
+                    style={{ color: 'var(--c-text2)' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-active)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    {display || <span style={{ color: 'var(--c-text6)', fontStyle: 'italic' }}>{s.label} (미입력)</span>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* 붙여넣기 결과 토스트 */}
+      {pasteToast && (
+        <div style={{
+          position: 'fixed', bottom: '72px', left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--c-tag)', border: '1px solid var(--c-border3)',
+          color: 'var(--c-text2)', fontSize: '11px', padding: '8px 16px',
+          borderRadius: '8px', zIndex: 200, boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+          whiteSpace: 'nowrap', pointerEvents: 'none',
+        }}>
+          {pasteToast}
+        </div>
+      )}
+
       {/* Shortcuts hint */}
       <div className="px-6 py-2 flex gap-4 text-[11px] shrink-0" style={{ borderTop: '1px solid var(--c-border)', color: 'var(--c-dim)' }}>
-        <span>Ctrl+1 씬번호</span>
-        <span>Ctrl+2 지문</span>
-        <span>Ctrl+3 대사</span>
+        <span>Ctrl+Shift+1 씬번호</span>
+        <span>Ctrl+Shift+2 지문</span>
+        <span>Ctrl+Shift+3 대사</span>
+        <span>Ctrl+Shift+5 씬연결</span>
         <span>Enter 다음 블록</span>
         <span>Shift+Enter 줄바꿈</span>
         <span>Backspace (빈 블록) 삭제</span>
