@@ -41,8 +41,8 @@ export default function BiographyPage() {
 
   return (
     <div className="h-full flex overflow-hidden" style={{ background: 'var(--c-bg)' }}>
-      {/* Left: char list */}
-      <div className="w-44 shrink-0 overflow-y-auto py-2" style={{ borderRight: '1px solid var(--c-border)', background: 'var(--c-panel)' }}>
+      {/* Left: char list — 20% */}
+      <div className="shrink-0 overflow-y-auto py-2" style={{ width: '20%', borderRight: '1px solid var(--c-border)', background: 'var(--c-panel)' }}>
         <div className="px-3 py-2 text-[10px] uppercase tracking-widest" style={{ color: 'var(--c-text6)' }}>인물</div>
         {projectChars.map(c => (
           <div
@@ -65,7 +65,7 @@ export default function BiographyPage() {
       </div>
 
       {/* Right: biography editor */}
-      <div className="flex-1 overflow-y-auto px-8 py-6">
+      <div className="flex-1 overflow-y-auto" style={{ padding: 10 }}>
         {!char ? (
           <div className="text-center py-16 text-sm" style={{ color: 'var(--c-text5)' }}>인물을 선택하세요</div>
         ) : (

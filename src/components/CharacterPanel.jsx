@@ -149,8 +149,55 @@ function CharacterForm({ initial, onSave, onCancel }) {
   );
 }
 
+// ─── CharacterUsage ────────────────────────────────────────────────────────────
+function CharacterUsage({ char, episodes, scenes, scriptBlocks }) {
+  const name = charDisplayName(char);
+  const fullName = charFullName(char);
+
+  const dialogueBlocks = scriptBlocks.filter(b =>
+    b.type === 'dialogue' &&
+    b.charName && (b.charName === name || b.charName === fullName)
+  );
+  const appearedEpIds = [...new Set(dialogueBlocks.map(b => b.episodeId).filter(Boolean))];
+  const appearedSceneIds = [...new Set(
+    scenes.filter(s => (s.characterIds || []).includes(char.id)).map(s => s.episodeId)
+  )];
+  const allEpIds = [...new Set([...appearedEpIds, ...appearedSceneIds])];
+
+  return (
+    <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--c-border)' }}>
+      <div className="text-[10px] uppercase tracking-widest mb-2" style={{ color: 'var(--c-text6)' }}>인물 현황</div>
+      <div className="flex flex-wrap gap-3 text-xs">
+        <span style={{ color: 'var(--c-text4)' }}>
+          대사 <span style={{ color: 'var(--c-accent)', fontWeight: 600 }}>{dialogueBlocks.length}</span>개
+        </span>
+        <span style={{ color: 'var(--c-text4)' }}>
+          등장 회차 <span style={{ color: 'var(--c-accent)', fontWeight: 600 }}>{allEpIds.length}</span>개
+        </span>
+      </div>
+      {allEpIds.length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-2">
+          {allEpIds.map(epId => {
+            const ep = episodes.find(e => e.id === epId);
+            if (!ep) return null;
+            return (
+              <span key={epId} className="text-[10px] px-1.5 py-0.5 rounded"
+                style={{ background: 'var(--c-tag)', color: 'var(--c-accent2)' }}>
+                {ep.number}회{ep.title ? ' ' + ep.title : ''}
+              </span>
+            );
+          })}
+        </div>
+      )}
+      {allEpIds.length === 0 && (
+        <div className="text-[10px] mt-1" style={{ color: 'var(--c-text6)' }}>등장 기록 없음</div>
+      )}
+    </div>
+  );
+}
+
 // ─── CharacterCard ─────────────────────────────────────────────────────────────
-function CharacterCard({ char, isSelected, onSelect, onEdit, onDelete }) {
+function CharacterCard({ char, isSelected, onSelect, onEdit, onDelete, episodes, scenes, scriptBlocks }) {
   const [confirm, setConfirm] = useState(false);
 
   const roleColor = { lead: 'var(--c-accent)', support: 'var(--c-accent2)', extra: 'var(--c-text5)' }[char.role] || 'var(--c-text5)';
@@ -216,7 +263,9 @@ function CharacterCard({ char, isSelected, onSelect, onEdit, onDelete }) {
       )}
 
       {isSelected && (
-        <div className="mt-2 text-[10px]" style={{ color: 'var(--c-accent)' }}>▶ 우측 패널에서 대사 현황 확인</div>
+        window.innerWidth < 768
+          ? <div className="mt-2 text-[10px]" style={{ color: 'var(--c-text5)' }}>인물 현황은 데스크톱에서 확인하세요</div>
+          : <CharacterUsage char={char} episodes={episodes} scenes={scenes} scriptBlocks={scriptBlocks} />
       )}
     </div>
   );
@@ -225,7 +274,7 @@ function CharacterCard({ char, isSelected, onSelect, onEdit, onDelete }) {
 // ─── CharacterPanel ────────────────────────────────────────────────────────────
 export default function CharacterPanel() {
   const { state, dispatch } = useApp();
-  const { activeProjectId, characters, selectedCharacterId } = state;
+  const { activeProjectId, characters, selectedCharacterId, episodes, scenes, scriptBlocks } = state;
 
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -279,12 +328,6 @@ export default function CharacterPanel() {
         </button>
       </div>
 
-      {selectedCharacterId && (
-        <div className="px-6 py-1.5 text-[11px] shrink-0" style={{ background: 'var(--c-active)', borderBottom: '1px solid var(--c-border)', color: 'var(--c-accent)' }}>
-          인물 선택됨 — 우측 패널에서 대사 현황 확인 가능
-          <button onClick={() => dispatch({ type: 'SET_SELECTED_CHARACTER', id: null })} className="ml-2 opacity-60 hover:opacity-100" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit' }}>✕</button>
-        </div>
-      )}
 
       <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
         {adding && <CharacterForm onSave={handleAdd} onCancel={() => setAdding(false)} />}
@@ -299,6 +342,9 @@ export default function CharacterPanel() {
               onSelect={handleSelect}
               onEdit={c => { setEditingId(c.id); setAdding(false); }}
               onDelete={id => dispatch({ type: 'DELETE_CHARACTER', id })}
+              episodes={episodes.filter(e => e.projectId === activeProjectId)}
+              scenes={scenes.filter(s => s.projectId === activeProjectId)}
+              scriptBlocks={scriptBlocks.filter(b => b.projectId === activeProjectId)}
             />
           )
         )}
@@ -309,15 +355,6 @@ export default function CharacterPanel() {
         )}
       </div>
 
-      {projectChars.length > 0 && (
-        <div className="px-6 py-3 flex gap-4 text-xs shrink-0" style={{ borderTop: '1px solid var(--c-border2)', color: 'var(--c-text5)' }}>
-          {Object.entries(ROLE_LABELS).map(([role, label]) => {
-            const cnt = projectChars.filter(c => c.role === role).length;
-            const color = { lead: 'var(--c-accent)', support: 'var(--c-accent2)', extra: 'var(--c-text5)' }[role];
-            return cnt > 0 ? <span key={role} style={{ color }}>{label} {cnt}</span> : null;
-          })}
-        </div>
-      )}
     </div>
   );
 }

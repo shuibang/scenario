@@ -7,7 +7,7 @@ import {
   getFontPdfStatus,
   getFontByCssFamily,
 } from './print/FontRegistry';
-import { getItem, setItem, clearDramaStorage, isPublicPcMode } from './store/db';
+import { getItem, setItem, clearDramaStorage, isPublicPcMode, genId, now } from './store/db';
 import { setAccessToken, clearAccessToken, loadFromDrive } from './store/googleDrive';
 import LeftPanel from './components/LeftPanel';
 import RightPanel from './components/RightPanel';
@@ -182,6 +182,14 @@ function RealtimeClock() {
   );
 }
 
+// ─── Mobile toolbar button style ─────────────────────────────────────────────
+const mobileTbtnStyle = {
+  flexShrink: 0, fontSize: 'clamp(10px, 2.8vw, 13px)', color: 'var(--c-text4)',
+  padding: '4px 10px', border: '1px solid var(--c-border3)',
+  borderRadius: 6, background: 'transparent', cursor: 'pointer',
+  WebkitTapHighlightColor: 'transparent',
+};
+
 // ─── Work timer (active-time accumulator) ─────────────────────────────────────
 function WorkTimer({ projectId, documentId, onComplete }) {
   const { state, dispatch } = useApp();
@@ -256,10 +264,9 @@ function WorkTimer({ projectId, documentId, onComplete }) {
       <button
         onClick={handleComplete}
         title="작업완료 — 시간 기록 저장"
-        className="text-[10px] px-1.5 py-0.5 rounded"
-        style={{ background: 'var(--c-tag)', color: 'var(--c-text5)', border: '1px solid var(--c-border3)', cursor: 'pointer' }}
+        style={{ ...mobileTbtnStyle, whiteSpace: 'nowrap' }}
       >
-        완료
+        기록
       </button>
     </div>
   );
@@ -440,69 +447,71 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave }) {
     <div data-tour-id="menubar" className="shrink-0 no-print" style={{ background: 'var(--c-header)', borderBottom: '1px solid var(--c-border)' }}>
       {loginOpen && <LoginModal onClose={() => setLoginOpen(false)} onLogin={setAuthUser} />}
 
-      {/* ── Row 1: identity + login + clock + timer + complete + theme ── */}
-      <div className="h-9 flex items-center px-4 gap-2 overflow-x-auto" style={{ borderBottom: '1px solid var(--c-border2)', scrollbarWidth: 'none' }}>
-        <span className="text-xs font-bold tracking-wider shrink-0" style={{ color: 'var(--c-accent)' }}>
+      {/* ── Row 1: [left: login/mypage] [center: brand] [right: clock/timer] ── */}
+      <div className="h-9 flex items-center px-4" style={{ borderBottom: '1px solid var(--c-border2)' }}>
+        {/* Left: 로그인/마이페이지 */}
+        <div className="flex items-center gap-2" style={{ flex: 1 }}>
+          {authUser ? (
+            <div className="flex items-center gap-1.5">
+              {authUser.picture && <img src={authUser.picture} alt="" className="w-5 h-5 rounded-full" />}
+              <span className="text-xs" style={{ color: 'var(--c-text3)' }}>{authUser.name}</span>
+              {driveStatus === 'syncing' && (
+                <span className="text-[10px]" style={{ color: 'var(--c-text5)' }}>☁ 동기화 중…</span>
+              )}
+              {driveStatus === 'synced' && (
+                <span className="text-[10px]" style={{ color: '#4ade80' }}>☁ 동기화됨</span>
+              )}
+              {driveStatus === 'error' && (
+                <span
+                  className="text-[10px] cursor-pointer"
+                  style={{ color: '#f87171' }}
+                  title="Drive 연동 실패. 클릭해서 재시도"
+                  onClick={() => {
+                    setDriveStatus('none');
+                    tokenClientRef.current?.requestAccessToken({ prompt: '' });
+                  }}
+                >☁ 연동 실패 (재시도)</span>
+              )}
+              <button onClick={() => {
+                  if (isPublicPcMode()) clearDramaStorage();
+                  localStorage.removeItem('drama_auth_user');
+                  window.google?.accounts.id.disableAutoSelect();
+                  clearAccessToken();
+                  setDriveStatus('none');
+                  setAuthUser(null);
+                }}
+                style={{ padding: '3px 10px', borderRadius: 4, fontSize: 11, background: 'transparent', border: '1px solid var(--c-border3)', color: 'var(--c-text6)', cursor: 'pointer' }}>
+                로그아웃
+              </button>
+            </div>
+          ) : (
+            <>
+              <button onClick={() => setLoginOpen(true)}
+                style={{ padding: '3px 10px', borderRadius: 4, fontSize: 11, background: 'transparent', border: '1px solid var(--c-border3)', color: 'var(--c-text4)', cursor: 'pointer' }}>
+                로그인
+              </button>
+              <button onClick={() => setLoginOpen(true)}
+                style={{ padding: '3px 10px', borderRadius: 4, fontSize: 11, background: 'var(--c-accent)', color: '#fff', border: 'none', cursor: 'pointer' }}>
+                회원가입
+              </button>
+            </>
+          )}
+          <button
+            onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'mypage' })}
+            style={{ padding: '3px 10px', borderRadius: 4, fontSize: 11, background: 'transparent', border: '1px solid var(--c-border3)', color: 'var(--c-text4)', cursor: 'pointer' }}
+          >
+            마이페이지
+          </button>
+        </div>
+
+        {/* Center: brand */}
+        <span className="text-xs font-bold tracking-wider"
+          style={{ color: 'var(--c-accent)', flexShrink: 0 }}>
           대본 작업실
         </span>
 
-        {authUser ? (
-          <div className="flex items-center gap-1.5 shrink-0">
-            {authUser.picture && <img src={authUser.picture} alt="" className="w-5 h-5 rounded-full" />}
-            <span className="text-xs" style={{ color: 'var(--c-text3)' }}>{authUser.name}</span>
-            {driveStatus === 'syncing' && (
-              <span className="text-[10px]" style={{ color: 'var(--c-text5)' }}>☁ 동기화 중…</span>
-            )}
-            {driveStatus === 'synced' && (
-              <span className="text-[10px]" style={{ color: '#4ade80' }}>☁ 동기화됨</span>
-            )}
-            {driveStatus === 'error' && (
-              <span
-                className="text-[10px] cursor-pointer"
-                style={{ color: '#f87171' }}
-                title="Drive 연동 실패. 클릭해서 재시도"
-                onClick={() => {
-                  setDriveStatus('none');
-                  tokenClientRef.current?.requestAccessToken({ prompt: '' });
-                }}
-              >☁ 연동 실패 (재시도)</span>
-            )}
-            <button onClick={() => {
-                if (isPublicPcMode()) clearDramaStorage();
-                localStorage.removeItem('drama_auth_user');
-                window.google?.accounts.id.disableAutoSelect();
-                clearAccessToken();
-                setDriveStatus('none');
-                setAuthUser(null);
-              }}
-              className="text-[10px] px-1.5 py-0.5 rounded"
-              style={{ background: 'transparent', border: '1px solid var(--c-border3)', color: 'var(--c-text6)', cursor: 'pointer' }}>
-              로그아웃
-            </button>
-          </div>
-        ) : (
-          <>
-            <button onClick={() => setLoginOpen(true)}
-              className="px-2 py-0.5 rounded text-xs shrink-0"
-              style={{ background: 'transparent', border: '1px solid var(--c-border3)', color: 'var(--c-text4)', cursor: 'pointer' }}>
-              로그인
-            </button>
-            <button onClick={() => setLoginOpen(true)}
-              className="px-2 py-0.5 rounded text-xs shrink-0"
-              style={{ background: 'var(--c-accent)', color: '#fff', border: 'none', cursor: 'pointer' }}>
-              회원가입
-            </button>
-          </>
-        )}
-        <button
-          onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'mypage' })}
-          className="px-2 py-0.5 rounded text-xs shrink-0"
-          style={{ background: 'transparent', border: '1px solid var(--c-border3)', color: 'var(--c-text4)', cursor: 'pointer' }}
-        >
-          마이페이지
-        </button>
-
-        <div className="ml-auto flex items-center gap-3 shrink-0">
+        {/* Right: clock + timer */}
+        <div className="flex items-center gap-3" style={{ flex: 1, justifyContent: 'flex-end' }}>
           <RealtimeClock />
           {activeProjectId && <WorkTimer key={activeProjectId} projectId={activeProjectId} documentId={state.activeEpisodeId || state.activeDoc} />}
         </div>
@@ -518,7 +527,7 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave }) {
           title={saveStatus === 'error' && saveErrorMsg ? saveErrorMsg : undefined}
           style={saveStatus === 'error' ? { color: '#c00', borderColor: '#f99' } : undefined}
         />
-        <MenuButton label="출력 미리보기" onClick={onPrintPreview} disabled={!activeProjectId} accent />
+        <MenuButton label="출력" onClick={onPrintPreview} disabled={!activeProjectId} accent />
 
         {sep}
 
@@ -600,8 +609,7 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave }) {
         <div className="ml-auto shrink-0">
           <button
             onClick={onToggleTheme}
-            className="px-2 py-0.5 rounded text-xs transition-colors"
-            style={{ background: 'transparent', border: '1px solid var(--c-border3)', color: 'var(--c-text3)', cursor: 'pointer' }}
+            style={{ padding: '3px 10px', borderRadius: 4, fontSize: 11, background: 'transparent', border: '1px solid var(--c-border3)', color: 'var(--c-text3)', cursor: 'pointer' }}
             title={isDark ? '라이트 모드로 전환' : '다크 모드로 전환'}
           >
             {isDark ? '☀ 라이트' : '🌙 다크'}
@@ -618,13 +626,14 @@ function MenuButton({ label, onClick, disabled, accent, fixedWidth, title, style
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className="px-2.5 py-1 rounded text-xs transition-colors shrink-0"
       style={{
+        padding: '3px 10px', borderRadius: 4, fontSize: 11,
         color: accent ? 'var(--c-accent)' : 'var(--c-text3)',
         border: `1px solid ${accent ? 'var(--c-accent)' : 'var(--c-border3)'}`,
         background: 'transparent',
         opacity: disabled ? 0.35 : 1,
         cursor: disabled ? 'not-allowed' : 'pointer',
+        flexShrink: 0,
         ...(fixedWidth ? { minWidth: fixedWidth, maxWidth: fixedWidth, textAlign: 'center' } : {}),
         ...extraStyle,
       }}
@@ -655,16 +664,16 @@ function CollapseButton({ side, collapsed, onToggle }) {
         onClick={onToggle}
         title={collapsed ? '패널 열기' : '패널 닫기'}
         style={{
-          width: '20px', height: '44px',
-          border: '1px solid var(--c-border3)',
+          width: '20px', height: '52px',
+          border: '1px solid var(--c-border2)',
           borderRadius: '10px',
-          background: 'var(--c-panel)',
-          color: 'var(--c-text4)',
+          background: 'var(--c-card)',
+          color: 'var(--c-text2)',
           cursor: 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '11px', lineHeight: 1,
+          fontSize: '13px', fontWeight: 600, lineHeight: 1,
           transition: 'background 0.15s, color 0.15s, border-color 0.15s',
-          boxShadow: '0 1px 4px rgba(0,0,0,0.15)',
+          boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
           padding: 0,
         }}
         onMouseEnter={e => {
@@ -684,72 +693,623 @@ function CollapseButton({ side, collapsed, onToggle }) {
   );
 }
 
+// ─── MobileScriptTab ─────────────────────────────────────────────────────────
+function MobileScriptTab() {
+  const { state, dispatch } = useApp();
+  const { projects, episodes, activeProjectId, activeEpisodeId, activeDoc } = state;
+  const [addingProject, setAddingProject] = useState(false);
+  const [newProjName, setNewProjName] = useState('');
+  const [newProjType, setNewProjType] = useState('series'); // 'series' | 'single'
+
+  // ── swipe-to-delete state ──────────────────────────────────────────────────
+  const [swipedId, setSwipedId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null); // { id, type: 'project'|'episode' }
+  const [deleteText, setDeleteText] = useState('');
+  const touchStartX = useRef({});
+
+  const handleTouchStart = (id, e) => {
+    touchStartX.current[id] = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = (id, e) => {
+    const startX = touchStartX.current[id];
+    if (startX === undefined) return;
+    const dx = e.changedTouches[0].clientX - startX;
+    if (dx < -60) {
+      setSwipedId(id);
+    } else if (dx > 20 && swipedId === id) {
+      setSwipedId(null);
+    }
+    delete touchStartX.current[id];
+  };
+
+  const openDeleteConfirm = (id, type, e) => {
+    e.stopPropagation();
+    setSwipedId(null);
+    setDeleteTarget({ id, type });
+    setDeleteText('');
+  };
+
+  const confirmDelete = () => {
+    if (deleteText !== '삭제' || !deleteTarget) return;
+    if (deleteTarget.type === 'project') dispatch({ type: 'DELETE_PROJECT', id: deleteTarget.id });
+    else dispatch({ type: 'DELETE_EPISODE', id: deleteTarget.id });
+    setDeleteTarget(null);
+    setDeleteText('');
+  };
+
+  const submitNewProject = () => {
+    if (!newProjName.trim()) return;
+    const p = { id: genId(), title: newProjName.trim(), genre: '', status: 'draft', projectType: newProjType, createdAt: now(), updatedAt: now() };
+    dispatch({ type: 'ADD_PROJECT', payload: p });
+    dispatch({ type: 'SET_ACTIVE_PROJECT', id: p.id });
+    setAddingProject(false);
+    setNewProjName('');
+    setNewProjType('series');
+  };
+
+  return (
+    <div style={{ paddingBottom: 16 }}>
+      {/* 삭제 확인 모달 */}
+      {deleteTarget && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 24px' }}
+          onClick={() => { setDeleteTarget(null); setDeleteText(''); }}
+        >
+          <div
+            style={{ background: 'var(--c-panel)', borderRadius: 12, padding: 20, width: '100%', maxWidth: 320, display: 'flex', flexDirection: 'column', gap: 12 }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--c-text)' }}>정말 삭제하시겠어요?</div>
+            <div style={{ fontSize: 13, color: 'var(--c-text4)' }}>아래에 <strong>삭제</strong>를 입력하면 삭제됩니다</div>
+            <input
+              autoFocus
+              className="m-input"
+              value={deleteText}
+              onChange={e => setDeleteText(e.target.value)}
+              placeholder="삭제"
+              onKeyDown={e => {
+                if (e.key === 'Enter') confirmDelete();
+                if (e.key === 'Escape') { setDeleteTarget(null); setDeleteText(''); }
+              }}
+            />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                className="m-btn"
+                style={{ flex: 1 }}
+                onClick={() => { setDeleteTarget(null); setDeleteText(''); }}
+              >취소</button>
+              <button
+                className="m-btn"
+                style={{
+                  flex: 1,
+                  background: deleteText === '삭제' ? '#e53935' : 'var(--c-border3)',
+                  color: deleteText === '삭제' ? '#fff' : 'var(--c-text6)',
+                  cursor: deleteText === '삭제' ? 'pointer' : 'not-allowed',
+                  border: 'none',
+                }}
+                onClick={confirmDelete}
+              >삭제</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 새 작품 */}
+      <div className="m-item accent" onClick={() => { setAddingProject(true); setNewProjName(''); setNewProjType('series'); }}>+ 새 작품</div>
+
+      {addingProject && (
+        <div style={{ padding: '10px 20px', borderBottom: '1px solid var(--c-border)', background: 'var(--c-panel)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <input
+            autoFocus
+            placeholder="작품명 입력"
+            className="m-input"
+            value={newProjName}
+            onChange={e => setNewProjName(e.target.value)}
+            onKeyDown={e => {
+              if (e.nativeEvent.isComposing) return;
+              if (e.key === 'Enter') submitNewProject();
+              if (e.key === 'Escape') setAddingProject(false);
+            }}
+          />
+          <div style={{ display: 'flex', gap: 8 }}>
+            {[{ v: 'series', label: '미니시리즈' }, { v: 'single', label: '단막' }].map(({ v, label }) => (
+              <button
+                key={v}
+                onClick={() => setNewProjType(v)}
+                style={{
+                  flex: 1, padding: '6px 0', borderRadius: 6, fontSize: 'clamp(11px, 3vw, 13px)',
+                  border: `1px solid ${newProjType === v ? 'var(--c-accent)' : 'var(--c-border3)'}`,
+                  background: newProjType === v ? 'var(--c-accent)' : 'transparent',
+                  color: newProjType === v ? '#fff' : 'var(--c-text4)',
+                  cursor: 'pointer',
+                }}
+              >{label}</button>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="m-btn primary" style={{ flex: 1 }} onClick={submitNewProject}>만들기</button>
+            <button className="m-btn" onClick={() => setAddingProject(false)}>취소</button>
+          </div>
+        </div>
+      )}
+
+      {projects.map(project => {
+        const isActive = project.id === activeProjectId;
+        const epList = episodes.filter(e => e.projectId === project.id).sort((a, b) => a.number - b.number);
+        const projActive = isActive && !activeEpisodeId && activeDoc !== 'cover' && activeDoc !== 'synopsis';
+        return (
+          <div key={project.id}>
+            <div style={{ position: 'relative', overflow: 'hidden' }}>
+              <div
+                className={`m-item${projActive ? ' active' : ''}`}
+                style={{ transform: swipedId === project.id ? 'translateX(-80px)' : 'translateX(0)', transition: 'transform 0.2s' }}
+                onClick={() => { if (swipedId === project.id) { setSwipedId(null); return; } dispatch({ type: 'SET_ACTIVE_PROJECT', id: project.id }); }}
+                onTouchStart={e => handleTouchStart(project.id, e)}
+                onTouchEnd={e => handleTouchEnd(project.id, e)}
+              >
+                <span className="m-text-xs">📁</span>
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{project.title}</span>
+              </div>
+              {swipedId === project.id && (
+                <button
+                  style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 80, background: '#e53935', color: '#fff', border: 'none', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
+                  onClick={e => openDeleteConfirm(project.id, 'project', e)}
+                >삭제</button>
+              )}
+            </div>
+
+            {isActive && <>
+              <div className={`m-item sub${activeDoc === 'cover' && !activeEpisodeId ? ' active' : ''}`}
+                onClick={() => { dispatch({ type: 'SET_ACTIVE_PROJECT', id: project.id }); dispatch({ type: 'SET_ACTIVE_DOC', payload: 'cover' }); }}
+              >표지</div>
+              <div className={`m-item sub${activeDoc === 'synopsis' ? ' active' : ''}`}
+                onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'synopsis' })}
+              >작품 시놉시스</div>
+
+              {epList.map(ep => {
+                const isEpActive = activeEpisodeId === ep.id && activeDoc === 'script';
+                return (
+                  <div key={ep.id} style={{ position: 'relative', overflow: 'hidden' }}>
+                    <div
+                      className={`m-item sub${isEpActive ? ' active' : ''}`}
+                      style={{ gap: 6, transform: swipedId === ep.id ? 'translateX(-80px)' : 'translateX(0)', transition: 'transform 0.2s' }}
+                      onClick={() => { if (swipedId === ep.id) { setSwipedId(null); return; } dispatch({ type: 'SET_ACTIVE_EPISODE', id: ep.id }); }}
+                      onTouchStart={e => handleTouchStart(ep.id, e)}
+                      onTouchEnd={e => handleTouchEnd(ep.id, e)}
+                    >
+                      {project.projectType !== 'single' && (
+                        <span className="m-text-xs" style={{ flexShrink: 0 }}>{ep.number}회</span>
+                      )}
+                      {isEpActive ? (
+                        <input
+                          className="m-input"
+                          style={{ flex: 1, padding: '2px 6px', fontSize: 'inherit' }}
+                          value={ep.title}
+                          placeholder="제목 없음"
+                          onClick={e => e.stopPropagation()}
+                          onChange={e => dispatch({ type: 'UPDATE_EPISODE', payload: { id: ep.id, title: e.target.value } })}
+                          onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }}
+                        />
+                      ) : (
+                        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {ep.title || <span className="m-text-xs" style={{ fontStyle: 'italic' }}>제목 없음</span>}
+                        </span>
+                      )}
+                    </div>
+                    {swipedId === ep.id && (
+                      <button
+                        style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 80, background: '#e53935', color: '#fff', border: 'none', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
+                        onClick={e => openDeleteConfirm(ep.id, 'episode', e)}
+                      >삭제</button>
+                    )}
+                  </div>
+                );
+              })}
+
+              <div className="m-item sub m-text-xs"
+                onClick={() => {
+                  const num = epList.length + 1;
+                  const ep = { id: genId(), projectId: project.id, number: num, title: '', majorEpisodes: '', summaryItems: [], status: 'draft', createdAt: now(), updatedAt: now() };
+                  dispatch({ type: 'ADD_EPISODE', payload: ep });
+                  dispatch({ type: 'SET_ACTIVE_EPISODE', id: ep.id });
+                }}
+              >{project.projectType === 'single' ? '+ 추가' : '+ 회차 추가'}</div>
+            </>}
+          </div>
+        );
+      })}
+
+      {projects.length === 0 && !addingProject && (
+        <div className="m-empty">위 버튼으로 첫 작품을 만들어보세요</div>
+      )}
+    </div>
+  );
+}
+
+// ─── MobileMemoTab ────────────────────────────────────────────────────────────
+// 모바일 전용 메모 탭: 체크리스트 + 코멘트
+function MobileMemoTab() {
+  const { state, dispatch } = useApp();
+  const { checklistItems, activeProjectId, activeDoc, activeEpisodeId } = state;
+  const [inputVal, setInputVal] = useState('');
+
+  const docKey = activeEpisodeId ? `ep-${activeEpisodeId}` : (activeDoc || 'default');
+  const storageKey = `drama_docMemo_${activeProjectId}_${docKey}`;
+  const [memo, setMemo] = useState(() => {
+    try { return localStorage.getItem(storageKey) || ''; } catch { return ''; }
+  });
+  useEffect(() => {
+    try { setMemo(localStorage.getItem(storageKey) || ''); } catch {}
+  }, [storageKey]);
+  const memoTimer = useRef(null);
+  const saveMemo = (val) => {
+    setMemo(val);
+    clearTimeout(memoTimer.current);
+    memoTimer.current = setTimeout(() => {
+      try { localStorage.setItem(storageKey, val); } catch {}
+    }, 400);
+  };
+
+  const items = checklistItems.filter(it => it.projectId === activeProjectId && !it.docId);
+  const pending = items.filter(it => !it.done);
+  const done    = items.filter(it => it.done);
+
+  const addItem = () => {
+    const text = inputVal.trim();
+    if (!text || !activeProjectId) return;
+    dispatch({ type: 'ADD_CHECKLIST_ITEM', payload: { id: genId(), projectId: activeProjectId, docId: null, text, done: false, createdAt: now() } });
+    setInputVal('');
+  };
+
+  if (!activeProjectId) {
+    return <div className="m-empty">작품을 선택하세요</div>;
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {/* Checklist */}
+      <div style={{ padding: '4px var(--m-pad-x)', overflowY: 'auto', flex: 1, minHeight: 0 }}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
+          <input
+            className="m-input"
+            style={{ padding: '5px 10px' }}
+            value={inputVal}
+            onChange={e => setInputVal(e.target.value)}
+            onKeyDown={e => { if (e.nativeEvent.isComposing) return; if (e.key === 'Enter') addItem(); }}
+            placeholder="항목 추가..."
+          />
+          <button onClick={addItem} className="m-btn primary" style={{ flexShrink: 0, fontSize: 15, padding: '0 12px' }}>+</button>
+        </div>
+        {[...pending, ...done].map(it => (
+          <div key={it.id} className="m-checklist-row" style={{ padding: '6px 0' }}>
+            <button
+              className={`m-check-box${it.done ? ' done' : ''}`}
+              onClick={() => dispatch({ type: 'UPDATE_CHECKLIST_ITEM', payload: { id: it.id, done: !it.done } })}
+            >{it.done && <span style={{ color: '#fff', fontSize: 11 }}>✓</span>}</button>
+            <span className="m-text-base" style={{ flex: 1, textDecoration: it.done ? 'line-through' : 'none', color: it.done ? 'var(--c-text6)' : undefined }}>{it.text}</span>
+            <button onClick={() => dispatch({ type: 'DELETE_CHECKLIST_ITEM', id: it.id })} style={{ background: 'none', border: 'none', color: 'var(--c-text6)', cursor: 'pointer', fontSize: 18, padding: '0 4px', lineHeight: 1 }}>×</button>
+          </div>
+        ))}
+        {items.length === 0 && <div className="m-text-xs" style={{ padding: '4px 0' }}>항목이 없습니다</div>}
+      </div>
+
+    </div>
+  );
+}
+
+// ─── MobileMenuBar ────────────────────────────────────────────────────────────
+function MobileMenuBar({ onSave, onPrintPreview }) {
+  const { state, dispatch } = useApp();
+  const { activeProjectId, stylePreset } = state;
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [myOpen, setMyOpen]     = useState(false);
+  const menuRef = useRef(null);
+
+  // Close dropdown when tapping outside
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e) => {
+      if (!menuRef.current?.contains(e.target)) setMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', handler);
+    return () => document.removeEventListener('pointerdown', handler);
+  }, [menuOpen]);
+
+  const dropItemStyle = {
+    display: 'flex', alignItems: 'center', gap: 10,
+    width: '100%', background: 'none', border: 'none',
+    color: 'var(--c-text)', fontSize: 'clamp(11px, 3.2vw, 14px)',
+    padding: '12px 18px', textAlign: 'left', cursor: 'pointer',
+    WebkitTapHighlightColor: 'transparent',
+  };
+
+  return (
+    <div className="shrink-0 no-print" style={{ background: 'var(--c-header)', borderBottom: '1px solid var(--c-border)' }}>
+      {/* Row 1: ☰ | 대본 작업실 | time+기록 */}
+      <div style={{
+        height: 'clamp(36px, 9vw, 44px)',
+        display: 'grid', gridTemplateColumns: '1fr auto 1fr',
+        alignItems: 'center', padding: '0 14px',
+      }}>
+        {/* Left: hamburger + dropdown */}
+        <div style={{ position: 'relative' }} ref={menuRef}>
+          <button
+            onClick={() => setMenuOpen(v => !v)}
+            style={{
+              background: 'none', border: 'none',
+              color: 'var(--c-text4)', fontSize: 'clamp(15px, 5vw, 20px)',
+              cursor: 'pointer', padding: '6px 8px', lineHeight: 1,
+              WebkitTapHighlightColor: 'transparent',
+            }}
+          >☰</button>
+          {menuOpen && (
+            <div style={{
+              position: 'absolute', top: 'calc(100% + 4px)', left: 0,
+              background: 'var(--c-panel)', border: '1px solid var(--c-border)',
+              borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
+              zIndex: 300, minWidth: 180, padding: '6px 0',
+            }}>
+              <button style={dropItemStyle} onClick={() => setMenuOpen(false)}>로그인 준비 중</button>
+              <div style={{ height: 1, background: 'var(--c-border)', margin: '4px 0' }} />
+              <button
+                style={dropItemStyle}
+                onClick={(e) => { e.stopPropagation(); setMyOpen(v => !v); }}
+              >
+                <span>👤</span><span>마이페이지</span>
+                <span style={{ marginLeft: 'auto' }}>{myOpen ? '˅' : '›'}</span>
+              </button>
+              {myOpen && (
+                <div style={{ background: 'var(--c-active)' }}>
+                  {[
+                    { label: '작업통계', tab: 'stats' },
+                    { label: '설정',     tab: 'settings' },
+                    { label: 'Q&A',      tab: 'qa' },
+                    { label: '멤버십',   tab: 'membership' },
+                    { label: '오류 보고',tab: 'errors' },
+                  ].map(({ label, tab }) => (
+                    <button
+                      key={tab}
+                      style={{ ...dropItemStyle, paddingLeft: 36, fontSize: 'clamp(10px, 2.8vw, 12px)', color: 'var(--c-text5)' }}
+                      onClick={() => {
+                        dispatch({ type: 'SET_ACTIVE_DOC', payload: 'mypage' });
+                        setTimeout(() => window.dispatchEvent(new CustomEvent('mypage:tab', { detail: tab })), 0);
+                        setMenuOpen(false);
+                      }}
+                    >{label}</button>
+                  ))}
+                </div>
+              )}
+              {/* 하단 배너 광고 */}
+              <div style={{ height: 1, background: 'var(--c-border)', margin: '4px 0' }} />
+              <AdBanner slot="mobile-bottom" mobileHide={false} height={70} style={{ width: '100%', borderRadius: '0 0 10px 10px', overflow: 'hidden' }} />
+            </div>
+          )}
+        </div>
+
+        {/* Center: brand */}
+        <span style={{ fontSize: 'clamp(13px, 4vw, 17px)', fontWeight: 700, color: 'var(--c-accent)', letterSpacing: '0.05em' }}>
+          대본 작업실
+        </span>
+
+        {/* Right: work timer (기록 button built in) */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
+          {activeProjectId && (
+            <WorkTimer
+              key={activeProjectId}
+              projectId={activeProjectId}
+              documentId={state.activeEpisodeId || state.activeDoc}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* Row 2: mobile toolbar */}
+      <div style={{
+        height: 'clamp(32px, 9vw, 42px)',
+        display: 'flex', alignItems: 'center',
+        padding: '0 12px', gap: 6,
+        borderTop: '1px solid var(--c-border2)',
+        overflowX: 'auto', scrollbarWidth: 'none',
+      }}>
+        <button onClick={onSave} style={mobileTbtnStyle}>저장</button>
+        <button
+          onClick={onPrintPreview}
+          style={{ ...mobileTbtnStyle, color: 'var(--c-accent)', borderColor: 'var(--c-accent)' }}
+        >출력 미리보기</button>
+        <div style={{ width: 1, height: 16, background: 'var(--c-border3)', margin: '0 2px', flexShrink: 0 }} />
+        {[
+          { label: 'B', title: '굵게', tag: 'bold', fw: 'bold' },
+          { label: 'I', title: '기울임', tag: 'italic', fs: 'italic' },
+          { label: 'U', title: '밑줄', tag: 'underline', td: 'underline' },
+        ].map(({ label, title, tag, fw, fs, td }) => (
+          <button
+            key={tag}
+            title={title}
+            onMouseDown={e => { e.preventDefault(); applyInlineFormat(tag); }}
+            style={{ ...mobileTbtnStyle, fontWeight: fw, fontStyle: fs, textDecoration: td }}
+          >{label}</button>
+        ))}
+        <div style={{ width: 1, height: 16, background: 'var(--c-border3)', margin: '0 2px', flexShrink: 0 }} />
+        {/* 글씨체 */}
+        <span style={{ fontSize: 'clamp(9px, 2.4vw, 11px)', color: 'var(--c-text6)', flexShrink: 0 }}>글꼴</span>
+        <select
+          value={stylePreset?.fontFamily ?? '함초롱바탕'}
+          onChange={e => dispatch({ type: 'SET_STYLE_PRESET', payload: { fontFamily: e.target.value } })}
+          style={{ ...mobileTbtnStyle, padding: '2px 4px', maxWidth: 90 }}
+        >
+          {FONTS.filter(f => f.sourceType === 'bundled').map(f => (
+            <option key={f.id} value={f.cssFamily}>{f.displayName}</option>
+          ))}
+          {FONTS.filter(f => f.sourceType === 'system').map(f => (
+            <option key={f.id} value={f.cssFamily}>{f.displayName}</option>
+          ))}
+        </select>
+        {/* 글씨크기 */}
+        <span style={{ fontSize: 'clamp(9px, 2.4vw, 11px)', color: 'var(--c-text6)', flexShrink: 0 }}>크기</span>
+        <button style={mobileTbtnStyle} onMouseDown={e => { e.preventDefault(); dispatch({ type: 'SET_STYLE_PRESET', payload: { fontSize: Math.max(9, (stylePreset?.fontSize ?? 11) - 1) } }); }}>−</button>
+        <span style={{ fontSize: 'clamp(9px, 2.4vw, 11px)', color: 'var(--c-text4)', flexShrink: 0, minWidth: 24, textAlign: 'center' }}>{stylePreset?.fontSize ?? 11}pt</span>
+        <button style={mobileTbtnStyle} onMouseDown={e => { e.preventDefault(); dispatch({ type: 'SET_STYLE_PRESET', payload: { fontSize: Math.min(18, (stylePreset?.fontSize ?? 11) + 1) } }); }}>+</button>
+        {/* 인물/대사 간격 */}
+        <span style={{ fontSize: 'clamp(9px, 2.4vw, 11px)', color: 'var(--c-text6)', flexShrink: 0 }}>간격</span>
+        <button style={mobileTbtnStyle} onMouseDown={e => { e.preventDefault(); const v = Math.max(4, parseFloat(stylePreset?.dialogueGap ?? '7') - 0.5); dispatch({ type: 'SET_STYLE_PRESET', payload: { dialogueGap: `${v}em` } }); }}>−</button>
+        <span style={{ fontSize: 'clamp(9px, 2.4vw, 11px)', color: 'var(--c-text4)', flexShrink: 0, minWidth: 28, textAlign: 'center' }}>{stylePreset?.dialogueGap ?? '7em'}</span>
+        <button style={mobileTbtnStyle} onMouseDown={e => { e.preventDefault(); const v = Math.min(14, parseFloat(stylePreset?.dialogueGap ?? '7') + 0.5); dispatch({ type: 'SET_STYLE_PRESET', payload: { dialogueGap: `${v}em` } }); }}>+</button>
+      </div>
+    </div>
+  );
+}
+
 // ─── MobileBottomPanel ────────────────────────────────────────────────────────
-// Bottom sheet with 탐색 (LeftPanel) / 보조 (RightPanel) tabs for mobile
+// 4-tab bottom sheet: 대본(LeftPanel) / 자료 / 설계 / 메모(RightPanel)
 function MobileBottomPanel({ open, onToggle, tab, onTabChange, onScrollToScene }) {
+  const { state, dispatch } = useApp();
+  const { activeDoc } = state;
+
+  // Swipe up = open, swipe down = close
+  const touchStartY = useRef(null);
+  const handleTouchStart = (e) => { touchStartY.current = e.touches[0].clientY; };
+  const handleTouchEnd = (e) => {
+    if (touchStartY.current === null) return;
+    const dy = e.changedTouches[0].clientY - touchStartY.current;
+    touchStartY.current = null;
+    if (Math.abs(dy) < 20) return;
+    if (dy < 0 && !open) onToggle();
+    if (dy > 0 && open)  onToggle();
+  };
+
+  // Keyboard detection: auto-collapse panel when software keyboard appears
+  const openRef     = useRef(open);
+  const toggleRef   = useRef(onToggle);
+  openRef.current   = open;
+  toggleRef.current = onToggle;
+  useEffect(() => {
+    if (!window.visualViewport) return;
+    const savedState = { wasOpen: false };
+    const handler = () => {
+      const keyboardUp = (window.visualViewport.height / window.screen.height) < 0.75;
+      if (keyboardUp && openRef.current && !savedState.wasOpen) {
+        savedState.wasOpen = true;
+        toggleRef.current();
+      } else if (!keyboardUp && savedState.wasOpen) {
+        savedState.wasOpen = false;
+        toggleRef.current();
+      }
+    };
+    window.visualViewport.addEventListener('resize', handler);
+    return () => window.visualViewport.removeEventListener('resize', handler);
+  }, []);
+
+  const TABS = [
+    { id: 'script', icon: '📝', label: '대본' },
+    { id: 'data',   icon: '👤', label: '자료' },
+    { id: 'plan',   icon: '🗂',  label: '설계' },
+    { id: 'memo',   icon: '✏️',  label: '메모' },
+  ];
+
+  const DATA_DOCS = [
+    { doc: 'characters',    label: '인물' },
+    { doc: 'biography',     label: '인물이력서' },
+    { doc: 'relationships', label: '인물관계도' },
+    { doc: 'resources',     label: '자료수집' },
+  ];
+  const PLAN_DOCS = [
+    { doc: 'structure',  label: '구조' },
+    { doc: 'treatment',  label: '트리트먼트' },
+    { doc: 'scenelist',  label: '씬리스트' },
+  ];
+
+  const tabH = 'clamp(52px, 14vw, 64px)';
+
+
   return (
     <div
       style={{
         flexShrink: 0,
         borderTop: '1px solid var(--c-border)',
         background: 'var(--c-panel)',
-        display: 'flex',
-        flexDirection: 'column',
-        height: open ? '45dvh' : '40px',
-        minHeight: open ? '45dvh' : '40px',
-        transition: 'height 0.2s ease, min-height 0.2s ease',
+        display: 'flex', flexDirection: 'column',
+        height: open ? '46%' : tabH,
+        transition: 'height 0.25s ease',
         overflow: 'hidden',
-        userSelect: 'none',
-        WebkitUserSelect: 'none',
-        touchAction: 'manipulation',
+        userSelect: 'none', WebkitUserSelect: 'none',
       }}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
     >
       {/* Tab bar */}
-      <div
-        style={{
-          height: '40px', flexShrink: 0,
-          display: 'flex', alignItems: 'center', gap: '2px',
-          padding: '0 10px',
-          borderBottom: open ? '1px solid var(--c-border2)' : 'none',
-        }}
-      >
-        <button
-          onClick={onToggle}
-          onContextMenu={e => e.preventDefault()}
-          style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: 'var(--c-text5)', fontSize: '14px',
-            padding: '4px 6px', marginRight: '6px', lineHeight: 1,
-          }}
-          title={open ? '보조 패널 접기' : '보조 패널 펼치기'}
-        >
-          {open ? '▾' : '▴'}
-        </button>
-
-        {[{ id: 'nav', label: '탐색' }, { id: 'context', label: '보조' }].map(({ id, label }) => (
+      <div style={{
+        height: tabH, minHeight: tabH, flexShrink: 0,
+        display: 'flex', alignItems: 'stretch',
+        borderBottom: open ? '1px solid var(--c-border2)' : 'none',
+      }}>
+        {TABS.map(({ id, icon, label }) => (
           <button
             key={id}
             onClick={() => { onTabChange(id); if (!open) onToggle(); }}
             style={{
-              background: tab === id && open ? 'var(--c-active)' : 'none',
-              border: 'none', cursor: 'pointer',
+              flex: 1, background: tab === id && open ? 'var(--c-active)' : 'none',
+              border: 'none', borderRight: '1px solid var(--c-border)',
+              cursor: 'pointer',
               color: tab === id && open ? 'var(--c-accent)' : 'var(--c-text5)',
-              fontSize: '13px', fontWeight: tab === id && open ? 600 : 400,
-              padding: '4px 14px', borderRadius: '6px',
+              display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center', gap: 4,
+              WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation',
             }}
           >
-            {label}
+            <span style={{ fontSize: 'clamp(17px, 5vw, 22px)', lineHeight: 1 }}>{icon}</span>
+            <span style={{ fontSize: 'clamp(10px, 2.8vw, 13px)', fontWeight: tab === id && open ? 600 : 400 }}>{label}</span>
           </button>
         ))}
+        {/* Toggle button */}
+        <button
+          onClick={onToggle}
+          onContextMenu={e => e.preventDefault()}
+          style={{
+            background: 'none', border: 'none',
+            borderLeft: '1px solid var(--c-border)',
+            color: 'var(--c-text5)', fontSize: 'clamp(13px, 4vw, 17px)',
+            padding: '0 14px', cursor: 'pointer', flexShrink: 0,
+            WebkitTapHighlightColor: 'transparent',
+          }}
+        >{open ? '▾' : '▴'}</button>
       </div>
 
       {/* Panel content */}
       {open && (
-        <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
-          {tab === 'nav'
-            ? <div data-tour-id="left-panel" style={{ height: '100%' }}><LeftPanel /></div>
-            : <div data-tour-id="right-panel" style={{ height: '100%' }}><RightPanel onScrollToScene={onScrollToScene} /></div>
-          }
+        <div style={{ flex: 1, overflow: 'auto', minHeight: 0, touchAction: 'pan-y' }}>
+          {tab === 'script' && (
+            <div data-tour-id="left-panel" className="m-panel-content" style={{ height: '100%', overflowY: 'auto' }}>
+              <MobileScriptTab />
+            </div>
+          )}
+          {tab === 'data' && (
+            <div className="m-panel-content">
+              {DATA_DOCS.map(({ doc, label }, i) => (
+                <div
+                  key={`${doc}-${i}`}
+                  className={`m-item${activeDoc === doc ? ' active' : ''}`}
+                  onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: doc })}
+                >
+                  {label}
+                </div>
+              ))}
+            </div>
+          )}
+          {tab === 'plan' && (
+            <div className="m-panel-content">
+              {PLAN_DOCS.map(({ doc, label }) => (
+                <div
+                  key={doc}
+                  className={`m-item${activeDoc === doc ? ' active' : ''}`}
+                  onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: doc })}
+                >
+                  {label}
+                </div>
+              ))}
+            </div>
+          )}
+          {tab === 'memo' && <div className="m-panel-content" style={{ height: '100%' }}><MobileMemoTab /></div>}
         </div>
       )}
     </div>
@@ -794,7 +1354,11 @@ function Shell() {
 
   // ── Mobile bottom panel state
   const [mobileBottomOpen, setMobileBottomOpen] = useState(true);
-  const [mobileTab, setMobileTab]               = useState('nav');
+  const [mobileTab, setMobileTab]               = useState('script');
+
+  useEffect(() => {
+    if (state.activeDoc === 'mypage') setMobileBottomOpen(false);
+  }, [state.activeDoc]);
 
   const updateLeftWidth = useCallback((delta) => {
     setPanelWidths(prev => {
@@ -906,10 +1470,26 @@ function Shell() {
   // ── Mobile layout ──────────────────────────────────────────────────────────
   if (isMobile) {
     return (
-      <div className="h-dvh w-screen flex flex-col overflow-hidden" style={{ background: 'var(--c-bg)' }}>
-        {menuBar}
+      <div
+        className="mobile-layout w-screen flex flex-col overflow-hidden"
+        style={{
+          background: 'var(--c-bg)',
+          height: '100dvh',
+          padding: '0 16px',
+          paddingTop: 'env(safe-area-inset-top, 0px)',
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        }}
+      >
+        <MobileMenuBar
+          onSave={handleSave}
+          onPrintPreview={() => setPrintPreviewOpen(true)}
+        />
         <div data-tour-id="center-panel" className="flex-1 min-h-0 overflow-hidden">
           <CenterPanel scrollToSceneId={scrollToSceneId} onScrollHandled={() => setScrollToSceneId(null)} />
+        </div>
+        {/* 광고: 하단 패널 닫혔을 때만 표시 */}
+        <div style={{ flexShrink: 0, overflow: 'hidden', height: mobileBottomOpen ? 0 : 'auto' }}>
+          <AdBanner slot="mobile-bottom" mobileHide={false} height={60} />
         </div>
         <MobileBottomPanel
           open={mobileBottomOpen}

@@ -495,10 +495,10 @@ export default function RelationshipsPage() {
     <div className="h-full overflow-y-auto" style={{ background: 'var(--c-bg)' }}>
       {/* Header */}
       {!isPrint && (
-        <div style={{ padding: '20px 24px 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ padding: '10px 10px 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--c-text2)' }}>인물관계도</span>
           <div style={{ display: 'flex', gap: '6px' }}>
-            {tabBtn('graph', '그래프')}
+            {tabBtn('graph', '관계도')}
             {tabBtn('edit', '편집')}
             <button
               onClick={() => setView('print')}

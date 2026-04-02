@@ -13,6 +13,7 @@ import {
   storeFont, removeFont, loadFontMeta, saveFontMeta,
 } from '../print/fontStorage';
 import { resetPageHints } from './OnboardingTour';
+import AdBanner from './AdBanner';
 
 // ─── Log PDF ──────────────────────────────────────────────────────────────────
 const LOG_PDF_FONT = '함초롱바탕';
@@ -236,7 +237,7 @@ function StatsTab() {
   };
 
   const labelStyle = { fontSize: '10px', color: 'var(--c-text6)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '0.25rem' };
-  const valStyle   = { fontSize: '1.5rem', fontWeight: 700, color: 'var(--c-text)', lineHeight: 1.2 };
+  const valStyle   = { fontSize: '1rem', fontWeight: 700, color: 'var(--c-text)', lineHeight: 1.2 };
 
   const handlePdfExport = async () => {
     setExportMsg('생성 중…');
@@ -576,7 +577,7 @@ function SettingsTab() {
   const labelStyle = { fontSize: '11px', color: 'var(--c-text5)', marginBottom: '2px', display: 'block' };
 
   return (
-    <div className="space-y-4">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
 
       {/* 스타일 설정 */}
       <div className="p-4 rounded-lg" style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)' }}>
@@ -684,24 +685,6 @@ function SettingsTab() {
         </button>
       </div>
 
-      <div
-        className="flex items-start gap-4 p-4 rounded-lg"
-        style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)' }}
-      >
-        <div className="flex-1">
-          <div className="text-sm font-medium mb-0.5" style={{ color: 'var(--c-text)' }}>페이지 힌트 초기화</div>
-          <div className="text-xs" style={{ color: 'var(--c-text5)' }}>
-            각 화면에 표시되는 안내 메시지를 다시 볼 수 있도록 초기화합니다.
-          </div>
-        </div>
-        <button
-          onClick={() => { resetPageHints(); alert('페이지 힌트가 초기화됐습니다.\n각 화면을 다시 방문하면 안내가 표시됩니다.'); }}
-          className="shrink-0 text-xs px-3 py-1.5 rounded"
-          style={{ background: 'transparent', border: '1px solid var(--c-border3)', color: 'var(--c-text4)', cursor: 'pointer' }}
-        >
-          초기화
-        </button>
-      </div>
 
       <div
         className="flex items-start gap-4 p-4 rounded-lg"
@@ -742,7 +725,7 @@ function SettingsTab() {
           주 설계 도구는 씬 추가·가져오기가 활성화됩니다. 연동을 켜면 변경사항이 대본에 자동 반영됩니다.
         </div>
 
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3" style={{ paddingLeft: 20 }}>
           {[['treatment', '트리트먼트'], ['scenelist', '씬리스트']].map(([tool, label]) => {
             const isPrimary = designTool === tool;
             const syncVal = tool === 'treatment' ? treatmentSync : scenelistSync;
@@ -750,8 +733,9 @@ function SettingsTab() {
             return (
               <div
                 key={tool}
-                className="rounded-lg p-3"
+                className="rounded-lg"
                 style={{
+                  padding: 14,
                   border: `1px solid ${isPrimary ? 'var(--c-accent)' : 'var(--c-border3)'}`,
                   background: isPrimary ? 'color-mix(in srgb, var(--c-accent) 6%, transparent)' : 'transparent',
                 }}
@@ -808,21 +792,23 @@ function SettingsTab() {
 
 // ─── Placeholder tabs ─────────────────────────────────────────────────────────
 const KAKAO_PAY_URL = 'https://qr.kakaopay.com/Ej8gwMmym';
-const isMobile = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-
 function SupportCard() {
-  const mobile = isMobile();
+  const mobile = window.innerWidth < 768;
   return (
-    <div className="w-full max-w-sm rounded-xl px-8 py-7 flex flex-col items-center gap-4"
-      style={{ background: 'var(--c-panel)', border: '1px solid var(--c-border2)' }}>
+    <div className="w-full max-w-sm flex flex-col items-center gap-4"
+      style={{ background: 'var(--c-panel)', border: '1px solid var(--c-border2)', borderRadius: 10, padding: '28px 32px 24px' }}>
       <div className="text-sm text-center leading-relaxed" style={{ color: 'var(--c-text3)' }}>
-        이 툴은 드라마 작가 지망생 개발자 혼자 만들고 있어요.<br />
+        드라마 작가 지망생 개발자 혼자 만들고 있어요.<br />
         커피 한 잔 값의 응원이 큰 힘이 됩니다. ☕
       </div>
       {mobile ? (
         <a href={KAKAO_PAY_URL} target="_blank" rel="noopener noreferrer"
-          className="px-5 py-2 rounded-lg text-sm font-semibold"
-          style={{ background: '#FEE500', color: '#3C1E1E', textDecoration: 'none' }}>
+          style={{
+            display: 'block', width: '100%', textAlign: 'center',
+            padding: '14px 0', borderRadius: 8,
+            fontSize: 15, fontWeight: 700,
+            background: '#FEE500', color: '#3C1E1E', textDecoration: 'none',
+          }}>
           개발자 응원하기 💛
         </a>
       ) : (
@@ -948,8 +934,9 @@ function ErrorReportTab() {
       <button
         onClick={handleSubmit}
         disabled={!description.trim() || status === 'sending'}
-        className="px-5 py-2.5 rounded-lg text-sm font-semibold"
         style={{
+          width: '100%', padding: '16px 0', borderRadius: 10,
+          fontSize: 16, fontWeight: 700,
           background: description.trim() ? 'var(--c-accent)' : 'var(--c-border3)',
           color: description.trim() ? '#fff' : 'var(--c-text6)',
           border: 'none', cursor: description.trim() ? 'pointer' : 'not-allowed',
@@ -982,48 +969,77 @@ const TABS = [
 
 export default function MyPage() {
   const [activeTab, setActiveTab] = useState('stats');
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', onResize, { passive: true });
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  // 모바일: 햄버거 메뉴에서 탭 전환 이벤트 수신
+  useEffect(() => {
+    const handler = (e) => setActiveTab(e.detail);
+    window.addEventListener('mypage:tab', handler);
+    return () => window.removeEventListener('mypage:tab', handler);
+  }, []);
+
+  const tabLabel = TABS.find(t => t.id === activeTab)?.label || '';
 
   return (
-    <div className="h-full flex overflow-hidden" style={{ background: 'var(--c-bg)' }}>
-      {/* Sidebar */}
-      <div
-        className="w-24 shrink-0 flex flex-col pt-8 pb-4"
-        style={{ borderRight: '1px solid var(--c-border)', background: 'var(--c-panel)' }}
-      >
-        <div className="px-3 mb-4 text-[10px] font-bold" style={{ color: 'var(--c-text4)', letterSpacing: '0.05em' }}>마이페이지</div>
-        {TABS.map(t => (
-          <button
-            key={t.id}
-            onClick={() => setActiveTab(t.id)}
-            className="w-full text-left px-3 py-2 text-xs"
-            style={{
-              background: activeTab === t.id ? 'var(--c-active)' : 'transparent',
-              color: activeTab === t.id ? 'var(--c-accent)' : 'var(--c-text4)',
-              borderLeft: activeTab === t.id ? '2px solid var(--c-accent)' : '2px solid transparent',
-              border: 'none',
-              borderLeft: activeTab === t.id ? '2px solid var(--c-accent)' : '2px solid transparent',
-              cursor: 'pointer',
-              fontWeight: activeTab === t.id ? 600 : 400,
-            }}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+    <div className="h-full flex flex-col overflow-hidden" style={{ background: 'var(--c-bg)' }}>
+      {isMobile ? (
+        /* 모바일: 현재 섹션 이름만 표시 (내부 메뉴 없음, 햄버거로 전환) */
+        <div style={{
+          padding: '10px 20px', flexShrink: 0,
+          borderBottom: '1px solid var(--c-border)',
+          background: 'var(--c-panel)',
+          fontSize: 13, color: 'var(--c-text5)',
+        }}>
+          마이페이지 › <span style={{ color: 'var(--c-accent)', fontWeight: 600 }}>{tabLabel}</span>
+        </div>
+      ) : null}
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-2xl mx-auto pt-16 pb-10 px-10">
-          {activeTab === 'stats' && <StatsTab />}
-          {activeTab === 'settings' && <SettingsTab />}
-          {activeTab === 'qa' && <QnATab />}
-          {activeTab === 'errors' && <ErrorReportTab />}
-          {activeTab === 'membership' && (
-            <div className="flex flex-col items-center gap-8">
-              <PlaceholderTab icon="⭐" title="멤버십" desc="멤버십 기능은 준비 중입니다." />
-              <SupportCard />
-            </div>
-          )}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        {/* 사이드바 — 데스크톱 전용 */}
+        {!isMobile && (
+          <div
+            className="w-24 shrink-0 flex flex-col pt-8 pb-4"
+            style={{ borderRight: '1px solid var(--c-border)', background: 'var(--c-panel)' }}
+          >
+            <div className="px-3 mb-4 text-[10px] font-bold" style={{ color: 'var(--c-text4)', letterSpacing: '0.05em' }}>마이페이지</div>
+            {TABS.map(t => (
+              <button
+                key={t.id}
+                onClick={() => setActiveTab(t.id)}
+                className="w-full text-left px-3 py-2 text-xs"
+                style={{
+                  background: activeTab === t.id ? 'var(--c-active)' : 'transparent',
+                  color: activeTab === t.id ? 'var(--c-accent)' : 'var(--c-text4)',
+                  border: 'none',
+                  borderLeft: activeTab === t.id ? '2px solid var(--c-accent)' : '2px solid transparent',
+                  cursor: 'pointer',
+                  fontWeight: activeTab === t.id ? 600 : 400,
+                }}
+              >{t.label}</button>
+            ))}
+          </div>
+        )}
+
+        {/* 콘텐츠 */}
+        <div className="flex-1 overflow-y-auto">
+          <div className={isMobile ? 'px-4 pt-6 pb-10' : 'max-w-2xl mx-auto pt-16 pb-10 px-10'}>
+            {activeTab === 'stats'      && <StatsTab />}
+            {activeTab === 'settings'   && <SettingsTab />}
+            {activeTab === 'qa'         && <QnATab />}
+            {activeTab === 'errors'     && <ErrorReportTab />}
+            {activeTab === 'membership' && (
+              <div className="flex flex-col items-center gap-8" style={{ paddingTop: 10 }}>
+                <PlaceholderTab icon="⭐" title="멤버십" desc="멤버십 기능은 준비 중입니다." />
+                <SupportCard />
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

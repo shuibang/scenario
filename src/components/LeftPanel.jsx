@@ -2,21 +2,25 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
 import { genId, now } from '../store/db';
 
-function NavItem({ label, active, onClick, indent = 1, badge }) {
+function NavItem({ label, active, onClick, indent = 1, badge, large }) {
   return (
     <div
       onClick={onClick}
-      className="flex items-center py-[5px] cursor-pointer text-sm rounded mx-1 mb-0.5 transition-colors"
+      className="flex items-center cursor-pointer rounded mx-1 mb-0.5 transition-colors"
       style={{
-        paddingLeft: `${indent * 12}px`,
+        paddingLeft: `${indent * (large ? 16 : 12)}px`,
         paddingRight: '8px',
+        paddingTop: large ? '10px' : '5px',
+        paddingBottom: large ? '10px' : '5px',
+        fontSize: large ? 'clamp(14px, 4vw, 16px)' : undefined,
         background: active ? 'var(--c-active)' : 'transparent',
         color: active ? 'var(--c-accent)' : 'var(--c-text4)',
+        WebkitTapHighlightColor: 'transparent',
       }}
       onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'var(--c-hover)'; }}
       onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent'; }}
     >
-      <span className="truncate flex-1">{label}</span>
+      <span className={`truncate flex-1 ${large ? '' : 'text-sm'}`}>{label}</span>
       {badge != null && (
         <span className="ml-1 text-[10px]" style={{ color: 'var(--c-text6)' }}>{badge}</span>
       )}
@@ -55,7 +59,7 @@ function InlineInput({ placeholder, defaultValue = '', onCommit, onCancel, inden
   );
 }
 
-function ProjectItem({ project }) {
+function ProjectItem({ project, section = 'all' }) {
   const { state, dispatch } = useApp();
   const { episodes, characters, activeProjectId, activeEpisodeId, activeDoc, synopsisDocs, stylePreset } = state;
   const isActive = project.id === activeProjectId;
@@ -92,6 +96,8 @@ function ProjectItem({ project }) {
     setAddingEp(false);
   };
 
+  const large = section === 'script';
+
   return (
     <div>
       {renaming ? (
@@ -103,21 +109,24 @@ function ProjectItem({ project }) {
         />
       ) : (
         <div
-          className="group flex items-center px-2 py-[6px] cursor-pointer rounded mx-1 mb-0.5"
-          style={{ color: isActive ? 'var(--c-text)' : 'var(--c-text3)' }}
+          className="group flex items-center cursor-pointer rounded mx-1 mb-0.5"
+          style={{
+            color: isActive ? 'var(--c-text)' : 'var(--c-text3)',
+            padding: large ? '10px 8px' : '6px 8px',
+            WebkitTapHighlightColor: 'transparent',
+          }}
           onClick={handleSelect}
           onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-hover)'; }}
           onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
         >
           <span
-            className="mr-1.5 text-[10px] select-none"
-            style={{ color: 'var(--c-text6)' }}
+            style={{ color: 'var(--c-text6)', marginRight: 6, fontSize: large ? 12 : 10, userSelect: 'none' }}
             onClick={e => { e.stopPropagation(); setExpanded(o => !o); }}
           >
             {expanded ? '▼' : '▶'}
           </span>
-          <span className="text-sm font-medium flex-1 truncate">{project.title}</span>
-          {isActive && (
+          <span style={{ fontSize: large ? 'clamp(14px, 4vw, 17px)' : undefined }} className={`font-medium flex-1 truncate ${large ? '' : 'text-sm'}`}>{project.title}</span>
+          {isActive && !large && (
             <span className="flex gap-1 opacity-0 group-hover:opacity-100">
               <button onClick={e => { e.stopPropagation(); setRenaming(true); }} className="text-[10px] px-1" style={{ color: 'var(--c-text6)' }}>✎</button>
               {confirmDelete ? (
@@ -135,16 +144,16 @@ function ProjectItem({ project }) {
 
       {expanded && isActive && (
         <div>
-          <NavItem label="표지" active={activeDoc === 'cover' && !activeEpisodeId} onClick={() => { dispatch({ type: 'SET_ACTIVE_PROJECT', id: project.id }); dispatch({ type: 'SET_ACTIVE_DOC', payload: 'cover' }); }} indent={2} />
-          <NavItem label="작품 시놉시스" active={activeDoc === 'synopsis'} onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'synopsis' })} indent={2} badge={synopsisPages > 0 ? `약 ${synopsisPages}p` : null} />
+          <NavItem large={large} label="표지" active={activeDoc === 'cover' && !activeEpisodeId} onClick={() => { dispatch({ type: 'SET_ACTIVE_PROJECT', id: project.id }); dispatch({ type: 'SET_ACTIVE_DOC', payload: 'cover' }); }} indent={2} />
+          <NavItem large={large} label="작품 시놉시스" active={activeDoc === 'synopsis'} onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'synopsis' })} indent={2} badge={synopsisPages > 0 ? `약 ${synopsisPages}p` : null} />
 
           <div className="mt-1">
-            <div className="py-0.5 text-[10px] uppercase tracking-wider" style={{ paddingLeft: '24px', color: 'var(--c-text6)' }}>회차</div>
-            {epList.map(ep => <EpisodeItem key={ep.id} ep={ep} isSingle={project.projectType === 'single'} />)}
+            <div style={{ paddingLeft: large ? '32px' : '24px', paddingTop: 2, paddingBottom: 2, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--c-text6)' }}>회차</div>
+            {epList.map(ep => <EpisodeItem key={ep.id} ep={ep} isSingle={project.projectType === 'single'} large={large} />)}
             {addingEp ? (
               <InlineInput placeholder={`${epList.length + 1}회 제목 (선택)`} onCommit={addEpisode} onCancel={() => setAddingEp(false)} indent={2} allowEmpty />
             ) : (
-              <div onClick={() => setAddingEp(true)} className="text-[11px] cursor-pointer py-1" style={{ paddingLeft: '24px', color: 'var(--c-text6)' }}
+              <div onClick={() => setAddingEp(true)} className="cursor-pointer py-1" style={{ paddingLeft: large ? '32px' : '24px', fontSize: large ? 13 : 11, color: 'var(--c-text6)', WebkitTapHighlightColor: 'transparent' }}
                 onMouseEnter={e => { e.currentTarget.style.color = 'var(--c-text4)'; }}
                 onMouseLeave={e => { e.currentTarget.style.color = 'var(--c-text6)'; }}
               >
@@ -153,58 +162,59 @@ function ProjectItem({ project }) {
             )}
           </div>
 
-          {/* 자료 구역 */}
-          <div className="mt-3 pt-2" style={{ borderTop: '1px solid var(--c-border)' }}>
-            <div className="py-0.5 text-[10px] uppercase tracking-wider font-semibold" style={{ paddingLeft: '24px', color: 'var(--c-text5)' }}>자료</div>
-            <NavItem
-              label="인물"
-              active={activeDoc === 'characters'}
-              onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'characters' })}
-              indent={2}
-              badge={characters.filter(c => c.projectId === project.id).length || null}
-            />
-            <NavItem
-              label="인물이력서"
-              active={activeDoc === 'biography'}
-              onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'biography' })}
-              indent={2}
-            />
-            <NavItem
-              label="인물관계도"
-              active={activeDoc === 'relationships'}
-              onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'relationships' })}
-              indent={2}
-            />
-            <NavItem
-              label="자료수집"
-              active={activeDoc === 'resources'}
-              onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'resources' })}
-              indent={2}
-            />
-          </div>
+          {/* 자료/설계 구역 — section='script' 일 때 숨김 */}
+          {section !== 'script' && <>
+            <div className="mt-3 pt-2" style={{ borderTop: '1px solid var(--c-border)' }}>
+              <div className="py-0.5 text-[10px] uppercase tracking-wider font-semibold" style={{ paddingLeft: '24px', color: 'var(--c-text5)' }}>자료</div>
+              <NavItem
+                label="인물"
+                active={activeDoc === 'characters'}
+                onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'characters' })}
+                indent={2}
+                badge={characters.filter(c => c.projectId === project.id).length || null}
+              />
+              <NavItem
+                label="인물이력서"
+                active={activeDoc === 'biography'}
+                onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'biography' })}
+                indent={2}
+              />
+              <NavItem
+                label="인물관계도"
+                active={activeDoc === 'relationships'}
+                onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'relationships' })}
+                indent={2}
+              />
+              <NavItem
+                label="자료수집"
+                active={activeDoc === 'resources'}
+                onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'resources' })}
+                indent={2}
+              />
+            </div>
 
-          {/* 설계 구역 */}
-          <div className="mt-2 pt-2" style={{ borderTop: '1px solid var(--c-border)' }}>
-            <div className="py-0.5 text-[10px] uppercase tracking-wider font-semibold" style={{ paddingLeft: '24px', color: 'var(--c-text5)' }}>설계</div>
-            <NavItem
-              label="구조"
-              active={activeDoc === 'structure'}
-              onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'structure' })}
-              indent={2}
-            />
-            <NavItem
-              label="트리트먼트"
-              active={activeDoc === 'treatment'}
-              onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'treatment' })}
-              indent={2}
-            />
-            <NavItem
-              label="씬리스트"
-              active={activeDoc === 'scenelist'}
-              onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'scenelist' })}
-              indent={2}
-            />
-          </div>
+            <div className="mt-2 pt-2" style={{ borderTop: '1px solid var(--c-border)' }}>
+              <div className="py-0.5 text-[10px] uppercase tracking-wider font-semibold" style={{ paddingLeft: '24px', color: 'var(--c-text5)' }}>설계</div>
+              <NavItem
+                label="구조"
+                active={activeDoc === 'structure'}
+                onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'structure' })}
+                indent={2}
+              />
+              <NavItem
+                label="트리트먼트"
+                active={activeDoc === 'treatment'}
+                onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'treatment' })}
+                indent={2}
+              />
+              <NavItem
+                label="씬리스트"
+                active={activeDoc === 'scenelist'}
+                onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'scenelist' })}
+                indent={2}
+              />
+            </div>
+          </>}
         </div>
       )}
     </div>
@@ -243,7 +253,7 @@ function estimatePages(scriptBlocks, epId, preset) {
   return Math.max(1, Math.ceil(totalLines / linesPerPage));
 }
 
-function EpisodeItem({ ep, isSingle }) {
+function EpisodeItem({ ep, isSingle, large }) {
   const { state, dispatch } = useApp();
   const { activeEpisodeId, activeDoc, scenes, scriptBlocks, stylePreset } = state;
   const isActive = activeEpisodeId === ep.id && activeDoc === 'script';
@@ -283,11 +293,15 @@ function EpisodeItem({ ep, isSingle }) {
 
   return (
     <div
-      className="group cursor-pointer rounded mx-1 mb-0.5 py-[5px] pr-1"
+      className="group cursor-pointer rounded mx-1 mb-0.5 pr-1"
       style={{
-        paddingLeft: '24px',
+        paddingLeft: large ? '32px' : '24px',
+        paddingTop: large ? '10px' : '5px',
+        paddingBottom: large ? '10px' : '5px',
+        fontSize: large ? 'clamp(13px, 3.8vw, 16px)' : undefined,
         background: isActive ? 'var(--c-active)' : 'transparent',
         color: isActive ? 'var(--c-accent)' : 'var(--c-text4)',
+        WebkitTapHighlightColor: 'transparent',
       }}
       onClick={() => dispatch({ type: 'SET_ACTIVE_EPISODE', id: ep.id })}
       onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--c-hover)'; }}
@@ -296,7 +310,7 @@ function EpisodeItem({ ep, isSingle }) {
       {/* ── 주 행: 번호 + 제목 + 씬 수 + 액션 버튼 ── */}
       <div className="flex items-center gap-1">
         {!isSingle && (
-          <span className="text-xs shrink-0 select-none" style={{ color: isActive ? 'var(--c-accent2)' : 'var(--c-text6)' }}>
+          <span className={`shrink-0 select-none ${large ? 'text-sm' : 'text-xs'}`} style={{ color: isActive ? 'var(--c-accent2)' : 'var(--c-text6)' }}>
             {ep.number}회
           </span>
         )}
@@ -410,7 +424,7 @@ function NewProjectModal({ onCommit, onCancel }) {
   );
 }
 
-export default function LeftPanel() {
+export default function LeftPanel({ section = 'all' }) {
   const { state, dispatch } = useApp();
   const { projects } = state;
   const [addingProject, setAddingProject] = useState(false);
@@ -425,13 +439,20 @@ export default function LeftPanel() {
   return (
     <div className="h-full flex flex-col select-none" style={{ background: 'var(--c-panel)', borderRight: '1px solid var(--c-border)' }}>
       {addingProject && <NewProjectModal onCommit={handleAddProject} onCancel={() => setAddingProject(false)} />}
-      <div className="px-3 py-3 flex items-center justify-between shrink-0" style={{ borderBottom: '1px solid var(--c-border)' }}>
-        <span className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--c-text6)' }}>대본 작업실</span>
-        <button onClick={() => setAddingProject(true)} className="text-lg leading-none font-light" style={{ color: 'var(--c-text5)' }} title="새 작품">+</button>
-      </div>
+      {section !== 'script' && (
+        <div className="px-3 py-3 flex items-center justify-between shrink-0" style={{ borderBottom: '1px solid var(--c-border)' }}>
+          <span className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--c-text6)' }}>대본 작업실</span>
+          <button onClick={() => setAddingProject(true)} className="text-lg leading-none font-light" style={{ color: 'var(--c-text5)' }} title="새 작품">+</button>
+        </div>
+      )}
+      {section === 'script' && (
+        <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--c-border)', display: 'flex', justifyContent: 'flex-end' }}>
+          <button onClick={() => setAddingProject(true)} style={{ fontSize: 22, lineHeight: 1, color: 'var(--c-text5)', background: 'none', border: 'none', cursor: 'pointer' }} title="새 작품">+</button>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto py-2" style={{ paddingBottom: '88px' }}>
-        {projects.map(p => <ProjectItem key={p.id} project={p} />)}
+        {projects.map(p => <ProjectItem key={p.id} project={p} section={section} />)}
         {projects.length === 0 && (
           <div className="px-4 py-6 text-center text-xs" style={{ color: 'var(--c-text6)' }}>
             + 버튼으로 첫 작품을 만들어보세요

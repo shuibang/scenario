@@ -1602,6 +1602,43 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
   const editorLineHeight = stylePreset?.lineHeight ?? 1.6;
   const { cssStack: editorFontFamily } = resolveFont(stylePreset, 'editor');
 
+  // 키보드 감지 (모바일 소프트 키보드 또는 물리 키보드)
+  const [hasKeyboard, setHasKeyboard] = useState(false);
+  useEffect(() => {
+    const check = () => {
+      if (!window.visualViewport) return;
+      setHasKeyboard(window.visualViewport.height / screen.height < 0.75);
+    };
+    window.visualViewport?.addEventListener('resize', check);
+    return () => window.visualViewport?.removeEventListener('resize', check);
+  }, []);
+
+  // 커서 중앙 자동스크롤
+  useEffect(() => {
+    let raf = null;
+    const handleSelectionChange = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const sel = window.getSelection();
+        if (!sel?.rangeCount) return;
+        const range = sel.getRangeAt(0).cloneRange();
+        range.collapse(true);
+        const rect = range.getBoundingClientRect();
+        const scrollEl = editorScrollRef.current;
+        if (!scrollEl || rect.height === 0) return;
+        const elRect = scrollEl.getBoundingClientRect();
+        const cursorY = rect.top - elRect.top + scrollEl.scrollTop;
+        const targetTop = cursorY - scrollEl.clientHeight / 2;
+        scrollEl.scrollTo({ top: targetTop, behavior: 'smooth' });
+      });
+    };
+    document.addEventListener('selectionchange', handleSelectionChange);
+    return () => {
+      document.removeEventListener('selectionchange', handleSelectionChange);
+      cancelAnimationFrame(raf);
+    };
+  }, []);
+
   const BLOCK_TYPE_BTNS = [
     { type: 'scene_number', label: 'S#', title: '씬번호 (Ctrl+Shift+1)' },
     { type: 'action',       label: '지문', title: '지문 (Ctrl+Shift+2)' },
@@ -1630,17 +1667,19 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
                 key={type}
                 title={isPending ? `${title} — 본문을 클릭하면 적용됩니다` : title}
                 onMouseDown={e => { e.preventDefault(); applyBlockType(type); }}
-                className="px-2 py-0.5 rounded text-xs"
                 style={{
-                  color:      isPending ? '#fff' : isActive ? 'var(--c-accent)' : 'var(--c-text3)',
-                  border:     `1px solid ${isPending || isActive ? 'var(--c-accent)' : 'var(--c-border3)'}`,
+                  flexShrink: 0,
+                  fontSize: 'clamp(10px, 2.8vw, 13px)',
+                  padding: '4px 10px',
+                  borderRadius: 6,
+                  border: `1px solid ${isPending || isActive ? 'var(--c-accent)' : 'var(--c-border3)'}`,
                   background: isPending ? 'var(--c-accent)' : 'transparent',
+                  color: isPending ? '#fff' : isActive ? 'var(--c-accent)' : 'var(--c-text4)',
                   fontWeight: isActive ? '600' : 'normal',
                   cursor: 'pointer',
+                  WebkitTapHighlightColor: 'transparent',
                   transition: 'background 0.1s, color 0.1s, border-color 0.1s',
                 }}
-                onMouseEnter={e => { if (!isPending && !isActive) { e.currentTarget.style.background = 'var(--c-hover)'; e.currentTarget.style.color = 'var(--c-accent)'; } }}
-                onMouseLeave={e => { if (!isPending && !isActive) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--c-text3)'; } }}
               >{label}</button>
             );
           })}
@@ -1648,10 +1687,12 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
             ref={charCheckBtnRef}
             title="등장체크 — 현재 씬 등장인물 추가 (Ctrl+Shift+4)"
             onMouseDown={e => { e.preventDefault(); handleCharCheck(); }}
-            className="px-2 py-0.5 rounded text-xs ml-1"
-            style={{ color: 'var(--c-text3)', border: '1px solid var(--c-border3)', background: 'transparent', cursor: 'pointer' }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-hover)'; e.currentTarget.style.color = 'var(--c-accent2)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--c-text3)'; }}
+            style={{
+              flexShrink: 0, fontSize: 'clamp(10px, 2.8vw, 13px)', color: 'var(--c-text4)',
+              padding: '4px 10px', border: '1px solid var(--c-border3)',
+              borderRadius: 6, background: 'transparent', cursor: 'pointer',
+              WebkitTapHighlightColor: 'transparent', marginLeft: 4,
+            }}
           >등장체크</button>
           <button
             title="씬연결 — 현재 위치에 다른 씬 참조 삽입 (Ctrl+Shift+5)"
@@ -1674,10 +1715,12 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
               const savedRange = sel?.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
               setSceneRefPicker({ top: rect.bottom + 4, left: rect.left, insertAfterId, savedRange });
             }}
-            className="px-2 py-0.5 rounded text-xs ml-1"
-            style={{ color: 'var(--c-text3)', border: '1px solid var(--c-border3)', background: 'transparent', cursor: 'pointer' }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-hover)'; e.currentTarget.style.color = 'var(--c-accent)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--c-text3)'; }}
+            style={{
+              flexShrink: 0, fontSize: 'clamp(10px, 2.8vw, 13px)', color: 'var(--c-text4)',
+              padding: '4px 10px', border: '1px solid var(--c-border3)',
+              borderRadius: 6, background: 'transparent', cursor: 'pointer',
+              WebkitTapHighlightColor: 'transparent', marginLeft: 4,
+            }}
           >씬연결</button>
           <SymbolPicker />
         </div>
@@ -1778,7 +1821,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
         }}
       >
         <div
-          className="max-w-2xl mx-auto py-8 px-16"
+          className="max-w-2xl mx-auto py-8 px-6 md:px-16"
           style={{ fontFamily: editorFontFamily, fontSize: editorFontSize, lineHeight: editorLineHeight }}
         >
           <EditorSurface
@@ -1956,16 +1999,18 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
         </div>
       )}
 
-      {/* Shortcuts hint */}
-      <div className="px-6 py-2 flex gap-4 text-[11px] shrink-0" style={{ borderTop: '1px solid var(--c-border)', color: 'var(--c-dim)' }}>
-        <span>Ctrl+Shift+1 씬번호</span>
-        <span>Ctrl+Shift+2 지문</span>
-        <span>Ctrl+Shift+3 대사</span>
-        <span>Ctrl+Shift+5 씬연결</span>
-        <span>Enter 다음 블록</span>
-        <span>Shift+Enter 줄바꿈</span>
-        <span>Backspace (빈 블록) 삭제</span>
-      </div>
+      {/* Shortcuts hint — 키보드 연결시만 표시 */}
+      {hasKeyboard && (
+        <div className="px-6 py-2 flex gap-4 text-[11px] shrink-0 flex-wrap" style={{ borderTop: '1px solid var(--c-border)', color: 'var(--c-dim)' }}>
+          <span>Ctrl+Shift+1 씬번호</span>
+          <span>Ctrl+Shift+2 지문</span>
+          <span>Ctrl+Shift+3 대사</span>
+          <span>Ctrl+Shift+5 씬연결</span>
+          <span>Enter 다음 블록</span>
+          <span>Shift+Enter 줄바꿈</span>
+          <span>Backspace (빈 블록) 삭제</span>
+        </div>
+      )}
     </div>
   );
 }

@@ -7,9 +7,7 @@ const DEFAULT_FIELDS = [
   { id: 'title',       label: '작품명',          type: 'input',    required: true },
   { id: 'subtitle',    label: '부제 / 형식',      type: 'input',    required: false },
   { id: 'writer',      label: '작가',             type: 'input',    required: false },
-  { id: 'coWriter',    label: '보조작가',          type: 'input',    required: false },
   { id: 'genre',       label: '장르',             type: 'input',    required: false },
-  { id: 'broadcaster', label: '방송사',            type: 'input',    required: false },
   { id: 'note',        label: '기타 메모',         type: 'textarea', required: false },
 ];
 
@@ -218,16 +216,16 @@ export default function CoverEditor() {
 
   return (
     <div className="h-full overflow-y-auto relative" style={{ background: 'var(--c-bg)' }}>
-      <div className="max-w-xl mx-auto py-4 px-8">
+      <div style={{ padding: 10 }}>
 
         {/* Form */}
         <div className="space-y-3">
           {DEFAULT_FIELDS.map(f => (
-            <div key={f.id} className="flex items-start gap-2">
-              <div className="flex-1">
-                <label className="block text-xs mb-1" style={{ color: 'var(--c-text5)' }}>
-                  {f.label}{f.required && ' *'}
-                </label>
+            <div key={f.id} className="flex items-center gap-3">
+              <label className="text-xs shrink-0 text-center" style={{ width: '25%', color: 'var(--c-text5)' }}>
+                {f.label}{f.required && ' *'}
+              </label>
+              <div style={{ width: '75%' }}>
                 {f.type === 'textarea' ? (
                   <textarea
                     value={values[f.id]}
@@ -243,40 +241,34 @@ export default function CoverEditor() {
                   />
                 )}
               </div>
-              {/* Fixed fields cannot be removed, show placeholder */}
-              <div className="w-7 shrink-0 mt-6" />
             </div>
           ))}
 
           {/* Custom fields */}
           {customFields.map((cf, idx) => (
-            <div key={cf.id} className="flex items-start gap-2">
-              <div className="flex-1">
+            <div key={cf.id} className="flex items-center gap-3">
+              <div className="shrink-0 text-center" style={{ width: '25%' }}>
                 <input
                   value={cf.label}
                   onChange={e => updateCustomLabel(idx, e.target.value)}
                   placeholder="항목명"
-                  className="block text-xs mb-1 bg-transparent outline-none"
-                  style={{ color: 'var(--c-text5)', borderBottom: '1px solid var(--c-border3)', width: '100%' }}
+                  className="text-xs bg-transparent outline-none text-center w-full"
+                  style={{ color: 'var(--c-text5)', borderBottom: '1px solid var(--c-border3)' }}
                 />
+              </div>
+              <div className="flex items-center gap-2" style={{ width: '75%' }}>
                 <input
                   value={cf.value}
                   onChange={e => setCustomVal(idx, e.target.value)}
-                  className={inputCls}
+                  className={`${inputCls} flex-1`}
                 />
+                <button
+                  onClick={() => removeCustomField(idx)}
+                  className="w-7 h-7 rounded text-sm shrink-0 flex items-center justify-center"
+                  style={{ color: 'var(--c-text5)', border: '1px solid var(--c-border3)', background: 'transparent' }}
+                  title="항목 삭제"
+                >−</button>
               </div>
-              <button
-                onClick={() => removeCustomField(idx)}
-                className="w-7 h-7 rounded text-sm shrink-0 mt-5 flex items-center justify-center"
-                style={{
-                  color: 'var(--c-text5)',
-                  border: '1px solid var(--c-border3)',
-                  background: 'transparent',
-                }}
-                title="항목 삭제"
-              >
-                −
-              </button>
             </div>
           ))}
 

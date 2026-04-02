@@ -312,53 +312,42 @@ export default function TreatmentPage() {
   if (!activeProjectId) return null;
 
   return (
-    <div className="h-full overflow-y-auto" style={{ background: 'var(--c-bg)' }}>
-      <div className="max-w-2xl mx-auto py-10 px-8">
-
-        {/* Header */}
-        <div className="flex items-center gap-3 mb-6 flex-wrap">
-          <span className="text-sm font-medium" style={{ color: 'var(--c-text2)' }}>트리트먼트</span>
-          <select
-            value={epId || ''}
-            onChange={e => setSelectedEpId(e.target.value)}
-            className="text-xs rounded outline-none px-2 py-1"
-            style={{ background: 'var(--c-input)', color: 'var(--c-text2)', border: '1px solid var(--c-border3)' }}
-          >
-            {projectEpisodes.map(ep => (
-              <option key={ep.id} value={ep.id}>{ep.number}회 {ep.title || ''}</option>
-            ))}
-          </select>
-          {!importing ? (
-            <button
-              onClick={() => setImporting(true)}
-              className="px-3 py-1 rounded text-xs"
-              style={{ background: 'transparent', color: 'var(--c-text3)', border: '1px solid var(--c-border3)', cursor: 'pointer' }}
-            >대본으로 가져오기</button>
-          ) : (
-            <span className="flex items-center gap-2">
-              <span className="text-xs" style={{ color: 'var(--c-text4)' }}>
-                {items.filter(it => it.text.trim()).length}개 항목 → {episode?.number}회 대본에 추가
-              </span>
-              <button
-                onClick={handleImportToScript}
-                className="px-2 py-0.5 rounded text-xs text-white"
-                style={{ background: 'var(--c-accent)', border: 'none', cursor: 'pointer' }}
-              >확인</button>
-              <button
-                onClick={() => setImporting(false)}
-                className="px-2 py-0.5 rounded text-xs"
-                style={{ color: 'var(--c-text4)', border: '1px solid var(--c-border3)', background: 'transparent', cursor: 'pointer' }}
-              >취소</button>
-            </span>
-          )}
+    <div className="h-full flex flex-col" style={{ background: 'var(--c-bg)' }}>
+      {/* Header bar — 구조/씬리스트와 동일 스타일 */}
+      <div className="flex items-center gap-3 shrink-0" style={{ padding: '10px', borderBottom: '1px solid var(--c-border2)' }}>
+        <span className="text-sm font-medium" style={{ color: 'var(--c-text2)' }}>트리트먼트</span>
+        <select
+          value={epId || ''}
+          onChange={e => setSelectedEpId(e.target.value)}
+          className="text-xs rounded outline-none px-2 py-1"
+          style={{ background: 'var(--c-input)', color: 'var(--c-text2)', border: '1px solid var(--c-border3)' }}
+        >
+          {projectEpisodes.map(ep => (
+            <option key={ep.id} value={ep.id}>{ep.number}회 {ep.title || ''}</option>
+          ))}
+        </select>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           {importMsg && <span className="text-xs" style={{ color: 'var(--c-accent2)' }}>{importMsg}</span>}
+          <button
+            onClick={() => setImporting(true)}
+            style={{ padding: '3px 10px', borderRadius: 4, fontSize: 11, background: 'transparent', color: 'var(--c-text3)', border: '1px solid var(--c-border3)', cursor: 'pointer' }}
+          >대본으로 가져오기</button>
         </div>
+      </div>
 
-        {episode && (
-          <div className="text-xs mb-4" style={{ color: 'var(--c-text5)' }}>
-            {episode.number}회{episode.title ? ' ' + episode.title : ''}
-          </div>
-        )}
+      {/* Import confirmation bar */}
+      {importing && (
+        <div className="flex items-center gap-2 px-3 py-2 shrink-0" style={{ background: 'var(--c-active)', borderBottom: '1px solid var(--c-border2)' }}>
+          <span className="text-xs flex-1" style={{ color: 'var(--c-text4)' }}>
+            {items.filter(it => it.text.trim()).length}개 항목 → {episode?.number}회 대본에 추가
+          </span>
+          <button onClick={handleImportToScript} className="px-3 py-1 rounded text-xs text-white" style={{ background: 'var(--c-accent)', border: 'none', cursor: 'pointer' }}>확인</button>
+          <button onClick={() => setImporting(false)} className="px-3 py-1 rounded text-xs" style={{ color: 'var(--c-text4)', border: '1px solid var(--c-border3)', background: 'transparent', cursor: 'pointer' }}>취소</button>
+        </div>
+      )}
+
+      <div className="flex-1 overflow-y-auto">
+      <div className="max-w-2xl mx-auto" style={{ padding: '10px 10px 40px' }}>
 
         {/* Items */}
         <div className="space-y-1.5">
@@ -447,10 +436,8 @@ export default function TreatmentPage() {
         </button>
 
 
-        <div className="mt-2 text-[10px]" style={{ color: 'var(--c-text6)' }}>
-          Enter: 항목 분리 · Shift+Enter: 줄바꿈 · Backspace(줄 앞): 앞 항목 병합
-        </div>
       </div>
-    </div>
+      </div>
+      </div>
   );
 }

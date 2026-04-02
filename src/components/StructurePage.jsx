@@ -113,11 +113,67 @@ export function GuidePanel({ selectedSceneId, scenes, dispatch }) {
 }
 
 // ─── SceneList for one episode ────────────────────────────────────────────────
+// ─── TagPicker dropdown ───────────────────────────────────────────────────────
+function TagPicker({ scene, dispatch, onClose }) {
+  const existingTags = scene.tags || [];
+  return (
+    <div
+      style={{
+        position: 'absolute', right: 0, top: '100%', zIndex: 200,
+        background: 'var(--c-panel)', border: '1px solid var(--c-border2)',
+        borderRadius: 8, boxShadow: '0 6px 20px rgba(0,0,0,0.2)',
+        minWidth: 160, padding: '6px 0', maxHeight: 280, overflowY: 'auto',
+      }}
+      onMouseDown={e => e.stopPropagation()}
+    >
+      {BUILTIN_GUIDES.map(guide => (
+        <div key={guide.id}>
+          <div style={{ padding: '4px 12px 2px', fontSize: 10, fontWeight: 600, color: guide.color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            {guide.name}
+          </div>
+          {guide.beats.map(beat => {
+            const has = existingTags.includes(beat);
+            return (
+              <button
+                key={beat}
+                style={{
+                  display: 'block', width: '100%', textAlign: 'left',
+                  padding: '5px 16px', fontSize: 12,
+                  background: has ? 'var(--c-active)' : 'none',
+                  color: has ? guide.color : 'var(--c-text3)',
+                  border: 'none', cursor: 'pointer',
+                }}
+                onClick={() => {
+                  const tags = has
+                    ? existingTags.filter(t => t !== beat)
+                    : [...existingTags, beat];
+                  dispatch({ type: 'UPDATE_SCENE', payload: { id: scene.id, tags }, _record: true });
+                }}
+              >
+                {has ? '✓ ' : ''}{beat}
+              </button>
+            );
+          })}
+        </div>
+      ))}
+      <div style={{ height: 1, background: 'var(--c-border)', margin: '4px 0' }} />
+      <button style={{ display: 'block', width: '100%', textAlign: 'center', padding: '5px 12px', fontSize: 11, color: 'var(--c-text5)', background: 'none', border: 'none', cursor: 'pointer' }} onClick={onClose}>닫기</button>
+    </div>
+  );
+}
+
 function EpisodeSceneList({ ep, scenes, scriptBlocks, dispatch, compact = false, selectedSceneId, onSelectScene }) {
   const epScenes = useMemo(() =>
     scenes.filter(s => s.episodeId === ep.id).sort((a, b) => a.sceneSeq - b.sceneSeq),
     [scenes, ep.id]
   );
+  const [tagPickerSceneId, setTagPickerSceneId] = useState(null);
+  useEffect(() => {
+    if (!tagPickerSceneId) return;
+    const handler = () => setTagPickerSceneId(null);
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [tagPickerSceneId]);
   const epBlocks = useMemo(() => scriptBlocks.filter(b => b.episodeId === ep.id), [scriptBlocks, ep.id]);
   const snBlocks = useMemo(() => epBlocks.filter(b => b.type === 'scene_number'), [epBlocks]);
   const [dragOverSceneId, setDragOverSceneId] = useState(null);
@@ -195,20 +251,19 @@ function EpisodeSceneList({ ep, scenes, scriptBlocks, dispatch, compact = false,
             return (
               <div
                 key={scene.id}
-                className="flex items-start gap-3 px-4 py-2 rounded-lg cursor-pointer"
+                className="flex items-start gap-3 px-4 py-2 rounded-lg"
                 style={{
                   background: isDragOver ? 'var(--c-active)' : selectedSceneId === scene.id ? 'var(--c-active)' : 'var(--c-card)',
                   border: isDragOver ? '1px dashed var(--c-accent2)' : selectedSceneId === scene.id ? '1px solid var(--c-accent)' : '1px solid var(--c-border)',
                   transition: 'border-color 0.1s',
                 }}
-                onClick={() => handleSceneClick(scene)}
                 onMouseEnter={e => { if (selectedSceneId !== scene.id && !isDragOver) e.currentTarget.style.borderColor = 'var(--c-border2)'; }}
                 onMouseLeave={e => { if (selectedSceneId !== scene.id && !isDragOver) e.currentTarget.style.borderColor = 'var(--c-border)'; }}
                 onDragOver={(e) => handleDragOver(e, scene.id)}
                 onDragLeave={handleDragLeave}
                 onDrop={(e) => handleDrop(e, scene)}
               >
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => handleSceneClick(scene)}>
                   <div className={compact ? 'text-xs font-bold' : 'text-sm font-bold'} style={{ color: 'var(--c-text)' }}>
                     {label || (snb?.label || '')}
                   </div>
@@ -229,7 +284,7 @@ function EpisodeSceneList({ ep, scenes, scriptBlocks, dispatch, compact = false,
                     </div>
                   )}
                 </div>
-                <div className="flex flex-col items-end gap-1 shrink-0 mt-0.5">
+                <div className="flex flex-col items-end gap-1 shrink-0 mt-0.5" style={{ position: 'relative' }}>
                   <span className="text-[10px]" style={{ color: 'var(--c-text6)' }}>
                     {{done:'완료', writing:'작성중', draft:'초안'}[scene.status] || '초안'}
                   </span>
@@ -238,6 +293,20 @@ function EpisodeSceneList({ ep, scenes, scriptBlocks, dispatch, compact = false,
                       style={{ background: 'var(--c-tag)', color: 'var(--c-accent2)', border: '1px solid var(--c-border4)' }}>
                       T
                     </span>
+                  )}
+                  <button
+                    title="구조지침 태그 추가"
+                    onClick={e => { e.stopPropagation(); e.preventDefault(); setTagPickerSceneId(v => v === scene.id ? null : scene.id); }}
+                    style={{
+                      fontSize: 13, width: 26, height: 26, borderRadius: 6,
+                      border: '1px solid var(--c-border3)', background: 'var(--c-tag)',
+                      color: 'var(--c-text4)', cursor: 'pointer', lineHeight: 1,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >+</button>
+                  {tagPickerSceneId === scene.id && (
+                    <TagPicker scene={scene} dispatch={dispatch} onClose={() => setTagPickerSceneId(null)} />
                   )}
                 </div>
               </div>
@@ -289,7 +358,7 @@ export default function StructurePage() {
     <div className="h-full flex overflow-hidden" style={{ background: 'var(--c-bg)' }}>
       {/* Main: scene tag overview */}
       <div className="flex-1 flex flex-col min-w-0">
-        <div className="px-6 py-3 flex items-center gap-3 shrink-0" style={{ borderBottom: '1px solid var(--c-border2)' }}>
+        <div className="flex items-center gap-3 shrink-0" style={{ padding: '10px', borderBottom: '1px solid var(--c-border2)' }}>
           <span className="text-sm font-medium" style={{ color: 'var(--c-text2)' }}>구조</span>
           <select
             value={epId || ''}
@@ -314,7 +383,7 @@ export default function StructurePage() {
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto px-6 py-4">
+        <div className="flex-1 overflow-y-auto" style={{ padding: 10 }}>
           {epId === ALL ? (
             projectEpisodes.length === 0 ? (
               <div className="text-center py-16 text-sm" style={{ color: 'var(--c-text5)' }}>회차가 없습니다.</div>

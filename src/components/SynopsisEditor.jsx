@@ -4,18 +4,19 @@ import { genId, now } from '../store/db';
 
 // ─── Section definitions
 const SECTIONS = [
-  { id: 'genre',  label: '장르',    type: 'input',    placeholder: '예: 로맨스 · 드라마 · 스릴러' },
-  { id: 'theme',  label: '주제',    type: 'textarea', placeholder: '이 작품이 말하려는 핵심 메시지' },
-  { id: 'intent', label: '기획의도', type: 'textarea', placeholder: '왜 이 이야기인가' },
-  { id: 'story',  label: '줄거리',  type: 'textarea', placeholder: '전체 이야기 흐름 (기승전결)' },
+  { id: 'genre',    label: '장르',    type: 'input',    placeholder: '예: 로맨스 · 드라마 · 스릴러' },
+  { id: 'theme',    label: '주제',    type: 'textarea', placeholder: '이 작품이 말하려는 핵심 메시지', rows: 1 },
+  { id: 'logline',  label: '로그라인', type: 'textarea', placeholder: '한 문장으로 요약한 이야기', rows: 1 },
+  { id: 'intent',   label: '기획의도', type: 'textarea', placeholder: '왜 이 이야기인가', rows: 5 },
+  { id: 'story',    label: '줄거리',  type: 'textarea', placeholder: '전체 이야기 흐름 (기승전결)', rows: 5 },
 ];
 
 // ─── Migrate old plain-text synopsis → new section format
 function migrateDoc(doc) {
-  if (!doc) return { genre: '', theme: '', intent: '', story: '' };
-  if (doc.genre !== undefined) return doc; // Already section format
+  if (!doc) return { genre: '', theme: '', logline: '', intent: '', story: '' };
+  if (doc.genre !== undefined) return { logline: '', ...doc }; // Already section format, fill missing
   // Old: single `content` field
-  return { genre: '', theme: '', intent: '', story: doc.content || '' };
+  return { genre: '', theme: '', logline: '', intent: '', story: doc.content || '' };
 }
 
 // ─── Section field
@@ -49,7 +50,7 @@ function SectionField({ sec, value, onChange, readOnly }) {
 
   return (
     <div className="space-y-1.5">
-      <label className="block text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-text5)' }}>
+      <label className="block text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-text5)', marginBottom: 5 }}>
         {sec.label}
       </label>
       {sec.type === 'input' ? (
@@ -66,7 +67,7 @@ function SectionField({ sec, value, onChange, readOnly }) {
           value={value}
           onChange={e => { onChange(e.target.value); autoResize(e.target); }}
           placeholder={sec.placeholder}
-          rows={5}
+          rows={sec.rows ?? 5}
           readOnly={readOnly}
           style={{ ...inputStyle }}
         />
@@ -211,7 +212,8 @@ export default function SynopsisEditor() {
     <div className="h-full flex flex-col" style={{ background: 'var(--c-bg)' }}>
       {/* Header */}
       <div
-        className="px-6 py-3 flex items-center gap-2 shrink-0"
+        className="flex items-center gap-2 shrink-0"
+        style={{ padding: '10px', borderBottom: '1px solid var(--c-border2)' }}
         style={{ borderBottom: '1px solid var(--c-border2)' }}
       >
         <span className="text-sm font-medium" style={{ color: 'var(--c-text2)' }}>작품 시놉시스</span>
@@ -223,7 +225,7 @@ export default function SynopsisEditor() {
 
       {/* Sections */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto">
-        <div className="max-w-2xl mx-auto py-8 px-8 space-y-8">
+        <div className="max-w-2xl mx-auto space-y-8" style={{ padding: '10px' }}>
           {/* Regular sections */}
           {SECTIONS.map(sec => (
             <SectionField

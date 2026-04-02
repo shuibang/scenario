@@ -404,7 +404,7 @@ export default function SceneListPage() {
   return (
     <div className="h-full flex flex-col" style={{ background: 'var(--c-bg)' }}>
       {/* Header */}
-      <div className="px-6 py-3 flex items-center gap-3 shrink-0" style={{ borderBottom: '1px solid var(--c-border2)' }}>
+      <div className="flex items-center gap-3 shrink-0" style={{ padding: '10px', borderBottom: '1px solid var(--c-border2)' }}>
         <span className="text-sm font-medium" style={{ color: 'var(--c-text2)' }}>씬리스트</span>
         <select
           value={epId || ''}
@@ -412,33 +412,30 @@ export default function SceneListPage() {
           className="text-xs rounded outline-none px-2 py-1"
           style={{ background: 'var(--c-input)', color: 'var(--c-text2)', border: '1px solid var(--c-border3)' }}
         >
-          {projectEpisodes.map((ep, i) => (
-            <option key={ep.id} value={ep.id}>{i + 1}회 {ep.title || ''}</option>
+          {projectEpisodes.map(ep => (
+            <option key={ep.id} value={ep.id}>{ep.number}회 {ep.title || ''}</option>
           ))}
         </select>
         <span className="text-xs" style={{ color: 'var(--c-text6)' }}>{epScenes.length}개 씬</span>
-        <button
-          onClick={handleAddScene}
-          className="px-3 py-1 rounded text-xs ml-1"
-          style={{ background: 'var(--c-accent)', color: '#fff', border: 'none', cursor: 'pointer' }}
-        >+ 씬 추가</button>
-        {!importing ? (
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          {importMsg && <span className="text-xs" style={{ color: 'var(--c-accent2)' }}>{importMsg}</span>}
           <button
             onClick={() => setImporting(true)}
-            className="px-3 py-1 rounded text-xs"
-            style={{ background: 'transparent', color: 'var(--c-text3)', border: '1px solid var(--c-border3)', cursor: 'pointer' }}
+            style={{ padding: '3px 10px', borderRadius: 4, fontSize: 11, background: 'transparent', color: 'var(--c-text3)', border: '1px solid var(--c-border3)', cursor: 'pointer' }}
           >대본으로 가져오기</button>
-        ) : (
-          <span className="flex items-center gap-2">
-            <span className="text-xs" style={{ color: 'var(--c-text4)' }}>
-              대본에 없는 씬 {epScenes.filter(s => !epBlocks.some(b => b.type === 'scene_number' && b.sceneId === s.id)).length}개를 추가합니다
-            </span>
-            <button onClick={handleImportToScript} className="px-2 py-0.5 rounded text-xs text-white" style={{ background: 'var(--c-accent)', border: 'none', cursor: 'pointer' }}>확인</button>
-            <button onClick={() => setImporting(false)} className="px-2 py-0.5 rounded text-xs" style={{ color: 'var(--c-text4)', border: '1px solid var(--c-border3)', background: 'transparent', cursor: 'pointer' }}>취소</button>
-          </span>
-        )}
-        {importMsg && <span className="text-xs" style={{ color: 'var(--c-accent2)' }}>{importMsg}</span>}
+        </div>
       </div>
+
+      {/* Import confirmation bar */}
+      {importing && (
+        <div className="px-6 py-2 flex items-center gap-2 shrink-0" style={{ borderBottom: '1px solid var(--c-border2)', background: 'var(--c-active)' }}>
+          <span className="text-xs flex-1" style={{ color: 'var(--c-text4)' }}>
+            대본에 없는 씬 {epScenes.filter(s => !epBlocks.some(b => b.type === 'scene_number' && b.sceneId === s.id)).length}개를 추가합니다
+          </span>
+          <button onClick={handleImportToScript} className="px-3 py-1 rounded text-xs text-white" style={{ background: 'var(--c-accent)', border: 'none', cursor: 'pointer' }}>확인</button>
+          <button onClick={() => setImporting(false)} className="px-3 py-1 rounded text-xs" style={{ color: 'var(--c-text4)', border: '1px solid var(--c-border3)', background: 'transparent', cursor: 'pointer' }}>취소</button>
+        </div>
+      )}
 
       {/* Table */}
       <div className="flex-1 overflow-auto">
@@ -447,12 +444,12 @@ export default function SceneListPage() {
             씬이 없습니다. 대본 편집기에서 Ctrl+1로 씬번호를 추가하세요.
           </div>
         ) : (
-          <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%', minWidth: '580px' }}>
+          <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%', minWidth: '480px' }}>
             <colgroup>
-              <col style={{ width: '260px' }} />  {/* 씬번호 + 헤더 */}
-              <col />                              {/* 내용 — takes remaining */}
-              <col style={{ width: '136px' }} />  {/* 등장인물 */}
-              <col style={{ width: '80px' }} />   {/* 비고 */}
+              <col style={{ width: '30%' }} />   {/* 씬번호 + 장소 */}
+              <col style={{ width: '30%' }} />   {/* 내용 */}
+              <col style={{ width: '25%' }} />   {/* 등장인물 */}
+              <col style={{ width: '15%' }} />   {/* 비고 */}
             </colgroup>
             <thead>
               <tr style={{ background: 'var(--c-panel)', borderBottom: '2px solid var(--c-border2)', position: 'sticky', top: 0, zIndex: 1 }}>
@@ -485,6 +482,14 @@ export default function SceneListPage() {
             </tbody>
           </table>
         )}
+        {/* 씬 추가 — 하단 */}
+        <div className="px-6 py-3">
+          <button
+            onClick={handleAddScene}
+            className="w-full py-2 rounded text-sm"
+            style={{ color: 'var(--c-text4)', border: '1px dashed var(--c-border3)', background: 'transparent', cursor: 'pointer' }}
+          >+ 씬 추가</button>
+        </div>
       </div>
     </div>
   );

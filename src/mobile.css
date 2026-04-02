@@ -1,0 +1,162 @@
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE DESIGN GUIDELINES
+   .mobile-layout 루트 안에서 모든 모바일 컴포넌트가 동작합니다.
+═══════════════════════════════════════════════════════════════ */
+
+/* ── 토큰 ── */
+.mobile-layout {
+  --m-fs-base:   clamp(14px, 4vw, 16px);
+  --m-fs-sm:     clamp(12px, 3.4vw, 14px);
+  --m-fs-xs:     clamp(11px, 3vw, 13px);
+  --m-fs-brand:  clamp(15px, 4.5vw, 18px);
+  --m-icon:      clamp(18px, 5vw, 22px);
+  --m-pad-x:     20px;
+  --m-pad-y:     14px;
+  --m-item-h:    50px;
+  --m-sub-pad-x: 40px;
+  --m-radius:    8px;
+}
+
+/* ── 리스트 아이템 ── */
+.mobile-layout .m-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: var(--m-pad-y) var(--m-pad-x);
+  min-height: var(--m-item-h);
+  font-size: var(--m-fs-base);
+  color: var(--c-text);
+  border-bottom: 1px solid var(--c-border);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.1s;
+}
+.mobile-layout .m-item:active {
+  background: var(--c-hover);
+}
+.mobile-layout .m-item.active {
+  background: var(--c-active);
+  color: var(--c-accent);
+  font-weight: 600;
+}
+
+/* ── 들여쓴 서브 아이템 ── */
+.mobile-layout .m-item.sub {
+  padding-left: var(--m-sub-pad-x);
+  font-size: var(--m-fs-sm);
+  color: var(--c-text4);
+  min-height: calc(var(--m-item-h) - 8px);
+}
+
+/* ── 섹션 레이블 ── */
+.mobile-layout .m-section-label {
+  padding: 10px var(--m-pad-x) 4px;
+  font-size: var(--m-fs-xs);
+  color: var(--c-text6);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* ── 강조 아이템 (+ 추가) ── */
+.mobile-layout .m-item.accent {
+  color: var(--c-accent);
+  justify-content: center;
+  font-size: var(--m-fs-sm);
+}
+
+/* ── 아이콘 ── */
+.mobile-layout .m-icon {
+  font-size: var(--m-icon);
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+/* ── 입력창 ── */
+.mobile-layout .m-input {
+  width: 100%;
+  background: var(--c-input);
+  color: var(--c-text);
+  border: 1px solid var(--c-border3);
+  border-radius: var(--m-radius);
+  padding: 10px 14px;
+  font-size: var(--m-fs-base);
+  outline: none;
+  font-family: inherit;
+}
+.mobile-layout .m-input:focus {
+  border-color: var(--c-accent);
+}
+
+/* ── 버튼 ── */
+.mobile-layout .m-btn {
+  padding: 10px 20px;
+  font-size: var(--m-fs-sm);
+  border-radius: var(--m-radius);
+  border: 1px solid var(--c-border3);
+  background: transparent;
+  color: var(--c-text4);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.mobile-layout .m-btn.primary {
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+  color: #fff;
+}
+
+/* ── 카드 ── */
+.mobile-layout .m-card {
+  background: var(--c-panel);
+  border: 1px solid var(--c-border2);
+  border-radius: var(--m-radius);
+  padding: 14px var(--m-pad-x);
+  margin-bottom: 10px;
+}
+
+/* ── 빈 상태 ── */
+.mobile-layout .m-empty {
+  padding: 32px var(--m-pad-x);
+  text-align: center;
+  font-size: var(--m-fs-sm);
+  color: var(--c-text6);
+}
+
+/* ── 체크리스트 ── */
+.mobile-layout .m-checklist-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--c-border);
+  font-size: var(--m-fs-base);
+}
+.mobile-layout .m-check-box {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  border: 1.5px solid var(--c-border3);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background: transparent;
+}
+.mobile-layout .m-check-box.done {
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+}
+
+/* ── 텍스트 계층 ── */
+.mobile-layout .m-text-base  { font-size: var(--m-fs-base); color: var(--c-text); }
+.mobile-layout .m-text-sm    { font-size: var(--m-fs-sm);   color: var(--c-text4); }
+.mobile-layout .m-text-xs    { font-size: var(--m-fs-xs);   color: var(--c-text6); }
+.mobile-layout .m-text-accent { color: var(--c-accent); font-weight: 600; }
+
+/* ── 패널 컨텐츠 블록 (중앙 정렬, 글자는 왼쪽) ── */
+.mobile-layout .m-panel-content {
+  max-width: 480px;
+  width: 100%;
+  margin: 0 auto;
+  text-align: left;
+}
