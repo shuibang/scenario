@@ -225,7 +225,7 @@ export default function SynopsisEditor() {
 
       {/* Sections */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto">
-        <div className="max-w-2xl mx-auto space-y-8" style={{ padding: '10px' }}>
+        <div className="space-y-8" style={{ padding: '10px' }}>
           {/* Regular sections */}
           {SECTIONS.map(sec => (
             <SectionField
