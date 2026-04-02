@@ -887,7 +887,7 @@ function Shell() {
   const modals = (
     <>
       {printPreviewOpen && <PrintPreviewModal onClose={() => setPrintPreviewOpen(false)} />}
-      {/* <OnboardingTour /> */}
+      <OnboardingTour />
       {saveToast && (
         <div style={{
           position: 'fixed', bottom: '32px', left: '50%', transform: 'translateX(-50%)',
