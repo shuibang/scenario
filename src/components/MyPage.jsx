@@ -1,10 +1,9 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY,
-);
+const supabase = (import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY)
+  ? createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY)
+  : null;
 import { QRCodeSVG } from 'qrcode.react';
 import { useApp } from '../store/AppContext';
 import QnATab from './QnATab';
@@ -837,6 +836,7 @@ function ErrorReportTab() {
   const handleSubmit = async () => {
     if (!description.trim()) return;
     setStatus('sending');
+    if (!supabase) { setStatus('error'); return; }
     const { error } = await supabase.from('error_reports').insert({
       type,
       description: description.trim(),
