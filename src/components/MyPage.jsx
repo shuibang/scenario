@@ -12,6 +12,7 @@ import { ensureFontsRegistered } from '../print/printPdf';
 import {
   storeFont, removeFont, loadFontMeta, saveFontMeta,
 } from '../print/fontStorage';
+import { resetPageHints } from './OnboardingTour';
 
 // ─── Log PDF ──────────────────────────────────────────────────────────────────
 const LOG_PDF_FONT = '함초롱바탕';
@@ -680,6 +681,25 @@ function SettingsTab() {
           style={{ background: 'var(--c-accent)', color: '#fff', border: 'none', cursor: 'pointer' }}
         >
           다시 보기
+        </button>
+      </div>
+
+      <div
+        className="flex items-start gap-4 p-4 rounded-lg"
+        style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)' }}
+      >
+        <div className="flex-1">
+          <div className="text-sm font-medium mb-0.5" style={{ color: 'var(--c-text)' }}>페이지 힌트 초기화</div>
+          <div className="text-xs" style={{ color: 'var(--c-text5)' }}>
+            각 화면에 표시되는 안내 메시지를 다시 볼 수 있도록 초기화합니다.
+          </div>
+        </div>
+        <button
+          onClick={() => { resetPageHints(); alert('페이지 힌트가 초기화됐습니다.\n각 화면을 다시 방문하면 안내가 표시됩니다.'); }}
+          className="shrink-0 text-xs px-3 py-1.5 rounded"
+          style={{ background: 'transparent', border: '1px solid var(--c-border3)', color: 'var(--c-text4)', cursor: 'pointer' }}
+        >
+          초기화
         </button>
       </div>
 
