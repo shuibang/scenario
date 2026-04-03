@@ -12,6 +12,7 @@ export default function MobileScriptTab() {
   const [swipedId, setSwipedId] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null); // { id, type: 'project'|'episode' }
   const [deleteText, setDeleteText] = useState('');
+  const [editingEpId, setEditingEpId] = useState(null);
   const touchStartX = useRef({});
 
   const handleTouchStart = (id, e) => {
@@ -172,6 +173,7 @@ export default function MobileScriptTab() {
 
               {epList.map(ep => {
                 const isEpActive = activeEpisodeId === ep.id && activeDoc === 'script';
+                const isEditing = editingEpId === ep.id;
                 return (
                   <div key={ep.id} style={{ position: 'relative', overflow: 'hidden' }}>
                     <div
@@ -184,20 +186,28 @@ export default function MobileScriptTab() {
                       {project.projectType !== 'single' && (
                         <span className="m-text-xs" style={{ flexShrink: 0 }}>{ep.number}회</span>
                       )}
-                      {isEpActive ? (
+                      {isEditing ? (
                         <input
+                          autoFocus
                           className="m-input"
                           style={{ flex: 1, padding: '2px 6px', fontSize: 'inherit' }}
                           value={ep.title}
                           placeholder="제목 없음"
                           onClick={e => e.stopPropagation()}
                           onChange={e => dispatch({ type: 'UPDATE_EPISODE', payload: { id: ep.id, title: e.target.value } })}
-                          onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }}
+                          onKeyDown={e => { if (e.key === 'Enter') { e.target.blur(); setEditingEpId(null); } }}
+                          onBlur={() => setEditingEpId(null)}
                         />
                       ) : (
                         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {ep.title || <span className="m-text-xs" style={{ fontStyle: 'italic' }}>제목 없음</span>}
                         </span>
+                      )}
+                      {!isEditing && (
+                        <button
+                          onClick={e => { e.stopPropagation(); setEditingEpId(ep.id); }}
+                          style={{ flexShrink: 0, background: 'none', border: 'none', color: 'var(--c-text6)', fontSize: 13, cursor: 'pointer', padding: '0 2px', lineHeight: 1, WebkitTapHighlightColor: 'transparent' }}
+                        >✎</button>
                       )}
                     </div>
                     {swipedId === ep.id && (

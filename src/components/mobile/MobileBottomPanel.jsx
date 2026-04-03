@@ -45,14 +45,17 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange }) 
   const toggleRef = useRef(onToggle);
   openRef.current   = open;
   toggleRef.current = onToggle;
+  const keyboardUpRef = useRef(false);
   useEffect(() => {
     if (!window.visualViewport) return;
     let closeTimer = null;
     const handler = () => {
       const keyboardUp = (window.visualViewport.height / window.screen.height) < 0.75;
+      const wasUp = keyboardUpRef.current;
+      keyboardUpRef.current = keyboardUp;
       clearTimeout(closeTimer);
-      if (keyboardUp) {
-        // 150ms 지연: 패널 탭 터치 시 포커스 이동 완료 후 판단
+      // 키보드가 새로 올라올 때만 닫기 (이미 올라와 있던 경우는 무시)
+      if (keyboardUp && !wasUp) {
         closeTimer = setTimeout(() => {
           if (openRef.current && !document.activeElement?.closest('[data-bottom-panel]')) {
             toggleRef.current();

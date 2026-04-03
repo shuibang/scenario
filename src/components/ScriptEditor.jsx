@@ -1640,10 +1640,11 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
   }, []);
 
   const BLOCK_TYPE_BTNS = [
-    { type: 'scene_number', label: 'S#', title: '씬번호 (Ctrl+Shift+1)' },
+    { type: 'scene_number', label: 'S#',  title: '씬번호 (Ctrl+Shift+1)' },
     { type: 'action',       label: '지문', title: '지문 (Ctrl+Shift+2)' },
     { type: 'dialogue',     label: '대사', title: '대사 (Ctrl+Shift+3)' },
   ];
+  const BTN_W = 40; // px — 상단 툴바 버튼 통일 너비
 
   if (!activeEpisodeId) {
     return (
@@ -1668,9 +1669,9 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
                 title={isPending ? `${title} — 본문을 클릭하면 적용됩니다` : title}
                 onMouseDown={e => { e.preventDefault(); applyBlockType(type); }}
                 style={{
-                  flexShrink: 0,
+                  flexShrink: 0, width: BTN_W, textAlign: 'center',
                   fontSize: 'clamp(10px, 2.8vw, 13px)',
-                  padding: '4px 10px',
+                  padding: '4px 0',
                   borderRadius: 6,
                   border: `1px solid ${isPending || isActive ? 'var(--c-accent)' : 'var(--c-border3)'}`,
                   background: isPending ? 'var(--c-accent)' : 'transparent',
@@ -1685,17 +1686,18 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
           })}
           <button
             ref={charCheckBtnRef}
-            title="등장체크 — 현재 씬 등장인물 추가 (Ctrl+Shift+4)"
+            title="등장 — 현재 씬 등장인물 추가 (Ctrl+Shift+4)"
             onMouseDown={e => { e.preventDefault(); handleCharCheck(); }}
             style={{
-              flexShrink: 0, fontSize: 'clamp(10px, 2.8vw, 13px)', color: 'var(--c-text4)',
-              padding: '4px 10px', border: '1px solid var(--c-border3)',
+              flexShrink: 0, width: BTN_W, textAlign: 'center',
+              fontSize: 'clamp(10px, 2.8vw, 13px)', color: 'var(--c-text4)',
+              padding: '4px 0', border: '1px solid var(--c-border3)',
               borderRadius: 6, background: 'transparent', cursor: 'pointer',
               WebkitTapHighlightColor: 'transparent', marginLeft: 4,
             }}
-          >등장체크</button>
+          >등장</button>
           <button
-            title="씬연결 — 현재 위치에 다른 씬 참조 삽입 (Ctrl+Shift+5)"
+            title="연결 — 현재 위치에 다른 씬 참조 삽입 (Ctrl+Shift+5)"
             onMouseDown={e => {
               e.preventDefault();
               const surface = document.querySelector('[data-editor-surface]');
@@ -1716,12 +1718,13 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
               setSceneRefPicker({ top: rect.bottom + 4, left: rect.left, insertAfterId, savedRange });
             }}
             style={{
-              flexShrink: 0, fontSize: 'clamp(10px, 2.8vw, 13px)', color: 'var(--c-text4)',
-              padding: '4px 10px', border: '1px solid var(--c-border3)',
+              flexShrink: 0, width: BTN_W, textAlign: 'center',
+              fontSize: 'clamp(10px, 2.8vw, 13px)', color: 'var(--c-text4)',
+              padding: '4px 0', border: '1px solid var(--c-border3)',
               borderRadius: 6, background: 'transparent', cursor: 'pointer',
               WebkitTapHighlightColor: 'transparent', marginLeft: 4,
             }}
-          >씬연결</button>
+          >연결</button>
           <SymbolPicker />
         </div>
         <span className="ml-auto flex items-center gap-3">
@@ -1733,15 +1736,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
             >⚠ S# 참조 {brokenSceneRefs.length}개 끊김</button>
           )}
           <PageCounter blocks={blocks} stylePreset={stylePreset} scrollRef={editorScrollRef} />
-          {saveStatus === 'saving'
-            ? <span style={{ color: 'var(--c-text6)' }}>저장 중…</span>
-            : saveStatus === 'error'
-            ? <span className="text-red-400 cursor-pointer" title={saveErrorMsg || '저장 실패'}
-                onClick={() => dispatch({ type: 'SET_SAVE_STATUS', payload: 'saved' })}>
-                ⚠ 저장 실패 {saveErrorMsg ? '(클릭으로 닫기)' : ''}
-              </span>
-            : <span style={{ color: 'var(--c-border3)' }}>● 저장됨</span>
-          }
+          <span style={{ color: 'var(--c-border3)' }}>● 저장됨</span>
         </span>
       </div>
 
@@ -1999,8 +1994,8 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
         </div>
       )}
 
-      {/* Shortcuts hint — 키보드 연결시만 표시 */}
-      {hasKeyboard && (
+      {/* Shortcuts hint — 터치 기기(소프트 키보드)에서는 숨김 */}
+      {!hasKeyboard && !('ontouchstart' in window) && (
         <div className="px-6 py-2 flex gap-4 text-[11px] shrink-0 flex-wrap" style={{ borderTop: '1px solid var(--c-border)', color: 'var(--c-dim)' }}>
           <span>Ctrl+Shift+1 씬번호</span>
           <span>Ctrl+Shift+2 지문</span>
@@ -2009,6 +2004,98 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
           <span>Enter 다음 블록</span>
           <span>Shift+Enter 줄바꿈</span>
           <span>Backspace (빈 블록) 삭제</span>
+        </div>
+      )}
+
+      {/* 저장 상태 — 우하단 fixed 토스트 */}
+      {(saveStatus === 'saving' || saveStatus === 'error') && (
+        <div style={{
+          position: 'fixed', bottom: 12, right: 12, zIndex: 500,
+          fontSize: 11, padding: '4px 10px', borderRadius: 6,
+          background: saveStatus === 'error' ? '#fee2e2' : 'var(--c-card)',
+          border: `1px solid ${saveStatus === 'error' ? '#fca5a5' : 'var(--c-border3)'}`,
+          color: saveStatus === 'error' ? '#b91c1c' : 'var(--c-text5)',
+          pointerEvents: saveStatus === 'error' ? 'auto' : 'none',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+        }}
+          onClick={saveStatus === 'error' ? () => dispatch({ type: 'SET_SAVE_STATUS', payload: 'saved' }) : undefined}
+        >
+          {saveStatus === 'saving' ? '저장 중…' : `⚠ 저장 실패${saveErrorMsg ? ' (탭해서 닫기)' : ''}`}
+        </div>
+      )}
+
+      {/* 모바일 플로팅 툴바 — 소프트 키보드가 올라와 있을 때 */}
+      {hasKeyboard && (
+        <div style={{
+          position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 400,
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '6px 12px',
+          background: 'var(--c-header)',
+          borderTop: '1px solid var(--c-border)',
+          overflowX: 'auto', scrollbarWidth: 'none',
+        }}>
+          {[
+            { type: 'scene_number', label: 'S#' },
+            { type: 'action',       label: '지문' },
+            { type: 'dialogue',     label: '대사' },
+          ].map(({ type, label }) => {
+            const isPending = pendingBlockType === type;
+            const isActive  = !isPending && activeBlockType === type;
+            return (
+              <button
+                key={type}
+                onMouseDown={e => { e.preventDefault(); applyBlockType(type); }}
+                style={{
+                  flex: '0 0 auto', width: 44, fontSize: 12, padding: '5px 0',
+                  borderRadius: 6, textAlign: 'center',
+                  border: `1px solid ${isPending || isActive ? 'var(--c-accent)' : 'var(--c-border3)'}`,
+                  background: isPending ? 'var(--c-accent)' : 'transparent',
+                  color: isPending ? '#fff' : isActive ? 'var(--c-accent)' : 'var(--c-text4)',
+                  fontWeight: isActive ? 600 : 'normal',
+                  cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+                }}
+              >{label}</button>
+            );
+          })}
+          <div style={{ width: 1, height: 16, background: 'var(--c-border3)', flexShrink: 0 }} />
+          <button
+            ref={charCheckBtnRef}
+            onMouseDown={e => { e.preventDefault(); handleCharCheck(); }}
+            style={{
+              flex: '0 0 auto', width: 44, fontSize: 12, padding: '5px 0',
+              borderRadius: 6, textAlign: 'center',
+              border: '1px solid var(--c-border3)', background: 'transparent',
+              color: 'var(--c-text4)', cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+            }}
+          >등장</button>
+          <button
+            onMouseDown={e => {
+              e.preventDefault();
+              const surface = document.querySelector('[data-editor-surface]');
+              const sel = window.getSelection();
+              let insertAfterId = null;
+              let anchorEl = null;
+              if (sel?.rangeCount && surface) {
+                let node = sel.getRangeAt(0).startContainer;
+                node = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+                while (node && node !== surface) {
+                  if (node.dataset?.blockId) { anchorEl = node; insertAfterId = node.dataset.blockId; break; }
+                  node = node.parentElement;
+                }
+              }
+              const btn = e.currentTarget;
+              const rect = anchorEl?.getBoundingClientRect() || btn.getBoundingClientRect();
+              const savedRange = sel?.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
+              setSceneRefPicker({ top: rect.top - 160, left: rect.left, insertAfterId, savedRange });
+            }}
+            style={{
+              flex: '0 0 auto', width: 44, fontSize: 12, padding: '5px 0',
+              borderRadius: 6, textAlign: 'center',
+              border: '1px solid var(--c-border3)', background: 'transparent',
+              color: 'var(--c-text4)', cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+            }}
+          >연결</button>
+          <SymbolPicker />
         </div>
       )}
     </div>
