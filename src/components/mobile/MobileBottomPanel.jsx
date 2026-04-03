@@ -35,7 +35,15 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange }) 
 
   // Swipe up = open, swipe down = close
   const touchStartY = useRef(null);
-  const handleTouchStart = (e) => { touchStartY.current = e.touches[0].clientY; };
+  const handleTouchStart = (e) => {
+    // 입력창에서 시작된 터치는 스와이프 무시
+    const tag = e.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable) {
+      touchStartY.current = null;
+      return;
+    }
+    touchStartY.current = e.touches[0].clientY;
+  };
   const handleTouchEnd = (e) => {
     if (touchStartY.current === null) return;
     const dy = e.changedTouches[0].clientY - touchStartY.current;
