@@ -182,11 +182,9 @@ export function tokenizeSection(section, metrics) {
   if (section.type === 'episode') {
     const epTitle = `${section.episodeNumber}회 ${section.episodeTitle}`.trim();
     tokens.push(T('ep_title', epTitle, { bold: true, center: true }));
-    tokens.push(B());
 
     let prevBlock = null;
     for (const block of section.blocks) {
-      if (prevBlock !== null && prevBlock.type !== block.type) tokens.push(B());
 
       switch (block.type) {
         case 'scene_number': {
