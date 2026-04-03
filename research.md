@@ -950,5 +950,93 @@ SharedReviewView 렌더링 (읽기 전용 미리보기)
 
 ---
 
+## 14. 버그 수정 이력 (2026-04-03)
+
+### 14.1 모바일 레이아웃 흑화면 시리즈
+
+**근본 원인:** 구형 모바일 브라우저(Samsung Internet < 12, 구형 iOS Safari)의 CSS 미지원
+
+| 증상 | 원인 | 수정 |
+|------|------|------|
+| 전체 레이아웃 찌그러짐 | `100svh` / `100dvh` 미지원 → height 0 | `position: fixed; bottom: 0` 방식으로 교체 |
+| Synopsis/Script 흑화면 | CSS `inset: 0` 단축 속성 미지원 | `top/right/bottom/left` 명시로 교체 |
+| Synopsis/Script 흑화면 | `flex-1 min-h-0` 체인이 구형 브라우저에서 높이 미계산 | `position: absolute; top:0; right:0; bottom:0; left:0` 방식으로 교체 |
+
+**적용 파일:** `App.jsx`, `SynopsisEditor.jsx`, `ScriptEditor.jsx`
+
+---
+
+### 14.2 Synopsis JS 크래시 (흑화면)
+
+**파일:** `src/components/SynopsisEditor.jsx`
+
+**증상:** 시놉시스 페이지 진입 시 JavaScript 오류 → 컴포넌트 unmount → 흑화면
+
+**원인:**
+```js
+// 기존 코드 — doc 전체를 spread
+function migrateDoc(doc) {
+  if (doc.genre !== undefined) return { logline: '', ...doc };
+  //  ↑ doc에 포함된 createdAt, updatedAt (숫자) 등이 sections에 섞임
+}
+
+// 이후 stripHtml 호출 시
+const plainAll = Object.values(sections).map(stripHtml).join(' ');
+// → stripHtml(1234567) → (1234567 || '').replace(...)
+// → TypeError: (e || "").replace is not a function
+```
+
+**수정:** `migrateDoc`에서 필요한 5개 필드만 명시적으로 추출
+
+---
+
+### 14.3 힌트 오버레이가 시놉시스 위에 남는 버그
+
+**파일:** `src/components/mobile/MobileOnboardingTour.jsx`
+
+**증상:** 표지 → 시놉시스 이동 시 이전 힌트 오버레이가 시놉시스 위를 덮음
+
+**수정:** `activeDoc` 변경 시 `hintId`, `hintRect` 초기화하는 `useEffect` 추가
+
+---
+
+### 14.4 WorkTimer — 다른 창 전환 시에도 시간이 흘러가는 버그
+
+**파일:** `src/App.jsx`
+
+**증상:** 데스크톱에서 다른 앱/창을 열어도 타이머가 계속 진행됨
+
+**원인:** `blur`/`visibilitychange` 이벤트 처리 없음. 30초 유예 동안 `activeRef`가 `true`로 유지됨
+
+**수정:** `window.blur`, `document.visibilitychange` 이벤트에서 즉시 `activeRef = false`로 설정
+
+---
+
+### 14.5 기타 버튼 스타일 불일치
+
+**파일:** `src/components/ScriptEditor.jsx`
+
+`SymbolPicker` 내 "기타" 버튼이 S#/지문/대사/등장/연결 버튼과 다른 스타일 사용.
+각 툴바(상단 고정 / 모바일 키보드)의 기준 스타일에 맞게 통일.
+
+---
+
+### 14.6 Script 진입 시 하단 패널 자동 닫힘
+
+**파일:** `src/App.jsx`
+
+`Shell` 컴포넌트에 `useEffect` 추가 — `activeDoc === 'script' && activeEpisodeId` 조건 시 `setMobileBottomOpen(false)` 호출.
+
+---
+
+## 15. 워크플로우 규칙 (2026-04-03 확정)
+
+1. 수정 요청 → `plan.md`에 계획 정리
+2. 코드 수정
+3. 사용자가 내부 dev 서버에서 확인
+4. 빌드 요청 시 → `npm run build` + `git push`
+
+---
+
 *이 보고서는 `src/` 디렉토리의 모든 소스 파일을 기반으로 작성되었다.*
 *v2 폴더(`src/v2/`)는 2026-04-01 삭제되었으며 현재 코드베이스에 존재하지 않는다.*

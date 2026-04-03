@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React from 'react';
 import { useApp } from '../../store/AppContext';
 import MobileScriptTab from './MobileScriptTab';
 import MobileMemoTab from './MobileMemoTab';
@@ -29,29 +29,9 @@ const OPEN_H   = 280;  // px — 열렸을 때 패널 전체 고정 높이
 const BANNER_H = 20;   // px — 하단 광고 고정 높이
 const CONTENT_H = OPEN_H - TAB_H - BANNER_H; // 콘텐츠 영역 = 204px
 
-export default function MobileBottomPanel({ open, onToggle, tab, onTabChange }) {
+export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, onClose }) {
   const { state, dispatch } = useApp();
   const { activeDoc } = state;
-
-  // Swipe up = open, swipe down = close
-  const touchStartY = useRef(null);
-  const handleTouchStart = (e) => {
-    // 입력창에서 시작된 터치는 스와이프 무시
-    const tag = e.target.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable) {
-      touchStartY.current = null;
-      return;
-    }
-    touchStartY.current = e.touches[0].clientY;
-  };
-  const handleTouchEnd = (e) => {
-    if (touchStartY.current === null) return;
-    const dy = e.changedTouches[0].clientY - touchStartY.current;
-    touchStartY.current = null;
-    if (Math.abs(dy) < 20) return;
-    if (dy < 0 && !open) onToggle();
-    if (dy > 0 && open)  onToggle();
-  };
 
   return (
     <div
@@ -66,8 +46,6 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange }) 
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         userSelect: 'none', WebkitUserSelect: 'none',
       }}
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
     >
       {/* Tab bar */}
       <div data-tour-id="mobile-tabs" style={{
@@ -115,7 +93,7 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange }) 
           >
             {tab === 'script' && (
               <div data-tour-id="left-panel" className="m-panel-content">
-                <MobileScriptTab />
+                <MobileScriptTab onClose={onClose} />
               </div>
             )}
             {tab === 'data' && (
@@ -124,7 +102,7 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange }) 
                   <div
                     key={`${doc}-${i}`}
                     className={`m-item${activeDoc === doc ? ' active' : ''}`}
-                    onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: doc })}
+                    onClick={() => { dispatch({ type: 'SET_ACTIVE_DOC', payload: doc }); onClose?.(); }}
                   >{label}</div>
                 ))}
               </div>
@@ -135,7 +113,7 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange }) 
                   <div
                     key={doc}
                     className={`m-item${activeDoc === doc ? ' active' : ''}`}
-                    onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: doc })}
+                    onClick={() => { dispatch({ type: 'SET_ACTIVE_DOC', payload: doc }); onClose?.(); }}
                   >{label}</div>
                 ))}
               </div>

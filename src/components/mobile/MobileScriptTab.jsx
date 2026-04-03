@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useApp } from '../../store/AppContext';
 import { genId, now } from '../../store/db';
 
-export default function MobileScriptTab() {
+export default function MobileScriptTab({ onClose }) {
   const { state, dispatch } = useApp();
   const { projects, episodes, activeProjectId, activeEpisodeId, activeDoc } = state;
   const [addingProject, setAddingProject] = useState(false);
@@ -165,10 +165,10 @@ export default function MobileScriptTab() {
 
             {isActive && <>
               <div className={`m-item sub${activeDoc === 'cover' && !activeEpisodeId ? ' active' : ''}`}
-                onClick={() => { dispatch({ type: 'SET_ACTIVE_PROJECT', id: project.id }); dispatch({ type: 'SET_ACTIVE_DOC', payload: 'cover' }); }}
+                onClick={() => { dispatch({ type: 'SET_ACTIVE_PROJECT', id: project.id }); dispatch({ type: 'SET_ACTIVE_DOC', payload: 'cover' }); onClose?.(); }}
               >표지</div>
               <div className={`m-item sub${activeDoc === 'synopsis' ? ' active' : ''}`}
-                onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'synopsis' })}
+                onClick={() => { dispatch({ type: 'SET_ACTIVE_DOC', payload: 'synopsis' }); onClose?.(); }}
               >작품 시놉시스</div>
 
               {epList.map(ep => {
@@ -179,7 +179,7 @@ export default function MobileScriptTab() {
                     <div
                       className={`m-item sub${isEpActive ? ' active' : ''}`}
                       style={{ gap: 6, transform: swipedId === ep.id ? 'translateX(-80px)' : 'translateX(0)', transition: 'transform 0.2s' }}
-                      onClick={() => { if (swipedId === ep.id) { setSwipedId(null); return; } dispatch({ type: 'SET_ACTIVE_EPISODE', id: ep.id }); }}
+                      onClick={() => { if (swipedId === ep.id) { setSwipedId(null); return; } dispatch({ type: 'SET_ACTIVE_EPISODE', id: ep.id }); onClose?.(); }}
                       onTouchStart={e => handleTouchStart(ep.id, e)}
                       onTouchEnd={e => handleTouchEnd(ep.id, e)}
                     >

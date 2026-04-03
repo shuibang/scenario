@@ -2,6 +2,7 @@ import React, {
   useState, useEffect, useRef, useCallback, useMemo,
   forwardRef, useImperativeHandle,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { useApp } from '../store/AppContext';
 import { genId, now } from '../store/db';
 import { resolveSceneLabel, parseSceneContent } from '../utils/sceneResolver';
@@ -16,20 +17,28 @@ const DEFAULT_SYMBOLS = ['(E)', '(F)', 'Flashback', 'Insert', 'Ins.', 'Subtitle)
 // ─── Symbol Picker ────────────────────────────────────────────────────────────
 function SymbolPicker({ mobile = false, closeToken = 0, onOpen }) {
   const { state } = useApp();
-  const [open, setOpen] = useState(false);
+  // dropPos null = closed, { top, left } = open — 둘을 분리하지 않아 (0,0) 렌더 방지
+  const [dropPos, setDropPos] = useState(null);
   const [activeIdx, setActiveIdx] = useState(-1);
   const ref = useRef(null);
+  const btnRef = useRef(null);
+  const dropRef = useRef(null);
   const customSymbols = state.stylePreset?.customSymbols || [];
   const allSymbols = [...DEFAULT_SYMBOLS, ...customSymbols];
+  const open = dropPos !== null;
 
   // 외부에서 닫기 요청 (closeToken 변경)
   useEffect(() => {
-    if (closeToken > 0) setOpen(false);
+    if (closeToken > 0) setDropPos(null);
   }, [closeToken]);
 
   useEffect(() => {
     if (!open) { setActiveIdx(-1); return; }
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const handler = (e) => {
+      const inBtn = ref.current?.contains(e.target);
+      const inDrop = dropRef.current?.contains(e.target);
+      if (!inBtn && !inDrop) setDropPos(null);
+    };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
@@ -39,12 +48,21 @@ function SymbolPicker({ mobile = false, closeToken = 0, onOpen }) {
     const onKey = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.code === 'Digit6') {
         e.preventDefault();
-        setOpen(v => !v);
+        if (open) {
+          setDropPos(null);
+        } else {
+          const rect = btnRef.current?.getBoundingClientRect();
+          if (rect) {
+            const dropW = 200;
+            const left = Math.min(rect.left, Math.max(0, window.innerWidth - dropW));
+            setDropPos({ top: rect.bottom + 4, left });
+          }
+        }
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [open]);
 
   // 방향키 / Enter / Escape 처리
   useEffect(() => {
@@ -67,7 +85,7 @@ function SymbolPicker({ mobile = false, closeToken = 0, onOpen }) {
         insertSymbol(allSymbols[activeIdx]);
       } else if (e.key === 'Escape') {
         e.preventDefault();
-        setOpen(false);
+        setDropPos(null);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -75,7 +93,7 @@ function SymbolPicker({ mobile = false, closeToken = 0, onOpen }) {
   }, [open, activeIdx, allSymbols]);
 
   const insertSymbol = (sym) => {
-    setOpen(false);
+    setDropPos(null);
     const surface = document.querySelector('[data-editor-surface]');
     if (!surface) return;
     surface.focus();
@@ -93,7 +111,19 @@ function SymbolPicker({ mobile = false, closeToken = 0, onOpen }) {
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
       <button
-        onMouseDown={e => { e.preventDefault(); if (!open) onOpen?.(); setOpen(v => !v); }}
+        ref={btnRef}
+        onMouseDown={e => {
+          e.preventDefault();
+          if (open) {
+            setDropPos(null);
+          } else {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const dropW = 200; // minWidth 여유
+            const left = Math.min(rect.left, Math.max(0, window.innerWidth - dropW));
+            setDropPos({ top: rect.bottom + 4, left });
+            onOpen?.();
+          }
+        }}
         style={mobile ? {
           flex: '0 0 auto', width: 44, fontSize: 12, padding: '5px 0',
           borderRadius: 6, textAlign: 'center',
@@ -110,31 +140,35 @@ function SymbolPicker({ mobile = false, closeToken = 0, onOpen }) {
           marginLeft: 4,
         }}
       >기타</button>
-      {open && (
+      {open && createPortal(
         <div
+          ref={dropRef}
           style={{
-            position: 'absolute', top: '100%', left: 0, zIndex: 200, marginTop: '4px',
-            background: 'var(--c-card)', border: '1px solid var(--c-border)',
-            borderRadius: '0.5rem', padding: '6px', display: 'flex', flexWrap: 'wrap',
-            gap: '4px', minWidth: '180px', maxWidth: '280px', boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+            position: 'fixed', top: dropPos.top, left: dropPos.left, zIndex: 9999,
+            background: 'var(--c-tag)', border: '1px solid var(--c-border4)',
+            borderRadius: '0.5rem', overflow: 'hidden',
+            minWidth: '180px', maxWidth: '280px', boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
           }}
         >
-          {allSymbols.map((sym, i) => (
-            <button
-              key={sym}
-              onMouseDown={e => { e.preventDefault(); insertSymbol(sym); }}
-              onMouseEnter={() => setActiveIdx(i)}
-              onMouseLeave={() => setActiveIdx(-1)}
-              className="text-xs px-2 py-1 rounded"
-              style={{
-                background: activeIdx === i ? 'var(--c-hover)' : 'var(--c-tag)',
-                color: activeIdx === i ? 'var(--c-accent)' : 'var(--c-text3)',
-                border: `1px solid ${activeIdx === i ? 'var(--c-accent)' : 'var(--c-border3)'}`,
-                cursor: 'pointer', whiteSpace: 'nowrap',
-              }}
-            >{sym}</button>
-          ))}
-        </div>
+          <div style={{ padding: '4px 12px 6px', fontSize: 10, fontWeight: 600, color: 'var(--c-text5)', borderBottom: '1px solid var(--c-border)' }}>기타 삽입</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 0, maxHeight: 192, overflowY: 'auto' }}>
+            {allSymbols.map((sym, i) => (
+              <div
+                key={sym}
+                onMouseDown={e => { e.preventDefault(); insertSymbol(sym); }}
+                onMouseEnter={() => setActiveIdx(i)}
+                onMouseLeave={() => setActiveIdx(-1)}
+                style={{
+                  padding: '6px 12px', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap',
+                  color: activeIdx === i ? 'var(--c-text)' : 'var(--c-text2)',
+                  background: activeIdx === i ? 'var(--c-active)' : 'transparent',
+                  width: '50%', boxSizing: 'border-box',
+                }}
+              >{sym}</div>
+            ))}
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -555,13 +589,28 @@ function CharPickerOverlay({ anchor, projectChars, onSelect, onClose, mobile = f
   const [activeIdx, setActiveIdx] = useState(-1);
   const inputRef = useRef(null);
   const listRef = useRef(null);
+  const containerRef = useRef(null);
+  // ref로 콜백 안정화 — inline arrow가 바뀌어도 effect 재실행 없음
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
 
   useEffect(() => { setTimeout(() => inputRef.current?.focus(), 30); }, []);
   useEffect(() => {
-    const handler = (e) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [onClose]);
+    const onKey = (e) => { if (e.key === 'Escape') onCloseRef.current(); };
+    const onMouseDown = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) onCloseRef.current();
+    };
+    document.addEventListener('keydown', onKey);
+    // setTimeout 0: 열리는 mousedown 이벤트가 끝난 뒤에 핸들러 등록
+    const t = setTimeout(() => document.addEventListener('mousedown', onMouseDown), 0);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      clearTimeout(t);
+      document.removeEventListener('mousedown', onMouseDown);
+    };
+  }, []); // 마운트 1회만 — onClose/onSelect는 ref로 접근
 
   const filtered = (query
     ? projectChars.filter(c => (c.name || '').includes(query) || (c.givenName || '').includes(query))
@@ -575,16 +624,20 @@ function CharPickerOverlay({ anchor, projectChars, onSelect, onClose, mobile = f
     items[activeIdx]?.scrollIntoView({ block: 'nearest' });
   }, [activeIdx]);
 
-  return (
+  return createPortal(
     <div
-      className="fixed z-[100] rounded shadow-xl overflow-hidden"
-      style={mobile ? {
-        bottom: 60, left: 8, right: 8,
-        background: 'var(--c-tag)', border: '1px solid var(--c-border4)',
-      } : {
-        top: anchor.top, left: anchor.left,
-        background: 'var(--c-tag)', border: '1px solid var(--c-border4)',
-        minWidth: '180px',
+      ref={containerRef}
+      style={{
+        position: 'fixed', zIndex: 9999, borderRadius: '0.5rem',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.2)', overflow: 'hidden',
+        ...(mobile ? {
+          bottom: 60, left: 8, right: 8,
+          background: 'var(--c-tag)', border: '1px solid var(--c-border4)',
+        } : {
+          top: anchor.top, left: anchor.left,
+          background: 'var(--c-tag)', border: '1px solid var(--c-border4)',
+          minWidth: '180px',
+        }),
       }}
     >
       <div className="px-2 py-1.5" style={{ borderBottom: '1px solid var(--c-border)' }}>
@@ -609,7 +662,7 @@ function CharPickerOverlay({ anchor, projectChars, onSelect, onClose, mobile = f
               }
             }
           }}
-          placeholder="인물명 검색 / Enter로 닫기"
+          placeholder="인물명 검색"
           className="w-full text-sm px-1 outline-none bg-transparent"
           style={{ color: 'var(--c-text)', caretColor: 'var(--c-accent)' }}
           spellCheck={false}
@@ -640,7 +693,8 @@ function CharPickerOverlay({ anchor, projectChars, onSelect, onClose, mobile = f
           <div className="px-3 py-2 text-xs" style={{ color: 'var(--c-text6)' }}>등록된 인물 없음</div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -1003,7 +1057,8 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
   const activeEpisodeIdRef = useRef(null);
   const scenesRef = useRef([]);
   const prevEpisodeIdRef = useRef(null);
-  const [charPickerState, setCharPickerState] = useState(null); // { blockId, top, left }
+  const [charPickerState, setCharPickerState] = useState(null); // { blockId, top, left, fromDialogue? }
+  const [charPickerNoSel, setCharPickerNoSel] = useState(null); // { top, left } — 선택안함 표시
   const [charSuggestState, setCharSuggestState] = useState(null); // { blockId, blockEl, charName }
   const [suggestEnabled, setSuggestEnabled] = useState(() => localStorage.getItem(CHAR_SUGGEST_KEY) !== 'off');
   const [pasteToast, setPasteToast] = useState(null);
@@ -1269,8 +1324,30 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
   const applyBlockType = useCallback((type) => {
     surfaceApiRef.current?.applyBlockType(type);
     setPendingBlockType(null);
-    // dialogue로 바꿀 때는 피커가 새로 열리므로 닫지 않음
-    if (type !== 'dialogue') setCharPickerState(null);
+    setCharCheckPicker(null);
+    setSceneRefPicker(null);
+    setSymbolPickerCloseToken(t => t + 1);
+    setCharPickerState(null);
+    if (type === 'dialogue') {
+      requestAnimationFrame(() => {
+        const surface = document.querySelector('[data-editor-surface]');
+        const sel = window.getSelection();
+        if (!surface) return;
+        let node = sel?.rangeCount ? sel.getRangeAt(0).startContainer : null;
+        if (node?.nodeType === Node.TEXT_NODE) node = node.parentElement;
+        while (node && node !== surface) {
+          if (node.dataset?.blockId) {
+            const rect = node.getBoundingClientRect();
+            // rect.bottom <= 60이면 아직 렌더 안 됐거나 툴바 위 → 열지 않음
+            if (rect.bottom > 60) {
+              setCharPickerState({ blockId: node.dataset.blockId, top: rect.bottom + 4, left: rect.left, fromDialogue: true });
+            }
+            return;
+          }
+          node = node.parentElement;
+        }
+      });
+    }
   }, []);
 
   // ── flushSave: 즉시 저장 (자동저장 타이머 무시)
@@ -1348,17 +1425,26 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
 
   const handleCharCheckRef = useRef(null);
 
-  // ── Esc/Enter로 씬연결 피커 닫기
+  const sceneRefPickerRef = useRef(null);
+
+  // ── 씬연결 피커: Esc/외부클릭으로 닫기
   useEffect(() => {
     if (!sceneRefPicker) return;
     const onKey = (e) => {
-      if (e.key === 'Escape' || e.key === 'Enter') {
-        e.preventDefault();
+      if (e.key === 'Escape') { e.preventDefault(); setSceneRefPicker(null); }
+    };
+    const onMouseDown = (e) => {
+      if (sceneRefPickerRef.current && !sceneRefPickerRef.current.contains(e.target)) {
         setSceneRefPicker(null);
       }
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    const t = setTimeout(() => document.addEventListener('mousedown', onMouseDown), 0);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      clearTimeout(t);
+      document.removeEventListener('mousedown', onMouseDown);
+    };
   }, [sceneRefPicker]);
 
   // ── Ctrl+Shift+1/2/3/4 단축키 + 상단바 저장 버튼 이벤트
@@ -1423,6 +1509,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
   const handleCharCheck = useCallback(() => {
     const sceneId = getCurrentSceneId();
     setSceneRefPicker(null);
+    setCharPickerState(null);
     setSymbolPickerCloseToken(t => t + 1);
     if (hasKeyboard) {
       setCharCheckPicker({ sceneId, mobile: true });
@@ -1692,6 +1779,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
       <div className="px-6 py-2 flex items-center gap-2 text-xs shrink-0" style={{ borderBottom: '1px solid var(--c-border2)' }}>
         <span style={{ color: 'var(--c-text3)' }}>{episode?.number}회 {episode?.title || ''}</span>
         <div data-tour-id="scene-block-btns" className="flex gap-1 ml-2">
+          {!hasKeyboard && (<>
           {BLOCK_TYPE_BTNS.map(({ type, label, title }) => {
             const isPending = pendingBlockType === type;
             const isActive  = !isPending && activeBlockType === type;
@@ -1703,20 +1791,17 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
                 style={{
                   flexShrink: 0, width: BTN_W, textAlign: 'center',
                   fontSize: 'clamp(10px, 2.8vw, 13px)',
-                  padding: '4px 0',
-                  borderRadius: 6,
+                  padding: '4px 0', borderRadius: 6,
                   border: `1px solid ${isPending || isActive ? 'var(--c-accent)' : 'var(--c-border3)'}`,
                   background: isPending ? 'var(--c-accent)' : 'transparent',
                   color: isPending ? '#fff' : isActive ? 'var(--c-accent)' : 'var(--c-text4)',
                   fontWeight: isActive ? '600' : 'normal',
-                  cursor: 'pointer',
-                  WebkitTapHighlightColor: 'transparent',
+                  cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
                   transition: 'background 0.1s, color 0.1s, border-color 0.1s',
                 }}
               >{label}</button>
             );
           })}
-          {!hasKeyboard && (<>
           <button
             ref={charCheckBtnRef}
             title="등장 — 현재 씬 등장인물 추가 (Ctrl+Shift+4)"
@@ -1734,6 +1819,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
             onMouseDown={e => {
               e.preventDefault();
               setCharCheckPicker(null);
+              setCharPickerState(null);
               setSymbolPickerCloseToken(t => t + 1);
               const surface = document.querySelector('[data-editor-surface]');
               const sel = window.getSelection();
@@ -1762,7 +1848,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
           >연결</button>
           <SymbolPicker
             closeToken={symbolPickerCloseToken}
-            onOpen={() => { setCharCheckPicker(null); setSceneRefPicker(null); }}
+            onOpen={() => { setCharCheckPicker(null); setSceneRefPicker(null); setCharPickerState(null); }}
           />
           </>)}
         </div>
@@ -1931,8 +2017,27 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
             );
             setCharPickerState(null);
           }}
-          onClose={() => setCharPickerState(null)}
+          onClose={() => {
+            if (charPickerState.fromDialogue) {
+              const { top, left } = charPickerState;
+              setCharPickerNoSel({ top, left });
+              setTimeout(() => setCharPickerNoSel(null), 1800);
+            }
+            setCharPickerState(null);
+          }}
         />
+      )}
+
+      {/* 선택안함 레이블 */}
+      {charPickerNoSel && createPortal(
+        <div style={{
+          position: 'fixed', top: charPickerNoSel.top, left: charPickerNoSel.left,
+          zIndex: 9999, padding: '4px 10px', borderRadius: 6,
+          background: 'var(--c-tag)', border: '1px solid #f87171',
+          color: '#ef4444', fontSize: 12, fontWeight: 600,
+          pointerEvents: 'none',
+        }}>선택안함</div>,
+        document.body
       )}
 
       {/* 등장체크 Char Picker */}
@@ -1986,16 +2091,20 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
             sel.addRange(range);
           });
         };
-        return (
+        return createPortal(
           <div
-            className="fixed z-[100] rounded shadow-xl"
-            style={sceneRefPicker.mobile ? {
-              bottom: 60, left: 8, right: 8,
-              background: 'var(--c-tag)', border: '1px solid var(--c-border4)',
-            } : {
-              top: sceneRefPicker.top, left: sceneRefPicker.left,
-              background: 'var(--c-tag)', border: '1px solid var(--c-border4)',
-              minWidth: '220px',
+            ref={sceneRefPickerRef}
+            style={{
+              position: 'fixed', zIndex: 9999, borderRadius: '0.5rem',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
+              ...(sceneRefPicker.mobile ? {
+                bottom: 60, left: 8, right: 8,
+                background: 'var(--c-tag)', border: '1px solid var(--c-border4)',
+              } : {
+                top: sceneRefPicker.top, left: sceneRefPicker.left,
+                background: 'var(--c-tag)', border: '1px solid var(--c-border4)',
+                minWidth: '220px',
+              }),
             }}
           >
             <div className="px-3 py-1.5 text-[10px] font-semibold" style={{ color: 'var(--c-text5)', borderBottom: '1px solid var(--c-border)' }}>
@@ -2020,7 +2129,8 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
                 );
               })}
             </div>
-          </div>
+          </div>,
+          document.body
         );
       })()}
 
@@ -2070,7 +2180,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
       {/* 모바일 플로팅 툴바 — 소프트 키보드가 올라와 있을 때 */}
       {hasKeyboard && (
         <div style={{
-          position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 400,
+          position: 'fixed', bottom: 56, left: 0, right: 0, zIndex: 400,
           display: 'flex', alignItems: 'center', gap: 6,
           padding: '6px 12px',
           background: 'var(--c-header)',
@@ -2115,6 +2225,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
             onMouseDown={e => {
               e.preventDefault();
               setCharCheckPicker(null);
+              setCharPickerState(null);
               setSymbolPickerCloseToken(t => t + 1);
               const surface = document.querySelector('[data-editor-surface]');
               const sel = window.getSelection();
@@ -2140,7 +2251,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
           <SymbolPicker
             mobile
             closeToken={symbolPickerCloseToken}
-            onOpen={() => { setCharCheckPicker(null); setSceneRefPicker(null); }}
+            onOpen={() => { setCharCheckPicker(null); setSceneRefPicker(null); setCharPickerState(null); }}
           />
         </div>
       )}

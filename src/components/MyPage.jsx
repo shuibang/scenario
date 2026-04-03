@@ -281,7 +281,8 @@ function StatsTab() {
           {exportMsg && <span className="text-xs" style={{ color: 'var(--c-accent2)' }}>{exportMsg}</span>}
         </div>
       )}
-      <div className="grid grid-cols-3 gap-3 mb-6">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      <div className="grid grid-cols-3 gap-3">
         <div style={cardStyle}>
           <div style={labelStyle}>총 작업시간</div>
           <div style={valStyle}>{fmt(totalSec)}</div>
@@ -296,7 +297,7 @@ function StatsTab() {
         </div>
       </div>
 
-      <div style={{ ...cardStyle, marginBottom: '1.5rem' }}>
+      <div style={cardStyle}>
         <div style={labelStyle}>최근 30일 활동</div>
         <div className="flex items-end gap-0.5 mt-3" style={{ height: '48px' }}>
           {last30.map(d => {
@@ -324,7 +325,7 @@ function StatsTab() {
       </div>
 
       {projectStats.length > 0 && (
-        <div style={{ ...cardStyle, marginBottom: '1.5rem' }}>
+        <div style={cardStyle}>
           <div style={labelStyle}>작품별 작업시간</div>
           <div className="mt-3 space-y-2">
             {projectStats.map(({ project, sec, epCount }) => (
@@ -359,6 +360,8 @@ function StatsTab() {
           </div>
         </div>
       )}
+
+      </div>{/* end gap wrapper */}
 
       {workTimeLogs.length === 0 && (
         <div className="text-center py-12 text-sm" style={{ color: 'var(--c-text5)' }}>
@@ -447,8 +450,8 @@ function FontManagementSection() {
 
   return (
     <div
-      className="p-4 rounded-lg"
-      style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)' }}
+      className="rounded-lg"
+      style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)', padding: '12px 16px' }}
     >
       <div className="flex items-center justify-between mb-3">
         <div className="text-sm font-medium" style={{ color: 'var(--c-text)' }}>사용자 폰트 관리</div>
@@ -577,7 +580,7 @@ function SettingsTab() {
   const labelStyle = { fontSize: '11px', color: 'var(--c-text5)', marginBottom: '2px', display: 'block' };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 10 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 5 }}>
 
       {/* 사용 가이드 다시 보기 */}
       <div
@@ -1028,7 +1031,7 @@ export default function MyPage() {
         {/* 콘텐츠 */}
         <div className="flex-1 overflow-y-auto">
           <div className={isMobile ? '' : 'max-w-2xl mx-auto pt-16 pb-10 px-10'}
-               style={isMobile ? { padding: '24px 20px', paddingBottom: 'calc(clamp(52px, 14vw, 64px) + 46dvh + 16px)' } : {}}>
+               style={isMobile ? { padding: '24px 20px', paddingBottom: 'calc((clamp(52px, 14vw, 64px) + 46dvh + 16px) / 4)' } : {}}>
             {activeTab === 'stats'      && <StatsTab />}
             {activeTab === 'settings'   && <SettingsTab />}
             {activeTab === 'qa'         && <QnATab />}

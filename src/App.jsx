@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import LandingPage from './components/LandingPage';
 import { AppProvider, useApp } from './store/AppContext';
 import {
   FONTS,
@@ -1066,12 +1067,29 @@ function LogShareView() {
   );
 }
 
+// ─── LandingPreview — 디자인 확인용 (#preview-landing) ────────────────────────
+function LandingPreview() {
+  useEffect(() => {
+    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    document.getElementById('root').dataset.theme = isDark ? 'dark' : 'light';
+  }, []);
+  return (
+    <LandingPage
+      onStart={() => { window.location.hash = ''; window.location.reload(); }}
+      onLogin={() => { window.location.hash = ''; window.location.reload(); }}
+    />
+  );
+}
+
 export default function App() {
   if (window.location.hash.startsWith('#review=')) {
     return <SharedReviewView />;
   }
   if (window.location.hash.startsWith('#log=')) {
     return <LogShareView />;
+  }
+  if (window.location.hash === '#preview-landing') {
+    return <LandingPreview />;
   }
   return (
     <AppProvider>
