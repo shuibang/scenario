@@ -834,7 +834,7 @@ function Shell() {
         className="mobile-layout w-screen flex flex-col overflow-hidden"
         style={{
           background: 'var(--c-bg)',
-          height: '100dvh',
+          height: '100svh',
           paddingTop: 'env(safe-area-inset-top, 0px)',
         }}
       >
