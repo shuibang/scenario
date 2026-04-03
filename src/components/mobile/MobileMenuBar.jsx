@@ -53,10 +53,12 @@ export default function MobileMenuBar({ onSave, onPrintPreview, WorkTimer }) {
           >☰</button>
           {menuOpen && (
             <div style={{
-              position: 'absolute', top: 'calc(100% + 4px)', left: 0,
+              position: 'fixed', top: 'calc(var(--mobile-header-h, 44px) + 4px)', left: 14,
               background: 'var(--c-panel)', border: '1px solid var(--c-border)',
               borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
-              zIndex: 300, minWidth: 180, padding: '6px 0',
+              zIndex: 300, minWidth: 200,
+              maxHeight: 'calc(100dvh - var(--mobile-header-h, 44px) - 24px)',
+              overflowY: 'auto', padding: '6px 0',
             }}>
               <button style={dropItemStyle} onClick={() => setMenuOpen(false)}>로그인 준비 중</button>
               <div style={{ height: 1, background: 'var(--c-border)', margin: '4px 0' }} />
