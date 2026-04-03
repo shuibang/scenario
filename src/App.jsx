@@ -191,9 +191,20 @@ function WorkTimer({ projectId, documentId, onComplete }) {
   }, []);
 
   useEffect(() => {
-    const events = ['keydown', 'mousedown', 'mousemove', 'scroll', 'dragstart'];
+    const events = ['keydown', 'mousedown', 'mousemove', 'scroll', 'dragstart', 'touchstart'];
     events.forEach(e => window.addEventListener(e, resetIdle, { passive: true }));
     resetIdle();
+
+    // 창 포커스를 잃거나 탭이 숨겨지면 즉시 정지
+    const pause = () => {
+      activeRef.current = false;
+      clearTimeout(idleTimer.current);
+    };
+    window.addEventListener('blur', pause);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) pause();
+    });
+
     tickTimer.current = setInterval(() => {
       if (activeRef.current) {
         elapsedRef.current += 1;
@@ -202,9 +213,9 @@ function WorkTimer({ projectId, documentId, onComplete }) {
     }, 1000);
     return () => {
       events.forEach(e => window.removeEventListener(e, resetIdle));
+      window.removeEventListener('blur', pause);
       clearTimeout(idleTimer.current);
       clearInterval(tickTimer.current);
-      // 확정 로그는 작업완료 버튼 클릭 시에만 저장 (cleanup 자동 저장 없음)
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, documentId]);

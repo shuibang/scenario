@@ -14,13 +14,18 @@ const CHAR_SUGGEST_KEY = 'drama_charSuggestInAction';
 const DEFAULT_SYMBOLS = ['(E)', '(F)', 'Flashback', 'Insert', 'Ins.', 'Subtitle)', 'S.T.', '(N)', 'N.A.'];
 
 // ─── Symbol Picker ────────────────────────────────────────────────────────────
-function SymbolPicker() {
+function SymbolPicker({ mobile = false, closeToken = 0, onOpen }) {
   const { state } = useApp();
   const [open, setOpen] = useState(false);
   const [activeIdx, setActiveIdx] = useState(-1);
   const ref = useRef(null);
   const customSymbols = state.stylePreset?.customSymbols || [];
   const allSymbols = [...DEFAULT_SYMBOLS, ...customSymbols];
+
+  // 외부에서 닫기 요청 (closeToken 변경)
+  useEffect(() => {
+    if (closeToken > 0) setOpen(false);
+  }, [closeToken]);
 
   useEffect(() => {
     if (!open) { setActiveIdx(-1); return; }
@@ -88,11 +93,22 @@ function SymbolPicker() {
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
       <button
-        onMouseDown={e => { e.preventDefault(); setOpen(v => !v); }}
-        className="px-2 py-0.5 rounded text-xs ml-1"
-        style={{ color: 'var(--c-text3)', border: '1px solid var(--c-border3)', background: 'transparent', cursor: 'pointer' }}
-        onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-hover)'; }}
-        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+        onMouseDown={e => { e.preventDefault(); if (!open) onOpen?.(); setOpen(v => !v); }}
+        style={mobile ? {
+          flex: '0 0 auto', width: 44, fontSize: 12, padding: '5px 0',
+          borderRadius: 6, textAlign: 'center',
+          border: '1px solid var(--c-border3)', background: 'transparent',
+          color: 'var(--c-text4)', cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+        } : {
+          flexShrink: 0, width: 40, textAlign: 'center',
+          fontSize: 'clamp(10px, 2.8vw, 13px)',
+          padding: '4px 0', borderRadius: 6,
+          border: '1px solid var(--c-border3)', background: 'transparent',
+          color: 'var(--c-text4)', cursor: 'pointer',
+          WebkitTapHighlightColor: 'transparent',
+          transition: 'background 0.1s, color 0.1s, border-color 0.1s',
+          marginLeft: 4,
+        }}
       >기타</button>
       {open && (
         <div
@@ -534,7 +550,7 @@ function SceneRefDropdown({ query, scenes, onSelect, onClose }) {
 }
 
 // ─── CharPickerOverlay ────────────────────────────────────────────────────────
-function CharPickerOverlay({ anchor, projectChars, onSelect, onClose }) {
+function CharPickerOverlay({ anchor, projectChars, onSelect, onClose, mobile = false }) {
   const [query, setQuery] = useState('');
   const [activeIdx, setActiveIdx] = useState(-1);
   const inputRef = useRef(null);
@@ -562,7 +578,10 @@ function CharPickerOverlay({ anchor, projectChars, onSelect, onClose }) {
   return (
     <div
       className="fixed z-[100] rounded shadow-xl overflow-hidden"
-      style={{
+      style={mobile ? {
+        bottom: 60, left: 8, right: 8,
+        background: 'var(--c-tag)', border: '1px solid var(--c-border4)',
+      } : {
         top: anchor.top, left: anchor.left,
         background: 'var(--c-tag)', border: '1px solid var(--c-border4)',
         minWidth: '180px',
@@ -988,10 +1007,12 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
   const [charSuggestState, setCharSuggestState] = useState(null); // { blockId, blockEl, charName }
   const [suggestEnabled, setSuggestEnabled] = useState(() => localStorage.getItem(CHAR_SUGGEST_KEY) !== 'off');
   const [pasteToast, setPasteToast] = useState(null);
-  const [sceneRefPicker, setSceneRefPicker] = useState(null); // { top, left, insertAfterId }
+  const [sceneRefPicker, setSceneRefPicker] = useState(null); // { top, left, insertAfterId, mobile }
   const [pendingBlockType, setPendingBlockType] = useState(null); // for mobile / no-focus toolbar clicks
   const [activeBlockType, setActiveBlockType] = useState(null);  // 현재 커서의 블록 타입 (툴바 하이라이트)
-  const [charCheckPicker, setCharCheckPicker] = useState(null); // { sceneId, top, left }
+  const [charCheckPicker, setCharCheckPicker] = useState(null); // { sceneId, top, left, mobile }
+  const [symbolPickerCloseToken, setSymbolPickerCloseToken] = useState(0);
+  const [hasKeyboard, setHasKeyboard] = useState(false); // 소프트/물리 키보드 감지 — useCallback deps에서 참조하므로 여기서 선언
   const charCheckBtnRef = useRef(null);
   const editorScrollRef = useRef(null);
 
@@ -1401,9 +1422,15 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
   // ── 등장체크: open char picker, add selected character to current scene's characterIds ─
   const handleCharCheck = useCallback(() => {
     const sceneId = getCurrentSceneId();
-    const rect = charCheckBtnRef.current?.getBoundingClientRect();
-    setCharCheckPicker({ sceneId, top: rect ? rect.bottom + 4 : 60, left: rect ? rect.left : 0 });
-  }, [getCurrentSceneId]);
+    setSceneRefPicker(null);
+    setSymbolPickerCloseToken(t => t + 1);
+    if (hasKeyboard) {
+      setCharCheckPicker({ sceneId, mobile: true });
+    } else {
+      const rect = charCheckBtnRef.current?.getBoundingClientRect();
+      setCharCheckPicker({ sceneId, top: rect ? rect.bottom + 4 : 60, left: rect ? rect.left : 0, mobile: false });
+    }
+  }, [getCurrentSceneId, hasKeyboard]);
   handleCharCheckRef.current = handleCharCheck;
 
   const handleCharCheckSelect = useCallback((char) => {
@@ -1602,15 +1629,20 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
   const editorLineHeight = stylePreset?.lineHeight ?? 1.6;
   const { cssStack: editorFontFamily } = resolveFont(stylePreset, 'editor');
 
-  // 키보드 감지 (모바일 소프트 키보드 또는 물리 키보드)
-  const [hasKeyboard, setHasKeyboard] = useState(false);
+  // 키보드 감지 — 모바일(<768px)에서만 활성화
   useEffect(() => {
     const check = () => {
       if (!window.visualViewport) return;
-      setHasKeyboard(window.visualViewport.height / screen.height < 0.75);
+      const isMobileWidth = window.innerWidth < 768;
+      setHasKeyboard(isMobileWidth && window.visualViewport.height / screen.height < 0.75);
     };
+    check(); // 마운트 시 즉시 확인
     window.visualViewport?.addEventListener('resize', check);
-    return () => window.visualViewport?.removeEventListener('resize', check);
+    window.visualViewport?.addEventListener('scroll', check);
+    return () => {
+      window.visualViewport?.removeEventListener('resize', check);
+      window.visualViewport?.removeEventListener('scroll', check);
+    };
   }, []);
 
   // 커서 중앙 자동스크롤
@@ -1655,7 +1687,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
   }
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col" style={{ background: 'var(--c-bg)' }}>
+    <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, display: 'flex', flexDirection: 'column', background: 'var(--c-bg)' }}>
       {/* Toolbar */}
       <div className="px-6 py-2 flex items-center gap-2 text-xs shrink-0" style={{ borderBottom: '1px solid var(--c-border2)' }}>
         <span style={{ color: 'var(--c-text3)' }}>{episode?.number}회 {episode?.title || ''}</span>
@@ -1684,6 +1716,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
               >{label}</button>
             );
           })}
+          {!hasKeyboard && (<>
           <button
             ref={charCheckBtnRef}
             title="등장 — 현재 씬 등장인물 추가 (Ctrl+Shift+4)"
@@ -1700,6 +1733,8 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
             title="연결 — 현재 위치에 다른 씬 참조 삽입 (Ctrl+Shift+5)"
             onMouseDown={e => {
               e.preventDefault();
+              setCharCheckPicker(null);
+              setSymbolPickerCloseToken(t => t + 1);
               const surface = document.querySelector('[data-editor-surface]');
               const sel = window.getSelection();
               let insertAfterId = null;
@@ -1715,7 +1750,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
               const btn = e.currentTarget;
               const rect = anchorEl?.getBoundingClientRect() || btn.getBoundingClientRect();
               const savedRange = sel?.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
-              setSceneRefPicker({ top: rect.bottom + 4, left: rect.left, insertAfterId, savedRange });
+              setSceneRefPicker({ top: rect.bottom + 4, left: rect.left, insertAfterId, savedRange, mobile: false });
             }}
             style={{
               flexShrink: 0, width: BTN_W, textAlign: 'center',
@@ -1725,7 +1760,11 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
               WebkitTapHighlightColor: 'transparent', marginLeft: 4,
             }}
           >연결</button>
-          <SymbolPicker />
+          <SymbolPicker
+            closeToken={symbolPickerCloseToken}
+            onOpen={() => { setCharCheckPicker(null); setSceneRefPicker(null); }}
+          />
+          </>)}
         </div>
         <span className="ml-auto flex items-center gap-3">
           {brokenSceneRefs.length > 0 && (
@@ -1794,7 +1833,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
       {/* Editor */}
       <div
         ref={editorScrollRef}
-        className="flex-1 overflow-y-auto relative"
+        className="flex-1 min-h-0 overflow-y-auto relative"
         onClick={(e) => {
           const inSurface = !!e.target.closest('[data-editor-surface]');
           if (inSurface) {
@@ -1903,6 +1942,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
           projectChars={projectChars}
           onSelect={handleCharCheckSelect}
           onClose={() => setCharCheckPicker(null)}
+          mobile={charCheckPicker.mobile}
         />
       )}
 
@@ -1949,7 +1989,10 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
         return (
           <div
             className="fixed z-[100] rounded shadow-xl"
-            style={{
+            style={sceneRefPicker.mobile ? {
+              bottom: 60, left: 8, right: 8,
+              background: 'var(--c-tag)', border: '1px solid var(--c-border4)',
+            } : {
               top: sceneRefPicker.top, left: sceneRefPicker.left,
               background: 'var(--c-tag)', border: '1px solid var(--c-border4)',
               minWidth: '220px',
@@ -2071,22 +2114,21 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
           <button
             onMouseDown={e => {
               e.preventDefault();
+              setCharCheckPicker(null);
+              setSymbolPickerCloseToken(t => t + 1);
               const surface = document.querySelector('[data-editor-surface]');
               const sel = window.getSelection();
               let insertAfterId = null;
-              let anchorEl = null;
               if (sel?.rangeCount && surface) {
                 let node = sel.getRangeAt(0).startContainer;
                 node = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
                 while (node && node !== surface) {
-                  if (node.dataset?.blockId) { anchorEl = node; insertAfterId = node.dataset.blockId; break; }
+                  if (node.dataset?.blockId) { insertAfterId = node.dataset.blockId; break; }
                   node = node.parentElement;
                 }
               }
-              const btn = e.currentTarget;
-              const rect = anchorEl?.getBoundingClientRect() || btn.getBoundingClientRect();
               const savedRange = sel?.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
-              setSceneRefPicker({ top: rect.top - 160, left: rect.left, insertAfterId, savedRange });
+              setSceneRefPicker({ mobile: true, insertAfterId, savedRange });
             }}
             style={{
               flex: '0 0 auto', width: 44, fontSize: 12, padding: '5px 0',
@@ -2095,7 +2137,11 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
               color: 'var(--c-text4)', cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
             }}
           >연결</button>
-          <SymbolPicker />
+          <SymbolPicker
+            mobile
+            closeToken={symbolPickerCloseToken}
+            onOpen={() => { setCharCheckPicker(null); setSceneRefPicker(null); }}
+          />
         </div>
       )}
     </div>
