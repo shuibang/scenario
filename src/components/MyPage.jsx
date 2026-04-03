@@ -1028,7 +1028,8 @@ export default function MyPage() {
 
         {/* 콘텐츠 */}
         <div className="flex-1 overflow-y-auto">
-          <div className={isMobile ? 'px-4 pt-6 pb-10' : 'max-w-2xl mx-auto pt-16 pb-10 px-10'}>
+          <div className={isMobile ? 'px-4 pt-6' : 'max-w-2xl mx-auto pt-16 pb-10 px-10'}
+               style={isMobile ? { paddingBottom: 'calc(clamp(52px, 14vw, 64px) + 46dvh + 16px)' } : {}}>
             {activeTab === 'stats'      && <StatsTab />}
             {activeTab === 'settings'   && <SettingsTab />}
             {activeTab === 'qa'         && <QnATab />}

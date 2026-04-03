@@ -40,42 +40,15 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange }) 
     if (dy > 0 && open)  onToggle();
   };
 
-  // Keyboard detection: auto-collapse panel when software keyboard appears
-  const openRef   = useRef(open);
-  const toggleRef = useRef(onToggle);
-  openRef.current   = open;
-  toggleRef.current = onToggle;
-  const keyboardUpRef = useRef(false);
-  useEffect(() => {
-    if (!window.visualViewport) return;
-    let closeTimer = null;
-    const handler = () => {
-      const keyboardUp = (window.visualViewport.height / window.screen.height) < 0.75;
-      const wasUp = keyboardUpRef.current;
-      keyboardUpRef.current = keyboardUp;
-      clearTimeout(closeTimer);
-      // 키보드가 새로 올라올 때만 닫기 (이미 올라와 있던 경우는 무시)
-      if (keyboardUp && !wasUp) {
-        closeTimer = setTimeout(() => {
-          if (openRef.current && !document.activeElement?.closest('[data-bottom-panel]')) {
-            toggleRef.current();
-          }
-        }, 150);
-      }
-    };
-    window.visualViewport.addEventListener('resize', handler);
-    return () => {
-      window.visualViewport.removeEventListener('resize', handler);
-      clearTimeout(closeTimer);
-    };
-  }, []);
+  // fixed 패널이므로 키보드 자동닫힘 불필요
 
   const tabH = 'clamp(52px, 14vw, 64px)';
 
   return (
     <div
       style={{
-        flexShrink: 0,
+        position: 'fixed', bottom: 0, left: 0, right: 0,
+        zIndex: 100,
         borderTop: '1px solid var(--c-border)',
         background: 'var(--c-panel)',
         display: 'flex', flexDirection: 'column',
@@ -83,6 +56,7 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange }) 
         transition: 'height 0.25s ease',
         overflow: 'hidden',
         userSelect: 'none', WebkitUserSelect: 'none',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
       }}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}

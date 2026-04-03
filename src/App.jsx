@@ -848,10 +848,7 @@ function Shell() {
         <div data-tour-id="center-panel" className="flex-1 min-h-0 overflow-hidden">
           <CenterPanel scrollToSceneId={scrollToSceneId} onScrollHandled={() => setScrollToSceneId(null)} />
         </div>
-        {/* 광고: 하단 패널 닫혔을 때만 표시 */}
-        <div style={{ flexShrink: 0, overflow: 'hidden', height: mobileBottomOpen ? 0 : 'auto' }}>
-          <AdBanner slot="mobile-bottom" mobileHide={false} height={60} />
-        </div>
+        {/* 하단 패널: fixed로 항상 화면 아래 고정 */}
         <MobileBottomPanel
           open={mobileBottomOpen}
           onToggle={() => setMobileBottomOpen(v => !v)}
