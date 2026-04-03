@@ -26,8 +26,8 @@ const PLAN_DOCS = [
 
 const TAB_H    = 56;   // px — 탭바 고정 높이
 const OPEN_H   = 280;  // px — 열렸을 때 패널 전체 고정 높이
-const BANNER_H = 56;   // px — 하단 광고 고정 높이
-const CONTENT_H = OPEN_H - TAB_H - BANNER_H; // 콘텐츠 영역 = 168px
+const BANNER_H = 20;   // px — 하단 광고 고정 높이
+const CONTENT_H = OPEN_H - TAB_H - BANNER_H; // 콘텐츠 영역 = 204px
 
 export default function MobileBottomPanel({ open, onToggle, tab, onTabChange }) {
   const { state, dispatch } = useApp();

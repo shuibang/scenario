@@ -870,8 +870,8 @@ function Shell() {
           <CenterPanel scrollToSceneId={scrollToSceneId} onScrollHandled={() => setScrollToSceneId(null)} />
         </div>
         {/* 광고: 키보드 올라오거나 패널 열리면 숨김 */}
-        <div style={{ flexShrink: 0, height: (keyboardUp || mobileBottomOpen) ? 0 : 60, overflow: 'hidden', transition: 'height 0.2s ease' }}>
-          <AdBanner slot="mobile-bottom" mobileHide={false} height={60} />
+        <div style={{ flexShrink: 0, height: (keyboardUp || mobileBottomOpen) ? 0 : 20, overflow: 'hidden', transition: 'height 0.2s ease' }}>
+          <AdBanner slot="mobile-bottom" mobileHide={false} height={20} />
         </div>
         <MobileBottomPanel
           open={mobileBottomOpen}
