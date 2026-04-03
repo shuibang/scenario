@@ -38,7 +38,9 @@ export default function MobileMenuBar({ onSave, onPrintPreview, WorkTimer }) {
       <div style={{
         height: 'clamp(36px, 9vw, 44px)',
         display: 'grid', gridTemplateColumns: '1fr auto 1fr',
-        alignItems: 'center', padding: '0 14px',
+        alignItems: 'center',
+        paddingLeft: 'max(14px, env(safe-area-inset-left, 14px))',
+        paddingRight: 'max(14px, env(safe-area-inset-right, 14px))',
       }}>
         {/* Left: hamburger + dropdown */}
         <div style={{ position: 'relative' }} ref={menuRef}>
@@ -118,7 +120,9 @@ export default function MobileMenuBar({ onSave, onPrintPreview, WorkTimer }) {
       <div style={{
         height: 'clamp(32px, 9vw, 42px)',
         display: 'flex', alignItems: 'center',
-        padding: '0 12px', gap: 6,
+        paddingLeft: 'max(12px, env(safe-area-inset-left, 12px))',
+        paddingRight: 'max(12px, env(safe-area-inset-right, 12px))',
+        gap: 6,
         borderTop: '1px solid var(--c-border2)',
         overflowX: 'auto', scrollbarWidth: 'none',
       }}>

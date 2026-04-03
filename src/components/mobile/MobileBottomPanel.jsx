@@ -52,9 +52,10 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange }) 
         borderTop: '1px solid var(--c-border)',
         background: 'var(--c-panel)',
         display: 'flex', flexDirection: 'column',
-        height: open ? OPEN_H : TAB_H,
+        height: `calc(${open ? OPEN_H : TAB_H}px + env(safe-area-inset-bottom, 0px))`,
         transition: 'height 0.25s ease',
         overflow: 'hidden',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         userSelect: 'none', WebkitUserSelect: 'none',
       }}
       onTouchStart={handleTouchStart}

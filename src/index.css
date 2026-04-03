@@ -450,3 +450,11 @@ textarea {
   /* Page number footer — -n- at 15mm from bottom */
   @page { @bottom-center { content: "- " counter(page) " -"; font-size: 10pt; } }
 }
+
+
+/* ─── RichField (contenteditable) placeholder ─────────────────────────────── */
+[contenteditable][data-placeholder]:empty::before {
+  content: attr(data-placeholder);
+  color: var(--c-text6);
+  pointer-events: none;
+}

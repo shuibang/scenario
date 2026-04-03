@@ -835,9 +835,7 @@ function Shell() {
         style={{
           background: 'var(--c-bg)',
           height: '100dvh',
-          padding: '0 16px',
           paddingTop: 'env(safe-area-inset-top, 0px)',
-          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         }}
       >
         <MobileMenuBar
@@ -845,10 +843,15 @@ function Shell() {
           onPrintPreview={() => setPrintPreviewOpen(true)}
           WorkTimer={WorkTimer}
         />
-        <div data-tour-id="center-panel" className="flex-1 min-h-0 overflow-hidden">
+        <div data-tour-id="center-panel" className="flex-1 min-h-0 overflow-hidden"
+          style={{ paddingLeft: 'env(safe-area-inset-left, 0px)', paddingRight: 'env(safe-area-inset-right, 0px)' }}
+        >
           <CenterPanel scrollToSceneId={scrollToSceneId} onScrollHandled={() => setScrollToSceneId(null)} />
         </div>
-        {/* 하단 패널: fixed로 항상 화면 아래 고정 */}
+        {/* 콘텐츠 아래 광고 — 항상 마운트, 패널 열리면 height:0으로 숨김 */}
+        <div style={{ flexShrink: 0, height: mobileBottomOpen ? 0 : 60, overflow: 'hidden', transition: 'height 0.25s ease' }}>
+          <AdBanner slot="mobile-bottom" mobileHide={false} height={60} />
+        </div>
         <MobileBottomPanel
           open={mobileBottomOpen}
           onToggle={() => setMobileBottomOpen(v => !v)}
