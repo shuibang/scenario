@@ -581,8 +581,8 @@ function SettingsTab() {
 
       {/* 사용 가이드 다시 보기 */}
       <div
-        className="flex items-start gap-4 p-4 rounded-lg"
-        style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)' }}
+        className="flex items-start gap-4 rounded-lg"
+        style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)', padding: '12px 16px' }}
       >
         <div className="flex-1">
           <div className="text-sm font-medium mb-0.5" style={{ color: 'var(--c-text)' }}>사용 가이드</div>
@@ -601,8 +601,8 @@ function SettingsTab() {
 
       {/* 공용 PC 모드 */}
       <div
-        className="flex items-start gap-4 p-4 rounded-lg"
-        style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)' }}
+        className="flex items-start gap-4 rounded-lg"
+        style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)', padding: '12px 16px' }}
       >
         <div className="flex-1">
           <div className="text-sm font-medium mb-0.5" style={{ color: 'var(--c-text)' }}>공용 PC 모드</div>
@@ -632,8 +632,8 @@ function SettingsTab() {
 
       {/* 설계 도구 설정 */}
       <div
-        className="p-4 rounded-lg"
-        style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)' }}
+        className="rounded-lg"
+        style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)', padding: '12px 16px' }}
       >
         <div className="text-sm font-medium mb-1" style={{ color: 'var(--c-text)' }}>설계 도구 설정</div>
         <div className="text-xs mb-4" style={{ color: 'var(--c-text5)' }}>
@@ -698,16 +698,16 @@ function SettingsTab() {
       </div>
 
       {/* 스타일 설정 */}
-      <div className="p-4 rounded-lg" style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)' }}>
+      <div className="rounded-lg" style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)', padding: '12px 16px' }}>
         <div className="flex items-center justify-between mb-3">
           <div className="text-sm font-semibold" style={{ color: 'var(--c-text)' }}>스타일 설정</div>
           {!isLoggedIn && (
-            <span className="text-[10px] px-2 py-0.5 rounded" style={{ background: 'var(--c-tag)', color: 'var(--c-text5)', border: '1px solid var(--c-border3)' }}>
+            <span className="text-[10px]" style={{ color: 'var(--c-text5)' }}>
               로그인 시 저장됩니다
             </span>
           )}
         </div>
-        <div className="text-[10px] mb-3 px-3 py-2 rounded" style={{ background: 'var(--c-tag)', color: 'var(--c-text5)', border: '1px solid var(--c-border3)' }}>
+        <div className="text-[10px] mb-3" style={{ color: '#ef4444' }}>
           공모전 등 정확한 지침이 있는 경우, 규격에 맞는지 직접 확인하시길 권장합니다.
         </div>
         <div className="space-y-4">
