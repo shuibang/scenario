@@ -330,19 +330,13 @@ function LoginModal({ onClose, onLogin }) {
 }
 
 // ─── MenuBar ──────────────────────────────────────────────────────────────────
-function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave }) {
+function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, authUser, setAuthUser }) {
   const { state, dispatch } = useApp();
   const { saveStatus, saveErrorMsg, activeProjectId, stylePreset, undoStack, redoStack } = state;
   const canUndo = undoStack?.length > 0;
   const canRedo = redoStack?.length > 0;
   const [fontAvailability, setFontAvail] = useState(null);
   const [loginOpen, setLoginOpen]        = useState(false);
-  const [authUser, setAuthUser]          = useState(() => {
-    try {
-      const saved = localStorage.getItem('drama_auth_user');
-      return saved ? JSON.parse(saved) : null;
-    } catch { return null; }
-  });
   const [driveStatus, setDriveStatus]    = useState('none'); // 'none'|'syncing'|'synced'|'error'
   const tokenClientRef  = useRef(null);
   const driveHandlerRef = useRef(null);
@@ -700,6 +694,16 @@ function Shell() {
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false);
   const { state, dispatch } = useApp();
 
+  // ── 인증 상태 (MenuBar에서 올림) ──────────────────────────────────────────────
+  const [authUser, setAuthUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('drama_auth_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
+  // 로그인 없이 시작하기 클릭 시 true
+  const [showEditor, setShowEditor] = useState(false);
+
   // Panel widths with localStorage persistence
   const [panelWidths, setPanelWidths] = useState(() => loadPanelWidths());
 
@@ -831,12 +835,24 @@ function Shell() {
     }
   }, [contextSceneId, dispatch]);
 
+  // ── 랜딩 페이지: 비로그인 + 에디터 진입 전 ────────────────────────────────────
+  if (!authUser && !showEditor) {
+    return (
+      <LandingPage
+        onStart={() => setShowEditor(true)}
+        onLogin={(userData) => { setAuthUser(userData); setShowEditor(true); }}
+      />
+    );
+  }
+
   const menuBar = (
     <MenuBar
       isDark={isDark}
       onToggleTheme={toggleTheme}
       onPrintPreview={() => setPrintPreviewOpen(true)}
       onSave={handleSave}
+      authUser={authUser}
+      setAuthUser={setAuthUser}
     />
   );
   const modals = (
