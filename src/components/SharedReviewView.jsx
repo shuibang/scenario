@@ -1,14 +1,14 @@
 /**
  * SharedReviewView — 공유 링크로 열었을 때 보이는 읽기전용 미리보기 + 피드백 패널
  *
- * URL hash: #review=BASE64_JSON
- * JSON payload: { projects, episodes, characters, scenes, scriptBlocks,
- *                 coverDocs, synopsisDocs, activeProjectId, stylePreset, selections }
+ * URL hash: #review=SHORT_ID  (Supabase 저장, 새 방식)
+ *           #review=BASE64    (구형 링크 폴백)
  */
 import React, { useState, useEffect } from 'react';
 import PreviewRenderer from '../print/PreviewRenderer';
+import { loadReviewPayload, isShortReviewId } from '../utils/reviewShare';
 
-function decode(hash) {
+function decodeLegacy(hash) {
   try {
     return JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(hash.slice(8))))));
   } catch {
@@ -23,9 +23,16 @@ export default function SharedReviewView() {
   const [copied,   setCopied]   = useState(false);
 
   useEffect(() => {
-    const result = decode(window.location.hash);
-    if (result) setData(result);
-    else setBad(true);
+    const val = window.location.hash.slice(8); // '#review=' 제거
+    if (isShortReviewId(val)) {
+      loadReviewPayload(val)
+        .then(setData)
+        .catch(() => setBad(true));
+    } else {
+      const result = decodeLegacy(window.location.hash);
+      if (result) setData(result);
+      else setBad(true);
+    }
   }, []);
 
   if (bad) return (

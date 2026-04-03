@@ -78,6 +78,7 @@ export default function PrintPreviewModal({ onClose }) {
   const [format, setFormat]       = useState('pdf');
   const [exporting, setExporting] = useState(false);
   const [shareMsg, setShareMsg]   = useState('');
+  const [sharing, setSharing]     = useState(false);
   const [exportStep, setExportStep] = useState('');  // '직렬화' | '레이아웃' | '파일 생성' | '다운로드'
   const [error, setError]         = useState(null);
 
@@ -127,16 +128,25 @@ export default function PrintPreviewModal({ onClose }) {
   }, [format, state, sel, onClose]);
 
   const handleShare = useCallback(async () => {
-    const url = buildReviewURL(state, sel);
-    try { await navigator.clipboard.writeText(url); }
-    catch {
-      const inp = document.createElement('input');
-      inp.value = url; document.body.appendChild(inp);
-      inp.select(); document.execCommand('copy');
-      document.body.removeChild(inp);
+    setSharing(true);
+    setShareMsg('링크 생성 중…');
+    try {
+      const url = await buildReviewURL(state, sel);
+      try { await navigator.clipboard.writeText(url); }
+      catch {
+        const inp = document.createElement('input');
+        inp.value = url; document.body.appendChild(inp);
+        inp.select(); document.execCommand('copy');
+        document.body.removeChild(inp);
+      }
+      setShareMsg('링크 복사됨');
+      setTimeout(() => setShareMsg(''), 2500);
+    } catch {
+      setShareMsg('링크 생성 실패');
+      setTimeout(() => setShareMsg(''), 3000);
+    } finally {
+      setSharing(false);
     }
-    setShareMsg('링크 복사됨');
-    setTimeout(() => setShareMsg(''), 2500);
   }, [state, sel]);
 
   const handleBackdrop = e => { if (e.target === e.currentTarget) onClose(); };
@@ -258,13 +268,14 @@ export default function PrintPreviewModal({ onClose }) {
           {/* Share button */}
           <button
             onClick={handleShare}
-            className="w-full py-2 rounded-lg text-sm font-medium transition-opacity hover:opacity-90"
+            disabled={sharing}
+            className="w-full py-2 rounded-lg text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
             style={{
               background: 'transparent',
               border: '1px solid var(--c-border3)',
               color: 'var(--c-text3)',
               marginTop: '0.5rem',
-              cursor: 'pointer',
+              cursor: sharing ? 'default' : 'pointer',
             }}
           >
             {shareMsg || '검토 링크 공유'}

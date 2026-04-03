@@ -34,6 +34,7 @@ import MobileBottomPanel from './components/mobile/MobileBottomPanel';
 // ─── v2: shared utilities ─────────────────────────────────────────────────────
 import { mobileTbtnStyle } from './styles/tokens';
 import { applyInlineFormat } from './utils/textFormat';
+import { saveReviewPayload } from './utils/reviewShare';
 
 // ─── Panel width persistence ───────────────────────────────────────────────────
 const PANEL_WIDTHS_KEY = 'panelWidths';
@@ -132,7 +133,7 @@ function CenterPanel({ scrollToSceneId, onScrollHandled, keyboardUp }) {
 }
 
 // ─── Share helper ─────────────────────────────────────────────────────────────
-export function buildReviewURL(state, selections) {
+export async function buildReviewURL(state, selections) {
   const { projects, episodes, characters, scenes, scriptBlocks, coverDocs, synopsisDocs, activeProjectId, stylePreset } = state;
   const payload = {
     projects:     projects.filter(p => p.id === activeProjectId),
@@ -146,8 +147,8 @@ export function buildReviewURL(state, selections) {
     stylePreset:  stylePreset || {},
     selections,
   };
-  const encoded = encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(payload)))));
-  return `${window.location.origin}${window.location.pathname}#review=${encoded}`;
+  const id = await saveReviewPayload(payload);
+  return `${window.location.origin}${window.location.pathname}#review=${id}`;
 }
 
 // ─── Realtime clock ───────────────────────────────────────────────────────────
