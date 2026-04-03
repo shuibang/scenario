@@ -687,7 +687,7 @@ export default function RightPanel({ onScrollToScene }) {
       {mainTab === 'checklist'
         ? <ChecklistPanel
             projectId={activeProjectId}
-            docId={activeEpisodeId || (activeDoc !== 'cover' ? activeDoc : null)}
+            docId={null}
           />
         : <div className="flex flex-col flex-1 min-h-0">{contextContent}</div>
       }
