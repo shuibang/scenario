@@ -130,7 +130,7 @@ export default function MobileMenuBar({ onSave, onPrintPreview, WorkTimer }) {
         <button
           onClick={onPrintPreview}
           style={{ ...mobileTbtnStyle, color: 'var(--c-accent)', borderColor: 'var(--c-accent)' }}
-        >출력 미리보기</button>
+        >출력</button>
         <div style={{ width: 1, height: 16, background: 'var(--c-border3)', margin: '0 2px', flexShrink: 0 }} />
         {[
           { label: 'B', title: '굵게', tag: 'bold', fw: 'bold' },
