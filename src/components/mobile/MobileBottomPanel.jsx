@@ -46,21 +46,24 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange }) 
   toggleRef.current = onToggle;
   useEffect(() => {
     if (!window.visualViewport) return;
-    const savedState = { wasOpen: false };
+    let closeTimer = null;
     const handler = () => {
       const keyboardUp = (window.visualViewport.height / window.screen.height) < 0.75;
-      // 패널 내부 입력창에 포커스된 경우엔 접지 않음
-      if (keyboardUp && document.activeElement?.closest('[data-bottom-panel]')) return;
-      if (keyboardUp && openRef.current && !savedState.wasOpen) {
-        savedState.wasOpen = true;
-        toggleRef.current();
-      } else if (!keyboardUp && savedState.wasOpen) {
-        savedState.wasOpen = false;
-        toggleRef.current();
+      clearTimeout(closeTimer);
+      if (keyboardUp) {
+        // 150ms 지연: 패널 탭 터치 시 포커스 이동 완료 후 판단
+        closeTimer = setTimeout(() => {
+          if (openRef.current && !document.activeElement?.closest('[data-bottom-panel]')) {
+            toggleRef.current();
+          }
+        }, 150);
       }
     };
     window.visualViewport.addEventListener('resize', handler);
-    return () => window.visualViewport.removeEventListener('resize', handler);
+    return () => {
+      window.visualViewport.removeEventListener('resize', handler);
+      clearTimeout(closeTimer);
+    };
   }, []);
 
   const tabH = 'clamp(52px, 14vw, 64px)';
