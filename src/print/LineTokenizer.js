@@ -329,11 +329,6 @@ export function tokenizeSection(section, metrics) {
 }
 
 // ─── LineToken[] → Page[] (each page = LineToken[]) ──────────────────────────
-// Keep-with-next: heading/scene/ep_title tokens are never left as the last
-// non-blank content on a page. If a heading wouldn't be followed by at least
-// one body token on the same page, it is pushed to the next page instead.
-const HEADING_KINDS = new Set(['heading', 'scene_number', 'ep_title', 'char_name']);
-
 export function paginate(tokens, metrics) {
   const { linesPerPage } = metrics;
   const pages = [];
@@ -343,20 +338,6 @@ export function paginate(tokens, metrics) {
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i];
     const h = token.height || 1;
-
-    // Keep-with-next: before placing a heading on a non-empty page, verify there
-    // is room for it plus the next non-blank token. If not, flush the page first.
-    if (HEADING_KINDS.has(token.kind) && page.length > 0) {
-      let nextH = 0;
-      for (let j = i + 1; j < tokens.length; j++) {
-        if (tokens[j].kind !== 'blank') { nextH = tokens[j].height || 1; break; }
-      }
-      if (used + h + nextH > linesPerPage) {
-        pages.push(page);
-        page = [];
-        used = 0;
-      }
-    }
 
     if (used + h > linesPerPage && page.length > 0) {
       pages.push(page);

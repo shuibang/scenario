@@ -23,12 +23,11 @@ const esc = (s) => String(s ?? '')
 
 // ─── Page constants (HWP units = 1/7200 inch ≈ 0.003527 mm) ───────────────
 // A4: 210×297 mm
-const A4_W  = 59528;
-const A4_H  = 84188;
-const M_LR  = 8503;  // 30 mm left/right
-const M_TOP = 8503;  // 30 mm top
-const M_BOT = 7087;  // 25 mm bottom
-const M_HF  = 4252;  // 15 mm header/footer
+const A4_W    = 59528;
+const A4_H    = 84188;
+const MM_TO_HWP = 7200 / 25.4; // ≈ 283.46 HWP units per mm
+
+function mmToHwp(mm) { return Math.round(mm * MM_TO_HWP); }
 
 // ─── Sequential ID counter (reset per document) ─────────────────────────────
 // HWPML: hp:p and all its children (pPr, run, pEnd) must each have a unique id.
@@ -239,8 +238,11 @@ ${paraPr(6, 'RIGHT',   0,   0,   0)}
 // ─── secPr control paragraph (must be first paragraph in every section) ──────
 // Contains page setup, column layout, and lineseg metadata.
 // Structure verified from Skeleton.hwpx: hp:secPr lives inside hp:run inside hp:p.
-function secPrPara() {
-  const pId = _pid++;
+function secPrPara(margins) {
+  const pId  = _pid++;
+  const mTop = mmToHwp(margins.top);
+  const mBot = mmToHwp(margins.bottom);
+  const mLR  = mmToHwp(margins.left);
   return `  <hp:p id="${pId}" paraPrIDRef="0" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">
     <hp:run charPrIDRef="0">
       <hp:secPr id="" textDirection="HORIZONTAL" spaceColumns="1134" tabStop="8000"
@@ -252,8 +254,8 @@ function secPrPara() {
                        hideFirstEmptyLine="0" showLineNumber="0"/>
         <hp:lineNumberShape restartType="0" countBy="0" distance="0" startNumber="0"/>
         <hp:pagePr landscape="WIDELY" width="${A4_W}" height="${A4_H}" gutterType="LEFT_ONLY">
-          <hp:margin header="${M_HF}" footer="${M_HF}" gutter="0"
-                     left="${M_LR}" right="${M_LR}" top="${M_TOP}" bottom="${M_BOT}"/>
+          <hp:margin header="0" footer="0" gutter="0"
+                     left="${mLR}" right="${mLR}" top="${mTop}" bottom="${mBot}"/>
         </hp:pagePr>
         <hp:footNotePr>
           <hp:autoNumFormat type="DIGIT" userChar="" prefixChar="" suffixChar=")" supscript="0"/>
@@ -292,7 +294,7 @@ function secPrPara() {
 }
 
 // ─── Section (body) XML ──────────────────────────────────────────────────────
-function xmlSection(printModel) {
+function xmlSection(printModel, margins) {
   resetIds();
 
   const paras      = [];
@@ -414,7 +416,7 @@ function xmlSection(printModel) {
         xmlns:ooxmlchart="urn:schemas-microsoft-com:office:office"
         xmlns:hwpunitchar="http://www.hancom.co.kr/hwpml/2016/HwpUnitChar"
         xmlns:epub="http://www.idpf.org/2007/ops">
-${secPrPara()}
+${secPrPara(margins)}
 ${paras.join('\n')}
 </hs:sec>`;
 }
@@ -432,6 +434,7 @@ export async function buildHwpx(appState, selections) {
   const dialogueEm     = parseFloat(preset.dialogueGap || '7');
   const dialogueTabHwp = Math.round(dialogueEm * fontSize * 100);
 
+  const margins      = preset.pageMargins ?? { top: 35, right: 30, bottom: 30, left: 30 };
   const printModel   = buildPrintModel(appState, selections, preset);
   const { projectTitle } = printModel;
 
@@ -445,7 +448,7 @@ export async function buildHwpx(appState, selections) {
   zip.file('META-INF/container.xml',  xmlContainer());
   zip.file('Contents/content.hpf',    xmlContentHpf(projectTitle));
   zip.file('Contents/header.xml',     xmlHeader(fontName, fontSize, dialogueTabHwp));
-  zip.file('Contents/section0.xml',   xmlSection(printModel));
+  zip.file('Contents/section0.xml',   xmlSection(printModel, margins));
 
   return zip.generateAsync({ type: 'blob', mimeType: 'application/hwp+zip' });
 }
