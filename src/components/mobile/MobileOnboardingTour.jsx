@@ -94,23 +94,12 @@ const MOBILE_PAGE_HINTS = {
       </>
     ),
   },
-  synopsis: {
-    title: '시놉시스',
-    accent: '#6366f1',
-    desc: (
-      <>
-        <Tag>시놉시스</Tag>에 장르·주제·기획의도·줄거리를 정리하세요.<br/>
-        작품 방향을 잡는 기초 문서입니다.
-      </>
-    ),
-  },
   script: {
     title: '대본 편집',
     accent: '#6366f1',
     desc: (
       <>
-        <Tag>S#</Tag> <Tag>지문</Tag> <Tag>대사</Tag> 버튼으로 블록 유형을 전환하세요.<br/>
-        키보드가 올라오면 화면 하단에 입력 버튼이 나타납니다.
+        <Tag>S#</Tag> <Tag>지문</Tag> <Tag>대사</Tag> 버튼으로 블록 유형을 전환하세요.
       </>
     ),
   },
@@ -130,7 +119,10 @@ const MOBILE_PAGE_HINTS = {
     desc: (
       <>
         <Tag>트리트먼트</Tag>에서 씬별 내용을 요약해 전체 흐름을 확인하세요.<br/>
-        항목을 대본으로 가져오면 씬번호 블록으로 변환됩니다.
+        항목을 대본으로 가져오면 씬번호 블록으로 변환됩니다.<br/>
+        <span style={{ fontSize: 11, color: 'var(--c-text5)' }}>
+          마이페이지 설정 › 설계 도구 설정에서 대본 자동 연동 여부를 설정할 수 있습니다.
+        </span>
       </>
     ),
   },
@@ -139,7 +131,11 @@ const MOBILE_PAGE_HINTS = {
     accent: '#6366f1',
     desc: (
       <>
-        <Tag>씬리스트</Tag>에서 회차별 씬을 한눈에 정리하고 순서를 구성하세요.
+        <Tag>씬리스트</Tag>에서 회차별 씬을 한눈에 정리하고 순서를 구성하세요.<br/>
+        씬 항목을 대본으로 가져올 수 있으며,<br/>
+        <span style={{ fontSize: 11, color: 'var(--c-text5)' }}>
+          마이페이지 설정 › 설계 도구 설정에서 대본 자동 연동 여부를 설정할 수 있습니다.
+        </span>
       </>
     ),
   },
@@ -148,8 +144,9 @@ const MOBILE_PAGE_HINTS = {
     accent: '#6366f1',
     desc: (
       <>
-        <Tag>구조 설계</Tag>에서 막·단락 구조를 시각적으로 설계하세요.<br/>
-        이야기 흐름을 큰 그림으로 파악할 수 있습니다.
+        <Tag>구조 설계</Tag>에서 씬에 붙인 <Tag color="#f59e0b">태그</Tag>로 전체 구조를 한눈에 파악하세요.<br/>
+        Save the Cat·7시퀀스 등 내장 지침을 참고하거나,<br/>
+        마이페이지 설정에서 나만의 태그를 직접 만들 수 있습니다.
       </>
     ),
   },
@@ -279,11 +276,11 @@ function MobileHintCard({
       {/* 딤 배경 */}
       <div
         style={{ position: 'fixed', inset: 0, zIndex: 9000, background: 'rgba(0,0,0,0.55)', pointerEvents: 'all' }}
-        onClick={isHint ? onSkip : undefined}
+        onClick={isHint ? onSkip : onNext}
       />
 
       {/* 컬러 박스 (스포트라이트) */}
-      {rect && pos.type !== 'center' && (
+      {rect && (
         <div style={{
           position: 'fixed',
           top:    rect.top    - 4,
@@ -435,7 +432,12 @@ export default function MobileOnboardingTour() {
     setStep(s => s - 1);
   }, [step]);
 
-  // 페이지 힌트: activeDoc 변경 시
+  // 페이지 힌트: activeDoc 변경 시 — 먼저 기존 힌트 클리어
+  useEffect(() => {
+    setHintId(null);
+    setHintRect(null);
+  }, [state.activeDoc]);
+
   useEffect(() => {
     if (tourVisible || !state.initialized) return;
     const pageId = state.activeDoc === 'script' && state.activeEpisodeId

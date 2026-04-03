@@ -207,18 +207,18 @@ export default function SynopsisEditor() {
   if (!activeProjectId) return null;
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col overflow-hidden" style={{ background: 'var(--c-bg)' }}>
+    <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, display: 'flex', flexDirection: 'column', background: 'var(--c-bg)', overflow: 'hidden' }}>
       {/* Header */}
-      <div className="flex items-center gap-2 shrink-0" style={{ padding: '10px', borderBottom: '1px solid var(--c-border2)' }}>
+      <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '10px', borderBottom: '1px solid var(--c-border2)' }}>
         <span className="text-sm font-medium" style={{ color: 'var(--c-text2)' }}>작품 시놉시스</span>
-        <span className="ml-auto text-xs flex items-center gap-2" style={{ color: 'var(--c-text6)' }}>
-          {pageEst > 0 && <span className="tabular-nums">약 {pageEst}p</span>}
+        <span style={{ marginLeft: 'auto', fontSize: 12, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--c-text6)' }}>
+          {pageEst > 0 && <span>{`약 ${pageEst}p`}</span>}
           {dirty ? '저장 중…' : '● 저장됨'} · {wordCount}어
         </span>
       </div>
 
       {/* Sections */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto">
+      <div ref={scrollRef} style={{ flex: '1 1 0', minHeight: 0, overflowY: 'auto' }}>
         <div className="space-y-8" style={{ padding: '10px' }}>
           {SECTIONS.map(sec => sec.type === 'input' ? (
             <div key={sec.id} className="space-y-1.5">

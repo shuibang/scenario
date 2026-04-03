@@ -736,7 +736,7 @@ function Shell() {
   const keyboardUp = isMobile && (window.innerHeight - vvHeight - vvOffsetTop) > 100;
 
   useEffect(() => {
-    if (state.activeDoc === 'mypage') setMobileBottomOpen(false);
+    setMobileBottomOpen(false);
   }, [state.activeDoc]);
 
   const updateLeftWidth = useCallback((delta) => {
@@ -853,10 +853,11 @@ function Shell() {
         className="mobile-layout w-screen flex flex-col overflow-hidden"
         style={{
           background: 'var(--c-bg)',
-          position: keyboardUp ? 'fixed' : 'relative',
+          position: 'fixed',
           top:    keyboardUp ? vvOffsetTop : 0,
           left: 0, right: 0,
-          height: keyboardUp ? vvHeight : '100svh',
+          bottom: keyboardUp ? 'auto' : 0,
+          height: keyboardUp ? vvHeight : undefined,
           paddingTop: 'env(safe-area-inset-top, 0px)',
         }}
       >
@@ -865,8 +866,8 @@ function Shell() {
           onPrintPreview={() => setPrintPreviewOpen(true)}
           WorkTimer={WorkTimer}
         />
-        <div data-tour-id="center-panel" className="flex-1 min-h-0 overflow-hidden"
-          style={{ paddingLeft: 'env(safe-area-inset-left, 0px)', paddingRight: 'env(safe-area-inset-right, 0px)', display: 'flex', flexDirection: 'column' }}
+        <div data-tour-id="center-panel" className="flex-1 min-h-0"
+          style={{ paddingLeft: 'env(safe-area-inset-left, 0px)', paddingRight: 'env(safe-area-inset-right, 0px)', display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0, position: 'relative' }}
         >
           <CenterPanel scrollToSceneId={scrollToSceneId} onScrollHandled={() => setScrollToSceneId(null)} />
         </div>
@@ -877,6 +878,7 @@ function Shell() {
         <MobileBottomPanel
           open={mobileBottomOpen}
           onToggle={() => setMobileBottomOpen(v => !v)}
+          onClose={() => setMobileBottomOpen(false)}
           tab={mobileTab}
           onTabChange={setMobileTab}
           onScrollToScene={id => setScrollToSceneId(id)}
@@ -890,7 +892,7 @@ function Shell() {
   // ── Tablet layout ──────────────────────────────────────────────────────────
   if (isTablet) {
     return (
-      <div className="h-dvh w-screen flex flex-col overflow-hidden" style={{ background: 'var(--c-bg)' }}>
+      <div className="w-screen flex flex-col overflow-hidden" style={{ background: 'var(--c-bg)', position: 'fixed', top: 0, right: 0, bottom: 0, left: 0 }}>
         {menuBar}
         <div className="flex flex-1 min-h-0">
           <CollapseButton side="left" collapsed={leftCollapsed} onToggle={() => setLeftCollapsed(v => !v)} />
@@ -904,7 +906,7 @@ function Shell() {
             </>
           )}
 
-          <div data-tour-id="center-panel" className="flex-1 min-w-0 overflow-hidden" style={{ display: 'flex', flexDirection: 'column' }}>
+          <div data-tour-id="center-panel" className="flex-1 min-w-0 overflow-hidden" style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
             <CenterPanel scrollToSceneId={scrollToSceneId} onScrollHandled={() => setScrollToSceneId(null)} />
           </div>
 
@@ -936,8 +938,8 @@ function Shell() {
   // ── PC layout (≥1280px) ────────────────────────────────────────────────────
   return (
     <div
-      className="h-dvh w-screen flex flex-col overflow-hidden"
-      style={{ background: 'var(--c-bg)' }}
+      className="w-screen flex flex-col overflow-hidden"
+      style={{ background: 'var(--c-bg)', position: 'fixed', top: 0, right: 0, bottom: 0, left: 0 }}
     >
       {menuBar}
 
@@ -948,7 +950,7 @@ function Shell() {
 
         <DragHandle onDrag={updateLeftWidth} isLeft />
 
-        <div data-tour-id="center-panel" className="flex-1 min-w-0 overflow-hidden" style={{ display: 'flex', flexDirection: 'column' }}>
+        <div data-tour-id="center-panel" className="flex-1 min-w-0 overflow-hidden" style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
           <CenterPanel
             scrollToSceneId={scrollToSceneId}
             onScrollHandled={() => setScrollToSceneId(null)}
