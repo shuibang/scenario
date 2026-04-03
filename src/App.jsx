@@ -713,7 +713,7 @@ function Shell() {
   }, [state.activeDoc]);
 
   // ── Mobile bottom panel state
-  const [mobileBottomOpen, setMobileBottomOpen] = useState(true);
+  const [mobileBottomOpen, setMobileBottomOpen] = useState(false);
   const [mobileTab, setMobileTab]               = useState('script');
 
   useEffect(() => {
