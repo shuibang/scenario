@@ -207,6 +207,22 @@ export default function PrintPreviewModal({ onClose }) {
             <Checkbox label="자료수집"   checked={false}          onChange={() => {}} indent disabled />
           </Section>
 
+          {/* Share button — 출력 형식 위 */}
+          <button
+            onClick={handleShare}
+            disabled={sharing}
+            className="w-full py-2 rounded-lg text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
+            style={{
+              background: 'transparent',
+              border: '1px solid var(--c-border3)',
+              color: 'var(--c-text3)',
+              marginBottom: '0.5rem',
+              cursor: sharing ? 'default' : 'pointer',
+            }}
+          >
+            {shareMsg || '검토 링크 공유'}
+          </button>
+
           {/* Format */}
           <Section title="출력 형식">
             {[
@@ -264,22 +280,6 @@ export default function PrintPreviewModal({ onClose }) {
               {exportStep} 중…
             </div>
           )}
-
-          {/* Share button */}
-          <button
-            onClick={handleShare}
-            disabled={sharing}
-            className="w-full py-2 rounded-lg text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
-            style={{
-              background: 'transparent',
-              border: '1px solid var(--c-border3)',
-              color: 'var(--c-text3)',
-              marginTop: '0.5rem',
-              cursor: sharing ? 'default' : 'pointer',
-            }}
-          >
-            {shareMsg || '검토 링크 공유'}
-          </button>
 
           {/* Export button */}
           <button

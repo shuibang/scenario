@@ -84,9 +84,10 @@ function wrapText(text, maxChars) {
 //
 // All take (lineHeight, fontSize) so we can compute lineHpt = fontSize*lineHeight.
 const TOKEN_HEIGHTS = {
-  ep_title:     (lh, fs) => ((fs + 2) * lh + 14) / (fs * lh),
+  ep_title:     (lh, fs) => (fs + 2) / fs,           // 더 큰 폰트만, marginBottom 없음
   scene_number: (lh, fs) => 1 + 12 / (fs * lh),
   char_name:    (lh, fs) => 1 + 6  / (fs * lh),
+  heading:      (lh, fs) => 1 + 2  / (fs * lh),      // marginBottom: 2pt만 (marginTop 제거)
   blank:        ()       => 1,
   action:       (lh, fs) => 1 + 1  / (fs * lh),
   body:         (lh, fs) => 1 + 1  / (fs * lh),

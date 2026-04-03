@@ -36,7 +36,7 @@ function TokenRow({ token, text: textProp, metrics, fontFamily, fontSize, lineHe
 
     case 'ep_title':
       return (
-        <div style={{ ...style, fontSize: `${fontSize + 2}pt`, fontWeight: 700, textAlign: 'center', marginBottom: '14pt' }}>
+        <div style={{ ...style, fontSize: `${fontSize + 2}pt`, fontWeight: 700, textAlign: 'center' }}>
           {content}
         </div>
       );
@@ -73,7 +73,7 @@ function TokenRow({ token, text: textProp, metrics, fontFamily, fontSize, lineHe
       return <div style={{ ...style, textAlign: 'right', margin: '4pt 0' }}>{content}</div>;
 
     case 'heading':
-      return <div style={{ ...style, fontWeight: 700, marginTop: '8pt', marginBottom: '2pt' }}>{content}</div>;
+      return <div style={{ ...style, fontWeight: 700, marginBottom: '2pt' }}>{content}</div>;
 
     case 'char_name':
       return <div style={{ ...style, fontWeight: 700, marginTop: '6pt' }}>{content}</div>;

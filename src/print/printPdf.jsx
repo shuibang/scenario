@@ -46,6 +46,8 @@ export function ensureFontsRegistered() {
 }
 
 // ─── Shared style factory ─────────────────────────────────────────────────────
+const MM_TO_PT = 2.8346;
+
 function makeStyles(preset, metrics) {
   const { pdfFamily: ff } = resolveFont(preset, 'pdf');
   const fs   = preset?.fontSize    ?? 11;
@@ -54,14 +56,14 @@ function makeStyles(preset, metrics) {
 
   return StyleSheet.create({
     page: {
-      fontFamily:   ff,
-      fontSize:     fs,
-      lineHeight:   lh,
-      color:        '#000',
-      paddingTop:    `${margins.top}mm`,
-      paddingRight:  `${margins.right}mm`,
-      paddingBottom: `${margins.bottom}mm`,
-      paddingLeft:   `${margins.left}mm`,
+      fontFamily:    ff,
+      fontSize:      fs,
+      lineHeight:    lh,
+      color:         '#000',
+      paddingTop:    margins.top    * MM_TO_PT,
+      paddingRight:  margins.right  * MM_TO_PT,
+      paddingBottom: margins.bottom * MM_TO_PT,
+      paddingLeft:   margins.left   * MM_TO_PT,
     },
     // ── cover
     coverWrap:        { flex: 1, position: 'relative' },
@@ -70,22 +72,22 @@ function makeStyles(preset, metrics) {
     coverTitle:       { fontSize: fs + 11, fontWeight: 700, marginBottom: 6, textAlign: 'center' },
     coverSubtitle:    { fontSize: fs + 2,  fontWeight: 400, marginBottom: 4, textAlign: 'center', color: '#555' },
     coverField:       { fontSize: fs,      marginBottom: 3, textAlign: 'center' },
-    // ── page number
+    // ── page number (absolute, no fixed — one PdfPage = one PDF page)
     pageNum: {
       position: 'absolute',
-      bottom: '15mm',
+      bottom:   15 * MM_TO_PT,
       left: 0, right: 0,
       textAlign: 'center',
       fontSize: fs - 2,
       color: '#555',
     },
     // ── synopsis / characters
-    heading:  { fontWeight: 700, marginTop: 8, marginBottom: 2 },
+    heading:  { fontWeight: 700, marginBottom: 2 },
     body:     { marginBottom: 1, textAlign: 'justify' },
     charName: { fontWeight: 700, marginTop: 6 },
     charMeta: { marginLeft: 8, fontSize: fs - 1, color: '#444' },
     // ── episode
-    epTitle:   { fontSize: fs + 2, fontWeight: 700, textAlign: 'center', marginBottom: 14 },
+    epTitle:   { fontSize: fs + 2, fontWeight: 700, textAlign: 'center' },
     scene:     { fontWeight: 700, marginTop: 10, marginBottom: 2 },
     action:    { marginLeft: '8mm', marginBottom: 1, textAlign: 'justify' },
     dialogueRow: { flexDirection: 'row', marginBottom: 1 },
@@ -188,7 +190,7 @@ function PdfPage({ tokens, pageNum, showPageNum, S }) {
         <TokenEl key={i} token={item.token} text={item.text} S={S} />
       ))}
       {showPageNum && (
-        <Text style={S.pageNum} fixed>- {pageNum} -</Text>
+        <Text style={S.pageNum}>- {pageNum} -</Text>
       )}
     </Page>
   );
