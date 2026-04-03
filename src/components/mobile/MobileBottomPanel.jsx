@@ -2,6 +2,7 @@ import React, { useRef, useEffect } from 'react';
 import { useApp } from '../../store/AppContext';
 import MobileScriptTab from './MobileScriptTab';
 import MobileMemoTab from './MobileMemoTab';
+import AdBanner from '../AdBanner';
 
 const TABS = [
   { id: 'script', icon: '📝', label: '대본' },
@@ -122,39 +123,47 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange }) 
 
       {/* Panel content */}
       {open && (
-        <div data-bottom-panel style={{ flex: 1, overflow: 'auto', minHeight: 0, touchAction: 'pan-y' }}>
-          {tab === 'script' && (
-            <div data-tour-id="left-panel" className="m-panel-content">
-              <MobileScriptTab />
-            </div>
-          )}
-          {tab === 'data' && (
-            <div className="m-panel-content">
-              {DATA_DOCS.map(({ doc, label }, i) => (
-                <div
-                  key={`${doc}-${i}`}
-                  className={`m-item${activeDoc === doc ? ' active' : ''}`}
-                  onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: doc })}
-                >
-                  {label}
-                </div>
-              ))}
-            </div>
-          )}
-          {tab === 'plan' && (
-            <div className="m-panel-content">
-              {PLAN_DOCS.map(({ doc, label }) => (
-                <div
-                  key={doc}
-                  className={`m-item${activeDoc === doc ? ' active' : ''}`}
-                  onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: doc })}
-                >
-                  {label}
-                </div>
-              ))}
-            </div>
-          )}
-          {tab === 'memo' && <div className="m-panel-content"><MobileMemoTab /></div>}
+        <div data-bottom-panel style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          {/* 탭 컨텐츠: 스크롤 영역 */}
+          <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, touchAction: 'pan-y' }}>
+            {tab === 'script' && (
+              <div data-tour-id="left-panel" className="m-panel-content">
+                <MobileScriptTab />
+              </div>
+            )}
+            {tab === 'data' && (
+              <div className="m-panel-content">
+                {DATA_DOCS.map(({ doc, label }, i) => (
+                  <div
+                    key={`${doc}-${i}`}
+                    className={`m-item${activeDoc === doc ? ' active' : ''}`}
+                    onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: doc })}
+                  >
+                    {label}
+                  </div>
+                ))}
+              </div>
+            )}
+            {tab === 'plan' && (
+              <div className="m-panel-content">
+                {PLAN_DOCS.map(({ doc, label }) => (
+                  <div
+                    key={doc}
+                    className={`m-item${activeDoc === doc ? ' active' : ''}`}
+                    onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: doc })}
+                  >
+                    {label}
+                  </div>
+                ))}
+              </div>
+            )}
+            {tab === 'memo' && <div className="m-panel-content"><MobileMemoTab /></div>}
+          </div>
+
+          {/* 하단 광고: 남은 공간을 채우고 탭이 바뀌어도 높이 고정 */}
+          <div style={{ flexShrink: 0 }}>
+            <AdBanner slot="mobile-bottom" mobileHide={false} height={60} />
+          </div>
         </div>
       )}
     </div>
