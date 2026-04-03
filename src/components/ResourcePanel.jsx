@@ -157,7 +157,7 @@ export default function ResourcePanel() {
   if (!activeProjectId) return null;
 
   return (
-    <div className="h-full flex flex-col" style={{ background: 'var(--c-bg)' }}>
+    <div className="flex-1 min-h-0 flex flex-col" style={{ background: 'var(--c-bg)' }}>
       {/* Header */}
       <div className="px-6 py-3 flex items-center gap-3 shrink-0" style={{ borderBottom: '1px solid var(--c-border2)' }}>
         <span className="text-sm font-medium" style={{ color: 'var(--c-text2)' }}>자료수집 ({projectResources.length})</span>

@@ -986,7 +986,7 @@ export default function MyPage() {
   const tabLabel = TABS.find(t => t.id === activeTab)?.label || '';
 
   return (
-    <div className="h-full flex flex-col overflow-hidden" style={{ background: 'var(--c-bg)' }}>
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden" style={{ background: 'var(--c-bg)' }}>
       {isMobile ? (
         /* 모바일: 현재 섹션 이름만 표시 (내부 메뉴 없음, 햄버거로 전환) */
         <div style={{

@@ -402,7 +402,7 @@ export default function SceneListPage() {
   const HEADERS = ['씬번호 / 장소', '내용', '등장인물', '비고'];
 
   return (
-    <div className="h-full flex flex-col" style={{ background: 'var(--c-bg)' }}>
+    <div className="flex-1 min-h-0 flex flex-col" style={{ background: 'var(--c-bg)' }}>
       {/* Header */}
       <div className="flex items-center gap-3 shrink-0" style={{ padding: '10px', borderBottom: '1px solid var(--c-border2)' }}>
         <span className="text-sm font-medium" style={{ color: 'var(--c-text2)' }}>씬리스트</span>

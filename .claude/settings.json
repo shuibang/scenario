@@ -2,7 +2,26 @@
   "permissions": {
     "allow": [
       "Bash(cmd /c \"cd /d \"\"c:\\\\Users\\\\jiusu\\\\OneDrive\\\\바탕 화면\\\\코딩\\\\star_sky\"\" && npx vite build 2>&1\")",
-      "Bash(powershell -Command \"Set-Location ''c:\\\\Users\\\\jiusu\\\\OneDrive\\\\바탕 화면\\\\코딩\\\\star_sky''; npm run build 2>&1\")"
+      "Bash(powershell -Command \"Set-Location ''c:\\\\Users\\\\jiusu\\\\OneDrive\\\\바탕 화면\\\\코딩\\\\star_sky''; npm run build 2>&1\")",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(curl -s \"https://raw.githubusercontent.com/neolord0/hwpxlib/main/src/main/java/kr/dogfoot/hwpxlib/writer/header_xml/CharShapeWriter.java\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/neolord0/hwpxlib/main/src/main/java/kr/dogfoot/hwpxlib/writer/header_xml/ParaShapeWriter.java\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/neolord0/hwpxlib/main/src/main/java/kr/dogfoot/hwpxlib/writer/header_xml/StyleWriter.java\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/neolord0/hwpxlib/main/src/main/java/kr/dogfoot/hwpxlib/writer/header_xml/FontFaceWriter.java\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/neolord0/hwpxlib/main/src/main/java/kr/dogfoot/hwpxlib/writer/header_xml/TabDefWriter.java\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/neolord0/hwpxlib/main/src/main/java/kr/dogfoot/hwpxlib/writer/header_xml/HeaderWriter.java\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/neolord0/hwpxlib/main/src/main/java/kr/dogfoot/hwpxlib/writer/header_xml/DocOptionWriter.java\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/neolord0/hwpxlib/main/src/main/java/kr/dogfoot/hwpxlib/writer/header_xml/ForbiddenWordListWriter.java\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/neolord0/hwpxlib/main/src/main/java/kr/dogfoot/hwpxlib/writer/header_xml/TrackChangeConfigWriter.java\")",
+      "Bash(curl -s \"https://api.github.com/repos/neolord0/hwpxlib/git/trees/main?recursive=1\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/neolord0/hwpxlib/main/src/main/java/kr/dogfoot/hwpxlib/writer/header_xml/reflist/fontface/FontFaceWriter.java\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/neolord0/hwpxlib/main/src/main/java/kr/dogfoot/hwpxlib/writer/header_xml/reflist/parapr/ParaPrWriter.java\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/neolord0/hwpxlib/main/src/main/java/kr/dogfoot/hwpxlib/writer/header_xml/reflist/charpr/CharPrWriter.java\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/neolord0/hwpxlib/main/src/main/java/kr/dogfoot/hwpxlib/writer/header_xml/reflist/StylesWriter.java\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/neolord0/hwpxlib/main/src/main/java/kr/dogfoot/hwpxlib/writer/header_xml/reflist/tabpr/TabPrWriter.java\")",
+      "WebFetch(domain:api.github.com)",
+      "Bash(curl -s \"https://raw.githubusercontent.com/airmang/python-hwpx/master/src/hwpx/document.py\")",
+      "Bash(curl -s \"https://api.github.com/repos/airmang/python-hwpx/contents/src/hwpx\")"
     ]
   }
 }

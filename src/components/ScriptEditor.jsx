@@ -1655,7 +1655,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
   }
 
   return (
-    <div className="h-full flex flex-col" style={{ background: 'var(--c-bg)' }}>
+    <div className="flex-1 min-h-0 flex flex-col" style={{ background: 'var(--c-bg)' }}>
       {/* Toolbar */}
       <div className="px-6 py-2 flex items-center gap-2 text-xs shrink-0" style={{ borderBottom: '1px solid var(--c-border2)' }}>
         <span style={{ color: 'var(--c-text3)' }}>{episode?.number}회 {episode?.title || ''}</span>

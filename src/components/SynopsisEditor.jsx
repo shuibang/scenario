@@ -207,7 +207,7 @@ export default function SynopsisEditor() {
   if (!activeProjectId) return null;
 
   return (
-    <div className="h-full flex flex-col" style={{ background: 'var(--c-bg)' }}>
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden" style={{ background: 'var(--c-bg)' }}>
       {/* Header */}
       <div className="flex items-center gap-2 shrink-0" style={{ padding: '10px', borderBottom: '1px solid var(--c-border2)' }}>
         <span className="text-sm font-medium" style={{ color: 'var(--c-text2)' }}>작품 시놉시스</span>

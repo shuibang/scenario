@@ -3,31 +3,73 @@ import { useApp } from '../store/AppContext';
 import { getItem, setItem, isPublicPcMode } from '../store/db';
 
 // ── Persistence keys ──────────────────────────────────────────────────────────
-const DONE_KEY      = 'onboardingDone';
-const SESSION_KEY   = 'drama_onboardingSession';
-const HINTS_KEY     = 'drama_pageHintsSeen'; // comma-separated list of seen page ids
+const DONE_KEY    = 'onboardingDone';
+const SESSION_KEY = 'drama_onboardingSession';
+const HINTS_KEY   = 'drama_pageHintsSeen';
 
-// ── Initial 3-panel tour steps ────────────────────────────────────────────────
+// ── Colored tag for menu/UI element names ─────────────────────────────────────
+function Tag({ children, color = 'accent' }) {
+  const palette = {
+    accent: { bg: 'var(--c-accent)',  text: '#fff' },
+    blue:   { bg: '#3b82f6',          text: '#fff' },
+    green:  { bg: '#10b981',          text: '#fff' },
+    orange: { bg: '#f59e0b',          text: '#fff' },
+    purple: { bg: '#8b5cf6',          text: '#fff' },
+  };
+  const c = palette[color] ?? palette.accent;
+  return (
+    <span style={{
+      display: 'inline-block', fontSize: 10, fontWeight: 700,
+      background: c.bg, color: c.text,
+      borderRadius: 4, padding: '1px 7px', margin: '0 2px',
+      verticalAlign: 'middle', lineHeight: 1.7, whiteSpace: 'nowrap',
+    }}>{children}</span>
+  );
+}
+
+// ── Initial 3-step tour ────────────────────────────────────────────────────────
 const STEPS = [
   {
     tourId: 'left-panel',
     navigateTo: 'cover',
-    title: '왼쪽 패널 — 작품 구성',
-    desc: '회차, 인물, 시놉시스 등 작품을 구성하는 메뉴가 모여 있습니다.\n원하는 항목을 클릭해 편집 화면으로 이동하세요.',
+    title: '작품 구성 메뉴',
+    desc: (
+      <>
+        <Tag>작품 구성 패널</Tag>에 회차·시놉시스·인물·트리트먼트 등<br/>
+        작품 전체를 구성하는 메뉴가 모여 있습니다.<br/>
+        항목을 탭하면 편집 화면으로 이동합니다.<br/>
+        <span style={{ fontSize: 11, color: 'var(--c-text5)' }}>
+          모바일 : 화면 하단 탭바 <Tag color="blue">대본</Tag> <Tag color="blue">자료</Tag> <Tag color="blue">설계</Tag> 버튼
+        </span>
+      </>
+    ),
     placement: 'right',
   },
   {
     tourId: 'center-panel',
     navigateTo: 'cover',
-    title: '가운데 패널 — 편집 영역',
-    desc: '선택한 메뉴의 편집 화면이 표시됩니다.\n지금은 작품 표지 화면이 열려 있습니다.',
+    title: '편집 영역',
+    desc: (
+      <>
+        <Tag>편집 영역</Tag>에 선택한 메뉴의 내용이 표시됩니다.<br/>
+        표지·시놉시스·대본·인물 등 모든 편집 작업이 이 영역에서 이루어집니다.
+      </>
+    ),
     placement: 'center',
   },
   {
     tourId: 'right-panel',
     navigateTo: 'cover',
-    title: '오른쪽 패널 — 문맥 & 체크리스트',
-    desc: '열려 있는 화면에 따라 관련 정보가 표시됩니다.\n체크리스트 탭에서 작업 항목을 관리할 수 있습니다.',
+    title: '체크리스트 & 메모',
+    desc: (
+      <>
+        <Tag color="green">체크리스트 패널</Tag>에 현재 화면 관련 작업 항목과<br/>
+        메모가 표시됩니다. 탭을 전환하면 구조 참고 자료도 확인할 수 있습니다.<br/>
+        <span style={{ fontSize: 11, color: 'var(--c-text5)' }}>
+          모바일 : 화면 하단 탭바 <Tag color="blue">메모</Tag> 버튼
+        </span>
+      </>
+    ),
     placement: 'left',
   },
 ];
@@ -36,61 +78,114 @@ const STEPS = [
 const PAGE_HINTS = {
   cover: {
     title: '표지',
-    desc: '작품 기본 정보(제목·작가·장르 등)를 입력하세요.\n출력 시 첫 장에 표시됩니다.',
+    desc: (
+      <>
+        <Tag>표지</Tag>에 작품 기본 정보(제목·작가·장르 등)를 입력하세요.<br/>
+        출력 시 첫 장에 표시됩니다.
+      </>
+    ),
     tourId: 'center-panel',
     placement: 'center',
   },
   synopsis: {
     title: '시놉시스',
-    desc: '장르, 주제, 기획의도, 줄거리를 정리하는 공간입니다.\n작품의 방향을 잡는 데 활용하세요.',
+    desc: (
+      <>
+        <Tag>시놉시스</Tag>에 장르·주제·기획의도·줄거리를 정리하세요.<br/>
+        작품의 방향을 잡는 데 활용할 수 있습니다.
+      </>
+    ),
     tourId: 'center-panel',
     placement: 'center',
   },
   script: {
     title: '대본 편집',
-    desc: 'Ctrl+1 씬번호 · Ctrl+2 지문 · Ctrl+3 대사\n블록 유형을 전환하며 대본을 작성하세요.',
+    desc: (
+      <>
+        <Tag>S#</Tag> <Tag>지문</Tag> <Tag>대사</Tag> 버튼으로 블록 유형을 전환하며 작성하세요.<br/>
+        데스크톱 단축키: <Tag color="blue">Ctrl+1</Tag> 씬번호 · <Tag color="blue">Ctrl+2</Tag> 지문 · <Tag color="blue">Ctrl+3</Tag> 대사<br/>
+        <span style={{ fontSize: 11, color: 'var(--c-text5)' }}>
+          모바일 : 키보드가 올라오면 화면 하단에 입력 버튼이 나타납니다.
+        </span>
+      </>
+    ),
     tourId: 'center-panel',
     placement: 'center',
   },
   characters: {
     title: '인물 관리',
-    desc: '등장인물을 등록하고 성격과 역할을 정리하세요.\n인물을 선택하면 오른쪽에 대본 등장 현황이 표시됩니다.',
+    desc: (
+      <>
+        <Tag>인물 패널</Tag>에 등장인물을 등록하고 성격·역할을 정리하세요.<br/>
+        인물을 선택하면 <Tag color="green">체크리스트 패널</Tag>에 대본 등장 현황이 표시됩니다.
+      </>
+    ),
     tourId: 'center-panel',
     placement: 'center',
   },
   scenelist: {
     title: '씬리스트',
-    desc: '회차별 씬을 한눈에 정리하고 순서를 구성하세요.\n씬 설명을 작성하면 대본 작성 시 참고할 수 있습니다.',
+    desc: (
+      <>
+        <Tag>씬리스트</Tag>에서 회차별 씬을 한눈에 정리하고 순서를 구성하세요.<br/>
+        씬 설명을 작성하면 대본 작성 시 참고할 수 있습니다.
+      </>
+    ),
     tourId: 'center-panel',
     placement: 'center',
   },
   treatment: {
     title: '트리트먼트',
-    desc: '씬별 내용을 요약해 전체 흐름을 확인하세요.\n항목을 대본으로 가져와 씬번호로 변환할 수 있습니다.',
+    desc: (
+      <>
+        <Tag>트리트먼트</Tag>에서 씬별 내용을 요약해 전체 흐름을 확인하세요.<br/>
+        항목을 대본으로 가져오면 씬번호 블록으로 변환됩니다.
+      </>
+    ),
     tourId: 'center-panel',
     placement: 'center',
   },
   biography: {
     title: '인물이력서',
-    desc: '인물의 과거 사건과 연표를 기록하세요.\n작품 배경을 구체화하는 데 도움이 됩니다.',
+    desc: (
+      <>
+        <Tag>인물이력서</Tag>에 인물의 과거 사건과 연표를 기록하세요.<br/>
+        작품 배경을 구체화하는 데 도움이 됩니다.
+      </>
+    ),
     tourId: 'center-panel',
     placement: 'center',
   },
   structure: {
     title: '구조 설계',
-    desc: '막/단락 구조를 시각적으로 설계하는 공간입니다.\n이야기 흐름을 큰 그림으로 파악하세요.',
+    desc: (
+      <>
+        <Tag>구조 설계</Tag>에서 막·단락 구조를 시각적으로 설계하세요.<br/>
+        이야기 흐름을 큰 그림으로 파악할 수 있습니다.
+      </>
+    ),
     tourId: 'center-panel',
     placement: 'center',
   },
   relationships: {
     title: '인물관계도',
-    desc: '인물 간의 관계를 시각적으로 정리하세요.\n선을 그어 관계를 표현할 수 있습니다.',
+    desc: (
+      <>
+        <Tag>인물관계도</Tag>에서 인물 간의 관계를 시각적으로 정리하세요.<br/>
+        선을 그어 관계를 표현할 수 있습니다.
+      </>
+    ),
     tourId: 'center-panel',
     placement: 'center',
   },
   resources: {
     title: '자료수집',
-    desc: '작품 관련 자료와 메모를 보관하세요.\n링크, 이미지, 텍스트를 자유롭게 저장할 수 있습니다.',
+    desc: (
+      <>
+        <Tag>자료수집</Tag>에 작품 관련 자료와 메모를 보관하세요.<br/>
+        링크·이미지·텍스트를 자유롭게 저장할 수 있습니다.
+      </>
+    ),
     tourId: 'center-panel',
     placement: 'center',
   },
@@ -98,7 +193,7 @@ const PAGE_HINTS = {
 
 // ── Layout helpers ────────────────────────────────────────────────────────────
 const CARD_W     = 320;
-const CARD_H_EST = 220;
+const CARD_H_EST = 240;
 const EDGE_PAD   = 12;
 const GAP        = 14;
 const SPOT_PAD   = 6;
@@ -227,10 +322,10 @@ function HintCard({ title, desc, rect, placement, footer, onClick }) {
         }}
         onClick={e => e.stopPropagation()}
       >
-        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--c-text)', marginBottom: 8, lineHeight: 1.4 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--c-text)', marginBottom: 10, lineHeight: 1.4 }}>
           {title}
         </div>
-        <div style={{ fontSize: 12, color: 'var(--c-text3)', lineHeight: 1.8, marginBottom: 16, whiteSpace: 'pre-line' }}>
+        <div style={{ fontSize: 12, color: 'var(--c-text3)', lineHeight: 2, marginBottom: 16 }}>
           {desc}
         </div>
         {footer({ btnBase })}
@@ -245,21 +340,18 @@ export default function OnboardingTour() {
   const stateRef = useRef(state);
   stateRef.current = state;
 
-  // ─ Initial tour state
   const [tourStep,    setTourStep]    = useState(0);
   const [tourVisible, setTourVisible] = useState(false);
   const [tourRect,    setTourRect]    = useState(null);
   const savedRef = useRef(null);
 
-  // ─ Page hint state
-  const [hintPage,    setHintPage]    = useState(null); // pageId string or null
+  const [hintPage,    setHintPage]    = useState(null);
   const [hintRect,    setHintRect]    = useState(null);
-  const hintShownRef = useRef(false); // prevent double-fire within same doc change
+  const hintShownRef = useRef(false);
 
   const currentStep = STEPS[tourStep];
   const currentHint = hintPage ? PAGE_HINTS[hintPage] : null;
 
-  // ─ Measure target element rect (with delay for render) ────────────────────
   function measureRect(tourId, setter, delay = 250) {
     const timer = setTimeout(() => {
       const el = document.querySelector(`[data-tour-id="${tourId}"]`);
@@ -268,7 +360,6 @@ export default function OnboardingTour() {
     return timer;
   }
 
-  // ─ Tour: spotlight tracking ────────────────────────────────────────────────
   useEffect(() => {
     if (!tourVisible || !currentStep?.tourId) { setTourRect(null); return; }
     let timer;
@@ -281,7 +372,6 @@ export default function OnboardingTour() {
     return () => { clearTimeout(timer); window.removeEventListener('resize', update); };
   }, [tourVisible, tourStep, currentStep?.tourId]);
 
-  // ─ Tour: auto-show on first visit ─────────────────────────────────────────
   useEffect(() => {
     const shouldShow = isPublicPcMode()
       ? !sessionStorage.getItem(SESSION_KEY)
@@ -289,14 +379,12 @@ export default function OnboardingTour() {
     if (shouldShow) setTourVisible(true);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ─ Tour: save original page state ─────────────────────────────────────────
   useEffect(() => {
     if (tourVisible && state.initialized && !savedRef.current) {
       savedRef.current = { activeDoc: state.activeDoc, activeEpisodeId: state.activeEpisodeId };
     }
   }, [tourVisible, state.initialized, state.activeDoc, state.activeEpisodeId]);
 
-  // ─ Tour: manual trigger ───────────────────────────────────────────────────
   useEffect(() => {
     const handler = () => {
       savedRef.current = {
@@ -356,7 +444,6 @@ export default function OnboardingTour() {
     setTourStep(prev);
   }, [tourStep, applyNavigation]);
 
-  // ─ Tour: keyboard ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (!tourVisible) return;
     const onKey = (e) => {
@@ -368,9 +455,8 @@ export default function OnboardingTour() {
     return () => window.removeEventListener('keydown', onKey);
   }, [tourVisible, closeTour, goNext, goPrev]);
 
-  // ─ Page hints: show on activeDoc change ───────────────────────────────────
   useEffect(() => {
-    if (tourVisible) return;        // don't show hints during tour
+    if (tourVisible) return;
     if (!state.initialized) return;
 
     const pageId = state.activeDoc === 'script' && state.activeEpisodeId
@@ -382,7 +468,6 @@ export default function OnboardingTour() {
     const seen = getSeenHints();
     if (seen.has(pageId)) return;
 
-    // Small delay to let the page render first
     hintShownRef.current = false;
     const timer = setTimeout(() => {
       if (hintShownRef.current) return;
@@ -406,7 +491,6 @@ export default function OnboardingTour() {
     setHintRect(null);
   }, [hintPage]);
 
-  // ─ Hint: keyboard ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (!hintPage) return;
     const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); closeHint(); } };
@@ -414,10 +498,8 @@ export default function OnboardingTour() {
     return () => window.removeEventListener('keydown', onKey);
   }, [hintPage, closeHint]);
 
-  // ─ Render: initial tour ───────────────────────────────────────────────────
   if (tourVisible) {
-    const isLast   = tourStep === STEPS.length - 1;
-    const isCenter = !tourRect || currentStep.placement === 'center';
+    const isLast = tourStep === STEPS.length - 1;
 
     return (
       <HintCard
@@ -428,7 +510,6 @@ export default function OnboardingTour() {
         onClick={closeTour}
         footer={({ btnBase }) => (
           <>
-            {/* Step dots */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 14 }}>
               {STEPS.map((_, i) => (
                 <div key={i} style={{
@@ -465,7 +546,6 @@ export default function OnboardingTour() {
     );
   }
 
-  // ─ Render: page hint ──────────────────────────────────────────────────────
   if (hintPage && currentHint) {
     return (
       <HintCard

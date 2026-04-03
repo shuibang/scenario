@@ -24,6 +24,7 @@ import BiographyPage from './components/BiographyPage';
 import RelationshipsPage from './components/RelationshipsPage';
 import MyPage from './components/MyPage';
 import OnboardingTour from './components/OnboardingTour';
+import MobileOnboardingTour from './components/mobile/MobileOnboardingTour';
 import SharedReviewView from './components/SharedReviewView';
 import AdBanner from './components/AdBanner';
 // ─── v2: extracted mobile components ──────────────────────────────────────────
@@ -829,7 +830,7 @@ function Shell() {
   const modals = (
     <>
       {printPreviewOpen && <PrintPreviewModal onClose={() => setPrintPreviewOpen(false)} />}
-      <OnboardingTour />
+      {!isMobile && <OnboardingTour />}
       {saveToast && (
         <div style={{
           position: 'fixed', bottom: '32px', left: '50%', transform: 'translateX(-50%)',
@@ -865,7 +866,7 @@ function Shell() {
           WorkTimer={WorkTimer}
         />
         <div data-tour-id="center-panel" className="flex-1 min-h-0 overflow-hidden"
-          style={{ paddingLeft: 'env(safe-area-inset-left, 0px)', paddingRight: 'env(safe-area-inset-right, 0px)' }}
+          style={{ paddingLeft: 'env(safe-area-inset-left, 0px)', paddingRight: 'env(safe-area-inset-right, 0px)', display: 'flex', flexDirection: 'column' }}
         >
           <CenterPanel scrollToSceneId={scrollToSceneId} onScrollHandled={() => setScrollToSceneId(null)} />
         </div>
@@ -880,6 +881,7 @@ function Shell() {
           onTabChange={setMobileTab}
           onScrollToScene={id => setScrollToSceneId(id)}
         />
+        <MobileOnboardingTour />
         {modals}
       </div>
     );
@@ -902,7 +904,7 @@ function Shell() {
             </>
           )}
 
-          <div data-tour-id="center-panel" className="flex-1 min-w-0 overflow-hidden">
+          <div data-tour-id="center-panel" className="flex-1 min-w-0 overflow-hidden" style={{ display: 'flex', flexDirection: 'column' }}>
             <CenterPanel scrollToSceneId={scrollToSceneId} onScrollHandled={() => setScrollToSceneId(null)} />
           </div>
 
@@ -946,7 +948,7 @@ function Shell() {
 
         <DragHandle onDrag={updateLeftWidth} isLeft />
 
-        <div data-tour-id="center-panel" className="flex-1 min-w-0 overflow-hidden">
+        <div data-tour-id="center-panel" className="flex-1 min-w-0 overflow-hidden" style={{ display: 'flex', flexDirection: 'column' }}>
           <CenterPanel
             scrollToSceneId={scrollToSceneId}
             onScrollHandled={() => setScrollToSceneId(null)}

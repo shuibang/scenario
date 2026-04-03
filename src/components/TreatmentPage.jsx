@@ -312,7 +312,7 @@ export default function TreatmentPage() {
   if (!activeProjectId) return null;
 
   return (
-    <div className="h-full flex flex-col" style={{ background: 'var(--c-bg)' }}>
+    <div className="flex-1 min-h-0 flex flex-col" style={{ background: 'var(--c-bg)' }}>
       {/* Header bar — 구조/씬리스트와 동일 스타일 */}
       <div className="flex items-center gap-3 shrink-0" style={{ padding: '10px', borderBottom: '1px solid var(--c-border2)' }}>
         <span className="text-sm font-medium" style={{ color: 'var(--c-text2)' }}>트리트먼트</span>

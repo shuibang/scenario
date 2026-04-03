@@ -70,7 +70,7 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange }) 
       onTouchEnd={handleTouchEnd}
     >
       {/* Tab bar */}
-      <div style={{
+      <div data-tour-id="mobile-tabs" style={{
         height: TAB_H, minHeight: TAB_H, flexShrink: 0,
         display: 'flex', alignItems: 'stretch',
         borderBottom: open ? '1px solid var(--c-border2)' : 'none',

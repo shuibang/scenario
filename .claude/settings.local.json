@@ -3,7 +3,8 @@
     "allow": [
       "Bash(node --input-type=module --eval \"import\\(''''./src/ByeolHayum.jsx''''\\)\")",
       "Bash(npx vite:*)",
-      "Bash(node_modules/.bin/vite build:*)"
+      "Bash(node_modules/.bin/vite build:*)",
+      "Bash(curl -s \"https://raw.githubusercontent.com/airmang/python-hwpx/master/src/hwpx/section.py\")"
     ]
   }
 }

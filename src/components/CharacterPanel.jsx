@@ -314,7 +314,7 @@ export default function CharacterPanel() {
   if (!activeProjectId) return null;
 
   return (
-    <div className="h-full flex flex-col" style={{ background: 'var(--c-bg)' }}>
+    <div className="flex-1 min-h-0 flex flex-col" style={{ background: 'var(--c-bg)' }}>
       <div className="px-6 py-3 flex items-center gap-3 shrink-0" style={{ borderBottom: '1px solid var(--c-border2)' }}>
         <span className="text-sm font-medium" style={{ color: 'var(--c-text2)' }}>인물 ({projectChars.length})</span>
         <div className="flex-1">
