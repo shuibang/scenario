@@ -577,7 +577,125 @@ function SettingsTab() {
   const labelStyle = { fontSize: '11px', color: 'var(--c-text5)', marginBottom: '2px', display: 'block' };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 10 }}>
+
+      {/* 사용 가이드 다시 보기 */}
+      <div
+        className="flex items-start gap-4 p-4 rounded-lg"
+        style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)' }}
+      >
+        <div className="flex-1">
+          <div className="text-sm font-medium mb-0.5" style={{ color: 'var(--c-text)' }}>사용 가이드</div>
+          <div className="text-xs" style={{ color: 'var(--c-text5)' }}>
+            처음 사용자를 위한 단계별 UI 투어를 다시 볼 수 있습니다.
+          </div>
+        </div>
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent('drama:startTour'))}
+          className="shrink-0 text-xs px-3 py-1.5 rounded"
+          style={{ background: 'var(--c-accent)', color: '#fff', border: 'none', cursor: 'pointer' }}
+        >
+          다시 보기
+        </button>
+      </div>
+
+      {/* 공용 PC 모드 */}
+      <div
+        className="flex items-start gap-4 p-4 rounded-lg"
+        style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)' }}
+      >
+        <div className="flex-1">
+          <div className="text-sm font-medium mb-0.5" style={{ color: 'var(--c-text)' }}>공용 PC 모드</div>
+          <div className="text-xs" style={{ color: 'var(--c-text5)' }}>
+            로그아웃 시 localStorage 데이터를 삭제합니다. 공용 컴퓨터 사용 시 활성화하세요.
+          </div>
+        </div>
+        <button
+          onClick={togglePublicPc}
+          className="shrink-0 w-10 h-5 rounded-full transition-colors relative"
+          style={{
+            background: publicPc ? 'var(--c-accent)' : 'var(--c-border3)',
+            border: 'none',
+            cursor: 'pointer',
+          }}
+        >
+          <span
+            className="absolute top-0.5 w-4 h-4 rounded-full transition-transform"
+            style={{
+              background: '#fff',
+              left: publicPc ? '1.25rem' : '0.125rem',
+              transition: 'left 0.15s',
+            }}
+          />
+        </button>
+      </div>
+
+      {/* 설계 도구 설정 */}
+      <div
+        className="p-4 rounded-lg"
+        style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)' }}
+      >
+        <div className="text-sm font-medium mb-1" style={{ color: 'var(--c-text)' }}>설계 도구 설정</div>
+        <div className="text-xs mb-4" style={{ color: 'var(--c-text5)' }}>
+          주 설계 도구는 씬 추가·가져오기가 활성화됩니다. 연동을 켜면 변경사항이 대본에 자동 반영됩니다.
+        </div>
+        <div className="flex flex-col gap-3" style={{ paddingLeft: 20 }}>
+          {[['treatment', '트리트먼트'], ['scenelist', '씬리스트']].map(([tool, label]) => {
+            const isPrimary = designTool === tool;
+            const syncVal = tool === 'treatment' ? treatmentSync : scenelistSync;
+            const isSynced = syncVal === 'sync';
+            return (
+              <div
+                key={tool}
+                className="rounded-lg"
+                style={{
+                  padding: 14,
+                  border: `1px solid ${isPrimary ? 'var(--c-accent)' : 'var(--c-border3)'}`,
+                  background: isPrimary ? 'color-mix(in srgb, var(--c-accent) 6%, transparent)' : 'transparent',
+                }}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold" style={{ color: isPrimary ? 'var(--c-accent)' : 'var(--c-text2)' }}>{label}</span>
+                    {isPrimary && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'var(--c-accent)', color: '#fff' }}>주 설계 도구</span>
+                    )}
+                  </div>
+                  {!isPrimary && (
+                    <button
+                      onClick={() => handleDesignTool(tool)}
+                      className="text-[10px] px-2 py-0.5 rounded"
+                      style={{ background: 'transparent', color: 'var(--c-text5)', border: '1px solid var(--c-border3)', cursor: 'pointer' }}
+                    >
+                      주 도구로 설정
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    {isPrimary && (
+                      <div className="text-[11px] mb-0.5" style={{ color: 'var(--c-accent)' }}>✓ 씬 추가 / 가져오기 활성화됨</div>
+                    )}
+                    <div className="text-[11px]" style={{ color: 'var(--c-text3)' }}>대본 자동 연동</div>
+                    <div className="text-[10px]" style={{ color: 'var(--c-text6)' }}>변경사항이 대본에 자동 반영됩니다</div>
+                  </div>
+                  <button
+                    onClick={() => toggleSync(tool)}
+                    className="w-9 h-5 rounded-full relative shrink-0"
+                    style={{ background: isSynced ? 'var(--c-accent)' : 'var(--c-border3)', border: 'none', cursor: 'pointer' }}
+                  >
+                    <span style={{
+                      position: 'absolute', top: '2px', width: '16px', height: '16px',
+                      borderRadius: '50%', background: '#fff',
+                      left: isSynced ? '18px' : '2px', transition: 'left 0.15s',
+                    }} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       {/* 스타일 설정 */}
       <div className="p-4 rounded-lg" style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)' }}>
@@ -662,125 +780,6 @@ function SettingsTab() {
                 style={{ background: 'var(--c-accent)', color: '#fff', border: 'none', cursor: 'pointer' }}>추가</button>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* 사용 가이드 다시 보기 */}
-      <div
-        className="flex items-start gap-4 p-4 rounded-lg"
-        style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)' }}
-      >
-        <div className="flex-1">
-          <div className="text-sm font-medium mb-0.5" style={{ color: 'var(--c-text)' }}>사용 가이드</div>
-          <div className="text-xs" style={{ color: 'var(--c-text5)' }}>
-            처음 사용자를 위한 단계별 UI 투어를 다시 볼 수 있습니다.
-          </div>
-        </div>
-        <button
-          onClick={() => window.dispatchEvent(new CustomEvent('drama:startTour'))}
-          className="shrink-0 text-xs px-3 py-1.5 rounded"
-          style={{ background: 'var(--c-accent)', color: '#fff', border: 'none', cursor: 'pointer' }}
-        >
-          다시 보기
-        </button>
-      </div>
-
-
-      <div
-        className="flex items-start gap-4 p-4 rounded-lg"
-        style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)' }}
-      >
-        <div className="flex-1">
-          <div className="text-sm font-medium mb-0.5" style={{ color: 'var(--c-text)' }}>공용 PC 모드</div>
-          <div className="text-xs" style={{ color: 'var(--c-text5)' }}>
-            로그아웃 시 localStorage 데이터를 삭제합니다. 공용 컴퓨터 사용 시 활성화하세요.
-          </div>
-        </div>
-        <button
-          onClick={togglePublicPc}
-          className="shrink-0 w-10 h-5 rounded-full transition-colors relative"
-          style={{
-            background: publicPc ? 'var(--c-accent)' : 'var(--c-border3)',
-            border: 'none',
-            cursor: 'pointer',
-          }}
-        >
-          <span
-            className="absolute top-0.5 w-4 h-4 rounded-full transition-transform"
-            style={{
-              background: '#fff',
-              left: publicPc ? '1.25rem' : '0.125rem',
-              transition: 'left 0.15s',
-            }}
-          />
-        </button>
-      </div>
-      {/* 설계 도구 설정 */}
-      <div
-        className="p-4 rounded-lg"
-        style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)' }}
-      >
-        <div className="text-sm font-medium mb-1" style={{ color: 'var(--c-text)' }}>설계 도구 설정</div>
-        <div className="text-xs mb-4" style={{ color: 'var(--c-text5)' }}>
-          주 설계 도구는 씬 추가·가져오기가 활성화됩니다. 연동을 켜면 변경사항이 대본에 자동 반영됩니다.
-        </div>
-
-        <div className="flex flex-col gap-3" style={{ paddingLeft: 20 }}>
-          {[['treatment', '트리트먼트'], ['scenelist', '씬리스트']].map(([tool, label]) => {
-            const isPrimary = designTool === tool;
-            const syncVal = tool === 'treatment' ? treatmentSync : scenelistSync;
-            const isSynced = syncVal === 'sync';
-            return (
-              <div
-                key={tool}
-                className="rounded-lg"
-                style={{
-                  padding: 14,
-                  border: `1px solid ${isPrimary ? 'var(--c-accent)' : 'var(--c-border3)'}`,
-                  background: isPrimary ? 'color-mix(in srgb, var(--c-accent) 6%, transparent)' : 'transparent',
-                }}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold" style={{ color: isPrimary ? 'var(--c-accent)' : 'var(--c-text2)' }}>{label}</span>
-                    {isPrimary && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'var(--c-accent)', color: '#fff' }}>주 설계 도구</span>
-                    )}
-                  </div>
-                  {!isPrimary && (
-                    <button
-                      onClick={() => handleDesignTool(tool)}
-                      className="text-[10px] px-2 py-0.5 rounded"
-                      style={{ background: 'transparent', color: 'var(--c-text5)', border: '1px solid var(--c-border3)', cursor: 'pointer' }}
-                    >
-                      주 도구로 설정
-                    </button>
-                  )}
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    {isPrimary && (
-                      <div className="text-[11px] mb-0.5" style={{ color: 'var(--c-accent)' }}>✓ 씬 추가 / 가져오기 활성화됨</div>
-                    )}
-                    <div className="text-[11px]" style={{ color: 'var(--c-text3)' }}>대본 자동 연동</div>
-                    <div className="text-[10px]" style={{ color: 'var(--c-text6)' }}>변경사항이 대본에 자동 반영됩니다</div>
-                  </div>
-                  <button
-                    onClick={() => toggleSync(tool)}
-                    className="w-9 h-5 rounded-full relative shrink-0"
-                    style={{ background: isSynced ? 'var(--c-accent)' : 'var(--c-border3)', border: 'none', cursor: 'pointer' }}
-                  >
-                    <span style={{
-                      position: 'absolute', top: '2px', width: '16px', height: '16px',
-                      borderRadius: '50%', background: '#fff',
-                      left: isSynced ? '18px' : '2px', transition: 'left 0.15s',
-                    }} />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
         </div>
       </div>
 
@@ -1028,8 +1027,8 @@ export default function MyPage() {
 
         {/* 콘텐츠 */}
         <div className="flex-1 overflow-y-auto">
-          <div className={isMobile ? 'px-4 pt-6' : 'max-w-2xl mx-auto pt-16 pb-10 px-10'}
-               style={isMobile ? { paddingBottom: 'calc(clamp(52px, 14vw, 64px) + 46dvh + 16px)' } : {}}>
+          <div className={isMobile ? '' : 'max-w-2xl mx-auto pt-16 pb-10 px-10'}
+               style={isMobile ? { padding: '24px 20px', paddingBottom: 'calc(clamp(52px, 14vw, 64px) + 46dvh + 16px)' } : {}}>
             {activeTab === 'stats'      && <StatsTab />}
             {activeTab === 'settings'   && <SettingsTab />}
             {activeTab === 'qa'         && <QnATab />}
