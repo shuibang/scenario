@@ -5,14 +5,13 @@
 
 /* ── 토큰 ── */
 .mobile-layout {
-  --m-fs-base:   clamp(14px, 4vw, 16px);
-  --m-fs-sm:     clamp(12px, 3.4vw, 14px);
-  --m-fs-xs:     clamp(11px, 3vw, 13px);
-  --m-fs-brand:  clamp(15px, 4.5vw, 18px);
-  --m-icon:      clamp(18px, 5vw, 22px);
+  --m-fs-base:   14px;
+  --m-fs-sm:     12px;
+  --m-fs-xs:     11px;
+  --m-fs-brand:  15px;
+  --m-icon:      20px;
   --m-pad-x:     20px;
-  --m-pad-y:     14px;
-  --m-item-h:    50px;
+  --m-pad-y:     13px;
   --m-sub-pad-x: 40px;
   --m-radius:    8px;
 }
@@ -23,13 +22,13 @@
   align-items: center;
   gap: 10px;
   padding: var(--m-pad-y) var(--m-pad-x);
-  min-height: var(--m-item-h);
   font-size: var(--m-fs-base);
   color: var(--c-text);
   border-bottom: 1px solid var(--c-border);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   transition: background 0.1s;
+  box-sizing: border-box;
 }
 .mobile-layout .m-item:active {
   background: var(--c-hover);
@@ -45,7 +44,6 @@
   padding-left: var(--m-sub-pad-x);
   font-size: var(--m-fs-sm);
   color: var(--c-text4);
-  min-height: calc(var(--m-item-h) - 8px);
 }
 
 /* ── 섹션 레이블 ── */
