@@ -7,8 +7,6 @@ export function createSeedData() {
   const ep2Id = genId();
   const char1Id = genId();
   const char2Id = genId();
-  const scene1Id = genId();
-
   const projects = [{
     id: projectId,
     title: '새 작품',
@@ -48,28 +46,9 @@ export function createSeedData() {
     },
   ];
 
-  const scenes = [
-    {
-      id: scene1Id, episodeId: ep1Id, projectId,
-      sceneSeq: 1, label: 'S#1.',
-      status: 'draft', tags: [], characters: [],
-      createdAt: t, updatedAt: t,
-    },
-  ];
+  const scenes = [];
 
-  const scriptBlocks = [
-    {
-      id: genId(), episodeId: ep1Id, projectId,
-      type: 'scene_number', content: '',
-      label: 'S#1.', sceneId: scene1Id,
-      createdAt: t, updatedAt: t,
-    },
-    {
-      id: genId(), episodeId: ep1Id, projectId,
-      type: 'action', content: '',
-      label: '', createdAt: t, updatedAt: t,
-    },
-  ];
+  const scriptBlocks = [];
 
   const coverDocs = [{
     id: genId(),

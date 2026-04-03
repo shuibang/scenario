@@ -5,22 +5,17 @@ import { genId, now } from '../store/db';
 const ROLE_LABELS = { lead: '주인공', support: '조연', extra: '단역' };
 
 // ─── Compat helpers ────────────────────────────────────────────────────────────
-// Read the "given name / 호칭" used for script display
 export function charDisplayName(char) {
   return char.givenName || char.name || '';
 }
-// Read the full name for listings
 export function charFullName(char) {
   if (char.surname || char.givenName) {
     return [char.surname, char.givenName].filter(Boolean).join('');
   }
   return char.name || '';
 }
-// Read occupation (new) or job (old)
 function charOccupation(char) { return char.occupation ?? char.job ?? ''; }
-// Read intro (new) or description (old)
 function charIntro(char) { return char.intro ?? char.description ?? ''; }
-// Read extraFields (new) or customFields (old)
 function charExtraFields(char) { return char.extraFields ?? char.customFields ?? []; }
 
 // ─── Migrate existing char → form initial values ───────────────────────────────
@@ -71,16 +66,11 @@ function CharacterForm({ initial, onSave, onCancel }) {
   const handleSave = () => {
     if (!canSave) return;
     const fullName = [form.surname, form.givenName].filter(Boolean).join('') || form.givenName;
-    onSave({
-      ...form,
-      // keep `name` for backward compat with script block charName lookups
-      name: fullName,
-    });
+    onSave({ ...form, name: fullName });
   };
 
   return (
     <div className="rounded-lg p-4 space-y-3" style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)' }}>
-      {/* Row 1: 성 + 이름/호칭 + 비중 */}
       <div className="grid grid-cols-3 gap-2">
         <div>
           <label className="block text-[10px] mb-1 uppercase tracking-wider" style={{ color: 'var(--c-text5)' }}>성</label>
@@ -99,7 +89,6 @@ function CharacterForm({ initial, onSave, onCancel }) {
           </select>
         </div>
       </div>
-      {/* Row 2: 성별 + 나이 */}
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-[10px] mb-1 uppercase tracking-wider" style={{ color: 'var(--c-text5)' }}>성별</label>
@@ -110,19 +99,16 @@ function CharacterForm({ initial, onSave, onCancel }) {
           <input value={form.age} onChange={e => f('age', e.target.value)} style={inputStyle} placeholder="30대 초반 / 32" />
         </div>
       </div>
-      {/* Row 3: 직업 */}
       <div>
         <label className="block text-[10px] mb-1 uppercase tracking-wider" style={{ color: 'var(--c-text5)' }}>직업</label>
         <input value={form.occupation} onChange={e => f('occupation', e.target.value)} style={inputStyle} placeholder="형사 / 배우 / 학생" />
       </div>
-      {/* Row 4: 인물소개 */}
       <div>
         <label className="block text-[10px] mb-1 uppercase tracking-wider" style={{ color: 'var(--c-text5)' }}>인물소개</label>
         <textarea value={form.intro} onChange={e => f('intro', e.target.value)}
           rows={3} style={{ ...inputStyle, resize: 'none' }} placeholder="성격, 배경, 특징 등" />
       </div>
 
-      {/* Extra fields */}
       {(form.extraFields || []).map(cf => (
         <div key={cf.id} className="flex gap-2 items-start">
           <div className="flex-1 space-y-1">
@@ -154,107 +140,200 @@ function CharacterUsage({ char, episodes, scenes, scriptBlocks }) {
   const name = charDisplayName(char);
   const fullName = charFullName(char);
 
+  // Dialogue blocks for this character
   const dialogueBlocks = scriptBlocks.filter(b =>
     b.type === 'dialogue' &&
     b.charName && (b.charName === name || b.charName === fullName)
   );
-  const appearedEpIds = [...new Set(dialogueBlocks.map(b => b.episodeId).filter(Boolean))];
-  const appearedSceneIds = [...new Set(
-    scenes.filter(s => (s.characterIds || []).includes(char.id)).map(s => s.episodeId)
-  )];
-  const allEpIds = [...new Set([...appearedEpIds, ...appearedSceneIds])];
+
+  // Scene number blocks (for label lookup)
+  const sceneNumberBlocks = scriptBlocks.filter(b => b.type === 'scene_number');
+
+  // Scenes where character appears via characterIds
+  const appearedScenes = scenes.filter(s => (s.characterIds || []).includes(char.id));
+
+  // Build dialogue list: group by episode
+  const dialoguesByEp = {};
+  for (const b of dialogueBlocks) {
+    const epId = b.episodeId || '__none__';
+    if (!dialoguesByEp[epId]) dialoguesByEp[epId] = [];
+    dialoguesByEp[epId].push(b);
+  }
+
+  const epMap = {};
+  for (const ep of episodes) epMap[ep.id] = ep;
+
+  const sceneBlockMap = {};
+  for (const b of sceneNumberBlocks) {
+    if (b.sceneId) sceneBlockMap[b.sceneId] = b;
+  }
+
+  const sceneObjMap = {};
+  for (const s of scenes) sceneObjMap[s.id] = s;
+
+  const hasDialogues = dialogueBlocks.length > 0;
+  const hasScenes = appearedScenes.length > 0;
+
+  if (!hasDialogues && !hasScenes) {
+    return (
+      <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--c-border)' }}>
+        <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: 'var(--c-text6)' }}>인물 현황</div>
+        <div className="text-[10px]" style={{ color: 'var(--c-text6)' }}>등장 기록 없음</div>
+      </div>
+    );
+  }
 
   return (
-    <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--c-border)' }}>
-      <div className="text-[10px] uppercase tracking-widest mb-2" style={{ color: 'var(--c-text6)' }}>인물 현황</div>
-      <div className="flex flex-wrap gap-3 text-xs">
-        <span style={{ color: 'var(--c-text4)' }}>
-          대사 <span style={{ color: 'var(--c-accent)', fontWeight: 600 }}>{dialogueBlocks.length}</span>개
-        </span>
-        <span style={{ color: 'var(--c-text4)' }}>
-          등장 회차 <span style={{ color: 'var(--c-accent)', fontWeight: 600 }}>{allEpIds.length}</span>개
-        </span>
-      </div>
-      {allEpIds.length > 0 && (
-        <div className="flex flex-wrap gap-1 mt-2">
-          {allEpIds.map(epId => {
-            const ep = episodes.find(e => e.id === epId);
-            if (!ep) return null;
-            return (
-              <span key={epId} className="text-[10px] px-1.5 py-0.5 rounded"
-                style={{ background: 'var(--c-tag)', color: 'var(--c-accent2)' }}>
-                {ep.number}회{ep.title ? ' ' + ep.title : ''}
-              </span>
-            );
-          })}
+    <div className="mt-3 pt-3 space-y-4" style={{ borderTop: '1px solid var(--c-border)' }}>
+      <div className="text-[10px] uppercase tracking-widest" style={{ color: 'var(--c-text6)' }}>인물 현황</div>
+
+      {/* Dialogues */}
+      {hasDialogues && (
+        <div>
+          <div className="text-xs font-medium mb-2" style={{ color: 'var(--c-text4)' }}>
+            대사 <span style={{ color: 'var(--c-accent)' }}>{dialogueBlocks.length}</span>개
+          </div>
+          <div className="space-y-3">
+            {Object.entries(dialoguesByEp).map(([epId, blocks]) => {
+              const ep = epId !== '__none__' ? epMap[epId] : null;
+              return (
+                <div key={epId}>
+                  {ep && (
+                    <div className="text-[10px] mb-1 font-medium" style={{ color: 'var(--c-accent2)' }}>
+                      {ep.number}회{ep.title ? ' ' + ep.title : ''}
+                    </div>
+                  )}
+                  <div className="space-y-1">
+                    {blocks.map(b => {
+                      const sceneBlock = b.sceneId ? sceneBlockMap[b.sceneId] : null;
+                      const sceneLabel = sceneBlock
+                        ? ((sceneBlock.label || '') + ' ' + (sceneBlock.content || '').replace(/^S#\d+\.?\s*/i, '')).trim()
+                        : '';
+                      const text = (b.content || '').trim();
+                      return (
+                        <div key={b.id} className="text-xs rounded px-2 py-1.5"
+                          style={{ background: 'var(--c-tag)', borderLeft: '2px solid var(--c-accent)' }}>
+                          {sceneLabel && (
+                            <div className="text-[10px] mb-0.5" style={{ color: 'var(--c-text5)' }}>{sceneLabel.trim()}</div>
+                          )}
+                          <div style={{ color: 'var(--c-text3)' }}>
+                            {text ? (text.length > 60 ? text.slice(0, 60) + '…' : text) : <span style={{ color: 'var(--c-text6)' }}>(내용 없음)</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
-      {allEpIds.length === 0 && (
-        <div className="text-[10px] mt-1" style={{ color: 'var(--c-text6)' }}>등장 기록 없음</div>
+
+      {/* Appeared scenes */}
+      {hasScenes && (
+        <div>
+          <div className="text-xs font-medium mb-2" style={{ color: 'var(--c-text4)' }}>
+            등장 씬 <span style={{ color: 'var(--c-accent)' }}>{appearedScenes.length}</span>개
+          </div>
+          <div className="space-y-1">
+            {appearedScenes.map(s => {
+              const ep = s.episodeId ? epMap[s.episodeId] : null;
+              const sceneBlock = sceneNumberBlocks.find(b => b.sceneId === s.id);
+              const label = sceneBlock
+                ? ((sceneBlock.label || '') + ' ' + (sceneBlock.content || '').replace(/^S#\d+\.?\s*/i, '')).trim()
+                : s.location || '';
+              return (
+                <div key={s.id} className="text-xs rounded px-2 py-1.5"
+                  style={{ background: 'var(--c-tag)', borderLeft: '2px solid var(--c-accent2)' }}>
+                  {ep && (
+                    <span className="text-[10px] mr-1.5" style={{ color: 'var(--c-accent2)' }}>
+                      {ep.number}회
+                    </span>
+                  )}
+                  <span style={{ color: 'var(--c-text3)' }}>{label.trim()}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
     </div>
   );
 }
 
-// ─── CharacterCard ─────────────────────────────────────────────────────────────
-function CharacterCard({ char, isSelected, onSelect, onEdit, onDelete, episodes, scenes, scriptBlocks }) {
-  const [confirm, setConfirm] = useState(false);
-
-  const roleColor = { lead: 'var(--c-accent)', support: 'var(--c-accent2)', extra: 'var(--c-text5)' }[char.role] || 'var(--c-text5)';
+// ─── CharacterIndexItem ────────────────────────────────────────────────────────
+function CharacterIndexItem({ char, isSelected, onClick }) {
   const fullName = charFullName(char);
   const displayName = charDisplayName(char);
-  const occupation = charOccupation(char);
-  const intro = charIntro(char);
-  const extraFields = charExtraFields(char);
+  const roleColor = { lead: 'var(--c-accent)', support: 'var(--c-accent2)', extra: 'var(--c-text5)' }[char.role] || 'var(--c-text5)';
 
   return (
     <div
-      className="rounded-lg p-4 group cursor-pointer transition-all"
+      onClick={onClick}
+      className="px-2 py-2 rounded cursor-pointer"
       style={{
-        background: isSelected ? 'var(--c-active)' : 'var(--c-card)',
-        border: `1px solid ${isSelected ? 'var(--c-accent)' : 'var(--c-border)'}`,
+        background: isSelected ? 'var(--c-active)' : 'transparent',
+        borderLeft: `2px solid ${isSelected ? 'var(--c-accent)' : 'transparent'}`,
       }}
-      onClick={() => onSelect(char.id)}
-      onMouseEnter={e => { if (!isSelected) e.currentTarget.style.borderColor = 'var(--c-border2)'; }}
-      onMouseLeave={e => { if (!isSelected) e.currentTarget.style.borderColor = 'var(--c-border)'; }}
     >
+      <div className="text-sm font-medium truncate" style={{ color: isSelected ? 'var(--c-text)' : 'var(--c-text3)' }}>
+        {fullName || displayName}
+      </div>
+      <div className="text-[10px] truncate" style={{ color: roleColor }}>{ROLE_LABELS[char.role] || ''}</div>
+    </div>
+  );
+}
+
+// ─── CharacterDetail ───────────────────────────────────────────────────────────
+function CharacterDetail({ char, onEdit, onDelete, episodes, scenes, scriptBlocks }) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const fullName = charFullName(char);
+  const displayName = charDisplayName(char);
+  const roleColor = { lead: 'var(--c-accent)', support: 'var(--c-accent2)', extra: 'var(--c-text5)' }[char.role] || 'var(--c-text5)';
+
+  return (
+    <div className="rounded-lg p-4" style={{ background: 'var(--c-card)', border: '1px solid var(--c-accent)' }}>
+      {/* Header */}
       <div className="flex items-start justify-between mb-1">
-        <div className="flex items-baseline gap-2">
-          {/* Full name (성+이름) in listing; if only givenName, show that */}
+        <div className="flex items-baseline gap-2 flex-wrap">
           <span className="font-semibold text-base" style={{ color: 'var(--c-text)' }}>{fullName || displayName}</span>
-          {/* Show givenName badge if different from full name (i.e. has surname) */}
           {char.surname && char.givenName && (
             <span className="text-[10px] px-1 rounded" style={{ background: 'var(--c-tag)', color: 'var(--c-text5)' }}>호칭: {char.givenName}</span>
           )}
           {char.age && <span className="text-xs" style={{ color: 'var(--c-text5)' }}>{char.age}</span>}
           {char.gender && <span className="text-xs" style={{ color: 'var(--c-text5)' }}>{char.gender}</span>}
         </div>
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={e => { e.stopPropagation(); onEdit(char); }} className="p-1 text-xs" style={{ color: 'var(--c-text4)' }}>편집</button>
-          {confirm ? (
+        <div className="flex items-center gap-1 shrink-0">
+          <button onClick={onEdit} className="px-2 py-1 text-xs rounded"
+            style={{ color: 'var(--c-text4)', border: '1px solid var(--c-border3)', background: 'transparent' }}>편집</button>
+          {confirmDelete ? (
             <span className="flex items-center gap-1">
-              <button onClick={e => { e.stopPropagation(); onDelete(char.id); }} className="text-xs" style={{ color: '#f87171' }}>확인</button>
-              <button onClick={e => { e.stopPropagation(); setConfirm(false); }} className="text-xs" style={{ color: 'var(--c-text5)' }}>취소</button>
+              <button onClick={onDelete} className="text-xs px-1" style={{ color: '#f87171' }}>확인</button>
+              <button onClick={() => setConfirmDelete(false)} className="text-xs px-1" style={{ color: 'var(--c-text5)' }}>취소</button>
             </span>
           ) : (
-            <button onClick={e => { e.stopPropagation(); setConfirm(true); }} className="p-1 text-xs" style={{ color: 'var(--c-text5)' }}>삭제</button>
+            <button onClick={() => setConfirmDelete(true)} className="px-2 py-1 text-xs rounded"
+              style={{ color: 'var(--c-text5)', border: '1px solid var(--c-border3)', background: 'transparent' }}>삭제</button>
           )}
         </div>
       </div>
 
-      <div className="flex items-center gap-2 mb-1">
+      {/* Role + occupation */}
+      <div className="flex items-center gap-2 mb-2">
         <span className="text-xs font-medium" style={{ color: roleColor }}>{ROLE_LABELS[char.role] || char.role}</span>
-        {occupation && <span className="text-xs" style={{ color: 'var(--c-text5)' }}>· {occupation}</span>}
+        {charOccupation(char) && <span className="text-xs" style={{ color: 'var(--c-text5)' }}>· {charOccupation(char)}</span>}
       </div>
 
-      {intro && (
-        <p className="text-sm leading-relaxed" style={{ color: 'var(--c-text4)' }}>{intro}</p>
+      {/* Intro */}
+      {charIntro(char) && (
+        <p className="text-sm leading-relaxed mb-2" style={{ color: 'var(--c-text4)' }}>{charIntro(char)}</p>
       )}
 
-      {/* Extra fields preview */}
-      {extraFields.length > 0 && (
-        <div className="mt-2 space-y-0.5">
-          {extraFields.map(cf => cf.value ? (
+      {/* Extra fields */}
+      {charExtraFields(char).length > 0 && (
+        <div className="space-y-0.5 mb-2">
+          {charExtraFields(char).map(cf => cf.value ? (
             <div key={cf.id} className="text-xs" style={{ color: 'var(--c-text5)' }}>
               <span style={{ color: 'var(--c-text6)' }}>{cf.label}: </span>{cf.value}
             </div>
@@ -262,11 +341,7 @@ function CharacterCard({ char, isSelected, onSelect, onEdit, onDelete, episodes,
         </div>
       )}
 
-      {isSelected && (
-        window.innerWidth < 768
-          ? <div className="mt-2 text-[10px]" style={{ color: 'var(--c-text5)' }}>인물 현황은 데스크톱에서 확인하세요</div>
-          : <CharacterUsage char={char} episodes={episodes} scenes={scenes} scriptBlocks={scriptBlocks} />
-      )}
+      <CharacterUsage char={char} episodes={episodes} scenes={scenes} scriptBlocks={scriptBlocks} />
     </div>
   );
 }
@@ -308,53 +383,87 @@ export default function CharacterPanel() {
   };
 
   const handleSelect = (charId) => {
+    setAdding(false);
+    setEditingId(null);
     dispatch({ type: 'SET_SELECTED_CHARACTER', id: charId === selectedCharacterId ? null : charId });
   };
 
   if (!activeProjectId) return null;
 
+  const selectedChar = selectedCharacterId ? projectChars.find(c => c.id === selectedCharacterId) : null;
+  const epList    = episodes.filter(e => e.projectId === activeProjectId);
+  const sceneList = scenes.filter(s => s.projectId === activeProjectId);
+  const blockList = scriptBlocks.filter(b => b.projectId === activeProjectId);
+
   return (
-    <div className="flex-1 min-h-0 flex flex-col" style={{ background: 'var(--c-bg)' }}>
-      <div className="px-6 py-3 flex items-center gap-3 shrink-0" style={{ borderBottom: '1px solid var(--c-border2)' }}>
-        <span className="text-sm font-medium" style={{ color: 'var(--c-text2)' }}>인물 ({projectChars.length})</span>
-        <div className="flex-1">
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="이름 검색"
+    <div className="flex-1 min-h-0 flex" style={{ background: 'var(--c-bg)' }}>
+      {/* ── Left: index column ── */}
+      <div className="flex flex-col shrink-0" style={{ width: 110, borderRight: '1px solid var(--c-border2)' }}>
+        {/* Search */}
+        <div className="shrink-0" style={{ padding: '8px 8px 6px', borderBottom: '1px solid var(--c-border2)' }}>
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="검색"
             className="w-full text-xs px-2 py-1 rounded outline-none t-input-field"
-            style={{ border: '1px solid var(--c-border3)' }} />
+            style={{ border: '1px solid var(--c-border3)' }}
+          />
         </div>
-        <button onClick={() => { setAdding(true); setEditingId(null); }}
-          className="px-3 py-1 text-sm rounded text-white" style={{ background: 'var(--c-accent)' }}>
-          + 인물 추가
-        </button>
-      </div>
 
-
-      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
-        {adding && <CharacterForm onSave={handleAdd} onCancel={() => setAdding(false)} />}
-        {filtered.map(char =>
-          editingId === char.id ? (
-            <CharacterForm key={char.id} initial={char} onSave={handleEdit} onCancel={() => setEditingId(null)} />
-          ) : (
-            <CharacterCard
+        {/* List */}
+        <div className="flex-1 overflow-y-auto py-1 space-y-0.5" style={{ paddingLeft: 6, paddingRight: 4 }}>
+          {filtered.map(char => (
+            <CharacterIndexItem
               key={char.id}
               char={char}
-              isSelected={selectedCharacterId === char.id}
-              onSelect={handleSelect}
-              onEdit={c => { setEditingId(c.id); setAdding(false); }}
-              onDelete={id => dispatch({ type: 'DELETE_CHARACTER', id })}
-              episodes={episodes.filter(e => e.projectId === activeProjectId)}
-              scenes={scenes.filter(s => s.projectId === activeProjectId)}
-              scriptBlocks={scriptBlocks.filter(b => b.projectId === activeProjectId)}
+              isSelected={!adding && !editingId && selectedCharacterId === char.id}
+              onClick={() => handleSelect(char.id)}
             />
-          )
+          ))}
+          {filtered.length === 0 && (
+            <div className="text-[10px] text-center py-4" style={{ color: 'var(--c-text6)' }}>
+              {search ? '없음' : '인물 없음'}
+            </div>
+          )}
+        </div>
+
+        {/* Add button */}
+        <div className="shrink-0" style={{ padding: '6px 8px', borderTop: '1px solid var(--c-border2)' }}>
+          <button
+            onClick={() => { setAdding(true); setEditingId(null); dispatch({ type: 'SET_SELECTED_CHARACTER', id: null }); }}
+            className="w-full py-1.5 text-xs rounded text-white"
+            style={{ background: adding ? 'var(--c-accent2)' : 'var(--c-accent)', cursor: 'pointer' }}
+          >+ 추가</button>
+        </div>
+      </div>
+
+      {/* ── Right: detail / form / placeholder ── */}
+      <div className="flex-1 min-w-0 overflow-y-auto" style={{ padding: 10 }}>
+        {adding && (
+          <CharacterForm onSave={handleAdd} onCancel={() => setAdding(false)} />
         )}
-        {filtered.length === 0 && !adding && (
-          <div className="text-center py-12 text-sm" style={{ color: 'var(--c-text5)' }}>
-            {search ? '검색 결과 없음' : '등록된 인물이 없습니다'}
+
+        {!adding && editingId && selectedChar && (
+          <CharacterForm initial={selectedChar} onSave={handleEdit} onCancel={() => setEditingId(null)} />
+        )}
+
+        {!adding && !editingId && selectedChar && (
+          <CharacterDetail
+            char={selectedChar}
+            onEdit={() => setEditingId(selectedChar.id)}
+            onDelete={() => dispatch({ type: 'DELETE_CHARACTER', id: selectedChar.id })}
+            episodes={epList}
+            scenes={sceneList}
+            scriptBlocks={blockList}
+          />
+        )}
+
+        {!adding && !editingId && !selectedChar && (
+          <div className="flex items-center justify-center h-full text-sm" style={{ color: 'var(--c-text6)' }}>
+            인물을 선택하세요
           </div>
         )}
       </div>
-
     </div>
   );
 }

@@ -441,21 +441,15 @@ function PageInfoPanel({ icon, title, items }) {
 // ─── RightPanel ───────────────────────────────────────────────────────────────
 export default function RightPanel({ onScrollToScene }) {
   const { state, dispatch } = useApp();
-  const { scenes, scriptBlocks, activeEpisodeId, activeDoc, selectedCharacterId, activeProjectId, selectedStructureSceneId } = state;
+  const { scenes, scriptBlocks, activeEpisodeId, activeDoc, activeProjectId, selectedStructureSceneId } = state;
 
   const episodeScenes = scenes
     .filter(s => s.episodeId === activeEpisodeId)
     .sort((a, b) => a.sceneSeq - b.sceneSeq);
 
   const [activeSceneId, setActiveSceneId] = useState(null);
-  const [tab, setTab] = useState('scenes'); // 'scenes' | 'character'
   const [tagFilter, setTagFilter] = useState('');
   const [mainTab, setMainTab] = useState('context'); // 'context' | 'checklist'
-
-  // Switch to character tab when a character is selected
-  React.useEffect(() => {
-    if (selectedCharacterId) setTab('character');
-  }, [selectedCharacterId]);
 
   const handleSceneClick = (scene) => {
     setActiveSceneId(scene.id);
@@ -569,18 +563,14 @@ export default function RightPanel({ onScrollToScene }) {
         />
       </div>
     );
-  } else if (isCharView && selectedCharacterId) {
-    contextContent = <CharacterUsagePanel charId={selectedCharacterId} onScrollToScene={onScrollToScene} />;
-  } else if (isScriptView) {
-    contextContent = <SceneOutlineContent />;
-  } else if (activeDoc === 'characters') {
+  } else if (isCharView) {
     contextContent = (
-      <div className="flex-1 flex items-center justify-center">
-        <span className="text-xs text-center px-4" style={{ color: 'var(--c-text6)' }}>
-          인물을 선택하면<br/>인물현황이 표시됩니다
-        </span>
+      <div className="flex-1 flex flex-col items-center justify-center gap-3 px-3">
+        <AdBanner slot="characters-panel" mobileHide={false} style={{ width: '100%' }} />
       </div>
     );
+  } else if (isScriptView) {
+    contextContent = <SceneOutlineContent />;
   } else {
     contextContent = (
       <div className="flex-1 flex items-center justify-center">
@@ -681,7 +671,7 @@ export default function RightPanel({ onScrollToScene }) {
     <div className="h-full flex flex-col" style={{ background: 'var(--c-panel)', borderLeft: '1px solid var(--c-border)' }}>
       {/* Top-level tabs: 문맥(인물현황) | 체크리스트 */}
       <div className="flex shrink-0" style={{ borderBottom: '1px solid var(--c-border)' }}>
-        {[['context', isCharView ? '인물현황' : '문맥'], ['checklist', '체크리스트']].map(([t, l]) => (
+        {[['context', '문맥'], ['checklist', '체크리스트']].map(([t, l]) => (
           <button key={t} onClick={() => setMainTab(t)}
             className="flex-1 py-2 text-[11px] font-medium"
             style={{

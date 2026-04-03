@@ -92,7 +92,7 @@ function DragHandle({ onDrag, isLeft }) {
 }
 
 // ─── Center panel ─────────────────────────────────────────────────────────────
-function CenterPanel({ scrollToSceneId, onScrollHandled }) {
+function CenterPanel({ scrollToSceneId, onScrollHandled, keyboardUp }) {
   const { state } = useApp();
   const { activeDoc, activeEpisodeId, activeProjectId, initialized } = state;
 
@@ -122,7 +122,7 @@ function CenterPanel({ scrollToSceneId, onScrollHandled }) {
   if (activeDoc === 'relationships') return <RelationshipsPage />;
   if (activeDoc === 'mypage') return <MyPage />;
   if (activeDoc === 'script' && activeEpisodeId) {
-    return <ScriptEditor scrollToSceneId={scrollToSceneId} onScrollHandled={onScrollHandled} />;
+    return <ScriptEditor scrollToSceneId={scrollToSceneId} onScrollHandled={onScrollHandled} keyboardUp={keyboardUp} />;
   }
   return (
     <div className="h-full flex items-center justify-center" style={{ background: 'var(--c-bg)' }}>
@@ -755,6 +755,13 @@ function Shell() {
     setMobileBottomOpen(false);
   }, [state.activeDoc]);
 
+  // 키보드 올라오면 하단 패널 자동 닫기 (메모 탭은 입력란이 하단이므로 제외)
+  useEffect(() => {
+    if (keyboardUp && mobileTab !== 'memo') {
+      setMobileBottomOpen(false);
+    }
+  }, [keyboardUp]);
+
   const updateLeftWidth = useCallback((delta) => {
     setPanelWidths(prev => {
       const next = { ...prev, left: Math.min(MAX_LEFT, Math.max(MIN_LEFT, prev.left + delta)) };
@@ -897,7 +904,7 @@ function Shell() {
         <div data-tour-id="center-panel" className="flex-1 min-h-0"
           style={{ paddingLeft: 'env(safe-area-inset-left, 0px)', paddingRight: 'env(safe-area-inset-right, 0px)', display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0, position: 'relative' }}
         >
-          <CenterPanel scrollToSceneId={scrollToSceneId} onScrollHandled={() => setScrollToSceneId(null)} />
+          <CenterPanel scrollToSceneId={scrollToSceneId} onScrollHandled={() => setScrollToSceneId(null)} keyboardUp={keyboardUp} />
         </div>
         {/* 광고: 키보드 올라오거나 패널 열리면 숨김 */}
         <div style={{ flexShrink: 0, height: (keyboardUp || mobileBottomOpen) ? 0 : 20, overflow: 'hidden', transition: 'height 0.2s ease' }}>

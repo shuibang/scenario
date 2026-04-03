@@ -1,11 +1,21 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useApp } from '../store/AppContext';
 import { genId, now } from '../store/db';
+import { parseSceneContent } from '../utils/sceneResolver';
 
 // ─── Import status ────────────────────────────────────────────────────────────
 const STATUS_COLOR = { imported: 'var(--c-accent2)', modified: '#f59e0b', deleted: '#ef4444' };
 const STATUS_LABEL = { imported: '변환됨', modified: '수정됨', deleted: '씬 삭제됨' };
 const STATUS_BADGE = { imported: '✓', modified: '△', deleted: '✕' };
+
+// ─── Scene heading detector ────────────────────────────────────────────────────
+// "특수상황) 장소" 또는 "(시간대)" 패턴이 있으면 씬 헤딩으로 인식
+function looksLikeSceneHeading(text) {
+  if (!text) return false;
+  if (/^[^)]{1,10}\)\s+\S/.test(text)) return true;            // 특수상황) 장소
+  if (/\((낮|밤|아침|오전|오후|저녁|새벽)\)\s*$/.test(text)) return true; // (시간대)
+  return false;
+}
 
 // ─── Migration: old {id, text} → new {id, text, order, ...extra} ─────────────
 function migrateItems(raw) {
@@ -57,6 +67,7 @@ export default function TreatmentPage() {
     return map;
   }, [items, scenes, scriptBlocks, epId]);
   const [importing, setImporting] = useState(false);
+  const [importWarning, setImportWarning] = useState(false);
   const [importMsg, setImportMsg] = useState('');
 
   // textarea refs for focus control after state updates
@@ -266,19 +277,31 @@ export default function TreatmentPage() {
       const sceneId  = genId();
       itemToSceneId.set(it.id, sceneId);
       const sceneSeq = lastSeq + seqOffset++;
+
+      // 첫 줄이 씬 헤딩 형식이면 scene_number에 구조화 필드로, 나머지는 action으로
+      const lines = it.text.trim().split('\n');
+      const firstLine = lines[0].trim();
+      const isHeading = looksLikeSceneHeading(firstLine);
+      const sceneHeadingContent = isHeading ? firstLine : '';
+      const actionContent = isHeading ? lines.slice(1).join('\n').trim() : it.text.trim();
+      const parsedFields = isHeading ? parseSceneContent(firstLine) : {};
+
       newScenes.push({
         id: sceneId, episodeId: epId, projectId: activeProjectId,
         sourceTreatmentItemId: it.id,
         sceneSeq, status: 'draft', tags: [], createdAt: now(), updatedAt: now(),
+        content: sceneHeadingContent,
+        ...parsedFields,
       });
       newBlocks.push({
         id: genId(), episodeId: epId, projectId: activeProjectId,
-        type: 'scene_number', label: '', content: '', sceneId,
+        type: 'scene_number', label: '', content: sceneHeadingContent, sceneId,
         createdAt: now(), updatedAt: now(),
+        ...parsedFields,
       });
       newBlocks.push({
         id: genId(), episodeId: epId, projectId: activeProjectId,
-        type: 'action', label: '', content: it.text.trim(), sceneId,
+        type: 'action', label: '', content: actionContent, sceneId,
         createdAt: now(), updatedAt: now(),
       });
     });
@@ -329,11 +352,31 @@ export default function TreatmentPage() {
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           {importMsg && <span className="text-xs" style={{ color: 'var(--c-accent2)' }}>{importMsg}</span>}
           <button
-            onClick={() => setImporting(true)}
+            onClick={() => {
+              const epSceneCount = scriptBlocks.filter(b => b.episodeId === epId && b.type === 'scene_number').length;
+              const filledCount = items.filter(it => it.text.trim()).length;
+              if (epSceneCount > 0 && epSceneCount > filledCount) {
+                setImportWarning(true);
+              } else {
+                setImporting(true);
+              }
+            }}
             style={{ padding: '3px 10px', borderRadius: 4, fontSize: 11, background: 'transparent', color: 'var(--c-text3)', border: '1px solid var(--c-border3)', cursor: 'pointer' }}
           >대본으로 가져오기</button>
         </div>
       </div>
+
+      {/* Import warning bar */}
+      {importWarning && (
+        <div className="flex items-center gap-2 px-3 py-2 shrink-0" style={{ background: '#7f1d1d22', borderBottom: '1px solid #ef444466' }}>
+          <span className="text-xs flex-1" style={{ color: '#fca5a5' }}>
+            대본에 이미 {scriptBlocks.filter(b => b.episodeId === epId && b.type === 'scene_number').length}개 씬이 있습니다.
+            트리트먼트 항목이 더 적어 기존 내용이 손상될 수 있습니다. 그래도 가져오겠습니까?
+          </span>
+          <button onClick={() => { setImportWarning(false); setImporting(true); }} className="px-3 py-1 rounded text-xs text-white shrink-0" style={{ background: '#ef4444', border: 'none', cursor: 'pointer' }}>가져오기</button>
+          <button onClick={() => setImportWarning(false)} className="px-3 py-1 rounded text-xs shrink-0" style={{ color: 'var(--c-text4)', border: '1px solid var(--c-border3)', background: 'transparent', cursor: 'pointer' }}>취소</button>
+        </div>
+      )}
 
       {/* Import confirmation bar */}
       {importing && (

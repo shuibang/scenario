@@ -159,7 +159,7 @@ export default function ResourcePanel() {
   return (
     <div className="flex-1 min-h-0 flex flex-col" style={{ background: 'var(--c-bg)' }}>
       {/* Header */}
-      <div className="px-6 py-3 flex items-center gap-3 shrink-0" style={{ borderBottom: '1px solid var(--c-border2)' }}>
+      <div className="flex items-center gap-3 shrink-0" style={{ padding: '10px', borderBottom: '1px solid var(--c-border2)' }}>
         <span className="text-sm font-medium" style={{ color: 'var(--c-text2)' }}>자료수집 ({projectResources.length})</span>
         <div className="ml-auto flex gap-2">
           <button
@@ -188,7 +188,7 @@ export default function ResourcePanel() {
       </div>
 
       {/* Grid */}
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto" style={{ padding: 10 }}>
         {projectResources.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-4">
             <div className="text-4xl" style={{ color: 'var(--c-border3)' }}>🖼</div>

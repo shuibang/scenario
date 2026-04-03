@@ -1039,4 +1039,574 @@ const plainAll = Object.values(sections).map(stripHtml).join(' ');
 ---
 
 *이 보고서는 `src/` 디렉토리의 모든 소스 파일을 기반으로 작성되었다.*
+
+---
+
+## 16. UI 레이아웃 상세 치수표 (2026-04-03 기준)
+
+> **이 섹션은 AI가 수정 시 반드시 참조할 기준값이다. 여기 명시된 수치를 변경하려면 사용자의 명시적 요청이 있어야 한다.**
+
+---
+
+### 16.1 반응형 브레이크포인트
+
+| 이름 | 조건 | 파일 |
+|------|------|------|
+| Mobile | `windowWidth < 768` | `App.jsx` |
+| Tablet | `768 ≤ windowWidth < 1280` | `App.jsx` |
+| Desktop (PC) | `windowWidth ≥ 1280` | `App.jsx` |
+
+---
+
+### 16.2 전체 앱 컨테이너
+
+모든 레이아웃 공통:
+```css
+position: fixed;
+top: 0; right: 0; bottom: 0; left: 0;
+width: 100vw;
+display: flex;
+flex-direction: column;
+overflow: hidden;
+background: var(--c-bg);
+```
+
+---
+
+### 16.3 패널 너비 (Desktop / Tablet)
+
+| 패널 | 기본값 | 최솟값 | 최댓값 | 저장 키 |
+|------|--------|--------|--------|---------|
+| 좌측 (LeftPanel) | 224px | 160px | 360px | `panelWidths` (localStorage) |
+| 우측 (RightPanel) | 256px | 180px | 400px | `panelWidths` (localStorage) |
+| DragHandle | 5px | — | — | — |
+| CollapseButton 영역 | 18px | — | — | — |
+
+CollapseButton 버튼 자체 크기: `width: 20px, height: 52px, borderRadius: 10px, paddingTop: 40px`
+
+---
+
+### 16.4 Desktop 레이아웃 구조
+
+```
+[MenuBar — shrink-0]
+[flex flex-1 min-h-0]
+  ┌─ LeftPanel (panelWidths.left px, flexShrink:0) ─┐
+  ├─ DragHandle (5px) ─┤
+  ├─ CenterPanel (flex-1 min-w-0) ─┤
+  ├─ CollapseButton right (18px) ─┤
+  ├─ DragHandle (5px, if !rightCollapsed) ─┤
+  └─ RightPanel (panelWidths.right px, if !rightCollapsed) ─┘
+[AdBanner — height:48px, margin:'0 8px 6px', borderRadius:6]
+```
+
+---
+
+### 16.5 Tablet 레이아웃 구조
+
+Desktop과 동일하나, 좌우 패널이 collapse 버튼으로 완전히 접힘 (오버레이 없음, 공간 차지 제거).
+트리트먼트·씬리스트 페이지 전환 시 우측 패널 자동 닫힘.
+
+---
+
+### 16.6 Mobile 레이아웃 구조
+
+```
+[MobileMenuBar — shrink-0]
+  Row 1: height clamp(36px, 9vw, 44px)
+  Row 2: height clamp(32px, 9vw, 42px)
+[CenterPanel — flex-1 min-h-0]
+[AdBanner — height:20px] ← 키보드/패널 오픈 시 height:0으로 숨김
+[MobileBottomPanel]
+```
+
+Mobile 레이아웃 컨테이너 특이사항:
+```css
+position: fixed;
+top: keyboardUp ? vvOffsetTop : 0
+left: 0; right: 0;
+bottom: keyboardUp ? 'auto' : 0;
+height: keyboardUp ? vvHeight : undefined;
+paddingTop: env(safe-area-inset-top, 0px);
+```
+키보드 감지: `isMobile && (window.innerHeight - vvHeight - vvOffsetTop) > 100`
+
+---
+
+### 16.7 MenuBar (Desktop) — `App.jsx → MenuBar`
+
+배경: `var(--c-header)` = dark: #111111 / light: #f0f0f0
+하단 경계: `1px solid var(--c-border)`
+
+#### Row 1 (상단 브랜드/로그인 줄)
+```css
+height: 36px;  /* h-9 */
+padding: 0 16px;  /* px-4 */
+border-bottom: 1px solid var(--c-border2);
+display: flex; align-items: center;
+```
+| 위치 | 내용 | 스타일 |
+|------|------|--------|
+| Left (flex:1) | 로그인/회원가입/마이페이지 버튼 | `padding: 3px 10px, borderRadius: 4, fontSize: 11px` |
+| Center | "대본 작업실" 브랜드 | `text-xs font-bold` (12px), `color: var(--c-accent)` |
+| Right (flex:1, justify:end) | RealtimeClock + WorkTimer | clock `text-xs`, timer `text-xs` |
+
+#### Row 2 (액션/포맷 줄)
+```css
+height: 32px;  /* h-8 */
+padding: 0 16px;  /* px-4 */
+gap: 4px;  /* gap-1 */
+overflow-x: auto; scrollbar: none;
+display: flex; align-items: center;
+```
+버튼별 스타일 (MenuButton):
+```css
+padding: 3px 10px; borderRadius: 4; fontSize: 11px;
+background: transparent;
+border: 1px solid var(--c-border3);
+```
+
+| 항목 | 크기/규격 |
+|------|----------|
+| 저장 / 출력 버튼 | MenuButton 스타일, 저장=minWidth/maxWidth:5rem |
+| 구분선 (sep) | `width:1px, height:16px` (h-4 w-px) |
+| ↩ ↪ Undo/Redo | `width:24px, height:24px` (w-6 h-6), borderRadius:4 |
+| B / I / U 인라인 포맷 | `width:24px, height:24px`, borderRadius:4 |
+| 글꼴 select | `maxWidth: 110px`, fontSize 11px |
+| 크기 select | 옵션: 9~18pt |
+| 간격 range | `width:64px` (w-16), min:4 max:14 step:0.5 |
+| 테마 버튼 | MenuButton 스타일, ml-auto |
+
+---
+
+### 16.8 MobileMenuBar — `src/components/mobile/MobileMenuBar.jsx`
+
+배경: `var(--c-header)`
+하단 경계: `1px solid var(--c-border)`
+
+#### Row 1 (브랜드/햄버거)
+```css
+height: clamp(36px, 9vw, 44px);
+display: grid; grid-template-columns: 1fr auto 1fr;
+align-items: center;
+padding-left: max(14px, env(safe-area-inset-left, 14px));
+padding-right: max(14px, env(safe-area-inset-right, 14px));
+```
+| 열 | 내용 | 스타일 |
+|----|------|--------|
+| Left (1fr) | ☰ 햄버거 버튼 | `fontSize: clamp(15px, 5vw, 20px)` |
+| Center (auto) | "대본 작업실" | `fontSize: clamp(13px, 4vw, 17px), fontWeight:700, color: var(--c-accent)` |
+| Right (1fr, justify:end) | WorkTimer | — |
+
+☰ 드롭다운:
+```css
+position: fixed;
+top: calc(var(--mobile-header-h, 44px) + 4px);
+left: 14px;
+width: 40vw; min-width: 192px; max-width: 264px;
+max-height: calc(100dvh - var(--mobile-header-h, 44px) - 24px);
+border-radius: 10px;
+zIndex: 300;
+padding: 6px 0;
+```
+드롭 아이템 높이: `padding: 12px 18px, fontSize: clamp(11px, 3.2vw, 14px)`
+
+#### Row 2 (모바일 툴바)
+```css
+height: clamp(32px, 9vw, 42px);
+border-top: 1px solid var(--c-border2);
+padding-left: max(12px, env(safe-area-inset-left, 12px));
+padding-right: max(12px, env(safe-area-inset-right, 12px));
+gap: 6px;
+overflow-x: auto; scrollbar-width: none;
+display: flex; align-items: center;
+```
+
+버튼 공통 스타일 (`mobileTbtnStyle`, `src/styles/tokens.js`):
+```css
+flexShrink: 0;
+fontSize: clamp(10px, 2.8vw, 13px);
+color: var(--c-text4);
+padding: 4px 10px;
+border: 1px solid var(--c-border3);
+borderRadius: 6px;
+background: transparent;
+cursor: pointer;
+WebkitTapHighlightColor: transparent;
+```
+
+Row 2 항목 순서: 저장 | 출력 | `1px×16px 구분선` | B I U | `1px×16px 구분선` | 글꼴 label+select(maxWidth:90px) | 크기 label+−/+버튼 | 간격 label+−/+버튼
+
+---
+
+### 16.9 ScriptEditor — `src/components/ScriptEditor.jsx`
+
+컨테이너:
+```css
+position: absolute; top:0; right:0; bottom:0; left:0;
+display: flex; flex-direction: column;
+background: var(--c-bg);
+```
+
+#### 상단 툴바 (ScriptEditor 내부)
+```css
+padding: 8px 24px;  /* px-6 py-2 */
+display: flex; align-items: center; gap: 8px;
+border-bottom: 1px solid var(--c-border2);
+flex-shrink: 0;
+font-size: 12px;  /* text-xs */
+```
+
+표시 조건: 블록 타입 버튼 6개는 **`!hasKeyboard`일 때만** 렌더링 (데스크톱/태블릿 / 소프트키보드 없을 때)
+
+블록 타입 버튼 공통 (`BTN_W = 40px`):
+```css
+flex-shrink: 0;
+width: 40px;
+text-align: center;
+font-size: clamp(10px, 2.8vw, 13px);
+padding: 4px 0;
+border-radius: 6px;
+border: 1px solid var(--c-border3);  /* 비활성 */
+background: transparent;
+cursor: pointer;
+WebkitTapHighlightColor: transparent;
+transition: background 0.1s, color 0.1s, border-color 0.1s;
+```
+
+버튼 상태:
+| 상태 | border | background | color |
+|------|--------|------------|-------|
+| 기본 | `var(--c-border3)` | transparent | `var(--c-text4)` |
+| 활성(isActive) | `var(--c-accent)` | transparent | `var(--c-accent)`, fontWeight:600 |
+| 대기(isPending) | `var(--c-accent)` | `var(--c-accent)` | #fff |
+
+등장/연결 버튼 추가 스타일: `marginLeft: 4px`
+기타(SymbolPicker) 버튼: `marginLeft: 4px` (SymbolPicker 컴포넌트 안에서)
+
+버튼 6개 순서: S# | 지문 | 대사 | 등장 | 연결 | 기타(SymbolPicker)
+
+툴바 우측 (`ml-auto`): S# 참조 경고뱃지 | PageCounter `text-[10px]` | "● 저장됨" `color: var(--c-border3)`
+
+#### 에디터 스크롤 영역
+```css
+flex: 1; min-height: 0;
+overflow-y: auto;
+position: relative;
+```
+
+에디터 내부 컨테이너:
+```css
+max-width: 672px;  /* max-w-2xl */
+margin: 0 auto;
+padding: 32px 24px;  /* py-8 px-6 */
+/* md(≥768px): padding: 32px 64px */  /* md:px-16 */
+font-family: [stylePreset.fontFamily];
+font-size: [stylePreset.fontSize + 'pt'];
+line-height: [editorLineHeight];
+```
+
+하단 여백 (에디터 안): `height: 192px` (h-48) — 마지막 블록 아래 스크롤 여유
+
+#### 하단 단축키 힌트 바
+```css
+/* 표시 조건: !hasKeyboard && !('ontouchstart' in window) — 데스크톱 전용 */
+padding: 8px 24px;  /* px-6 py-2 */
+border-top: 1px solid var(--c-border);
+color: var(--c-dim);  /* dark: #333333 / light: #aaaaaa */
+font-size: 11px;
+display: flex; gap: 16px; flex-wrap: wrap;
+flex-shrink: 0;
+```
+
+#### 모바일 플로팅 툴바 (키보드 올라왔을 때)
+```css
+/* 표시 조건: hasKeyboard */
+position: fixed;
+bottom: 56px;
+left: 0; right: 0;
+z-index: 400;
+padding: 6px 12px;
+gap: 6px;
+background: var(--c-header);
+border-top: 1px solid var(--c-border);
+overflow-x: auto; scrollbar-width: none;
+display: flex; align-items: center;
+```
+
+버튼 스타일 (모바일 플로팅):
+```css
+flex: 0 0 auto;
+width: 44px;
+font-size: 12px;
+padding: 5px 0;
+border-radius: 6px;
+text-align: center;
+border: 1px solid var(--c-border3);
+background: transparent;
+color: var(--c-text4);
+cursor: pointer;
+WebkitTapHighlightColor: transparent;
+```
+
+버튼 순서: S# | 지문 | 대사 | `1px×16px 구분선` | 등장 | 연결 | 기타(SymbolPicker mobile)
+
+---
+
+### 16.10 블록 CSS 스타일 (`src/index.css`)
+
+#### .ce-block (모든 블록 공통)
+```css
+display: block;
+min-height: 1.4em;
+position: relative;
+```
+
+#### scene_number 블록
+```css
+font-weight: bold;
+margin-top: 1.5em;
+margin-bottom: 0.25em;
+color: var(--c-text);
+```
+`::before` pseudo: `content: attr(data-label) " "`, `color: var(--c-accent2)` = dark:#a78bfa / light:#7c3aed, `user-select: none`
+
+#### action 블록
+```css
+padding-left: 1.5rem;  /* 24px */
+color: var(--c-text2);
+```
+
+#### dialogue 블록
+```css
+display: block;
+padding-left: var(--dialogue-gap, 7em);  /* 기본값 7em, 사용자 조정 가능 */
+position: relative;
+color: var(--c-text);
+white-space: pre-wrap;
+word-break: break-word;
+```
+`::before` pseudo: 인물명, `position: absolute; left:0; top:0; width: var(--dialogue-gap); font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis`
+hover `::before`: `color: var(--c-accent)`
+
+#### scene_ref 블록
+```css
+color: var(--c-accent);
+font-style: italic;
+opacity: 0.85;
+cursor: default;
+```
+
+#### parenthetical 블록
+```css
+padding-left: var(--c-dialogue-gap, 7em);
+font-style: italic;
+color: var(--c-text4);
+```
+
+#### transition 블록
+```css
+text-align: right;
+text-transform: uppercase;
+color: var(--c-text4);
+margin-top: 0.5em;
+margin-bottom: 0.5em;
+```
+
+---
+
+### 16.11 팝업/피커 치수 (모두 createPortal → document.body)
+
+#### SymbolPicker 드롭다운
+```css
+position: fixed;
+top: [버튼.bottom + 4px];
+left: Math.min(rect.left, Math.max(0, window.innerWidth - 200));  /* viewport 클램핑 */
+z-index: 9999;
+min-width: 180px; max-width: 280px;
+border-radius: 0.5rem;
+box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+background: var(--c-tag); border: 1px solid var(--c-border4);
+```
+헤더: `padding: 4px 12px 6px, fontSize: 10px, fontWeight:600, borderBottom: 1px solid var(--c-border)`
+아이템 그리드: `display: flex, flex-wrap: wrap, max-height: 192px, overflow-y: auto`
+각 아이템: `width: 50%, padding: 6px 12px, fontSize: 12px`
+
+#### CharPickerOverlay
+```css
+position: fixed;
+top: anchor.top;  left: anchor.left;
+z-index: 9999;
+border-radius: 0.5rem;
+```
+
+#### SceneRefPicker (씬연결)
+데스크톱:
+```css
+position: fixed;
+top: sceneRefPicker.top; left: sceneRefPicker.left;
+z-index: 9999;
+min-width: 220px;
+border-radius: 0.5rem;
+box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+background: var(--c-tag); border: 1px solid var(--c-border4);
+```
+모바일:
+```css
+position: fixed;
+bottom: 60px; left: 8px; right: 8px;
+z-index: 9999;
+border-radius: 0.5rem;
+```
+헤더: `px-3 py-1.5, font-size: 10px, font-weight: semibold, borderBottom: 1px solid var(--c-border)`
+아이템: `px-3 py-1.5, font-size: 12px, max-height: 192px overflow-y:auto`
+
+#### 선택안함 레이블 (charPickerNoSel)
+```css
+position: fixed;
+top: charPickerNoSel.top; left: charPickerNoSel.left;
+z-index: 9999;
+padding: 4px 10px; border-radius: 6px;
+background: var(--c-tag);
+border: 1px solid #f87171; color: #ef4444;
+font-size: 12px; font-weight: 600;
+pointer-events: none;
+```
+수명: 1800ms 후 자동 제거
+
+---
+
+### 16.12 토스트 / 알림 위치
+
+| 토스트 | 위치 | z-index | 스타일 |
+|--------|------|---------|--------|
+| 저장 완료 (App.jsx) | `bottom:32px, left:50%, translateX(-50%)` | 9999 | `background: var(--c-accent), color:#fff, padding:8px 20px, borderRadius:8px, fontSize:13px` |
+| 붙여넣기 결과 (ScriptEditor) | `bottom:72px, left:50%, translateX(-50%)` | 200 | `background: var(--c-tag), border: 1px solid var(--c-border3), padding:8px 16px, borderRadius:8px, fontSize:11px` |
+| 저장 중/실패 (ScriptEditor) | `bottom:12px, right:12px` | 500 | 저장 중: `var(--c-card)`, 실패: `#fee2e2` border `#fca5a5` |
+
+---
+
+### 16.13 CSS 변수 토큰 전체 참조
+
+#### 다크 모드 (기본)
+```css
+--c-bg:      #1a1a1a   /* 메인 배경 */
+--c-panel:   #171717   /* 좌/우 패널 배경 */
+--c-header:  #111111   /* 상단 바 배경 */
+--c-input:   #242424   /* 입력 필드 배경 */
+--c-hover:   #242424   /* hover 상태 */
+--c-active:  #2a2a4a   /* 선택/활성 상태 */
+--c-tag:     #2a2a3a   /* 팝업/태그/피커 배경 */
+--c-card:    #1e1e1e   /* 카드 배경 */
+
+--c-border:  #252525
+--c-border2: #2a2a2a
+--c-border3: #333333   /* 버튼 테두리 기본 */
+--c-border4: #3a3a4a   /* 피커 테두리 */
+
+--c-text:    #e0e0e0
+--c-text2:   #bbbbbb
+--c-text3:   #888888
+--c-text4:   #666666   /* 버튼 기본 텍스트 */
+--c-text5:   #555555
+--c-text6:   #444444
+--c-dim:     #333333   /* 힌트/단축키 바 */
+
+--c-accent:       #5a5af5   /* 강조색 */
+--c-accent-hover: #6a6aff
+--c-accent2:      #a78bfa   /* 씬번호 레이블 색 */
+```
+
+#### 라이트 모드
+```css
+--c-bg:      #f8f8f8
+--c-panel:   #ffffff
+--c-header:  #f0f0f0
+--c-input:   #eeeeee
+--c-hover:   #ebebeb
+--c-active:  #ede9fe
+--c-tag:     #e8e4ff
+--c-card:    #f5f5f5
+
+--c-border:  #e0e0e0
+--c-border2: #e8e8e8
+--c-border3: #dddddd
+--c-border4: #c4b5fd
+
+--c-text:    #1a1a1a
+--c-text2:   #333333
+--c-text3:   #555555
+--c-text4:   #777777
+--c-text5:   #888888
+--c-text6:   #999999
+--c-dim:     #aaaaaa
+
+--c-accent:       #4f46e5
+--c-accent-hover: #4338ca
+--c-accent2:      #7c3aed
+```
+
+---
+
+### 16.14 스타일 토큰 공통 모듈 (`src/styles/tokens.js`)
+
+```js
+mobileTbtnStyle = {
+  flexShrink: 0,
+  fontSize: 'clamp(10px, 2.8vw, 13px)',
+  color: 'var(--c-text4)',
+  padding: '4px 10px',
+  border: '1px solid var(--c-border3)',
+  borderRadius: 6,
+  background: 'transparent',
+  cursor: 'pointer',
+  WebkitTapHighlightColor: 'transparent',
+}
+
+commonInputStyle = {
+  background: 'var(--c-input)',
+  color: 'var(--c-text)',
+  border: '1px solid var(--c-border3)',
+  borderRadius: '0.375rem',
+  outline: 'none',
+  width: '100%',
+  padding: '0.4rem 0.6rem',
+  fontSize: '0.85rem',
+}
+
+topBarBtnStyle = {
+  padding: '3px 10px',
+  borderRadius: 4,
+  fontSize: 11,
+  background: 'transparent',
+  border: '1px solid var(--c-border3)',
+  color: 'var(--c-text4)',
+  cursor: 'pointer',
+}
+```
+
+---
+
+### 16.15 스크롤바
+
+```css
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+/* 라이트: thumb #ccc, hover #aaa */
+```
+
+---
+
+### 16.16 수정 금지 규칙 (기준값 변경 시 사용자 확인 필요)
+
+1. 브레이크포인트: `< 768` / `768~1279` / `≥ 1280` — 변경 시 전체 레이아웃 영향
+2. 패널 기본 너비: left 224px, right 256px — localStorage 저장값 있으면 그게 우선
+3. MenuBar Row 1: h-9(36px), Row 2: h-8(32px) — 다른 요소와 높이 조율 필요
+4. MobileMenuBar Row 1: clamp(36px, 9vw, 44px), Row 2: clamp(32px, 9vw, 42px)
+5. `BTN_W = 40px` (데스크톱 툴바 버튼) / `44px` (모바일 플로팅 툴바 버튼)
+6. 모바일 플로팅 툴바: `bottom: 56px` — MobileBottomPanel 탭바 높이와 연동
+7. 에디터 본문 max-width: 672px (max-w-2xl) — 출력 레이아웃과 연관
+8. dialogue 기본 gap: 7em — stylePreset.dialogueGap으로 사용자 조정 가능
+9. z-index 계층: 팝업/피커 9999 > 저장상태 500 > 플로팅툴바 400 > 드롭메뉴 300 > CharSuggest 50
 *v2 폴더(`src/v2/`)는 2026-04-01 삭제되었으며 현재 코드베이스에 존재하지 않는다.*

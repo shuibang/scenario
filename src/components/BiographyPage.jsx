@@ -3,6 +3,8 @@ import { useApp } from '../store/AppContext';
 import { charDisplayName, charFullName } from './CharacterPanel';
 import { genId, now } from '../store/db';
 
+const ROLE_LABELS = { lead: '주인공', support: '조연', extra: '단역' };
+
 // ─── BiographyPage — 인물이력서 ────────────────────────────────────────────────
 // 인물별 자유형식 이력서 (추가 필드 + 타임라인 형식)
 export default function BiographyPage() {
@@ -41,27 +43,36 @@ export default function BiographyPage() {
 
   return (
     <div className="h-full flex overflow-hidden" style={{ background: 'var(--c-bg)' }}>
-      {/* Left: char list — 20% */}
-      <div className="shrink-0 overflow-y-auto py-2" style={{ width: '20%', borderRight: '1px solid var(--c-border)', background: 'var(--c-panel)' }}>
-        <div className="px-3 py-2 text-[10px] uppercase tracking-widest" style={{ color: 'var(--c-text6)' }}>인물</div>
-        {projectChars.map(c => (
-          <div
-            key={c.id}
-            onClick={() => setSelectedId(c.id)}
-            className="px-3 py-2 cursor-pointer text-sm truncate"
-            style={{
-              background: selectedId === c.id ? 'var(--c-active)' : 'transparent',
-              color: selectedId === c.id ? 'var(--c-accent)' : 'var(--c-text4)',
-            }}
-            onMouseEnter={e => { if (selectedId !== c.id) e.currentTarget.style.background = 'var(--c-hover)'; }}
-            onMouseLeave={e => { if (selectedId !== c.id) e.currentTarget.style.background = 'transparent'; }}
-          >
-            {charDisplayName(c)}
-          </div>
-        ))}
-        {projectChars.length === 0 && (
-          <div className="px-3 py-4 text-xs text-center" style={{ color: 'var(--c-text6)' }}>인물 없음</div>
-        )}
+      {/* Left: char index — same style as CharacterPanel */}
+      <div className="flex flex-col shrink-0" style={{ width: 110, borderRight: '1px solid var(--c-border2)' }}>
+        <div className="shrink-0" style={{ padding: '8px 8px 6px', borderBottom: '1px solid var(--c-border2)' }}>
+          <span className="text-xs" style={{ color: 'var(--c-text5)' }}>인물이력서</span>
+        </div>
+        <div className="flex-1 overflow-y-auto py-1 space-y-0.5" style={{ paddingLeft: 6, paddingRight: 4 }}>
+          {projectChars.map(c => {
+            const isSelected = selectedId === c.id;
+            const roleColor = { lead: 'var(--c-accent)', support: 'var(--c-accent2)', extra: 'var(--c-text5)' }[c.role] || 'var(--c-text5)';
+            return (
+              <div
+                key={c.id}
+                onClick={() => setSelectedId(c.id)}
+                className="px-2 py-2 rounded cursor-pointer"
+                style={{
+                  background: isSelected ? 'var(--c-active)' : 'transparent',
+                  borderLeft: `2px solid ${isSelected ? 'var(--c-accent)' : 'transparent'}`,
+                }}
+              >
+                <div className="text-sm font-medium truncate" style={{ color: isSelected ? 'var(--c-text)' : 'var(--c-text3)' }}>
+                  {charFullName(c) || charDisplayName(c)}
+                </div>
+                <div className="text-[10px] truncate" style={{ color: roleColor }}>{ROLE_LABELS[c.role] || ''}</div>
+              </div>
+            );
+          })}
+          {projectChars.length === 0 && (
+            <div className="text-[10px] text-center py-4" style={{ color: 'var(--c-text6)' }}>인물 없음</div>
+          )}
+        </div>
       </div>
 
       {/* Right: biography editor */}

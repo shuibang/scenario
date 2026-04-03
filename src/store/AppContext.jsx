@@ -61,6 +61,7 @@ const initialState = {
   isPro: false,
   saveStatus: 'saved',
   scrollToSceneId: null,
+  pendingScriptReload: null, // episodeId — tells ScriptEditor to reload blocks from store
   // Undo/Redo (session-only, not persisted)
   undoStack: [],   // snapshots of { episodes, scenes, scriptBlocks }
   redoStack: [],
@@ -160,6 +161,7 @@ function reducer(state, action) {
           ...state.scriptBlocks.filter(b => b.episodeId !== episodeId),
           ...labelled,
         ],
+        pendingScriptReload: episodeId,
         // Also persist import-tracking metadata back into episode.summaryItems
         episodes: updatedSummaryItems
           ? state.episodes.map(e =>
@@ -168,6 +170,9 @@ function reducer(state, action) {
           : state.episodes,
       };
     }
+
+    case 'CLEAR_PENDING_RELOAD':
+      return { ...state, pendingScriptReload: null };
 
     case 'SET_COVER':
       return {

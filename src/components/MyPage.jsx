@@ -645,8 +645,7 @@ function SettingsTab() {
         <div className="flex flex-col gap-3" style={{ paddingLeft: 20 }}>
           {[['treatment', '트리트먼트'], ['scenelist', '씬리스트']].map(([tool, label]) => {
             const isPrimary = designTool === tool;
-            const syncVal = tool === 'treatment' ? treatmentSync : scenelistSync;
-            const isSynced = syncVal === 'sync';
+            const isSynced = tool === 'scenelist' && scenelistSync === 'sync';
             return (
               <div
                 key={tool}
@@ -674,26 +673,31 @@ function SettingsTab() {
                     </button>
                   )}
                 </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    {isPrimary && (
-                      <div className="text-[11px] mb-0.5" style={{ color: 'var(--c-accent)' }}>✓ 씬 추가 / 가져오기 활성화됨</div>
-                    )}
-                    <div className="text-[11px]" style={{ color: 'var(--c-text3)' }}>대본 자동 연동</div>
-                    <div className="text-[10px]" style={{ color: 'var(--c-text6)' }}>변경사항이 대본에 자동 반영됩니다</div>
+                {tool === 'scenelist' && (
+                  <div className="flex items-center justify-between">
+                    <div>
+                      {isPrimary && (
+                        <div className="text-[11px] mb-0.5" style={{ color: 'var(--c-accent)' }}>✓ 씬 추가 / 가져오기 활성화됨</div>
+                      )}
+                      <div className="text-[11px]" style={{ color: 'var(--c-text3)' }}>대본 자동 연동</div>
+                      <div className="text-[10px]" style={{ color: 'var(--c-text6)' }}>변경사항이 대본에 자동 반영됩니다</div>
+                    </div>
+                    <button
+                      onClick={() => toggleSync('scenelist')}
+                      className="w-9 h-5 rounded-full relative shrink-0"
+                      style={{ background: isSynced ? 'var(--c-accent)' : 'var(--c-border3)', border: 'none', cursor: 'pointer' }}
+                    >
+                      <span style={{
+                        position: 'absolute', top: '2px', width: '16px', height: '16px',
+                        borderRadius: '50%', background: '#fff',
+                        left: isSynced ? '18px' : '2px', transition: 'left 0.15s',
+                      }} />
+                    </button>
                   </div>
-                  <button
-                    onClick={() => toggleSync(tool)}
-                    className="w-9 h-5 rounded-full relative shrink-0"
-                    style={{ background: isSynced ? 'var(--c-accent)' : 'var(--c-border3)', border: 'none', cursor: 'pointer' }}
-                  >
-                    <span style={{
-                      position: 'absolute', top: '2px', width: '16px', height: '16px',
-                      borderRadius: '50%', background: '#fff',
-                      left: isSynced ? '18px' : '2px', transition: 'left 0.15s',
-                    }} />
-                  </button>
-                </div>
+                )}
+                {tool === 'treatment' && isPrimary && (
+                  <div className="text-[11px]" style={{ color: 'var(--c-accent)' }}>✓ 씬 추가 / 가져오기 활성화됨</div>
+                )}
               </div>
             );
           })}

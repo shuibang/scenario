@@ -17,7 +17,7 @@ const DEFAULT_SYMBOLS = ['(E)', '(F)', 'Flashback', 'Insert', 'Ins.', 'Subtitle)
 // ─── Symbol Picker ────────────────────────────────────────────────────────────
 function SymbolPicker({ mobile = false, closeToken = 0, onOpen }) {
   const { state } = useApp();
-  // dropPos null = closed, { top, left } = open — 둘을 분리하지 않아 (0,0) 렌더 방지
+  // dropPos null = closed, { top?, bottom?, left } = open — 둘을 분리하지 않아 (0,0) 렌더 방지
   const [dropPos, setDropPos] = useState(null);
   const [activeIdx, setActiveIdx] = useState(-1);
   const ref = useRef(null);
@@ -26,6 +26,23 @@ function SymbolPicker({ mobile = false, closeToken = 0, onOpen }) {
   const customSymbols = state.stylePreset?.customSymbols || [];
   const allSymbols = [...DEFAULT_SYMBOLS, ...customSymbols];
   const open = dropPos !== null;
+
+  // 버튼 rect를 받아 위/아래 중 공간이 넓은 쪽으로 드롭다운 위치 계산
+  // visualViewport 기준 사용 — 모바일 키보드가 올라와 있을 때 window.innerHeight는 키보드 포함이라 부정확
+  const calcDropPos = (rect) => {
+    const dropW = 200;
+    const dropH = 220;
+    const left = Math.min(rect.left, Math.max(0, window.innerWidth - dropW));
+    const vvTop = window.visualViewport?.offsetTop ?? 0;
+    const vvH   = window.visualViewport?.height ?? window.innerHeight;
+    const spaceBelow = (vvTop + vvH) - rect.bottom;
+    const spaceAbove = rect.top - vvTop;
+    if (spaceBelow >= dropH || spaceBelow >= spaceAbove) {
+      return { top: rect.bottom + 4, left };
+    }
+    // 위로 열기 — top 기반으로 계산 (bottom 기반은 키보드에 가려질 수 있음)
+    return { top: Math.max(vvTop + 4, rect.top - dropH - 4), left };
+  };
 
   // 외부에서 닫기 요청 (closeToken 변경)
   useEffect(() => {
@@ -52,11 +69,7 @@ function SymbolPicker({ mobile = false, closeToken = 0, onOpen }) {
           setDropPos(null);
         } else {
           const rect = btnRef.current?.getBoundingClientRect();
-          if (rect) {
-            const dropW = 200;
-            const left = Math.min(rect.left, Math.max(0, window.innerWidth - dropW));
-            setDropPos({ top: rect.bottom + 4, left });
-          }
+          if (rect) setDropPos(calcDropPos(rect));
         }
       }
     };
@@ -118,9 +131,7 @@ function SymbolPicker({ mobile = false, closeToken = 0, onOpen }) {
             setDropPos(null);
           } else {
             const rect = e.currentTarget.getBoundingClientRect();
-            const dropW = 200; // minWidth 여유
-            const left = Math.min(rect.left, Math.max(0, window.innerWidth - dropW));
-            setDropPos({ top: rect.bottom + 4, left });
+            setDropPos(calcDropPos(rect));
             onOpen?.();
           }
         }}
@@ -144,7 +155,10 @@ function SymbolPicker({ mobile = false, closeToken = 0, onOpen }) {
         <div
           ref={dropRef}
           style={{
-            position: 'fixed', top: dropPos.top, left: dropPos.left, zIndex: 9999,
+            position: 'fixed',
+            top: dropPos.top,
+            left: dropPos.left,
+            zIndex: 9999,
             background: 'var(--c-tag)', border: '1px solid var(--c-border4)',
             borderRadius: '0.5rem', overflow: 'hidden',
             minWidth: '180px', maxWidth: '280px', boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
@@ -1026,7 +1040,6 @@ const EditorSurface = forwardRef(function EditorSurface({
         lineHeight,
         outline: 'none',
         '--dialogue-gap': dialogueGap || '7em',
-        minHeight: '100%',
         caretColor: 'var(--c-accent)',
       }}
       className="ce-surface"
@@ -1041,11 +1054,12 @@ const EditorSurface = forwardRef(function EditorSurface({
 });
 
 // ─── ScriptEditor (main) ──────────────────────────────────────────────────────
-export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
+export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboardUp }) {
   const { state, dispatch } = useApp();
   const {
     activeEpisodeId, activeProjectId, scriptBlocks,
     scenes, characters, saveStatus, saveErrorMsg, initialized, stylePreset,
+    pendingScriptReload,
   } = state;
 
   const [blocks, setBlocks] = useState([]);
@@ -1067,7 +1081,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
   const [activeBlockType, setActiveBlockType] = useState(null);  // 현재 커서의 블록 타입 (툴바 하이라이트)
   const [charCheckPicker, setCharCheckPicker] = useState(null); // { sceneId, top, left, mobile }
   const [symbolPickerCloseToken, setSymbolPickerCloseToken] = useState(0);
-  const [hasKeyboard, setHasKeyboard] = useState(false); // 소프트/물리 키보드 감지 — useCallback deps에서 참조하므로 여기서 선언
+  const hasKeyboard = !!keyboardUp; // App.jsx에서 내려온 키보드 감지값 사용
   const charCheckBtnRef = useRef(null);
   const editorScrollRef = useRef(null);
 
@@ -1115,6 +1129,18 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
     lastSavedBlocks.current = JSON.stringify(loaded);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeEpisodeId, initialized]);
+
+  // ── External block injection (e.g. IMPORT_TREATMENT_TO_SCRIPT)
+  useEffect(() => {
+    if (!pendingScriptReload || pendingScriptReload !== activeEpisodeId) return;
+    const epBlocks = scriptBlocks.filter(b => b.episodeId === activeEpisodeId);
+    if (!epBlocks.length) return;
+    lastSavedBlocks.current = JSON.stringify(epBlocks);
+    setBlocks(epBlocks);
+    requestAnimationFrame(() => surfaceApiRef.current?.loadBlocks(epBlocks));
+    dispatch({ type: 'CLEAR_PENDING_RELOAD' });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingScriptReload]);
 
   // ── Debounced save + scene sync
   useEffect(() => {
@@ -1716,23 +1742,9 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
   const editorLineHeight = stylePreset?.lineHeight ?? 1.6;
   const { cssStack: editorFontFamily } = resolveFont(stylePreset, 'editor');
 
-  // 키보드 감지 — 모바일(<768px)에서만 활성화
-  useEffect(() => {
-    const check = () => {
-      if (!window.visualViewport) return;
-      const isMobileWidth = window.innerWidth < 768;
-      setHasKeyboard(isMobileWidth && window.visualViewport.height / screen.height < 0.75);
-    };
-    check(); // 마운트 시 즉시 확인
-    window.visualViewport?.addEventListener('resize', check);
-    window.visualViewport?.addEventListener('scroll', check);
-    return () => {
-      window.visualViewport?.removeEventListener('resize', check);
-      window.visualViewport?.removeEventListener('scroll', check);
-    };
-  }, []);
+  // 키보드 감지: App.jsx의 keyboardUp prop 사용 (제거됨)
 
-  // 커서 중앙 자동스크롤
+  // 커서 자동스크롤 — 커서가 뷰 밖으로 나갈 때만 스크롤 (smooth 제거로 흔들림 방지)
   useEffect(() => {
     let raf = null;
     const handleSelectionChange = () => {
@@ -1746,9 +1758,13 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
         const scrollEl = editorScrollRef.current;
         if (!scrollEl || rect.height === 0) return;
         const elRect = scrollEl.getBoundingClientRect();
-        const cursorY = rect.top - elRect.top + scrollEl.scrollTop;
+        const MARGIN = 80; // 상하 여백 — 커서가 이 범위 안에 있으면 스크롤 안 함
+        const tooHigh = rect.top < elRect.top + MARGIN;
+        const tooLow  = rect.bottom > elRect.bottom - MARGIN;
+        if (!tooHigh && !tooLow) return; // 커서가 뷰 안에 있으면 무시
+        const cursorY  = rect.top - elRect.top + scrollEl.scrollTop;
         const targetTop = cursorY - scrollEl.clientHeight / 2;
-        scrollEl.scrollTo({ top: targetTop, behavior: 'smooth' });
+        scrollEl.scrollTo({ top: targetTop, behavior: 'instant' });
       });
     };
     document.addEventListener('selectionchange', handleSelectionChange);
@@ -2097,10 +2113,16 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
             style={{
               position: 'fixed', zIndex: 9999, borderRadius: '0.5rem',
               boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
-              ...(sceneRefPicker.mobile ? {
-                bottom: 60, left: 8, right: 8,
-                background: 'var(--c-tag)', border: '1px solid var(--c-border4)',
-              } : {
+              ...(sceneRefPicker.mobile ? (() => {
+                // visual viewport 기준으로 floating toolbar 바로 위에 위치
+                // bottom: X (fixed) 는 layout viewport 기준 → 키보드에 가려질 수 있어 top 기준 사용
+                const vvTop = window.visualViewport?.offsetTop ?? 0;
+                const vvH   = window.visualViewport?.height ?? window.innerHeight;
+                const toolbarH = 50; // 플로팅 툴바 높이 근사값
+                const pickerH  = 240;
+                const top = Math.max(vvTop + 8, vvTop + vvH - toolbarH - pickerH - 8);
+                return { top, left: 8, right: 8, background: 'var(--c-tag)', border: '1px solid var(--c-border4)' };
+              })() : {
                 top: sceneRefPicker.top, left: sceneRefPicker.left,
                 background: 'var(--c-tag)', border: '1px solid var(--c-border4)',
                 minWidth: '220px',
@@ -2177,10 +2199,10 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
         </div>
       )}
 
-      {/* 모바일 플로팅 툴바 — 소프트 키보드가 올라와 있을 때 */}
+      {/* 모바일 플로팅 툴바 — 소프트 키보드가 올라와 있을 때 (flex 항목으로 배치 — position:fixed 대신) */}
       {hasKeyboard && (
         <div style={{
-          position: 'fixed', bottom: 56, left: 0, right: 0, zIndex: 400,
+          flexShrink: 0,
           display: 'flex', alignItems: 'center', gap: 6,
           padding: '6px 12px',
           background: 'var(--c-header)',
@@ -2222,7 +2244,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled }) {
             }}
           >등장</button>
           <button
-            onMouseDown={e => {
+            onPointerDown={e => {
               e.preventDefault();
               setCharCheckPicker(null);
               setCharPickerState(null);
