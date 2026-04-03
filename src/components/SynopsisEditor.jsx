@@ -14,7 +14,13 @@ const SECTIONS = [
 // ─── Migrate old plain-text synopsis → new section format
 function migrateDoc(doc) {
   if (!doc) return { genre: '', theme: '', logline: '', intent: '', story: '' };
-  if (doc.genre !== undefined) return { logline: '', ...doc };
+  if (doc.genre !== undefined) return {
+    genre:   doc.genre   || '',
+    theme:   doc.theme   || '',
+    logline: doc.logline || '',
+    intent:  doc.intent  || '',
+    story:   doc.story   || '',
+  };
   return { genre: '', theme: '', logline: '', intent: '', story: doc.content || '' };
 }
 
