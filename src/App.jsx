@@ -716,6 +716,24 @@ function Shell() {
   const [mobileBottomOpen, setMobileBottomOpen] = useState(false);
   const [mobileTab, setMobileTab]               = useState('script');
 
+  // ── Mobile keyboard detection via visualViewport
+  const [vvHeight, setVvHeight] = useState(() => window.visualViewport?.height ?? window.innerHeight);
+  const [vvOffsetTop, setVvOffsetTop] = useState(0);
+  useEffect(() => {
+    if (!isMobile || !window.visualViewport) return;
+    const handler = () => {
+      setVvHeight(window.visualViewport.height);
+      setVvOffsetTop(window.visualViewport.offsetTop);
+    };
+    window.visualViewport.addEventListener('resize', handler);
+    window.visualViewport.addEventListener('scroll', handler);
+    return () => {
+      window.visualViewport.removeEventListener('resize', handler);
+      window.visualViewport.removeEventListener('scroll', handler);
+    };
+  }, [isMobile]);
+  const keyboardUp = isMobile && (window.innerHeight - vvHeight - vvOffsetTop) > 100;
+
   useEffect(() => {
     if (state.activeDoc === 'mypage') setMobileBottomOpen(false);
   }, [state.activeDoc]);
@@ -834,7 +852,10 @@ function Shell() {
         className="mobile-layout w-screen flex flex-col overflow-hidden"
         style={{
           background: 'var(--c-bg)',
-          height: '100svh',
+          position: keyboardUp ? 'fixed' : 'relative',
+          top:    keyboardUp ? vvOffsetTop : 0,
+          left: 0, right: 0,
+          height: keyboardUp ? vvHeight : '100svh',
           paddingTop: 'env(safe-area-inset-top, 0px)',
         }}
       >
@@ -848,8 +869,8 @@ function Shell() {
         >
           <CenterPanel scrollToSceneId={scrollToSceneId} onScrollHandled={() => setScrollToSceneId(null)} />
         </div>
-        {/* 콘텐츠 아래 광고 — 항상 마운트, 패널 열리면 height:0으로 숨김 */}
-        <div style={{ flexShrink: 0, height: mobileBottomOpen ? 0 : 60, overflow: 'hidden', transition: 'height 0.25s ease' }}>
+        {/* 광고: 키보드 올라오거나 패널 열리면 숨김 */}
+        <div style={{ flexShrink: 0, height: (keyboardUp || mobileBottomOpen) ? 0 : 60, overflow: 'hidden', transition: 'height 0.2s ease' }}>
           <AdBanner slot="mobile-bottom" mobileHide={false} height={60} />
         </div>
         <MobileBottomPanel
