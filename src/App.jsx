@@ -366,6 +366,7 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, authUser, setA
         }
       }
       setDriveStatus('synced');
+      setTimeout(() => setDriveStatus('none'), 3000);
     } catch (e) {
       console.warn('[Drive] 불러오기 실패:', e);
       setDriveStatus('error');
@@ -444,10 +445,10 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, authUser, setA
               {authUser.picture && <img src={authUser.picture} alt="" className="w-5 h-5 rounded-full" />}
               <span className="text-xs" style={{ color: 'var(--c-text3)' }}>{authUser.name}</span>
               {driveStatus === 'syncing' && (
-                <span className="text-[10px]" style={{ color: 'var(--c-text5)' }}>☁ 동기화 중…</span>
+                <span className="text-[10px]" style={{ color: 'var(--c-text5)' }}>동기화 중…</span>
               )}
               {driveStatus === 'synced' && (
-                <span className="text-[10px]" style={{ color: '#4ade80' }}>☁ 동기화됨</span>
+                <span className="text-[10px]" style={{ color: '#4ade80' }}>저장됨</span>
               )}
               {driveStatus === 'error' && (
                 <span
@@ -458,7 +459,7 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, authUser, setA
                     setDriveStatus('none');
                     tokenClientRef.current?.requestAccessToken({ prompt: '' });
                   }}
-                >☁ 연동 실패 (재시도)</span>
+                >Drive 오류 (재시도)</span>
               )}
               <button onClick={() => {
                   if (isPublicPcMode()) clearDramaStorage();
