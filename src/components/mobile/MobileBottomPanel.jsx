@@ -1,7 +1,7 @@
 import React from 'react';
 import { useApp } from '../../store/AppContext';
 import MobileScriptTab from './MobileScriptTab';
-import MobileMemoTab from './MobileMemoTab';
+import MobileMemoTab, { MobileChecklistPanel } from './MobileMemoTab';
 import AdBanner from '../AdBanner';
 
 const TABS = [
@@ -24,10 +24,11 @@ const PLAN_DOCS = [
   { doc: 'scenelist',  label: '씬리스트' },
 ];
 
-const TAB_H    = 56;   // px — 탭바 고정 높이
-const OPEN_H   = 280;  // px — 열렸을 때 패널 전체 고정 높이
-const BANNER_H = 20;   // px — 하단 광고 고정 높이
-const CONTENT_H = OPEN_H - TAB_H - BANNER_H; // 콘텐츠 영역 = 204px
+const TAB_H     = 56;   // px — 탭바 고정 높이
+const OPEN_H    = 280;  // px — 열렸을 때 패널 전체 고정 높이
+const CONTENT_H = OPEN_H - TAB_H; // 콘텐츠 영역 = 224px
+const AD_W      = '38%'; // 왼쪽 광고
+const MENU_W    = '62%'; // 오른쪽 메뉴
 
 export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, onClose }) {
   const { state, dispatch } = useApp();
@@ -85,12 +86,23 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, on
         >{open ? '▾' : '▴'}</button>
       </div>
 
-      {/* 탭 콘텐츠 — 고정 높이로 모든 탭 통일 */}
+      {/* 탭 콘텐츠 — 좌우 2분할: 왼쪽=광고(or 체크리스트), 오른쪽=메뉴 */}
       {open && (
-        <>
-          <div data-bottom-panel
-            style={{ height: CONTENT_H, minHeight: CONTENT_H, overflowY: 'auto', touchAction: 'pan-y' }}
-          >
+        <div
+          data-bottom-panel
+          style={{ height: CONTENT_H, minHeight: CONTENT_H, display: 'flex', flexDirection: 'row', overflow: 'hidden' }}
+        >
+          {/* 왼쪽: 메모탭=코멘트 / 나머지=광고 */}
+          <div style={{ width: AD_W, minWidth: 0, height: '100%', flexShrink: 0, overflow: 'hidden', borderRight: '1px solid var(--c-border)' }}>
+            {tab === 'memo' ? (
+              <MobileMemoTab />
+            ) : (
+              <AdBanner slot="mobile-bottom-left" mobileHide={false} height={CONTENT_H} style={{ height: '100%' }} />
+            )}
+          </div>
+
+          {/* 오른쪽: 메뉴 콘텐츠 / 메모탭=체크리스트 */}
+          <div style={{ width: MENU_W, minWidth: 0, overflowY: 'auto', touchAction: 'pan-y', height: '100%' }}>
             {tab === 'script' && (
               <div data-tour-id="left-panel" className="m-panel-content">
                 <MobileScriptTab onClose={onClose} />
@@ -118,18 +130,9 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, on
                 ))}
               </div>
             )}
-            {tab === 'memo' && (
-              <div className="m-panel-content">
-                <MobileMemoTab />
-              </div>
-            )}
+            {tab === 'memo' && <MobileChecklistPanel />}
           </div>
-
-          {/* 하단 광고 — 고정 높이 */}
-          <div style={{ height: BANNER_H, minHeight: BANNER_H, flexShrink: 0, overflow: 'hidden' }}>
-            <AdBanner slot="mobile-bottom" mobileHide={false} height={BANNER_H} />
-          </div>
-        </>
+        </div>
       )}
     </div>
   );
