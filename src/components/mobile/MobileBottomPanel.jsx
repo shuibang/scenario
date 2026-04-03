@@ -49,6 +49,8 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange }) 
     const savedState = { wasOpen: false };
     const handler = () => {
       const keyboardUp = (window.visualViewport.height / window.screen.height) < 0.75;
+      // 패널 내부 입력창에 포커스된 경우엔 접지 않음
+      if (keyboardUp && document.activeElement?.closest('[data-bottom-panel]')) return;
       if (keyboardUp && openRef.current && !savedState.wasOpen) {
         savedState.wasOpen = true;
         toggleRef.current();
@@ -117,9 +119,9 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange }) 
 
       {/* Panel content */}
       {open && (
-        <div style={{ flex: 1, overflow: 'auto', minHeight: 0, touchAction: 'pan-y' }}>
+        <div data-bottom-panel style={{ flex: 1, overflow: 'auto', minHeight: 0, touchAction: 'pan-y' }}>
           {tab === 'script' && (
-            <div data-tour-id="left-panel" className="m-panel-content" style={{ height: '100%', overflowY: 'auto' }}>
+            <div data-tour-id="left-panel" className="m-panel-content">
               <MobileScriptTab />
             </div>
           )}
@@ -149,7 +151,7 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange }) 
               ))}
             </div>
           )}
-          {tab === 'memo' && <div className="m-panel-content" style={{ height: '100%' }}><MobileMemoTab /></div>}
+          {tab === 'memo' && <div className="m-panel-content"><MobileMemoTab /></div>}
         </div>
       )}
     </div>
