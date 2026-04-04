@@ -35,6 +35,7 @@ import MobileBottomPanel from './components/mobile/MobileBottomPanel';
 import { mobileTbtnStyle } from './styles/tokens';
 import UpdateBanner from './components/UpdateBanner';
 import { applyInlineFormat } from './utils/textFormat';
+import { getLayoutMetrics } from './print/LineTokenizer';
 import { saveReviewPayload } from './utils/reviewShare';
 
 // ─── Panel width persistence ───────────────────────────────────────────────────
@@ -121,73 +122,125 @@ function getTimelineColor(ratio) {
   return `rgb(${c.r},${c.g},${c.b})`;
 }
 
-function TimelineStrip({ scrollRef }) {
+// 마커가 콘텐츠와 함께 스크롤되는 타임라인
+function TimelineStrip({ scrollEl }) {
   const { state } = useApp();
-  const [scrollRatio, setScrollRatio] = useState(0);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [contentHeight, setContentHeight] = useState(0);
+
   const activeProject = state.projects.find(p => p.id === state.activeProjectId);
-  const totalMinutes = activeProject?.targetMinutes || 70;
+  const activeEpisodeId = state.activeEpisodeId;
+  const episode = activeProject?.episodes?.find(e => e.id === activeEpisodeId);
+  const blocks = episode?.blocks || [];
+  const stylePreset = activeProject?.stylePreset || {};
+  const targetMinutes = activeProject?.targetMinutes || 70;
+
+  // ScriptEditor의 PageCounter와 동일한 로직으로 총 페이지 수 계산
+  const totalPages = useMemo(() => {
+    if (!blocks.length) return 1;
+    const m = getLayoutMetrics(stylePreset);
+    const { charsPerLine, charsInSpeech, linesPerPage, fontSize, lineHeight } = m;
+    const lineHpt = fontSize * lineHeight;
+    let total = 0;
+    let prevType = null;
+    total += ((fontSize + 2) * lineHeight + 14) / lineHpt + 1;
+    for (const b of blocks) {
+      if (prevType !== null && prevType !== b.type) total += 1;
+      switch (b.type) {
+        case 'scene_number':
+          total += 1 + 12 / lineHpt;
+          break;
+        case 'action': {
+          const lines = Math.max(1, Math.ceil((b.content?.length || 0) / (charsPerLine - 2)));
+          total += lines * (1 + 1 / lineHpt);
+          break;
+        }
+        case 'dialogue': {
+          const lines = Math.max(1, Math.ceil((b.content?.length || 0) / charsInSpeech));
+          total += lines * (1 + 1 / lineHpt);
+          break;
+        }
+        default: {
+          const lines = Math.max(1, Math.ceil((b.content?.length || 0) / charsPerLine));
+          total += lines * (1 + 1 / lineHpt);
+        }
+      }
+      prevType = b.type;
+    }
+    return Math.max(1, Math.ceil(total / linesPerPage));
+  }, [blocks, stylePreset]);
 
   useEffect(() => {
-    const el = scrollRef?.current;
-    if (!el) return;
-    const update = () => {
-      const { scrollTop, scrollHeight, clientHeight } = el;
-      setScrollRatio(scrollHeight <= clientHeight ? 0 : scrollTop / (scrollHeight - clientHeight));
+    if (!scrollEl) return;
+    const onScroll = () => setScrollTop(scrollEl.scrollTop);
+    const ro = new ResizeObserver(() => setContentHeight(scrollEl.scrollHeight));
+    scrollEl.addEventListener('scroll', onScroll, { passive: true });
+    ro.observe(scrollEl);
+    setScrollTop(scrollEl.scrollTop);
+    setContentHeight(scrollEl.scrollHeight);
+    return () => {
+      scrollEl.removeEventListener('scroll', onScroll);
+      ro.disconnect();
     };
-    el.addEventListener('scroll', update, { passive: true });
-    update();
-    return () => el.removeEventListener('scroll', update);
-  }, [scrollRef]);
+  }, [scrollEl]);
 
-  // 1분 간격 마커, 5분마다 레이블
+  // 1분 = 1페이지 기준으로 각 마커의 픽셀 위치 계산
+  const pxPerPage = contentHeight > 0 ? contentHeight / totalPages : 0;
+
   const markers = [];
-  for (let m = 0; m <= totalMinutes; m++) {
-    const ratio = m / totalMinutes;
+  for (let m = 0; m <= targetMinutes; m++) {
+    const top = m * pxPerPage;
+    const ratio = m / Math.max(targetMinutes, 1);
     const color = getTimelineColor(ratio);
     const isLabel = m % 5 === 0;
-    markers.push({ m, ratio, color, isLabel });
+    markers.push({ m, top, color, isLabel });
   }
-
-  // 현재 위치 표시용 분
-  const currentMin = Math.round(scrollRatio * totalMinutes);
 
   return (
     <div
-      className="shrink-0 flex flex-col relative select-none"
-      style={{ width: 36, borderLeft: '1px solid var(--c-border)', background: 'var(--c-panel)', overflow: 'hidden' }}
+      className="shrink-0 select-none no-print"
+      style={{ width: 36, borderLeft: '1px solid var(--c-border)', background: 'var(--c-panel)', overflow: 'hidden', position: 'relative' }}
     >
-      <div style={{ position: 'relative', flex: 1 }}>
-        {markers.map(({ m, ratio, color, isLabel }) => (
+      {/* contentHeight 높이의 내부 컨테이너를 scrollTop만큼 위로 이동 → 콘텐츠와 동기 스크롤 */}
+      <div style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: contentHeight,
+        transform: `translateY(${-scrollTop}px)`,
+        willChange: 'transform',
+      }}>
+        {markers.map(({ m, top, color, isLabel }) => (
           <div
             key={m}
             style={{
               position: 'absolute',
-              top: `${ratio * 100}%`,
-              right: 0,
+              top,
               left: 0,
+              right: 0,
+              height: 1,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'flex-end',
               paddingRight: 4,
-              height: 1,
             }}
           >
-            {isLabel && (
+            {isLabel ? (
               <span style={{
                 fontSize: 9,
                 color,
-                fontWeight: m === currentMin ? 700 : 400,
+                fontWeight: 400,
                 whiteSpace: 'nowrap',
                 lineHeight: 1,
-                opacity: 0.85,
+                opacity: 0.9,
               }}>
-                {Math.floor(m / 60)}:{String(m % 60).padStart(2, '0')}
+                {m}분
               </span>
-            )}
-            {!isLabel && (
+            ) : (
               <span style={{
                 display: 'inline-block',
-                width: m % 5 === 0 ? 6 : 3,
+                width: 3,
                 height: 1,
                 background: color,
                 opacity: 0.5,
@@ -195,22 +248,13 @@ function TimelineStrip({ scrollRef }) {
             )}
           </div>
         ))}
-        {/* 현재 위치 인디케이터 */}
-        <div style={{
-          position: 'absolute',
-          top: `${scrollRatio * 100}%`,
-          left: 0, right: 0,
-          height: 1,
-          background: 'var(--c-accent)',
-          opacity: 0.7,
-        }} />
       </div>
     </div>
   );
 }
 
 function ScriptWithTimeline({ scrollToSceneId, onScrollHandled, keyboardUp }) {
-  const scrollRef = useRef(null);
+  const [scrollEl, setScrollEl] = useState(null);
   return (
     <div className="h-full flex flex-row min-h-0 overflow-hidden">
       <div className="flex-1 min-w-0 min-h-0">
@@ -218,10 +262,10 @@ function ScriptWithTimeline({ scrollToSceneId, onScrollHandled, keyboardUp }) {
           scrollToSceneId={scrollToSceneId}
           onScrollHandled={onScrollHandled}
           keyboardUp={keyboardUp}
-          onScrollRefReady={(ref) => { scrollRef.current = ref.current; }}
+          onScrollRefReady={(ref) => { setScrollEl(ref.current); }}
         />
       </div>
-      <TimelineStrip scrollRef={scrollRef} />
+      <TimelineStrip scrollEl={scrollEl} />
     </div>
   );
 }
