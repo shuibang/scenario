@@ -94,13 +94,14 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, on
         <div data-bottom-panel style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           {/* 좌우 2분할: 왼쪽=광고(or 코멘트), 오른쪽=메뉴(or 체크리스트) */}
           <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'row', overflow: 'hidden' }}>
-            {/* 왼쪽: 메모탭=코멘트 / 나머지=광고 */}
+            {/* 왼쪽: 메모탭=코멘트 / 나머지=광고 — 항상 마운트, CSS로 전환 */}
             <div style={{ width: AD_W, minWidth: 0, flexShrink: 0, overflow: 'hidden', borderRight: '1px solid var(--c-border)', display: 'flex', flexDirection: 'column' }}>
-              {tab === 'memo' ? (
+              <div style={{ display: tab === 'memo' ? 'flex' : 'none', flexDirection: 'column', height: '100%' }}>
                 <MobileMemoTab />
-              ) : (
-                <AdBanner slot="mobile-bottom-left" mobileHide={false} height={CONTENT_H} style={{ height: '100%' }} />
-              )}
+              </div>
+              <div style={{ display: tab === 'memo' ? 'none' : 'block', height: '100%' }}>
+                <AdBanner slot="mobile-bottom-left" mobileHide={false} height={CONTENT_H} />
+              </div>
             </div>
 
             {/* 오른쪽: 메뉴 콘텐츠 / 메모탭=체크리스트 */}
