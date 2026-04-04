@@ -27,6 +27,7 @@ import MyPage from './components/MyPage';
 import OnboardingTour from './components/OnboardingTour';
 import MobileOnboardingTour from './components/mobile/MobileOnboardingTour';
 import SharedReviewView from './components/SharedReviewView';
+import SurveyPage from './components/SurveyPage';
 import AdBanner from './components/AdBanner';
 // ─── v2: extracted mobile components ──────────────────────────────────────────
 import MobileMenuBar    from './components/mobile/MobileMenuBar';
@@ -1300,6 +1301,7 @@ export default function App() {
   if (window.location.hash.startsWith('#review=')) return <SharedReviewView />;
   if (window.location.hash.startsWith('#log='))    return <LogShareView />;
   if (window.location.hash === '#preview-landing') return <LandingPreview />;
+  if (window.location.hash === '#survey')          return <SurveyPage />;
 
   // 매 렌더마다 localStorage 직접 확인 + 모듈 플래그 — 어떤 state 리셋에도 안전
   const lsAuth    = (() => { try { return !!localStorage.getItem('drama_auth_user'); } catch { return false; } })();
