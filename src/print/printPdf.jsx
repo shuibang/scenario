@@ -62,7 +62,7 @@ function makeStyles(preset, metrics) {
       color:         '#000',
       paddingTop:    margins.top    * MM_TO_PT,
       paddingRight:  margins.right  * MM_TO_PT,
-      paddingBottom: margins.bottom * MM_TO_PT,
+      paddingBottom: (margins.bottom + 8) * MM_TO_PT,  // +8mm for page number area
       paddingLeft:   margins.left   * MM_TO_PT,
     },
     // ── cover
@@ -99,26 +99,64 @@ function makeStyles(preset, metrics) {
   });
 }
 
+// ─── HTML → react-pdf inline Text children ────────────────────────────────────
+function htmlToPdfChildren(html) {
+  if (!html || !/<[biu][\s>]/i.test(html)) return html || '';
+  const tagRe = /<(\/?)([biu])\b[^>]*>/gi;
+  const segments = [];
+  let last = 0;
+  const stack = { b: 0, i: 0, u: 0 };
+  let match;
+  let key = 0;
+  const flush = (text) => {
+    if (!text) return;
+    const bold = stack.b > 0;
+    const italic = stack.i > 0;
+    const underline = stack.u > 0;
+    if (bold || italic || underline) {
+      segments.push(
+        <Text key={key++} style={{ fontWeight: bold ? 700 : undefined, fontStyle: italic ? 'italic' : undefined, textDecoration: underline ? 'underline' : undefined }}>
+          {text}
+        </Text>
+      );
+    } else {
+      segments.push(text);
+    }
+  };
+  while ((match = tagRe.exec(html)) !== null) {
+    flush(html.slice(last, match.index));
+    last = match.index + match[0].length;
+    const closing = match[1] === '/';
+    const tag = match[2].toLowerCase();
+    stack[tag] = closing ? Math.max(0, stack[tag] - 1) : stack[tag] + 1;
+  }
+  flush(html.slice(last));
+  return segments.length === 1 && typeof segments[0] === 'string' ? segments[0] : segments;
+}
+
 // ─── Token → PDF element ──────────────────────────────────────────────────────
 // Receives either a single token or a pre-grouped text (for multi-line action/body).
 function TokenEl({ token, text, S }) {
   const content = text ?? token.text;
+  // rawHtml: 서식 포함 HTML (첫 토큰만, 여러 줄 wrap 전 원문). text가 넘어오면 이미 plain.
+  const htmlSource = (text == null && token.rawHtml) ? token.rawHtml : content;
+  const richContent = htmlToPdfChildren(htmlSource);
   switch (token.kind) {
     case 'blank':
       return <View style={S.blank} />;
     case 'scene_number':
-      return <Text style={S.scene}>{content}</Text>;
+      return <Text style={S.scene}>{richContent}</Text>;
     case 'action':
-      return <Text style={S.action}>{content}</Text>;
+      return <Text style={S.action}>{richContent}</Text>;
     case 'dialogue':
       return (
         <View style={S.dialogueRow}>
           <Text style={S.charCell}>{token.charName || ''}</Text>
-          <Text style={S.speechCell}>{content}</Text>
+          <Text style={S.speechCell}>{richContent}</Text>
         </View>
       );
     case 'parenthetical':
-      return <Text style={S.paren}>{content}</Text>;
+      return <Text style={S.paren}>{richContent}</Text>;
     case 'transition':
       return <Text style={S.transition}>{content}</Text>;
     case 'heading':
@@ -129,7 +167,7 @@ function TokenEl({ token, text, S }) {
       return <Text style={S.charName}>{content}</Text>;
     case 'body':
     default:
-      return <Text style={S.body}>{content}</Text>;
+      return <Text style={S.body}>{richContent}</Text>;
   }
 }
 

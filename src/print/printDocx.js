@@ -62,6 +62,40 @@ function baseRun(text, props, dp) {
   });
 }
 
+// ─── HTML → TextRun[] (b/i/u 태그만 처리) ─────────────────────────────────────
+function htmlToRuns(html, dp, extraProps = {}) {
+  if (!html) return [baseRun('', extraProps, dp)];
+  // Replace <br> with newline
+  const normalized = html.replace(/<br\s*\/?>/gi, '\n');
+  const runs = [];
+  // Parse segments: text and <b>/<i>/<u> spans
+  // We iterate with a simple state stack
+  const tagRe = /<(\/?)([biu])\b[^>]*>/gi;
+  let last = 0;
+  const stack = { b: 0, i: 0, u: 0 };
+  let match;
+  const flush = (text) => {
+    if (!text) return;
+    runs.push(new TextRun({
+      text,
+      font:      { name: dp.fontFamily },
+      size:      dp.fontSizeHalfPt,
+      bold:      (stack.b > 0) || !!extraProps.bold,
+      italics:   (stack.i > 0) || !!extraProps.italics,
+      underline: (stack.u > 0) ? {} : extraProps.underline,
+    }));
+  };
+  while ((match = tagRe.exec(normalized)) !== null) {
+    flush(normalized.slice(last, match.index));
+    last = match.index + match[0].length;
+    const closing = match[1] === '/';
+    const tag = match[2].toLowerCase();
+    stack[tag] = closing ? Math.max(0, stack[tag] - 1) : stack[tag] + 1;
+  }
+  flush(normalized.slice(last));
+  return runs.length ? runs : [baseRun('', extraProps, dp)];
+}
+
 // ─── Paragraph spacing ────────────────────────────────────────────────────────
 function lineSpacing(dp) {
   return {
@@ -73,13 +107,13 @@ function lineSpacing(dp) {
 }
 
 // ─── Common paragraph builder ─────────────────────────────────────────────────
+// opts.html=true → text is HTML, parse inline formatting
 function para(text, dp, opts = {}) {
-  const run = baseRun(text, {
-    bold:   opts.bold   || false,
-    italics: opts.italic || false,
-  }, dp);
+  const children = opts.html
+    ? htmlToRuns(text, dp, { bold: opts.bold || false, italics: opts.italic || false })
+    : [baseRun(text, { bold: opts.bold || false, italics: opts.italic || false }, dp)];
   return new Paragraph({
-    children:  [run],
+    children,
     alignment: opts.center ? AlignmentType.CENTER
              : opts.right  ? AlignmentType.RIGHT
              : opts.noJustify ? AlignmentType.LEFT
@@ -104,13 +138,12 @@ function sectionBreak() {
 // ─── Dialogue paragraph (character name + speech, tab-based) ──────────────────
 function dialoguePara(charName, speech, dp) {
   const gapTwips = dp.dialogueGapTwips;
-  // Single tab jumps to gapTwips where speech starts.
-  // Hanging indent: continuation lines align with speech start position.
+  const speechRuns = htmlToRuns(speech, dp);
   return new Paragraph({
     children: [
       new TextRun({ text: String(charName || ''), bold: true, font: { name: dp.fontFamily }, size: dp.fontSizeHalfPt }),
       new TextRun({ children: [new Tab()], font: { name: dp.fontFamily }, size: dp.fontSizeHalfPt }),
-      new TextRun({ text: String(speech || ''), font: { name: dp.fontFamily }, size: dp.fontSizeHalfPt }),
+      ...speechRuns,
     ],
     tabStops: [
       { type: TabStopType.LEFT, position: gapTwips },
@@ -194,6 +227,7 @@ function buildDocxSections(printModel, dp) {
       const addBlock = (label, text) => {
         if (!text) return;
         paras.push(para(label, dp, { bold: true }));
+        paras.push(blankPara(dp)); // 항목명과 내용 사이 줄바꿈
         text.split('\n').forEach(l => paras.push(para(l, dp)));
         paras.push(blankPara(dp));
       };
@@ -227,8 +261,9 @@ function buildDocxSections(printModel, dp) {
             paras.push(para(`${block.label} ${block.content}`.trim(), dp, { bold: true, noJustify: true }));
             break;
           case 'action':
-            block.content.split('\n').forEach(l =>
-              paras.push(para(l, dp, { indent: 8 }))
+            // HTML 서식 포함 가능 — 줄 단위로 분리하되 각 줄을 html 모드로 렌더
+            (block.content || '').split('\n').forEach(l =>
+              paras.push(para(l, dp, { indent: 8, html: true }))
             );
             break;
           case 'dialogue':

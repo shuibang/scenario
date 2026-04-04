@@ -132,6 +132,7 @@ export function tokenizeSection(section, metrics) {
     const addSection = (label, text) => {
       if (!text) return;
       tokens.push(T('heading', label, { bold: true }));
+      tokens.push(B()); // 항목명과 내용 사이 줄바꿈
       // Split by newline paragraphs; each paragraph is its own blockText block
       // so the PDF renderer can justify interior lines when the para fits on one page.
       const paras = text.split('\n');
@@ -197,6 +198,8 @@ export function tokenizeSection(section, metrics) {
         }
         case 'action': {
           const plainA = stripHtml(block.content);
+          const rawHtmlA = block.content || '';
+          const hasHtmlA = rawHtmlA !== plainA;
           const wrappedA = wrapText(plainA, charsPerLine - 2);
           wrappedA.forEach((t, i) =>
             tokens.push(T('action', t, {
@@ -204,12 +207,15 @@ export function tokenizeSection(section, metrics) {
               isFirstOfBlock: i === 0,
               blockText:      i === 0 ? plainA : undefined,
               blockLineCount: i === 0 ? wrappedA.length : undefined,
+              rawHtml:        (i === 0 && hasHtmlA) ? rawHtmlA : undefined,
             }))
           );
           break;
         }
         case 'dialogue': {
           const plainD = stripHtml(block.content);
+          const rawHtmlD = block.content || '';
+          const hasHtmlD = rawHtmlD !== plainD;
           const wrappedD = wrapText(plainD, charsInSpeech);
           wrappedD.forEach((t, i) =>
             tokens.push(T('dialogue', t, {
@@ -218,6 +224,7 @@ export function tokenizeSection(section, metrics) {
               isFirstOfBlock: i === 0,
               blockText:      i === 0 ? plainD : undefined,
               blockLineCount: i === 0 ? wrappedD.length : undefined,
+              rawHtml:        (i === 0 && hasHtmlD) ? rawHtmlD : undefined,
             }))
           );
           break;

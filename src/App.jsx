@@ -267,7 +267,7 @@ function TimelineStrip({ scrollEl }) {
   );
 }
 
-function ScriptWithTimeline({ scrollToSceneId, onScrollHandled, keyboardUp }) {
+function ScriptWithTimeline({ scrollToSceneId, onScrollHandled, keyboardUp, isMobile }) {
   const [scrollEl, setScrollEl] = useState(null);
   return (
     <div className="h-full flex flex-row min-h-0 overflow-hidden">
@@ -276,6 +276,7 @@ function ScriptWithTimeline({ scrollToSceneId, onScrollHandled, keyboardUp }) {
           scrollToSceneId={scrollToSceneId}
           onScrollHandled={onScrollHandled}
           keyboardUp={keyboardUp}
+          isMobile={isMobile}
           onScrollRefReady={(ref) => { setScrollEl(ref.current); }}
         />
       </div>
@@ -285,7 +286,7 @@ function ScriptWithTimeline({ scrollToSceneId, onScrollHandled, keyboardUp }) {
 }
 
 // ─── Center panel ─────────────────────────────────────────────────────────────
-function CenterPanel({ scrollToSceneId, onScrollHandled, keyboardUp }) {
+function CenterPanel({ scrollToSceneId, onScrollHandled, keyboardUp, isMobile }) {
   const { state } = useApp();
   const { activeDoc, activeEpisodeId, activeProjectId, initialized } = state;
 
@@ -315,7 +316,7 @@ function CenterPanel({ scrollToSceneId, onScrollHandled, keyboardUp }) {
   if (activeDoc === 'relationships') return <RelationshipsPage />;
   if (activeDoc === 'mypage') return <MyPage />;
   if (activeDoc === 'script' && activeEpisodeId) {
-    return <ScriptWithTimeline scrollToSceneId={scrollToSceneId} onScrollHandled={onScrollHandled} keyboardUp={keyboardUp} />;
+    return <ScriptWithTimeline scrollToSceneId={scrollToSceneId} onScrollHandled={onScrollHandled} keyboardUp={keyboardUp} isMobile={isMobile} />;
   }
   return (
     <div className="h-full flex items-center justify-center" style={{ background: 'var(--c-bg)' }}>
@@ -1083,7 +1084,7 @@ function Shell({ authUser, setAuthUser }) {
         <div data-tour-id="center-panel" className="flex-1 min-h-0"
           style={{ paddingLeft: 'env(safe-area-inset-left, 0px)', paddingRight: 'env(safe-area-inset-right, 0px)', display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0, position: 'relative' }}
         >
-          <CenterPanel scrollToSceneId={scrollToSceneId} onScrollHandled={() => setScrollToSceneId(null)} keyboardUp={keyboardUp} />
+          <CenterPanel scrollToSceneId={scrollToSceneId} onScrollHandled={() => setScrollToSceneId(null)} keyboardUp={keyboardUp} isMobile={isMobile} />
         </div>
         {/* 광고: 키보드 올라오거나 패널 열리면 숨김 */}
         <div style={{ flexShrink: 0, height: (keyboardUp || mobileBottomOpen) ? 0 : 20, overflow: 'hidden', transition: 'height 0.2s ease' }}>

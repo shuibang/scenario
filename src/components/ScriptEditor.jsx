@@ -1192,7 +1192,7 @@ const EditorSurface = forwardRef(function EditorSurface({
 });
 
 // ─── ScriptEditor (main) ──────────────────────────────────────────────────────
-export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboardUp, onScrollRefReady }) {
+export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboardUp, isMobile, onScrollRefReady }) {
   const { state, dispatch } = useApp();
   const {
     activeEpisodeId, activeProjectId, scriptBlocks,
@@ -2068,8 +2068,8 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
             closeToken={symbolPickerCloseToken}
             onOpen={() => { setCharCheckPicker(null); setSceneRefPicker(null); setCharPickerState(null); }}
           />
-          {/* B/I/U 서식 버튼 — action/dialogue 블록에서 동작 */}
-          <div style={{ borderLeft: '1px solid var(--c-border3)', paddingLeft: 6, marginLeft: 2, display: 'flex', gap: 2 }}>
+          {/* B/I/U 서식 버튼 — action/dialogue 블록에서 동작, 모바일에서는 MobileMenuBar에 있으므로 숨김 */}
+          {!isMobile && <div style={{ borderLeft: '1px solid var(--c-border3)', paddingLeft: 6, marginLeft: 2, display: 'flex', gap: 2 }}>
             {[
               { format: 'bold',      label: 'B', style: { fontWeight: 700 },                title: '굵게 (Ctrl+B)' },
               { format: 'italic',    label: 'I', style: { fontStyle: 'italic' },             title: '기울임 (Ctrl+I)' },
@@ -2091,7 +2091,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
                 }}
               >{label}</button>
             ))}
-          </div>
+          </div>}
           </>)}
         </div>
         <span className="ml-auto flex items-center gap-3">
