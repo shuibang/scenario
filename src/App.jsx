@@ -39,14 +39,19 @@ import { saveReviewPayload } from './utils/reviewShare';
 
 // ─── Panel width persistence ───────────────────────────────────────────────────
 const PANEL_WIDTHS_KEY = 'panelWidths';
-const DEFAULT_WIDTHS = { left: 224, right: 256 };
-const MIN_LEFT = 160; const MAX_LEFT = 360;
-const MIN_RIGHT = 180; const MAX_RIGHT = 400;
+const MIN_LEFT = 150; const MAX_LEFT = 500;
+const MIN_RIGHT = 150; const MAX_RIGHT = 500;
 
 function loadPanelWidths() {
   const saved = getItem(PANEL_WIDTHS_KEY);
   if (saved && saved.left && saved.right) return saved;
-  return DEFAULT_WIDTHS;
+  // 기본값: 창 너비의 20% (좌우 패널 각각), 결과적으로 본문 60%
+  const w = window.innerWidth;
+  const side = Math.round(w * 0.20);
+  return {
+    left:  Math.max(MIN_LEFT, Math.min(MAX_LEFT, side)),
+    right: Math.max(MIN_RIGHT, Math.min(MAX_RIGHT, side)),
+  };
 }
 
 // ─── DragHandle ───────────────────────────────────────────────────────────────

@@ -612,7 +612,7 @@ export default function RightPanel({ onScrollToScene }) {
         <div className="flex-1 overflow-y-auto py-1">
           {filteredScenes.length === 0 ? (
             <div className="px-4 py-8 text-center text-xs" style={{ color: 'var(--c-text6)' }}>
-              {tagFilter ? `#${tagFilter} 씬 없음` : 'Ctrl+1 로 씬번호를 추가하세요'}
+              {tagFilter ? `#${tagFilter} 씬 없음` : 'Ctrl+Shift+1 로 씬번호를 추가하세요'}
             </div>
           ) : (
             filteredScenes.map(scene => {
