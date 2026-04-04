@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
 import { genId, now } from '../store/db';
 
@@ -354,6 +354,15 @@ export default function CharacterPanel() {
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [search, setSearch] = useState('');
+  const [helpOpen, setHelpOpen] = useState(false);
+  const helpRef = useRef(null);
+  useEffect(() => {
+    if (!helpOpen) return;
+    const handler = (e) => { if (!helpRef.current?.contains(e.target)) setHelpOpen(false); };
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('touchstart', handler);
+    return () => { document.removeEventListener('mousedown', handler); document.removeEventListener('touchstart', handler); };
+  }, [helpOpen]);
 
   const projectChars = characters
     .filter(c => c.projectId === activeProjectId)
@@ -399,6 +408,21 @@ export default function CharacterPanel() {
     <div className="flex-1 min-h-0 flex" style={{ background: 'var(--c-bg)' }}>
       {/* ── Left: index column ── */}
       <div className="flex flex-col shrink-0" style={{ width: 110, borderRight: '1px solid var(--c-border2)' }}>
+        {/* Title + Help */}
+        <div className="shrink-0 flex items-center gap-1" style={{ padding: '6px 8px', borderBottom: '1px solid var(--c-border2)' }}>
+          <span className="text-xs" style={{ color: 'var(--c-text5)' }}>인물</span>
+          <div ref={helpRef} style={{ position: 'relative', display: 'inline-flex' }}>
+            <button onClick={() => setHelpOpen(v => !v)} title="도움말" style={{ width: 16, height: 16, borderRadius: '50%', border: '1px solid var(--c-border3)', background: helpOpen ? 'var(--c-active)' : 'transparent', color: 'var(--c-text5)', fontSize: 10, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, flexShrink: 0 }}>?</button>
+            {helpOpen && (
+              <div style={{ position: 'absolute', top: '20px', left: 0, zIndex: 200, background: 'var(--c-card)', border: '1px solid var(--c-border)', borderRadius: 8, padding: '10px 14px', width: 220, boxShadow: '0 4px 16px rgba(0,0,0,0.18)' }}>
+                <div className="text-xs font-semibold mb-2" style={{ color: 'var(--c-text3)' }}>인물 안내</div>
+                {['인물을 추가하고 역할·직업·소개를 입력하세요.', '대사·등장 씬은 대본과 자동동기화 됩니다.'].map((t, i) => (
+                  <div key={i} className="text-[11px] leading-relaxed" style={{ color: 'var(--c-text5)' }}>· {t}</div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
         {/* Search */}
         <div className="shrink-0" style={{ padding: '8px 8px 6px', borderBottom: '1px solid var(--c-border2)' }}>
           <input

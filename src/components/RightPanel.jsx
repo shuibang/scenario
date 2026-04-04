@@ -401,11 +401,11 @@ function DocMemo({ projectId, docKey }) {
 
   return (
     <div className="px-3 py-2 flex-1 flex flex-col min-h-0" style={{ borderTop: '1px solid var(--c-border)' }}>
-      <div className="text-[10px] uppercase tracking-widest mb-1 shrink-0" style={{ color: 'var(--c-text6)' }}>코멘트</div>
+      <div className="text-[10px] uppercase tracking-widest mb-1 shrink-0" style={{ color: 'var(--c-text6)' }}>메모</div>
       <textarea
         value={memo}
         onChange={handleChange}
-        placeholder="코멘트 입력..."
+        placeholder="메모 입력..."
         className="flex-1 w-full text-xs rounded outline-none resize-none"
         style={{
           background: 'var(--c-input)',
@@ -499,29 +499,23 @@ export default function RightPanel({ onScrollToScene }) {
     contextContent = withMemo(<CoverMiniPreview />, 'synopsis');
   } else if (activeDoc === 'biography') {
     contextContent = withMemo(
-      <PageInfoPanel icon="📋" title="인물이력서 작성 팁" items={[
-        '인물의 외형·성격·배경을 구체적으로 작성하세요.',
-        '다른 인물과의 관계, 동기, 비밀 등을 기록하면 대본 집필에 도움이 됩니다.',
-        '이력서는 출력물에 포함되지 않으므로 자유롭게 메모하세요.',
-      ]} />,
+      <div className="flex flex-col items-center justify-center" style={{ padding: '12px', flex: 1 }}>
+        <AdBanner slot="biography-panel" mobileHide={false} height={120} style={{ width: '100%' }} />
+      </div>,
       'biography'
     );
   } else if (activeDoc === 'relationships') {
     contextContent = withMemo(
-      <PageInfoPanel icon="🔗" title="인물관계도 안내" items={[
-        '편집 탭에서 인물 간 관계를 추가하세요.',
-        '그래프 탭에서 노드를 드래그해 배치를 조정할 수 있습니다.',
-        '인쇄 탭에서 관계도를 PDF로 저장할 수 있습니다.',
-      ]} />,
+      <div className="flex flex-col items-center justify-center" style={{ padding: '12px', flex: 1 }}>
+        <AdBanner slot="relationships-panel" mobileHide={false} height={120} style={{ width: '100%' }} />
+      </div>,
       'relationships'
     );
   } else if (activeDoc === 'resources') {
     contextContent = withMemo(
-      <PageInfoPanel icon="📁" title="자료수집 안내" items={[
-        '참고 이미지, 링크, 메모 등 창작 자료를 정리하세요.',
-        '태그를 활용해 자료를 카테고리별로 묶어두면 편리합니다.',
-        '자료수집 항목은 출력물에 포함되지 않습니다.',
-      ]} />,
+      <div className="flex flex-col items-center justify-center" style={{ padding: '12px', flex: 1 }}>
+        <AdBanner slot="resources-panel" mobileHide={false} height={120} style={{ width: '100%' }} />
+      </div>,
       'resources'
     );
   } else if (activeDoc === 'treatment') {
@@ -539,20 +533,25 @@ export default function RightPanel({ onScrollToScene }) {
       'scenelist'
     );
   } else if (activeDoc === 'structure') {
-    contextContent = (
-      <div className="flex-1 overflow-y-auto">
-        <GuidePanel
-          selectedSceneId={selectedStructureSceneId}
-          scenes={scenes}
-          dispatch={dispatch}
-        />
-      </div>
+    contextContent = withMemo(
+      <div className="flex-1 flex flex-col min-h-0">
+        <div className="flex-1 overflow-y-auto min-h-0">
+          <GuidePanel
+            selectedSceneId={selectedStructureSceneId}
+            scenes={scenes}
+            dispatch={dispatch}
+          />
+        </div>
+        <AdBanner slot="structure-panel" mobileHide style={{ margin: '6px 8px' }} />
+      </div>,
+      'structure'
     );
   } else if (isCharView) {
-    contextContent = (
-      <div className="flex-1 flex flex-col items-center justify-center gap-3 px-3">
-        <AdBanner slot="characters-panel" mobileHide={false} style={{ width: '100%' }} />
-      </div>
+    contextContent = withMemo(
+      <div className="flex flex-col items-center justify-center" style={{ padding: '12px', flex: 1 }}>
+        <AdBanner slot="characters-panel" mobileHide={false} height={120} style={{ width: '100%' }} />
+      </div>,
+      'characters'
     );
   } else if (isScriptView) {
     contextContent = <SceneOutlineContent />;
@@ -648,6 +647,7 @@ export default function RightPanel({ onScrollToScene }) {
             초안 {episodeScenes.filter(s => s.status === 'draft').length}
           </div>
         )}
+        {activeProjectId && <DocMemo projectId={activeProjectId} docKey={`script_${activeEpisodeId}`} />}
       </>
     );
   }

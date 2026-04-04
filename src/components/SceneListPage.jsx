@@ -412,17 +412,6 @@ export default function SceneListPage() {
       {/* Header */}
       <div className="flex items-center gap-3 shrink-0" style={{ padding: '10px', borderBottom: '1px solid var(--c-border2)' }}>
         <span className="text-sm font-medium" style={{ color: 'var(--c-text2)' }}>씬리스트</span>
-        <select
-          value={epId || ''}
-          onChange={e => setSelectedEpId(e.target.value)}
-          className="text-xs rounded outline-none px-2 py-1"
-          style={{ background: 'var(--c-input)', color: 'var(--c-text2)', border: '1px solid var(--c-border3)' }}
-        >
-          {projectEpisodes.map(ep => (
-            <option key={ep.id} value={ep.id}>{ep.number}회 {ep.title || ''}</option>
-          ))}
-        </select>
-        <span className="text-xs" style={{ color: 'var(--c-text6)' }}>{epScenes.length}개 씬</span>
         {/* 도움말 */}
         <div ref={helpRef} style={{ position: 'relative', display: 'inline-flex' }}>
           <button
@@ -447,14 +436,24 @@ export default function SceneListPage() {
               {[
                 '씬 번호, 장소, 시간대, 등장인물을 정리하세요.',
                 '씬번호 클릭 시 대본의 해당 씬으로 이동합니다.',
-                '장소·시간대는 대본과 자동 동기화됩니다.',
-                '내용 컬럼은 씬리스트 전용 메모 공간입니다.',
+                '대본과 자동동기화 됩니다.',
               ].map((t, i) => (
                 <div key={i} className="text-[11px] leading-relaxed" style={{ color: 'var(--c-text5)' }}>· {t}</div>
               ))}
             </div>
           )}
         </div>
+        <select
+          value={epId || ''}
+          onChange={e => setSelectedEpId(e.target.value)}
+          className="text-xs rounded outline-none px-2 py-1"
+          style={{ background: 'var(--c-input)', color: 'var(--c-text2)', border: '1px solid var(--c-border3)' }}
+        >
+          {projectEpisodes.map(ep => (
+            <option key={ep.id} value={ep.id}>{ep.number}회 {ep.title || ''}</option>
+          ))}
+        </select>
+        <span className="text-xs" style={{ color: 'var(--c-text6)' }}>{epScenes.length}개 씬</span>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           {importMsg && <span className="text-xs" style={{ color: 'var(--c-accent2)' }}>{importMsg}</span>}
           <button

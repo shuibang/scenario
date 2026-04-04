@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
 import { charDisplayName, charFullName } from './CharacterPanel';
 import { genId, now } from '../store/db';
@@ -10,6 +10,16 @@ const ROLE_LABELS = { lead: '주인공', support: '조연', extra: '단역' };
 export default function BiographyPage() {
   const { state, dispatch } = useApp();
   const { characters, activeProjectId } = state;
+
+  const [helpOpen, setHelpOpen] = useState(false);
+  const helpRef = useRef(null);
+  useEffect(() => {
+    if (!helpOpen) return;
+    const handler = (e) => { if (!helpRef.current?.contains(e.target)) setHelpOpen(false); };
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('touchstart', handler);
+    return () => { document.removeEventListener('mousedown', handler); document.removeEventListener('touchstart', handler); };
+  }, [helpOpen]);
 
   const projectChars = characters.filter(c => c.projectId === activeProjectId)
     .sort((a, b) => { const o = { lead: 0, support: 1, extra: 2 }; return (o[a.role] ?? 3) - (o[b.role] ?? 3); });
@@ -47,6 +57,17 @@ export default function BiographyPage() {
       <div className="flex flex-col shrink-0" style={{ width: 110, borderRight: '1px solid var(--c-border2)' }}>
         <div className="shrink-0" style={{ padding: '8px 8px 6px', borderBottom: '1px solid var(--c-border2)' }}>
           <span className="text-xs" style={{ color: 'var(--c-text5)' }}>인물이력서</span>
+          <div ref={helpRef} style={{ position: 'relative', display: 'inline-flex' }}>
+            <button onClick={() => setHelpOpen(v => !v)} title="도움말" style={{ width: 16, height: 16, borderRadius: '50%', border: '1px solid var(--c-border3)', background: helpOpen ? 'var(--c-active)' : 'transparent', color: 'var(--c-text5)', fontSize: 10, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, flexShrink: 0 }}>?</button>
+            {helpOpen && (
+              <div style={{ position: 'absolute', top: '20px', left: 0, zIndex: 200, background: 'var(--c-card)', border: '1px solid var(--c-border)', borderRadius: 8, padding: '10px 14px', width: 220, boxShadow: '0 4px 16px rgba(0,0,0,0.18)' }}>
+                <div className="text-xs font-semibold mb-2" style={{ color: 'var(--c-text3)' }}>인물이력서 안내</div>
+                {['인물의 외형·성격·배경을 자유롭게 기록하세요.', '이력서 내용은 출력물에 포함되지 않습니다.'].map((t, i) => (
+                  <div key={i} className="text-[11px] leading-relaxed" style={{ color: 'var(--c-text5)' }}>· {t}</div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
         <div className="flex-1 overflow-y-auto py-1 space-y-0.5" style={{ paddingLeft: 6, paddingRight: 4 }}>
           {projectChars.map(c => {

@@ -48,6 +48,15 @@ export default function TreatmentPage() {
   const episode = episodes.find(e => e.id === epId);
 
   const [items, setItems]       = useState([]);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const helpRef = useRef(null);
+  useEffect(() => {
+    if (!helpOpen) return;
+    const handler = (e) => { if (!helpRef.current?.contains(e.target)) setHelpOpen(false); };
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('touchstart', handler);
+    return () => { document.removeEventListener('mousedown', handler); document.removeEventListener('touchstart', handler); };
+  }, [helpOpen]);
 
   // Compute per-item import status: null | 'imported' | 'modified' | 'deleted'
   const itemStatusMap = useMemo(() => {
@@ -339,6 +348,17 @@ export default function TreatmentPage() {
       {/* Header bar — 구조/씬리스트와 동일 스타일 */}
       <div className="flex items-center gap-3 shrink-0" style={{ padding: '10px', borderBottom: '1px solid var(--c-border2)' }}>
         <span className="text-sm font-medium" style={{ color: 'var(--c-text2)' }}>트리트먼트</span>
+        <div ref={helpRef} style={{ position: 'relative', display: 'inline-flex' }}>
+          <button onClick={() => setHelpOpen(v => !v)} title="도움말" style={{ width: 18, height: 18, borderRadius: '50%', border: '1px solid var(--c-border3)', background: helpOpen ? 'var(--c-active)' : 'transparent', color: 'var(--c-text5)', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, flexShrink: 0 }}>?</button>
+          {helpOpen && (
+            <div style={{ position: 'absolute', top: '24px', left: 0, zIndex: 200, background: 'var(--c-card)', border: '1px solid var(--c-border)', borderRadius: 8, padding: '10px 14px', width: 240, boxShadow: '0 4px 16px rgba(0,0,0,0.18)' }}>
+              <div className="text-xs font-semibold mb-2" style={{ color: 'var(--c-text3)' }}>트리트먼트 안내</div>
+              {['각 씬의 내용을 간략히 작성하세요.', '대본으로 가져오기로 씬을 대본에 추가할 수 있습니다.', '대본과 자동동기화 됩니다.'].map((t, i) => (
+                <div key={i} className="text-[11px] leading-relaxed" style={{ color: 'var(--c-text5)' }}>· {t}</div>
+              ))}
+            </div>
+          )}
+        </div>
         <select
           value={epId || ''}
           onChange={e => setSelectedEpId(e.target.value)}

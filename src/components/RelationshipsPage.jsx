@@ -353,6 +353,16 @@ export default function RelationshipsPage() {
 
   const projectChars = characters.filter(c => c.projectId === activeProjectId);
 
+  const [helpOpen, setHelpOpen] = useState(false);
+  const helpRef = useRef(null);
+  useEffect(() => {
+    if (!helpOpen) return;
+    const handler = (e) => { if (!helpRef.current?.contains(e.target)) setHelpOpen(false); };
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('touchstart', handler);
+    return () => { document.removeEventListener('mousedown', handler); document.removeEventListener('touchstart', handler); };
+  }, [helpOpen]);
+
   const [view, setView] = useState('graph'); // 'graph' | 'edit' | 'print'
   const [positions, setPositions] = useState({});
   const containerRef = useRef(null);
@@ -497,6 +507,17 @@ export default function RelationshipsPage() {
       {!isPrint && (
         <div style={{ padding: '10px 10px 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--c-text2)' }}>인물관계도</span>
+          <div ref={helpRef} style={{ position: 'relative', display: 'inline-flex' }}>
+            <button onClick={() => setHelpOpen(v => !v)} title="도움말" style={{ width: 18, height: 18, borderRadius: '50%', border: '1px solid var(--c-border3)', background: helpOpen ? 'var(--c-active)' : 'transparent', color: 'var(--c-text5)', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, flexShrink: 0 }}>?</button>
+            {helpOpen && (
+              <div style={{ position: 'absolute', top: '24px', left: 0, zIndex: 200, background: 'var(--c-card)', border: '1px solid var(--c-border)', borderRadius: 8, padding: '10px 14px', width: 240, boxShadow: '0 4px 16px rgba(0,0,0,0.18)' }}>
+                <div className="text-xs font-semibold mb-2" style={{ color: 'var(--c-text3)' }}>인물관계도 안내</div>
+                {['편집 탭에서 인물 간 관계를 추가하세요.', '그래프 탭에서 노드를 드래그해 배치를 조정할 수 있습니다.', '인쇄 탭에서 관계도를 PDF로 저장할 수 있습니다.'].map((t, i) => (
+                  <div key={i} className="text-[11px] leading-relaxed" style={{ color: 'var(--c-text5)' }}>· {t}</div>
+                ))}
+              </div>
+            )}
+          </div>
           <div style={{ display: 'flex', gap: '6px' }}>
             {tabBtn('graph', '관계도')}
             {tabBtn('edit', '편집')}
