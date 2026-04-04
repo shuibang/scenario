@@ -206,17 +206,20 @@ function PageCounter({ blocks, stylePreset, scrollRef }) {
           total += 1 + 12 / lineHpt;
           break;
         case 'action': {
-          const lines = Math.max(1, Math.ceil((b.content?.length || 0) / (charsPerLine - 2)));
+          const len = stripHtml(b.content || '').length;
+          const lines = Math.max(1, Math.ceil(len / (charsPerLine - 2)));
           total += lines * (1 + 1 / lineHpt);
           break;
         }
         case 'dialogue': {
-          const lines = Math.max(1, Math.ceil((b.content?.length || 0) / charsInSpeech));
+          const len = stripHtml(b.content || '').length;
+          const lines = Math.max(1, Math.ceil(len / charsInSpeech));
           total += lines * (1 + 1 / lineHpt);
           break;
         }
         default: {
-          const lines = Math.max(1, Math.ceil((b.content?.length || 0) / charsPerLine));
+          const len = stripHtml(b.content || '').length;
+          const lines = Math.max(1, Math.ceil(len / charsPerLine));
           total += lines * (1 + 1 / lineHpt);
         }
       }
@@ -262,6 +265,28 @@ function esc(s) {
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// ─── Inline HTML helpers (B/I/U 서식 저장용) ─────────────────────────────────
+function sanitizeInlineHtml(html) {
+  if (!html) return '';
+  return html
+    .replace(/<strong(\s[^>]*)?>/gi, '<b>').replace(/<\/strong>/gi, '</b>')
+    .replace(/<em(\s[^>]*)?>/gi, '<i>').replace(/<\/em>/gi, '</i>')
+    .replace(/<br\s*\/?>/gi, '')
+    .replace(/<(?!\/?(b|i|u)(\s[^>]*)?>)[^>]+>/gi, '')
+    .replace(/\n$/, '');
+}
+function stripHtml(html) {
+  return (html || '').replace(/<[^>]+>/g, '');
+}
+function blockHtml(el) {
+  if (!el) return '';
+  return sanitizeInlineHtml(el.innerHTML);
+}
+function setBlockHtml(el, html) {
+  if (!el) return;
+  el.innerHTML = html;
+}
+
 // ─── Blocks → innerHTML ──────────────────────────────────────────────────────
 // For scene_number: strip the "S#n." prefix — label shown via CSS ::before
 // For dialogue: strip charName prefix from content (old format had name embedded in content)
@@ -298,7 +323,9 @@ function blocksToHtml(blocks) {
   return blocks.map(b => {
     const id = esc(b.id);
     const displayContent = blockDisplayContent(b);
-    const dc = b.sceneRefs?.length ? buildRichHtml(displayContent, b.sceneRefs) : esc(displayContent);
+    // action/dialogue 블록: HTML 서식 포함 가능 → esc 생략 (sanitizeInlineHtml로 이미 안전)
+    const isRichBlock = (b.type === 'action' || b.type === 'dialogue') && !b.sceneRefs?.length;
+    const dc = b.sceneRefs?.length ? buildRichHtml(displayContent, b.sceneRefs) : isRichBlock ? displayContent : esc(displayContent);
     switch (b.type) {
       case 'scene_number': {
         const label = esc(b.label || '');
@@ -470,9 +497,11 @@ function parseSurface(surface, metaRef, epId, projId) {
       return { ...base, ...parsed, content, sceneId: div.dataset.sceneId || prev.sceneId || genId() };
     }
     if (type === 'dialogue') {
+      // sceneRefs 없는 dialogue는 HTML 서식 보존
+      const content = sceneRefs.length ? rawText : blockHtml(div);
       return {
         ...base,
-        content: rawText,
+        content,
         characterName: div.dataset.charName || prev.characterName || '',
         characterId: div.dataset.charId || prev.characterId || undefined,
         charName: div.dataset.charName || prev.charName || '',
@@ -481,7 +510,9 @@ function parseSurface(surface, metaRef, epId, projId) {
     if (type === 'scene_ref') {
       return { ...base, content: rawText, refSceneId: div.dataset.refSceneId || prev.refSceneId || '' };
     }
-    return { ...base, content: rawText };
+    // action: sceneRefs 없으면 HTML 보존
+    const content = (type === 'action' && !sceneRefs.length) ? blockHtml(div) : rawText;
+    return { ...base, content };
   });
   const synced = syncLabels(result);
   // Update data-label on DOM
@@ -741,6 +772,7 @@ const EditorSurface = forwardRef(function EditorSurface({
   activeEpisodeId,
   activeProjectId,
   onPaste,
+  onUndo,          // () → 커스텀 Undo 핸들러
 }, ref) {
   const surfaceRef = useRef(null);
   const metaRef = useRef({});
@@ -797,9 +829,13 @@ const EditorSurface = forwardRef(function EditorSurface({
       const div = el.querySelector(`[data-block-id="${b.id}"]`);
       if (!div) return;
       if (div === activeBlockEl) return; // skip block with cursor
-      // Sync content
+      // Sync content — rich blocks: compare plain text to avoid overwriting formatting
       const expected = blockDisplayContent(b);
-      if (blockText(div) !== expected) setBlockText(div, expected);
+      const isRich = b.type === 'action' || b.type === 'dialogue';
+      const expectedPlain = isRich ? stripHtml(expected) : expected;
+      if (blockText(div) !== expectedPlain) {
+        if (isRich) setBlockHtml(div, expected); else setBlockText(div, expected);
+      }
       // Sync char name for dialogue
       if (b.type === 'dialogue') {
         const cn = b.characterName || b.charName || '';
@@ -913,6 +949,12 @@ const EditorSurface = forwardRef(function EditorSurface({
       syncMeta(synced);
       onBlocksChange(synced);
     },
+    applyFormat(format) {
+      // format: 'bold' | 'italic' | 'underline'
+      document.execCommand('styleWithCSS', false, false);
+      document.execCommand(format, false, null);
+      doParse();
+    },
   }), [doParse, onBadgeClick, syncMeta, onBlocksChange]);
 
   // ── Input handler ─────────────────────────────────────────────────────────
@@ -951,35 +993,88 @@ const EditorSurface = forwardRef(function EditorSurface({
       return;
     }
 
+    // ── Ctrl+Z: 커스텀 Undo (브라우저 기본 동작 대체)
+    if (ctrl && e.key === 'z' && !e.shiftKey) {
+      e.preventDefault();
+      onUndo?.();
+      return;
+    }
+
+    // ── Ctrl+B/I/U: 인라인 서식 (action/dialogue 블록에서만)
+    if (ctrl && !e.shiftKey && (e.key === 'b' || e.key === 'i' || e.key === 'u')) {
+      if (type === 'action' || type === 'dialogue') {
+        e.preventDefault();
+        const cmdMap = { b: 'bold', i: 'italic', u: 'underline' };
+        document.execCommand('styleWithCSS', false, false);
+        document.execCommand(cmdMap[e.key], false, null);
+        doParse();
+      }
+      return;
+    }
+
     // ── Enter: split block at caret
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
+      // ── Helper: HTML-aware split at current caret ──────────────────────────
+      const splitRichBlock = (srcEl, srcRange) => {
+        const rangeToEnd = document.createRange();
+        try {
+          rangeToEnd.setStart(srcRange.startContainer, srcRange.startOffset);
+          rangeToEnd.setEnd(srcEl, srcEl.childNodes.length);
+        } catch (_) { return null; }
+        const frag = rangeToEnd.extractContents();
+        const tmp = document.createElement('div');
+        tmp.appendChild(frag);
+        return sanitizeInlineHtml(tmp.innerHTML);
+      };
+
       // Clear any cross-block selection first
       if (!sel.isCollapsed) {
         document.execCommand('delete');
-        // Re-query after delete
         const sel2 = window.getSelection();
         if (!sel2?.rangeCount) return;
         const range2 = sel2.getRangeAt(0);
         const blockEl2 = findBlockEl(range2.startContainer, el);
         if (!blockEl2) return;
-        const offset2 = caretOff(range2, blockEl2);
-        const text2 = blockText(blockEl2);
-        setBlockText(blockEl2, text2.slice(0, offset2));
         const nextType2 = blockEl2.dataset.blockType === 'scene_number' ? 'action' : blockEl2.dataset.blockType;
-        const newEl2 = insertBlockAfterEl(el, blockEl2, nextType2, text2.slice(offset2));
-        if (nextType2 === 'dialogue') onBadgeClick?.(newEl2.dataset.blockId, newEl2);
+        const isRich2 = blockEl2.dataset.blockType === 'action' || blockEl2.dataset.blockType === 'dialogue';
+        if (isRich2) {
+          const afterHtml2 = splitRichBlock(blockEl2, range2) ?? '';
+          const newEl2 = insertBlockAfterEl(el, blockEl2, nextType2, '');
+          setBlockHtml(newEl2, afterHtml2);
+          setCaret(newEl2, 0);
+          if (nextType2 === 'dialogue') onBadgeClick?.(newEl2.dataset.blockId, newEl2);
+        } else {
+          const offset2 = caretOff(range2, blockEl2);
+          const text2 = blockText(blockEl2);
+          setBlockText(blockEl2, text2.slice(0, offset2));
+          const newEl2 = insertBlockAfterEl(el, blockEl2, nextType2, text2.slice(offset2));
+          if (nextType2 === 'dialogue') onBadgeClick?.(newEl2.dataset.blockId, newEl2);
+        }
         doParse();
         return;
       }
-      const offset = caretOff(range, blockEl);
-      const text = blockText(blockEl);
-      setBlockText(blockEl, text.slice(0, offset));
+
       const nextType = type === 'scene_number' ? 'action' : type;
-      const newEl = insertBlockAfterEl(el, blockEl, nextType, text.slice(offset));
-      if (nextType === 'dialogue') {
-        const bid = newEl.dataset.blockId;
-        requestAnimationFrame(() => onBadgeClick?.(bid, newEl));
+      const isRich = type === 'action' || type === 'dialogue';
+      if (isRich) {
+        const afterHtml = splitRichBlock(blockEl, range) ?? '';
+        const newEl = insertBlockAfterEl(el, blockEl, nextType, '');
+        setBlockHtml(newEl, afterHtml);
+        setCaret(newEl, 0);
+        if (nextType === 'dialogue') {
+          const bid = newEl.dataset.blockId;
+          requestAnimationFrame(() => onBadgeClick?.(bid, newEl));
+        }
+      } else {
+        const offset = caretOff(range, blockEl);
+        const text = blockText(blockEl);
+        setBlockText(blockEl, text.slice(0, offset));
+        const newEl = insertBlockAfterEl(el, blockEl, nextType, text.slice(offset));
+        if (nextType === 'dialogue') {
+          const bid = newEl.dataset.blockId;
+          requestAnimationFrame(() => onBadgeClick?.(bid, newEl));
+        }
       }
       onCharSuggest?.(null, null);
       doParse();
@@ -993,11 +1088,22 @@ const EditorSurface = forwardRef(function EditorSurface({
         e.preventDefault();
         const prev = prevBlockEl(el, blockEl);
         if (!prev) return;
-        const prevText = blockText(prev);
-        const curText = blockText(blockEl);
-        setBlockText(prev, prevText + curText);
-        blockEl.remove();
-        setCaret(prev, prevText.length);
+        const prevIsRich = prev.dataset.blockType === 'action' || prev.dataset.blockType === 'dialogue';
+        const curIsRich  = type === 'action' || type === 'dialogue';
+        if (prevIsRich || curIsRich) {
+          const prevHtml = blockHtml(prev);
+          const curHtml  = blockHtml(blockEl);
+          const caretPos = stripHtml(prevHtml).length;
+          setBlockHtml(prev, prevHtml + curHtml);
+          blockEl.remove();
+          setCaret(prev, caretPos);
+        } else {
+          const prevText = blockText(prev);
+          const curText  = blockText(blockEl);
+          setBlockText(prev, prevText + curText);
+          blockEl.remove();
+          setCaret(prev, prevText.length);
+        }
         doParse();
         return;
       }
@@ -1011,11 +1117,22 @@ const EditorSurface = forwardRef(function EditorSurface({
         e.preventDefault();
         const next = nextBlockEl(el, blockEl);
         if (!next) return;
-        const curText = blockText(blockEl);
-        const nextText = blockText(next);
-        setBlockText(blockEl, curText + nextText);
-        next.remove();
-        setCaret(blockEl, curText.length);
+        const isRich = type === 'action' || type === 'dialogue'
+          || next.dataset.blockType === 'action' || next.dataset.blockType === 'dialogue';
+        if (isRich) {
+          const curHtml  = blockHtml(blockEl);
+          const nextHtml = blockHtml(next);
+          const caretPos = stripHtml(curHtml).length;
+          setBlockHtml(blockEl, curHtml + nextHtml);
+          next.remove();
+          setCaret(blockEl, caretPos);
+        } else {
+          const curText  = blockText(blockEl);
+          const nextText = blockText(next);
+          setBlockText(blockEl, curText + nextText);
+          next.remove();
+          setCaret(blockEl, curText.length);
+        }
         doParse();
         return;
       }
@@ -1097,6 +1214,38 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   const charCheckBtnRef = useRef(null);
   const editorScrollRef = useRef(null);
   useEffect(() => { if (onScrollRefReady) onScrollRefReady(editorScrollRef); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Undo 스택 (1초 디바운스로 스냅샷 저장, 최대 50개) ─────────────────────
+  const undoStack = useRef([]);
+  const undoActive = useRef(false);
+  const undoPushTimer = useRef(null);
+  useEffect(() => {
+    if (undoActive.current) return;
+    clearTimeout(undoPushTimer.current);
+    undoPushTimer.current = setTimeout(() => {
+      const serialized = JSON.stringify(blocks);
+      const last = undoStack.current[undoStack.current.length - 1];
+      if (last !== serialized) {
+        undoStack.current.push(serialized);
+        if (undoStack.current.length > 50) undoStack.current.shift();
+      }
+    }, 1000);
+    return () => clearTimeout(undoPushTimer.current);
+  }, [blocks]);
+
+  const handleUndo = useCallback(() => {
+    if (undoStack.current.length <= 1) return;
+    undoStack.current.pop(); // 현재 상태 제거
+    const prev = undoStack.current[undoStack.current.length - 1];
+    if (!prev) return;
+    undoActive.current = true;
+    const restored = JSON.parse(prev);
+    setBlocks(restored);
+    requestAnimationFrame(() => {
+      surfaceApiRef.current?.loadBlocks(restored);
+      undoActive.current = false;
+    });
+  }, []);
 
   // Keep refs in sync every render so unmount-flush sees latest values
   blocksRef.current = blocks;
@@ -1384,6 +1533,11 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
       setCharSuggestState(null);
     }
   }, [suggestEnabled, projectChars]);
+
+  // ── applyFormat (B/I/U 툴바)
+  const applyFormat = useCallback((format) => {
+    surfaceApiRef.current?.applyFormat(format);
+  }, []);
 
   // ── applyBlockType (toolbar)
   const applyBlockType = useCallback((type) => {
@@ -1905,6 +2059,30 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
             closeToken={symbolPickerCloseToken}
             onOpen={() => { setCharCheckPicker(null); setSceneRefPicker(null); setCharPickerState(null); }}
           />
+          {/* B/I/U 서식 버튼 — action/dialogue 블록에서 동작 */}
+          <div style={{ borderLeft: '1px solid var(--c-border3)', paddingLeft: 6, marginLeft: 2, display: 'flex', gap: 2 }}>
+            {[
+              { format: 'bold',      label: 'B', style: { fontWeight: 700 },                title: '굵게 (Ctrl+B)' },
+              { format: 'italic',    label: 'I', style: { fontStyle: 'italic' },             title: '기울임 (Ctrl+I)' },
+              { format: 'underline', label: 'U', style: { textDecoration: 'underline' },     title: '밑줄 (Ctrl+U)' },
+            ].map(({ format, label, style, title }) => (
+              <button
+                key={format}
+                title={title}
+                onMouseDown={e => { e.preventDefault(); applyFormat(format); }}
+                style={{
+                  flexShrink: 0, width: BTN_W, textAlign: 'center',
+                  fontSize: 'clamp(10px, 2.8vw, 13px)',
+                  padding: '4px 0', borderRadius: 6,
+                  border: '1px solid var(--c-border3)',
+                  background: 'transparent',
+                  color: 'var(--c-text4)',
+                  cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+                  ...style,
+                }}
+              >{label}</button>
+            ))}
+          </div>
           </>)}
         </div>
         <span className="ml-auto flex items-center gap-3">
@@ -2014,6 +2192,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
             activeEpisodeId={activeEpisodeId}
             activeProjectId={activeProjectId}
             onPaste={handleEditorPaste}
+            onUndo={handleUndo}
           />
           <div className="h-48" />
         </div>
@@ -2221,6 +2400,8 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
           <span>Ctrl+Shift+2 지문</span>
           <span>Ctrl+Shift+3 대사</span>
           <span>Ctrl+Shift+5 씬연결</span>
+          <span>Ctrl+B/I/U 굵게/기울임/밑줄</span>
+          <span>Ctrl+Z Undo</span>
           <span>Enter 다음 블록</span>
           <span>Shift+Enter 줄바꿈</span>
           <span>Backspace (빈 블록) 삭제</span>
