@@ -19,7 +19,7 @@ function genId() {
  */
 export async function saveReviewPayload(payload) {
   const id = genId();
-  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30일
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7일
   const { error } = await supabase.from('review_links').insert({ id, payload, expires_at: expiresAt });
   if (error) throw new Error(error.message);
   return id;

@@ -139,8 +139,8 @@ export default function PrintPreviewModal({ onClose }) {
         inp.select(); document.execCommand('copy');
         document.body.removeChild(inp);
       }
-      setShareMsg('링크 복사됨');
-      setTimeout(() => setShareMsg(''), 2500);
+      setShareMsg('링크 복사됨 (7일 후 만료)');
+      setTimeout(() => setShareMsg(''), 3000);
     } catch {
       setShareMsg('링크 생성 실패');
       setTimeout(() => setShareMsg(''), 3000);
