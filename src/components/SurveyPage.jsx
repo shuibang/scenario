@@ -249,7 +249,7 @@ export default function SurveyPage() {
   const [answers, setAnswers] = useState({
     q1: '', q2: [], q3: [], q4: '', q5: '', q6: [],
     q7: 0, q8: '', q9: '', q9detail: '', q10: '', q10detail: '',
-    q11: '', q12: '', q13: 0, q14: '',
+    q11: '', q12: '', q13: 0, q14: '', /* q11은 '||' 구분 문자열 */
     qa: [], qb: '', qc: '', qd: '',
     q15: '', q16: '',
   });
@@ -498,8 +498,80 @@ export default function SurveyPage() {
 
           <Card>
             <div id="q11">
-              <QuestionLabel>Q11. 꼭 추가됐으면 하는 기능이 있나요?<Optional /></QuestionLabel>
-              <TextArea value={answers.q11} onChange={v => set('q11', v)} placeholder="원하는 기능을 자유롭게 적어주세요" />
+              <QuestionLabel>Q11. 추후 업데이트 예정 기능 중 기대되는 것을 골라주세요!<Optional /> <span style={{ fontWeight: 400, color: 'var(--c-text4)', fontSize: 12 }}>(복수 선택)</span></QuestionLabel>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {[
+                  { id: 'emotion', label: '😊 감정 태그 그래프', desc: '씬별 감정 흐름을 시각화해서 한눈에 보기' },
+                  { id: 'corkboard', label: '🗂️ 씬 코르크보드', desc: '씬을 카드형으로 배치하고 드래그로 순서 조정' },
+                  { id: 'stats', label: '📊 인물별 대사량 통계', desc: '캐릭터마다 얼마나 말하는지 비중 확인' },
+                ].map(({ id, label, desc }) => {
+                  const val = `${label}`;
+                  const checked = answers.q11.includes(val);
+                  return (
+                    <label key={id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => {
+                          const arr = answers.q11.split('||').filter(Boolean);
+                          const next = checked ? arr.filter(v => v !== val) : [...arr, val];
+                          set('q11', next.join('||'));
+                        }}
+                        style={{ accentColor: 'var(--c-accent)', width: 16, height: 16, flexShrink: 0, marginTop: 2 }}
+                      />
+                      <div>
+                        <span style={{ fontSize: 14, color: 'var(--c-text2)', fontWeight: 500 }}>{label}</span>
+                        <span style={{ fontSize: 13, color: 'var(--c-text4)', marginLeft: 6 }}>({desc})</span>
+                      </div>
+                    </label>
+                  );
+                })}
+
+                {/* 기타 */}
+                {(() => {
+                  const arr = answers.q11.split('||').filter(Boolean);
+                  const otherEntry = arr.find(v => v.startsWith('__other__:'));
+                  const otherChecked = !!otherEntry;
+                  const otherText = otherEntry ? otherEntry.slice('__other__:'.length) : '';
+                  return (
+                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={otherChecked}
+                        onChange={() => {
+                          const arr2 = answers.q11.split('||').filter(Boolean);
+                          const next = otherChecked
+                            ? arr2.filter(v => !v.startsWith('__other__:'))
+                            : [...arr2, '__other__:'];
+                          set('q11', next.join('||'));
+                        }}
+                        style={{ accentColor: 'var(--c-accent)', width: 16, height: 16, flexShrink: 0, marginTop: 2 }}
+                      />
+                      <div style={{ flex: 1 }}>
+                        <span style={{ fontSize: 14, color: 'var(--c-text2)', fontWeight: 500 }}>기타, 이런 기능이 생겼으면 해요</span>
+                        {otherChecked && (
+                          <input
+                            type="text"
+                            value={otherText}
+                            onChange={e => {
+                              const arr2 = answers.q11.split('||').filter(Boolean);
+                              const next = [...arr2.filter(v => !v.startsWith('__other__:')), '__other__:' + e.target.value];
+                              set('q11', next.join('||'));
+                            }}
+                            placeholder="원하는 기능을 자유롭게 적어주세요"
+                            style={{
+                              display: 'block', marginTop: 8, width: '100%',
+                              background: 'var(--c-input)', border: '1px solid var(--c-border3)',
+                              borderRadius: 6, padding: '8px 12px', color: 'var(--c-text)', fontSize: 13,
+                              outline: 'none', boxSizing: 'border-box',
+                            }}
+                          />
+                        )}
+                      </div>
+                    </label>
+                  );
+                })()}
+              </div>
             </div>
           </Card>
 
