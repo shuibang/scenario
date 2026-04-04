@@ -16,6 +16,8 @@
  * }
  */
 
+function stripHtml(html) { return (html || '').replace(/<[^>]+>/g, ''); }
+
 // ─── A4 metrics ────────────────────────────────────────────────────────────────
 const PT_PER_MM   = 2.8346;
 const A4_W_MM     = 210;
@@ -194,25 +196,27 @@ export function tokenizeSection(section, metrics) {
           break;
         }
         case 'action': {
-          const wrappedA = wrapText(block.content, charsPerLine - 2);
+          const plainA = stripHtml(block.content);
+          const wrappedA = wrapText(plainA, charsPerLine - 2);
           wrappedA.forEach((t, i) =>
             tokens.push(T('action', t, {
               indent: 1,
               isFirstOfBlock: i === 0,
-              blockText:      i === 0 ? (block.content || '') : undefined,
+              blockText:      i === 0 ? plainA : undefined,
               blockLineCount: i === 0 ? wrappedA.length : undefined,
             }))
           );
           break;
         }
         case 'dialogue': {
-          const wrappedD = wrapText(block.content, charsInSpeech);
+          const plainD = stripHtml(block.content);
+          const wrappedD = wrapText(plainD, charsInSpeech);
           wrappedD.forEach((t, i) =>
             tokens.push(T('dialogue', t, {
               charName:       i === 0 ? block.charName : '',
               isFirstLine:    i === 0,
               isFirstOfBlock: i === 0,
-              blockText:      i === 0 ? (block.content || '') : undefined,
+              blockText:      i === 0 ? plainD : undefined,
               blockLineCount: i === 0 ? wrappedD.length : undefined,
             }))
           );
@@ -241,7 +245,7 @@ export function tokenizeSection(section, metrics) {
         }
         default:
           if (block.content) {
-            wrapText(block.content, charsPerLine).forEach(t =>
+            wrapText(stripHtml(block.content), charsPerLine).forEach(t =>
               tokens.push(T('body', t))
             );
           }
