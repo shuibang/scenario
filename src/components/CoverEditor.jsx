@@ -152,14 +152,23 @@ export default function CoverEditor() {
   // Load / migrate on project change
   useEffect(() => {
     const migrated = migrateDoc(existing);
+    // 표지에 작품명이 없으면 프로젝트 제목으로 pre-fill
+    if (!migrated.values.title) {
+      const project = projects.find(p => p.id === activeProjectId);
+      if (project?.title) migrated.values.title = project.title;
+    }
     setValues(migrated.values);
     setCustomFields(migrated.customFields);
     setDirty(false);
-  }, [activeProjectId, existing?.id]);
+  }, [activeProjectId, existing?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setVal = (id, v) => {
     setValues(prev => ({ ...prev, [id]: v }));
     setDirty(true);
+    // 작품명 변경 시 프로젝트 제목 즉시 동기화
+    if (id === 'title') {
+      dispatch({ type: 'UPDATE_PROJECT', payload: { id: activeProjectId, title: v } });
+    }
   };
 
   const setCustomVal = (idx, v) => {

@@ -65,7 +65,6 @@ function ProjectItem({ project, section = 'all' }) {
   const isActive = project.id === activeProjectId;
   const [expanded, setExpanded] = useState(isActive);
   const [addingEp, setAddingEp] = useState(false);
-  const [renaming, setRenaming] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
@@ -100,14 +99,6 @@ function ProjectItem({ project, section = 'all' }) {
 
   return (
     <div>
-      {renaming ? (
-        <InlineInput
-          placeholder={project.title}
-          onCommit={v => { dispatch({ type: 'UPDATE_PROJECT', payload: { id: project.id, title: v } }); setRenaming(false); }}
-          onCancel={() => setRenaming(false)}
-          indent={1}
-        />
-      ) : (
         <div
           className="group flex items-center cursor-pointer rounded mx-1 mb-0.5"
           style={{
@@ -128,7 +119,6 @@ function ProjectItem({ project, section = 'all' }) {
           <span style={{ fontSize: large ? 'clamp(14px, 4vw, 17px)' : undefined }} className={`font-medium flex-1 truncate ${large ? '' : 'text-sm'}`}>{project.title}</span>
           {isActive && !large && (
             <span className="flex gap-1 opacity-0 group-hover:opacity-100">
-              <button onClick={e => { e.stopPropagation(); setRenaming(true); }} className="text-[10px] px-1" style={{ color: 'var(--c-text6)' }}>✎</button>
               {confirmDelete ? (
                 <span className="flex items-center gap-1">
                   <button onClick={e => { e.stopPropagation(); dispatch({ type: 'DELETE_PROJECT', id: project.id }); }} className="text-[10px] px-1" style={{ color: '#f87171' }}>확인</button>
@@ -140,7 +130,6 @@ function ProjectItem({ project, section = 'all' }) {
             </span>
           )}
         </div>
-      )}
 
       {expanded && isActive && (
         <div>
