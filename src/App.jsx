@@ -33,6 +33,7 @@ import MobileMenuBar    from './components/mobile/MobileMenuBar';
 import MobileBottomPanel from './components/mobile/MobileBottomPanel';
 // ─── v2: shared utilities ─────────────────────────────────────────────────────
 import { mobileTbtnStyle } from './styles/tokens';
+import UpdateBanner from './components/UpdateBanner';
 import { applyInlineFormat } from './utils/textFormat';
 import { saveReviewPayload } from './utils/reviewShare';
 
@@ -903,6 +904,7 @@ function Shell() {
           onPrintPreview={() => setPrintPreviewOpen(true)}
           WorkTimer={WorkTimer}
         />
+        <UpdateBanner />
         <div data-tour-id="center-panel" className="flex-1 min-h-0"
           style={{ paddingLeft: 'env(safe-area-inset-left, 0px)', paddingRight: 'env(safe-area-inset-right, 0px)', display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0, position: 'relative' }}
         >
@@ -931,6 +933,7 @@ function Shell() {
     return (
       <div className="w-screen flex flex-col overflow-hidden" style={{ background: 'var(--c-bg)', position: 'fixed', top: 0, right: 0, bottom: 0, left: 0 }}>
         {menuBar}
+        <UpdateBanner />
         <div className="flex flex-1 min-h-0">
           <CollapseButton side="left" collapsed={leftCollapsed} onToggle={() => setLeftCollapsed(v => !v)} />
 
@@ -979,6 +982,7 @@ function Shell() {
       style={{ background: 'var(--c-bg)', position: 'fixed', top: 0, right: 0, bottom: 0, left: 0 }}
     >
       {menuBar}
+      <UpdateBanner />
 
       <div className="flex flex-1 min-h-0">
         <div data-tour-id="left-panel" style={{ width: panelWidths.left, flexShrink: 0, overflow: 'hidden' }}>
