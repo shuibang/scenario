@@ -18,7 +18,11 @@ function CharacterMultiSelect({ characterIds = [], projectChars, autoDetectedStr
       }
     };
     document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener('touchstart', handler);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('touchstart', handler);
+    };
   }, [open]);
 
   const selectedChars = characterIds.map(id => projectChars.find(c => c.id === id)).filter(Boolean);
@@ -69,7 +73,7 @@ function CharacterMultiSelect({ characterIds = [], projectChars, autoDetectedStr
             position: 'fixed',
             top: dropPos.top,
             left: dropPos.left,
-            zIndex: 200,
+            zIndex: 1000,
             background: 'var(--c-tag)',
             border: '1px solid var(--c-border4)',
             borderRadius: '6px',
@@ -373,7 +377,6 @@ export default function SceneListPage() {
   const handleAddScene = () => {
     if (!epId) return;
     const sceneId = genId();
-    const blockId = genId();
     const nextSeq = (epScenes.length > 0 ? Math.max(...epScenes.map(s => s.sceneSeq || 0)) : 0) + 1;
     const newScene = {
       id: sceneId, episodeId: epId, projectId: activeProjectId,
@@ -383,17 +386,10 @@ export default function SceneListPage() {
       specialSituation: '', sceneListContent: '',
       createdAt: now(), updatedAt: now(),
     };
-    const newBlock = {
-      id: blockId, episodeId: epId, projectId: activeProjectId,
-      type: 'scene_number', content: '', label: `S#${nextSeq}.`,
-      sceneId, createdAt: now(), updatedAt: now(),
-    };
-    const otherBlocks = scriptBlocks.filter(b => b.episodeId !== epId);
-    const epBlockList = scriptBlocks.filter(b => b.episodeId === epId);
     dispatch({ type: 'IMPORT_TREATMENT_TO_SCRIPT', payload: {
       episodeId: epId,
       newScenes: [newScene],
-      labelled: [...epBlockList, newBlock],
+      labelled: scriptBlocks.filter(b => b.episodeId === epId),
     }});
   };
 
@@ -438,7 +434,14 @@ export default function SceneListPage() {
       )}
 
       {/* Table */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto" style={{ position: 'relative' }}>
+        {/* 오른쪽 스크롤 인디케이터 페이드 */}
+        <div style={{
+          position: 'sticky', top: 0, right: 0, float: 'right',
+          width: 24, height: '100%', pointerEvents: 'none',
+          background: 'linear-gradient(to right, transparent, var(--c-bg))',
+          zIndex: 2,
+        }} />
         {epScenes.length === 0 ? (
           <div className="py-16 text-center text-sm" style={{ color: 'var(--c-text5)' }}>
             씬이 없습니다. 대본 편집기에서 Ctrl+1로 씬번호를 추가하세요.

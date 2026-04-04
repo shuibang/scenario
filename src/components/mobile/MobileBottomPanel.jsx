@@ -48,7 +48,6 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, on
         transition: 'height 0.25s ease, max-height 0.25s ease, min-height 0.25s ease',
         overflow: 'hidden',
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
-        userSelect: 'none', WebkitUserSelect: 'none',
       }}
     >
       {/* Tab bar */}
@@ -56,6 +55,7 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, on
         height: TAB_H, minHeight: TAB_H, flexShrink: 0,
         display: 'flex', alignItems: 'stretch',
         borderBottom: open ? '1px solid var(--c-border2)' : 'none',
+        userSelect: 'none', WebkitUserSelect: 'none',
       }}>
         {TABS.map(({ id, icon, label }) => (
           <button
