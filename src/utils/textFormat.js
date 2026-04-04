@@ -1,3 +1,8 @@
+// ─── Strip HTML tags (for plain-text display of rich content) ────────────────
+export function stripHtml(html) {
+  return (html || '').replace(/<[^>]+>/g, '');
+}
+
 // ─── Inline text formatting utility ──────────────────────────────────────────
 // Used by MenuBar (desktop) and MobileMenuBar
 export function applyInlineFormat(tag) {

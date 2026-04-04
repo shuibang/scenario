@@ -4,6 +4,7 @@ import { now, genId } from '../store/db';
 import { CoverPreview } from './CoverEditor';
 import { charDisplayName } from './CharacterPanel';
 import { resolveSceneLabel, TIME_OF_DAY_OPTIONS } from '../utils/sceneResolver';
+import { stripHtml } from '../utils/textFormat';
 import { GuidePanel } from './StructurePage';
 import AdBanner from './AdBanner';
 
@@ -217,7 +218,8 @@ function CharacterUsagePanel({ charId, onScrollToScene }) {
                   for (let i = bIdx - 1; i >= 0; i--) {
                     if (epBlocks[i].type === 'scene_number') { sceneLbl = epBlocks[i].label || ''; break; }
                   }
-                  const excerpt = (b.content || '').slice(0, 55) + ((b.content || '').length > 55 ? '…' : '');
+                  const plain = stripHtml(b.content || '');
+                  const excerpt = plain.slice(0, 55) + (plain.length > 55 ? '…' : '');
                   return (
                     <button
                       key={b.id}

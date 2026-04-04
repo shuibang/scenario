@@ -35,7 +35,7 @@ import MobileBottomPanel from './components/mobile/MobileBottomPanel';
 // ─── v2: shared utilities ─────────────────────────────────────────────────────
 import { mobileTbtnStyle } from './styles/tokens';
 import UpdateBanner from './components/UpdateBanner';
-import { applyInlineFormat } from './utils/textFormat';
+import { applyInlineFormat, stripHtml } from './utils/textFormat';
 import { getLayoutMetrics } from './print/LineTokenizer';
 import { saveReviewPayload } from './utils/reviewShare';
 
@@ -151,17 +151,17 @@ function TimelineStrip({ scrollEl }) {
           total += 1 + 12 / lineHpt;
           break;
         case 'action': {
-          const lines = Math.max(1, Math.ceil((b.content?.length || 0) / (charsPerLine - 2)));
+          const lines = Math.max(1, Math.ceil((stripHtml(b.content)?.length || 0) / (charsPerLine - 2)));
           total += lines * (1 + 1 / lineHpt);
           break;
         }
         case 'dialogue': {
-          const lines = Math.max(1, Math.ceil((b.content?.length || 0) / charsInSpeech));
+          const lines = Math.max(1, Math.ceil((stripHtml(b.content)?.length || 0) / charsInSpeech));
           total += lines * (1 + 1 / lineHpt);
           break;
         }
         default: {
-          const lines = Math.max(1, Math.ceil((b.content?.length || 0) / charsPerLine));
+          const lines = Math.max(1, Math.ceil((stripHtml(b.content)?.length || 0) / charsPerLine));
           total += lines * (1 + 1 / lineHpt);
         }
       }

@@ -19,6 +19,8 @@
  *   { id, type, label, content, charName, sceneId }
  */
 
+function stripHtml(html) { return (html || '').replace(/<[^>]+>/g, ''); }
+
 // ─── Character field compat helpers (new model: surname/givenName/occupation/intro)
 function charFullName(c) {
   if (c.surname || c.givenName) return [c.surname, c.givenName].filter(Boolean).join('');
@@ -39,7 +41,7 @@ function resolveCharName(block, characters) {
 // ─── Normalize a single script block for print
 function normalizeBlock(block, characters) {
   const charName = resolveCharName(block, characters);
-  let content = block.content || '';
+  let content = stripHtml(block.content || '');
   // Migration: old badge-span format stored charName at start of content
   if (block.type === 'dialogue' && charName && content.startsWith(charName)) {
     content = content.slice(charName.length).trimStart();
