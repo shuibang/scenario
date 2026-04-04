@@ -357,7 +357,10 @@ function BlockListView({ episodes, scriptBlocks, scenes, viewMode }) {
                               {b.charName || b.characterName}
                             </div>
                           )}
-                          {b.content || <span style={{ opacity: 0.4, fontStyle: 'italic' }}>내용 없음</span>}
+                          {b.content
+                            ? <span dangerouslySetInnerHTML={{ __html: b.content }} />
+                            : <span style={{ opacity: 0.4, fontStyle: 'italic' }}>내용 없음</span>
+                          }
                         </div>
                       ))}
                     </div>
