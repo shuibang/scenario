@@ -1121,10 +1121,21 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     prevEpisodeIdRef.current = activeEpisodeId;
 
     const epBlocks = scriptBlocks.filter(b => b.episodeId === activeEpisodeId);
-    const loaded = epBlocks.length > 0
+    const raw = epBlocks.length > 0
       ? epBlocks
       : [{ id: genId(), episodeId: activeEpisodeId, projectId: activeProjectId,
            type: 'action', content: '', label: '', createdAt: now(), updatedAt: now() }];
+    // scene_number 블록 content가 비어있으면 씬 structured 필드에서 재파생
+    const loaded = raw.map(b => {
+      if (b.type === 'scene_number' && b.sceneId && !b.content) {
+        const scene = scenes.find(s => s.id === b.sceneId);
+        if (scene) {
+          const derived = resolveSceneLabel({ ...scene, label: '' });
+          if (derived) return { ...b, content: derived };
+        }
+      }
+      return b;
+    });
     setBlocks(loaded);
     lastSavedBlocks.current = JSON.stringify(loaded);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1133,8 +1144,18 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   // ── External block injection (e.g. IMPORT_TREATMENT_TO_SCRIPT)
   useEffect(() => {
     if (!pendingScriptReload || pendingScriptReload !== activeEpisodeId) return;
-    const epBlocks = scriptBlocks.filter(b => b.episodeId === activeEpisodeId);
-    if (!epBlocks.length) return;
+    const epBlocksRaw = scriptBlocks.filter(b => b.episodeId === activeEpisodeId);
+    if (!epBlocksRaw.length) return;
+    const epBlocks = epBlocksRaw.map(b => {
+      if (b.type === 'scene_number' && b.sceneId && !b.content) {
+        const scene = scenes.find(s => s.id === b.sceneId);
+        if (scene) {
+          const derived = resolveSceneLabel({ ...scene, label: '' });
+          if (derived) return { ...b, content: derived };
+        }
+      }
+      return b;
+    });
     lastSavedBlocks.current = JSON.stringify(epBlocks);
     setBlocks(epBlocks);
     requestAnimationFrame(() => surfaceApiRef.current?.loadBlocks(epBlocks));
@@ -1172,7 +1193,10 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
         };
       });
       dispatch({ type: 'SET_BLOCKS', episodeId: activeEpisodeId, payload: blocks });
-      dispatch({ type: 'SYNC_SCENES', episodeId: activeEpisodeId, payload: updatedScenes });
+      // scene_number 블록이 없으면 SYNC_SCENES 하지 않음 — 씬리스트에서 추가한 orphan 씬들이 사라지는 버그 방지
+      if (updatedScenes.length > 0) {
+        dispatch({ type: 'SYNC_SCENES', episodeId: activeEpisodeId, payload: updatedScenes });
+      }
       dispatch({ type: 'SET_SAVE_STATUS', payload: 'saved' });
       lastSavedBlocks.current = serialized;
     }, 800);
@@ -1208,7 +1232,9 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
         };
       });
       dispatch({ type: 'SET_BLOCKS', episodeId: epId, payload: currentBlocks });
-      dispatch({ type: 'SYNC_SCENES', episodeId: epId, payload: updatedScenes });
+      if (updatedScenes.length > 0) {
+        dispatch({ type: 'SYNC_SCENES', episodeId: epId, payload: updatedScenes });
+      }
       dispatch({ type: 'SET_SAVE_STATUS', payload: 'saved' });
       lastSavedBlocks.current = serialized;
     };

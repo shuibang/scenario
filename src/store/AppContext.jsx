@@ -133,14 +133,17 @@ function reducer(state, action) {
         s.id === action.payload.id ? { ...s, ...action.payload, updatedAt: now() } : s) };
     case 'DELETE_SCENE':
       return { ...state, scenes: state.scenes.filter(s => s.id !== action.id) };
-    case 'SYNC_SCENES':
+    case 'SYNC_SCENES': {
+      // ScriptEditor가 아는 씬만 교체 — 블록 없는 orphan 씬(SceneListPage 전용)은 보존
+      const syncedIds = new Set(action.payload.map(s => s.id));
       return {
         ...state,
         scenes: [
-          ...state.scenes.filter(s => s.episodeId !== action.episodeId),
+          ...state.scenes.filter(s => s.episodeId !== action.episodeId || !syncedIds.has(s.id)),
           ...action.payload,
         ],
       };
+    }
 
     case 'SET_BLOCKS':
       return {

@@ -202,8 +202,7 @@ function SceneListRow({ scene, idx, blockLabel, autoCharacters, projectChars, on
               background: 'var(--c-input)',
               color: 'var(--c-text)',
               border: '1px solid transparent',
-              minWidth: '140px',
-              width: '100%',
+              width: '100%', minWidth: 0,
             }}
             onFocus={e => { e.target.style.borderColor = 'var(--c-accent)'; }}
             title="회상) 장소 - 세부장소 (시간대) 형식으로 입력"
@@ -386,11 +385,7 @@ export default function SceneListPage() {
       specialSituation: '', sceneListContent: '',
       createdAt: now(), updatedAt: now(),
     };
-    dispatch({ type: 'IMPORT_TREATMENT_TO_SCRIPT', payload: {
-      episodeId: epId,
-      newScenes: [newScene],
-      labelled: scriptBlocks.filter(b => b.episodeId === epId),
-    }});
+    dispatch({ type: 'ADD_SCENE', payload: newScene });
   };
 
   if (!activeProjectId) return null;
@@ -437,8 +432,8 @@ export default function SceneListPage() {
       <div className="flex-1 overflow-auto" style={{ position: 'relative' }}>
         {/* 오른쪽 스크롤 인디케이터 페이드 */}
         <div style={{
-          position: 'sticky', top: 0, right: 0, float: 'right',
-          width: 24, height: '100%', pointerEvents: 'none',
+          position: 'absolute', top: 0, right: 0, bottom: 0,
+          width: 24, pointerEvents: 'none',
           background: 'linear-gradient(to right, transparent, var(--c-bg))',
           zIndex: 2,
         }} />
