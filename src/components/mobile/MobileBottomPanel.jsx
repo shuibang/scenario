@@ -42,7 +42,9 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, on
         background: 'var(--c-panel)',
         display: 'flex', flexDirection: 'column',
         height: `calc(${open ? OPEN_H : TAB_H}px + env(safe-area-inset-bottom, 0px))`,
-        transition: 'height 0.25s ease',
+        maxHeight: `calc(${open ? OPEN_H : TAB_H}px + env(safe-area-inset-bottom, 0px))`,
+        minHeight: `calc(${open ? OPEN_H : TAB_H}px + env(safe-area-inset-bottom, 0px))`,
+        transition: 'height 0.25s ease, max-height 0.25s ease, min-height 0.25s ease',
         overflow: 'hidden',
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         userSelect: 'none', WebkitUserSelect: 'none',
@@ -86,14 +88,14 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, on
         >{open ? '▾' : '▴'}</button>
       </div>
 
-      {/* 탭 콘텐츠 — 좌우 2분할: 왼쪽=광고(or 체크리스트), 오른쪽=메뉴 */}
+      {/* 탭 콘텐츠 — 좌우 2분할: 왼쪽=광고(or 코멘트), 오른쪽=메뉴 */}
       {open && (
         <div
           data-bottom-panel
-          style={{ height: CONTENT_H, minHeight: CONTENT_H, display: 'flex', flexDirection: 'row', overflow: 'hidden' }}
+          style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'row', overflow: 'hidden' }}
         >
           {/* 왼쪽: 메모탭=코멘트 / 나머지=광고 */}
-          <div style={{ width: AD_W, minWidth: 0, height: '100%', flexShrink: 0, overflow: 'hidden', borderRight: '1px solid var(--c-border)' }}>
+          <div style={{ width: AD_W, minWidth: 0, flexShrink: 0, overflow: 'hidden', borderRight: '1px solid var(--c-border)', display: 'flex', flexDirection: 'column' }}>
             {tab === 'memo' ? (
               <MobileMemoTab />
             ) : (
@@ -102,7 +104,7 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, on
           </div>
 
           {/* 오른쪽: 메뉴 콘텐츠 / 메모탭=체크리스트 */}
-          <div style={{ width: MENU_W, minWidth: 0, overflowY: 'auto', touchAction: 'pan-y', height: '100%' }}>
+          <div style={{ width: MENU_W, minWidth: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}>
             {tab === 'script' && (
               <div data-tour-id="left-panel" className="m-panel-content">
                 <MobileScriptTab onClose={onClose} />
