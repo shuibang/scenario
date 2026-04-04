@@ -546,8 +546,8 @@ function SettingsTab() {
 
   const [publicPc, setPublicPc] = useState(() => localStorage.getItem(PUBLIC_PC_KEY) === 'true');
   const [designTool, setDesignTool]       = useState(() => localStorage.getItem(DESIGN_TOOL_KEY) || 'treatment');
-  const [treatmentSync, setTreatmentSync] = useState(() => localStorage.getItem(TREATMENT_SYNC_KEY) || 'off');
-  const [scenelistSync, setScenelistSync] = useState(() => localStorage.getItem(SCENELIST_SYNC_KEY) || 'off');
+  const [treatmentSync, setTreatmentSync] = useState(() => localStorage.getItem(TREATMENT_SYNC_KEY) || 'sync');
+  const [scenelistSync, setScenelistSync] = useState(() => localStorage.getItem(SCENELIST_SYNC_KEY) || 'sync');
 
   const togglePublicPc = () => {
     const next = !publicPc;
@@ -580,7 +580,7 @@ function SettingsTab() {
   const labelStyle = { fontSize: '11px', color: 'var(--c-text5)', marginBottom: '2px', display: 'block' };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 5 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 5 }}>
 
       {/* 사용 가이드 다시 보기 */}
       <div
@@ -639,13 +639,13 @@ function SettingsTab() {
         style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)', padding: '12px 16px' }}
       >
         <div className="text-sm font-medium mb-1" style={{ color: 'var(--c-text)' }}>설계 도구 설정</div>
-        <div className="text-xs mb-4" style={{ color: 'var(--c-text5)' }}>
+        <div className="text-xs mb-6" style={{ color: 'var(--c-text5)', paddingBottom: 4 }}>
           주 설계 도구는 씬 추가·가져오기가 활성화됩니다. 연동을 켜면 변경사항이 대본에 자동 반영됩니다.
         </div>
         <div className="flex flex-col gap-3" style={{ paddingLeft: 20 }}>
           {[['treatment', '트리트먼트'], ['scenelist', '씬리스트']].map(([tool, label]) => {
             const isPrimary = designTool === tool;
-            const isSynced = tool === 'scenelist' && scenelistSync === 'sync';
+            const isSynced = scenelistSync === 'sync';
             return (
               <div
                 key={tool}
@@ -673,15 +673,19 @@ function SettingsTab() {
                     </button>
                   )}
                 </div>
-                {tool === 'scenelist' && (
-                  <div className="flex items-center justify-between">
-                    <div>
-                      {isPrimary && (
-                        <div className="text-[11px] mb-0.5" style={{ color: 'var(--c-accent)' }}>✓ 씬 추가 / 가져오기 활성화됨</div>
-                      )}
-                      <div className="text-[11px]" style={{ color: 'var(--c-text3)' }}>대본 자동 연동</div>
-                      <div className="text-[10px]" style={{ color: 'var(--c-text6)' }}>변경사항이 대본에 자동 반영됩니다</div>
-                    </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    {isPrimary && (
+                      <div className="text-[11px] mb-0.5" style={{ color: 'var(--c-accent)' }}>✓ 씬 추가 / 가져오기 활성화됨</div>
+                    )}
+                    {tool === 'scenelist' && (
+                      <>
+                        <div className="text-[11px]" style={{ color: 'var(--c-text3)' }}>대본 자동 연동</div>
+                        <div className="text-[10px]" style={{ color: 'var(--c-text6)' }}>변경사항이 대본에 자동 반영됩니다</div>
+                      </>
+                    )}
+                  </div>
+                  {tool === 'scenelist' && (
                     <button
                       onClick={() => toggleSync('scenelist')}
                       className="w-9 h-5 rounded-full relative shrink-0"
@@ -693,11 +697,8 @@ function SettingsTab() {
                         left: isSynced ? '18px' : '2px', transition: 'left 0.15s',
                       }} />
                     </button>
-                  </div>
-                )}
-                {tool === 'treatment' && isPrimary && (
-                  <div className="text-[11px]" style={{ color: 'var(--c-accent)' }}>✓ 씬 추가 / 가져오기 활성화됨</div>
-                )}
+                  )}
+                </div>
               </div>
             );
           })}
@@ -1043,7 +1044,8 @@ export default function MyPage() {
             {activeTab === 'membership' && (
               <div className="flex flex-col items-center gap-8" style={{ paddingTop: 10 }}>
                 <PlaceholderTab icon="⭐" title="멤버십" desc="멤버십 기능은 준비 중입니다." />
-                <SupportCard />
+                {/* SupportCard 일시 비활성화 — 추후 복원 예정 */}
+                {false && <SupportCard />}
               </div>
             )}
           </div>

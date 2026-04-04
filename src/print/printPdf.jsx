@@ -196,6 +196,50 @@ function PdfPage({ tokens, pageNum, showPageNum, S }) {
   );
 }
 
+// ─── SceneList landscape table page ──────────────────────────────────────────
+function SceneListPage({ section, S }) {
+  const fs = S.page.fontSize ?? 11;
+  const COL = {
+    num:   { width: '8%',  fontWeight: 700 },
+    head:  { width: '28%' },
+    desc:  { width: '30%' },
+    chars: { width: '20%' },
+    tags:  { width: '14%' },
+  };
+  const cellStyle = { fontSize: fs - 1, padding: '3pt 4pt', borderRight: '0.5pt solid #ccc' };
+  const headerCell = { ...cellStyle, fontWeight: 700, backgroundColor: '#f0f0f0' };
+  const rowStyle = { flexDirection: 'row', borderBottom: '0.5pt solid #ddd' };
+  const epTitle = `${section.episodeNumber}회 씬리스트${section.episodeTitle ? ` — ${section.episodeTitle}` : ''}`;
+
+  return (
+    <Page size="A4" orientation="landscape" style={{ ...S.page, paddingTop: S.page.paddingTop }}>
+      <Text style={{ fontSize: fs + 1, fontWeight: 700, textAlign: 'center', marginBottom: 8 }}>{epTitle}</Text>
+      {/* Header row */}
+      <View style={{ flexDirection: 'row', borderBottom: '1pt solid #999', borderTop: '1pt solid #999', backgroundColor: '#f0f0f0' }}>
+        <Text style={{ ...headerCell, width: COL.num.width }}>씬번호</Text>
+        <Text style={{ ...headerCell, width: COL.head.width }}>씬헤딩</Text>
+        <Text style={{ ...headerCell, width: COL.desc.width }}>내용</Text>
+        <Text style={{ ...headerCell, width: COL.chars.width }}>등장인물</Text>
+        <Text style={{ ...headerCell, width: COL.tags.width, borderRight: 'none' }}>태그</Text>
+      </View>
+      {section.scenes.map((scene, i) => {
+        const loc = [scene.specialSituation ? scene.specialSituation + ')' : '', scene.location, scene.subLocation].filter(Boolean).join(' ');
+        const head = [loc, scene.timeOfDay ? `(${scene.timeOfDay})` : ''].filter(Boolean).join(' ');
+        const bg = i % 2 === 1 ? '#fafafa' : '#fff';
+        return (
+          <View key={scene.id} style={{ ...rowStyle, backgroundColor: bg }}>
+            <Text style={{ ...cellStyle, width: COL.num.width, fontWeight: 700 }}>{scene.sceneNum}</Text>
+            <Text style={{ ...cellStyle, width: COL.head.width }}>{head || scene.content}</Text>
+            <Text style={{ ...cellStyle, width: COL.desc.width }}>{scene.sceneListContent}</Text>
+            <Text style={{ ...cellStyle, width: COL.chars.width }}>{scene.characters?.join(', ') || ''}</Text>
+            <Text style={{ ...cellStyle, width: COL.tags.width, borderRight: 'none' }}>{scene.tags?.map(t => `#${t}`).join(' ') || ''}</Text>
+          </View>
+        );
+      })}
+    </Page>
+  );
+}
+
 // ─── Cover page ───────────────────────────────────────────────────────────────
 function CoverPage({ section, S }) {
   const subtitleField   = section.fields.find(f => f.label === '부제목' || f.id === 'subtitle');
@@ -230,6 +274,10 @@ function buildPdfDocument(printModel) {
   for (const section of sections) {
     if (section.type === 'cover') {
       pages.push(<CoverPage key="cover" section={section} S={S} />);
+      continue;
+    }
+    if (section.type === 'scenelist') {
+      pages.push(<SceneListPage key={`scenelist-${section.episodeId}`} section={section} S={S} />);
       continue;
     }
 

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
 import { now, genId } from '../store/db';
 import { CoverPreview } from './CoverEditor';
@@ -274,6 +274,12 @@ function ChecklistPanel({ projectId, docId }) {
   const doneItems    = items.filter(it => it.done);
   const total = items.length;
 
+  const autoResizeChecklist = (el) => {
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = el.scrollHeight + 'px';
+  };
+
   const CheckItem = ({ it }) => (
     <div className="flex items-start gap-2 px-3 py-1.5 group"
       onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-hover)'; }}
@@ -289,14 +295,19 @@ function ChecklistPanel({ projectId, docId }) {
       >
         {it.done && <span className="text-white text-[8px]">✓</span>}
       </button>
-      <input
+      <textarea
         value={it.text}
-        onChange={e => editText(it.id, e.target.value)}
-        className="flex-1 text-xs bg-transparent outline-none leading-relaxed"
+        rows={1}
+        onChange={e => { editText(it.id, e.target.value); autoResizeChecklist(e.target); }}
+        ref={el => { if (el) autoResizeChecklist(el); }}
+        className="flex-1 bg-transparent outline-none leading-relaxed resize-none"
         style={{
+          fontSize: '12px',
           color: it.done ? 'var(--c-text6)' : 'var(--c-text3)',
           textDecoration: it.done ? 'line-through' : 'none',
           border: 'none',
+          overflow: 'hidden',
+          minHeight: '1.4em',
         }}
       />
       <button onClick={() => del(it.id)}
@@ -451,6 +462,9 @@ export default function RightPanel({ onScrollToScene }) {
   const [tagFilter, setTagFilter] = useState('');
   const [mainTab, setMainTab] = useState('context'); // 'context' | 'checklist'
 
+  // E8: activeDoc/episode 변경 시 문맥 탭으로 리셋
+  useEffect(() => { setMainTab('context'); }, [activeDoc, activeEpisodeId]);
+
   const handleSceneClick = (scene) => {
     setActiveSceneId(scene.id);
     onScrollToScene?.(scene.id);
@@ -552,6 +566,13 @@ export default function RightPanel({ onScrollToScene }) {
         <AdBanner slot="characters-panel" mobileHide={false} height={120} style={{ width: '100%' }} />
       </div>,
       'characters'
+    );
+  } else if (activeDoc === 'mypage') {
+    contextContent = withMemo(
+      <div className="flex flex-col items-center justify-center" style={{ padding: '12px', flex: 1 }}>
+        <AdBanner slot="settings-panel" mobileHide={false} height={120} style={{ width: '100%' }} />
+      </div>,
+      'mypage'
     );
   } else if (isScriptView) {
     contextContent = <SceneOutlineContent />;

@@ -237,24 +237,38 @@ function CharacterUsage({ char, episodes, scenes, scriptBlocks }) {
             등장 씬 <span style={{ color: 'var(--c-accent)' }}>{appearedScenes.length}</span>개
           </div>
           <div className="space-y-1">
-            {appearedScenes.map(s => {
-              const ep = s.episodeId ? epMap[s.episodeId] : null;
-              const sceneBlock = sceneNumberBlocks.find(b => b.sceneId === s.id);
-              const label = sceneBlock
-                ? ((sceneBlock.label || '') + ' ' + (sceneBlock.content || '').replace(/^S#\d+\.?\s*/i, '')).trim()
-                : s.location || '';
-              return (
-                <div key={s.id} className="text-xs rounded px-3 py-2"
-                  style={{ background: 'var(--c-tag)', borderLeft: '2px solid var(--c-accent2)' }}>
-                  {ep && (
-                    <span className="text-[10px] mr-1.5" style={{ color: 'var(--c-accent2)' }}>
-                      {ep.number}회
-                    </span>
-                  )}
-                  <span style={{ color: 'var(--c-text3)' }}>{label.trim()}</span>
-                </div>
-              );
-            })}
+            {[...appearedScenes]
+              .sort((a, b) => {
+                const epA = a.episodeId ? (epMap[a.episodeId]?.number ?? 999) : 999;
+                const epB = b.episodeId ? (epMap[b.episodeId]?.number ?? 999) : 999;
+                if (epA !== epB) return epA - epB;
+                return (a.sceneSeq ?? 0) - (b.sceneSeq ?? 0);
+              })
+              .map((s, idx) => {
+                const ep = s.episodeId ? epMap[s.episodeId] : null;
+                const sceneBlock = sceneNumberBlocks.find(b => b.sceneId === s.id);
+                const label = sceneBlock
+                  ? ((sceneBlock.label || '') + ' ' + (sceneBlock.content || '').replace(/^S#\d+\.?\s*/i, '')).trim()
+                  : s.location || '';
+                const isFirst = idx === 0;
+                return (
+                  <div key={s.id} className="text-xs rounded px-3 py-2"
+                    style={{ background: 'var(--c-tag)', borderLeft: `2px solid ${isFirst ? 'var(--c-accent)' : 'var(--c-accent2)'}` }}>
+                    <div className="flex items-center gap-1.5">
+                      {ep && (
+                        <span className="text-[10px]" style={{ color: 'var(--c-accent2)' }}>
+                          {ep.number}회
+                        </span>
+                      )}
+                      {isFirst && (
+                        <span className="text-[9px] px-1 py-0.5 rounded font-semibold shrink-0"
+                          style={{ background: 'var(--c-accent)', color: '#fff' }}>첫등장</span>
+                      )}
+                      <span style={{ color: 'var(--c-text3)' }}>{label.trim()}</span>
+                    </div>
+                  </div>
+                );
+              })}
           </div>
         </div>
       )}

@@ -388,12 +388,11 @@ export default function TreatmentPage() {
 
       {/* Import warning bar */}
       {importWarning && (
-        <div className="flex items-center gap-2 px-3 py-2 shrink-0" style={{ background: '#7f1d1d22', borderBottom: '1px solid #ef444466' }}>
-          <span className="text-xs flex-1" style={{ color: '#fca5a5' }}>
-            대본에 이미 {scriptBlocks.filter(b => b.episodeId === epId && b.type === 'scene_number').length}개 씬이 있습니다.
-            트리트먼트 항목이 더 적어 기존 내용이 손상될 수 있습니다. 그래도 가져오겠습니까?
+        <div className="flex items-center gap-2 px-3 py-2 shrink-0" style={{ background: 'var(--c-active)', borderBottom: '1px solid var(--c-border2)' }}>
+          <span className="text-xs flex-1" style={{ color: 'var(--c-text4)' }}>
+            트리트먼트 항목이 {episode?.number}회 대본 하단에 추가됩니다. (기존 씬 {scriptBlocks.filter(b => b.episodeId === epId && b.type === 'scene_number').length}개 유지)
           </span>
-          <button onClick={() => { setImportWarning(false); setImporting(true); }} className="px-3 py-1 rounded text-xs text-white shrink-0" style={{ background: '#ef4444', border: 'none', cursor: 'pointer' }}>가져오기</button>
+          <button onClick={() => { setImportWarning(false); setImporting(true); }} className="px-3 py-1 rounded text-xs text-white shrink-0" style={{ background: 'var(--c-accent)', border: 'none', cursor: 'pointer' }}>확인</button>
           <button onClick={() => setImportWarning(false)} className="px-3 py-1 rounded text-xs shrink-0" style={{ color: 'var(--c-text4)', border: '1px solid var(--c-border3)', background: 'transparent', cursor: 'pointer' }}>취소</button>
         </div>
       )}
@@ -451,13 +450,13 @@ export default function TreatmentPage() {
                 value={it.text}
                 rows={1}
                 placeholder="줄거리 항목 입력"
-                className="flex-1 text-sm resize-none rounded px-3 py-2 outline-none"
+                className="flex-1 text-xs resize-none rounded px-3 py-1.5 outline-none"
                 style={{
                   background: 'var(--c-input)',
                   color: 'var(--c-text)',
                   border: '1px solid var(--c-border3)',
-                  lineHeight: 1.7,
-                  minHeight: '2.4em',
+                  lineHeight: 1.5,
+                  minHeight: '2em',
                   overflow: 'hidden',
                 }}
                 onChange={e => {

@@ -36,7 +36,7 @@ export const BUILTIN_GUIDES = [
 
 // ─── Guide panel (exported for RightPanel context) ────────────────────────────
 export function GuidePanel({ selectedSceneId, scenes, dispatch }) {
-  const [openGuide, setOpenGuide] = useState('save-the-cat');
+  const [openGuide, setOpenGuide] = useState(null);
 
   const handleBeatClick = (beat) => {
     if (!selectedSceneId) return;
@@ -51,11 +51,7 @@ export function GuidePanel({ selectedSceneId, scenes, dispatch }) {
 
   return (
     <div className="h-full overflow-y-auto px-4 py-4">
-      <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: 'var(--c-text6)' }}>구조 지침</div>
-      <div className="text-[10px] mb-3" style={{ color: selectedScene ? 'var(--c-accent2)' : 'var(--c-text6)' }}>
-        {selectedScene ? `선택: ${selectedScene.label || '씬'}` : '씬 클릭 후 비트 적용'}
-      </div>
-      <div className="text-[10px] mb-2" style={{ color: 'var(--c-text6)' }}>비트를 씬 위로 드래그하여 태그 적용</div>
+      <div className="text-[10px] uppercase tracking-widest mb-3" style={{ color: 'var(--c-text6)' }}>구조 지침</div>
       {BUILTIN_GUIDES.map(guide => (
         <div key={guide.id} className="mb-3">
           <button

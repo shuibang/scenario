@@ -185,14 +185,24 @@ export function buildPrintModel(appState, selections, preset) {
         episodeId:     ep.id,
         episodeNumber: ep.number,
         episodeTitle:  ep.title || '',
-        scenes: epScenes.map(s => ({
-          id:              s.id,
-          content:         s.content         || '',
-          location:        s.location        || '',
-          subLocation:     s.subLocation     || '',
-          timeOfDay:       s.timeOfDay       || '',
-          sceneListContent: s.sceneListContent || '',
-        })),
+        scenes: epScenes.map((s, i) => {
+          const snBlock = (scriptBlocks || []).find(b => b.sceneId === s.id && b.type === 'scene_number');
+          const charNames = (s.characterIds || [])
+            .map(cid => { const c = projectChars.find(ch => ch.id === cid); return c ? (c.givenName || c.name) : null; })
+            .filter(Boolean);
+          return {
+            id:              s.id,
+            sceneNum:        snBlock?.label || `S#${i + 1}.`,
+            content:         s.content         || '',
+            location:        s.location        || '',
+            subLocation:     s.subLocation     || '',
+            timeOfDay:       s.timeOfDay       || '',
+            specialSituation: s.specialSituation || '',
+            sceneListContent: s.sceneListContent || '',
+            characters:      charNames,
+            tags:            s.tags || [],
+          };
+        }),
       });
     });
   }
