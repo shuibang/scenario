@@ -153,7 +153,7 @@ export default function MobileMenuBar({ onSave, onPrintPreview, WorkTimer }) {
               background: 'var(--c-panel)', border: '1px solid var(--c-border)',
               borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
               zIndex: 300, minWidth: 200,
-              maxHeight: 'calc(100dvh - var(--mobile-header-h, 44px) - 24px)',
+              maxHeight: 'min(420px, calc(100dvh - var(--mobile-header-h, 44px) - 24px))',
               width: '40vw', minWidth: 192, maxWidth: 264,
               overflowY: 'auto', padding: '6px 0',
             }}>
@@ -237,9 +237,6 @@ export default function MobileMenuBar({ onSave, onPrintPreview, WorkTimer }) {
                 </div>
               )}
 
-              {/* 하단 배너 광고 */}
-              <div style={{ height: 1, background: 'var(--c-border)', margin: '4px 0' }} />
-              <AdBanner slot="mobile-bottom" mobileHide={false} height={24} style={{ width: '100%', borderRadius: '0 0 10px 10px', overflow: 'hidden' }} />
             </div>
           )}
         </div>
