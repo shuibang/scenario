@@ -214,7 +214,7 @@ function TextArea({ value, onChange, placeholder }) {
 // ─── 진행률 바 ────────────────────────────────────────────────────────────────
 
 function ProgressBar({ answers }) {
-  const total = 16;
+  const total = 20;
   const filled = Object.values(answers).filter(v =>
     v !== '' && v !== null && v !== 0 && !(Array.isArray(v) && v.length === 0)
   ).length;
@@ -249,7 +249,9 @@ export default function SurveyPage() {
   const [answers, setAnswers] = useState({
     q1: '', q2: [], q3: [], q4: '', q5: '', q6: [],
     q7: 0, q8: '', q9: '', q9detail: '', q10: '', q10detail: '',
-    q11: '', q12: '', q13: 0, q14: '', q15: '', q16: '',
+    q11: '', q12: '', q13: 0, q14: '',
+    qa: [], qb: '', qc: '', qd: '',
+    q15: '', q16: '',
   });
   const [errors, setErrors] = useState({});
   const [submitted, setSubmitted] = useState(false);
@@ -271,6 +273,11 @@ export default function SurveyPage() {
     if (!answers.q9) e.q9 = true;
     if (!answers.q10) e.q10 = true;
     if (!answers.q13) e.q13 = true;
+    if (!answers.qb) e.qb = true;
+    if (answers.qb !== '유료라면 안 쓸 것 같아요') {
+      if (!answers.qc) e.qc = true;
+      if (!answers.qd) e.qd = true;
+    }
     if (!answers.q15) e.q15 = true;
     return e;
   };
@@ -523,6 +530,133 @@ export default function SurveyPage() {
             </div>
           </Card>
 
+          {/* ── 섹션 4.5: 유료 전환 의향 ── */}
+          <div style={{ marginTop: 36 }}>
+            <SectionHeader emoji="💰" title="유료 전환 의향" />
+          </div>
+
+          <Card>
+            <div id="qa">
+              <QuestionLabel>
+                Q-A. 현재 무료로 제공되는 기능 중 "이것만으로도 충분하다"고 느끼는 기능을 모두 골라주세요.
+                <Optional />
+              </QuestionLabel>
+
+              {[
+                {
+                  label: '기본 기능',
+                  items: ['대본 편집 (씬번호/지문/대사/단축키)', '씬번호 자동 연동', '자동저장'],
+                },
+                {
+                  label: '작업 보조',
+                  items: ['시놉시스 편집', '인물 관리 + 인물이력서', '트리트먼트 작성', '씬리스트 자동 생성', '구조 점검'],
+                },
+                {
+                  label: '출력 / 공유',
+                  items: ['PDF 출력', 'DOCX/HWPX 출력', '검토 링크 공유'],
+                },
+                {
+                  label: '환경',
+                  items: ['모바일/태블릿 지원', '오프라인 작동', '다크모드'],
+                },
+              ].map(group => (
+                <div key={group.label} style={{ marginBottom: 20 }}>
+                  <div style={{
+                    fontSize: 11, fontWeight: 700, color: 'var(--c-accent)',
+                    letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10,
+                  }}>{group.label}</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {group.items.map(item => (
+                      <label key={item} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={answers.qa.includes(item)}
+                          onChange={() => {
+                            const next = answers.qa.includes(item)
+                              ? answers.qa.filter(v => v !== item)
+                              : [...answers.qa, item];
+                            set('qa', next);
+                          }}
+                          style={{ accentColor: 'var(--c-accent)', width: 16, height: 16, flexShrink: 0 }}
+                        />
+                        <span style={{ fontSize: 14, color: 'var(--c-text2)' }}>{item}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              <div style={{
+                marginTop: 16, padding: '10px 14px', background: 'var(--c-active)',
+                borderRadius: 8, fontSize: 13, color: 'var(--c-text3)',
+              }}>
+                💡 선택하지 않은 기능은 유료 전환 시 참고할게요!
+              </div>
+            </div>
+          </Card>
+
+          <Card>
+            <div id="qb">
+              <QuestionLabel>Q-B. 실제로 써보고 나서 유료 구매 의사가 생겼나요?<Required /></QuestionLabel>
+              <SingleSelect
+                options={[
+                  '네, 충분히 생겼어요',
+                  '조금 생겼어요',
+                  '아직 잘 모르겠어요',
+                  '솔직히 무료로 충분할 것 같아요',
+                  '유료라면 안 쓸 것 같아요',
+                ]}
+                value={answers.qb}
+                onChange={v => {
+                  set('qb', v);
+                  if (v === '유료라면 안 쓸 것 같아요') { set('qc', ''); set('qd', ''); }
+                  setErrors(p => ({ ...p, qb: false, qc: false, qd: false }));
+                }}
+              />
+              {errors.qb && errMsg}
+            </div>
+          </Card>
+
+          {answers.qb && answers.qb !== '유료라면 안 쓸 것 같아요' && (
+            <>
+              <Card>
+                <div id="qc">
+                  <QuestionLabel>Q-C. 유료라면 어떤 방식을 선호하시나요?<Required /></QuestionLabel>
+                  <SingleSelect
+                    options={[
+                      '월 구독 (매달 결제)',
+                      '연 구독 (1년치 한번에, 할인 적용)',
+                      '크라우드펀딩 참여 (와디즈 같은 방식)',
+                      '앱 유료 구매 (플레이스토어/앱스토어 일회성)',
+                    ]}
+                    value={answers.qc}
+                    onChange={v => { set('qc', v); setErrors(p => ({ ...p, qc: false })); }}
+                    allowOther
+                  />
+                  {errors.qc && errMsg}
+                </div>
+              </Card>
+
+              <Card>
+                <div id="qd">
+                  <QuestionLabel>Q-D. 광고 없는 버전을 위해 낼 수 있는 금액은?<Required /></QuestionLabel>
+                  <SingleSelect
+                    options={[
+                      '월 3,000원 이하',
+                      '월 5,000~7,000원',
+                      '월 10,000원 이상',
+                      '연 30,000~40,000원 (월 환산 시 더 저렴)',
+                      '연 50,000원 이상도 괜찮아요',
+                    ]}
+                    value={answers.qd}
+                    onChange={v => { set('qd', v); setErrors(p => ({ ...p, qd: false })); }}
+                  />
+                  {errors.qd && errMsg}
+                </div>
+              </Card>
+            </>
+          )}
+
           {/* ── 섹션 5: 마지막 ── */}
           <div style={{ marginTop: 36 }}>
             <SectionHeader emoji="💬" title="마지막" />
@@ -530,20 +664,12 @@ export default function SurveyPage() {
 
           <Card>
             <div id="q15">
-              <QuestionLabel>
-                Q15. 앞으로 유료 멤버십이 생긴다면, 광고 제거 + 추가 기능 기준으로<br />
-                어느 정도 금액이 적당할 것 같으신가요?<Required />
-              </QuestionLabel>
-              <SingleSelect
-                options={[
-                  '무조건 무료만 쓸 것 같아요',
-                  '월 3,000원 이하면 고려해볼게요',
-                  '월 5,000~7,000원 정도면 적당해요',
-                  '월 10,000원 이상도 괜찮아요',
-                  '연간 결제라면 더 저렴하면 고려해볼게요',
-                ]}
-                value={answers.q15}
-                onChange={v => { set('q15', v); setErrors(p => ({ ...p, q15: false })); }}
+              <QuestionLabel>Q15. 베타 테스터로서 전반적인 완성도는 몇 점인가요?<Required /></QuestionLabel>
+              <ScaleRating
+                value={answers.q15 ? Number(answers.q15) : 0}
+                onChange={v => { set('q15', String(v)); setErrors(p => ({ ...p, q15: false })); }}
+                leftLabel="아직 많이 부족해요"
+                rightLabel="충분히 쓸 만해요"
               />
               {errors.q15 && errMsg}
             </div>
