@@ -138,8 +138,8 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, on
 
           {/* 하단 광고 띠 — 메모탭 전용 */}
           {tab === 'memo' && (
-            <div style={{ height: BANNER_H, minHeight: BANNER_H, flexShrink: 0, overflow: 'hidden', borderTop: '1px solid var(--c-border)' }}>
-              <AdBanner slot="mobile-memo-bottom" mobileHide={false} height={BANNER_H} />
+            <div style={{ height: BANNER_H, minHeight: BANNER_H, maxHeight: BANNER_H, flexShrink: 0, overflow: 'hidden', borderTop: '1px solid var(--c-border)' }}>
+              <AdBanner slot="mobile-memo-bottom" mobileHide={false} height={BANNER_H} style={{ height: BANNER_H, maxHeight: BANNER_H }} />
             </div>
           )}
         </div>
