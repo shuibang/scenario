@@ -314,6 +314,64 @@ function EpisodeSceneList({ ep, scenes, scriptBlocks, dispatch, compact = false,
   );
 }
 
+// ─── Block list view (지문/대사 보기) ─────────────────────────────────────────
+function BlockListView({ episodes, scriptBlocks, scenes, viewMode }) {
+  return (
+    <div className="space-y-6">
+      {episodes.map(ep => {
+        const epBlocks = scriptBlocks.filter(b => b.episodeId === ep.id);
+        const snBlocks = epBlocks.filter(b => b.type === 'scene_number');
+        const groups = snBlocks.map((snb, idx) => {
+          const next = snBlocks[idx + 1];
+          const start = epBlocks.indexOf(snb);
+          const end = next ? epBlocks.indexOf(next) : epBlocks.length;
+          const seg = epBlocks.slice(start + 1, end);
+          const filtered = seg.filter(b => b.type === (viewMode === 'action' ? 'action' : 'dialogue'));
+          return { snb, filtered };
+        }).filter(g => g.filtered.length > 0);
+
+        if (groups.length === 0) return null;
+        return (
+          <div key={ep.id}>
+            {episodes.length > 1 && (
+              <div className="px-2 py-1 mb-2 rounded text-xs font-semibold" style={{ background: 'var(--c-tag)', color: 'var(--c-text2)' }}>
+                {ep.number}회 {ep.title || ''}
+              </div>
+            )}
+            <div className="space-y-3">
+              {groups.map(({ snb, filtered }) => {
+                const scene = scenes.find(s => s.id === snb.sceneId);
+                const label = resolveSceneLabel({ ...scene, label: snb.label || scene?.label || '' });
+                return (
+                  <div key={snb.id}>
+                    <div className="text-[10px] font-semibold px-2 py-0.5 rounded mb-1"
+                      style={{ background: 'var(--c-tag)', color: 'var(--c-text5)' }}>
+                      {label || snb.label || '씬'}
+                    </div>
+                    <div className="space-y-1">
+                      {filtered.map(b => (
+                        <div key={b.id} className="px-3 py-1.5 rounded text-xs"
+                          style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)', color: 'var(--c-text3)', lineHeight: 1.6 }}>
+                          {viewMode === 'dialogue' && (b.charName || b.characterName) && (
+                            <div className="text-[10px] font-semibold mb-0.5" style={{ color: 'var(--c-accent2)' }}>
+                              {b.charName || b.characterName}
+                            </div>
+                          )}
+                          {b.content || <span style={{ opacity: 0.4, fontStyle: 'italic' }}>내용 없음</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── StructurePage ────────────────────────────────────────────────────────────
 export default function StructurePage() {
   const { state, dispatch } = useApp();
@@ -322,6 +380,7 @@ export default function StructurePage() {
   const ALL = '__all__';
   const [selectedSceneId, setSelectedSceneId] = useState(null);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [viewMode, setViewMode] = useState('scene'); // 'scene' | 'action' | 'dialogue'
   const helpRef = useRef(null);
   useEffect(() => {
     if (!helpOpen) return;
@@ -390,6 +449,36 @@ export default function StructurePage() {
           {epId !== ALL && (
             <span className="text-xs" style={{ color: 'var(--c-text6)' }}>{episodeScenes.length}개 씬</span>
           )}
+          <div className="flex-1" />
+          <div className="flex items-center gap-1">
+            <span className="text-[11px]" style={{ color: 'var(--c-text6)', flexShrink: 0 }}>필터:</span>
+            {[
+              { mode: 'scene',    label: '씬' },
+              { mode: 'action',   label: '지문' },
+              { mode: 'dialogue', label: '대사' },
+            ].map(({ mode, label }) => (
+              <button
+                key={mode}
+                onClick={() => setViewMode(mode)}
+                style={{
+                  width: 38,
+                  fontSize: 11,
+                  padding: '3px 0',
+                  borderRadius: 6,
+                  border: `1px solid ${viewMode === mode ? 'var(--c-accent)' : 'var(--c-border3)'}`,
+                  background: viewMode === mode ? 'var(--c-accent)' : 'var(--c-tag)',
+                  color: viewMode === mode ? '#fff' : 'var(--c-text4)',
+                  cursor: 'pointer',
+                  fontWeight: viewMode === mode ? 600 : 400,
+                  transition: 'background 0.15s, border-color 0.15s',
+                  textAlign: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* majorEpisodes summary bar (single ep view) */}
@@ -400,7 +489,18 @@ export default function StructurePage() {
         )}
 
         <div className="flex-1 overflow-y-auto" style={{ padding: 10 }}>
-          {epId === ALL ? (
+          {viewMode !== 'scene' ? (
+            projectEpisodes.length === 0 ? (
+              <div className="text-center py-16 text-sm" style={{ color: 'var(--c-text5)' }}>회차가 없습니다.</div>
+            ) : (
+              <BlockListView
+                episodes={epId === ALL ? projectEpisodes : [selectedEp || projectEpisodes[0]].filter(Boolean)}
+                scriptBlocks={scriptBlocks}
+                scenes={scenes}
+                viewMode={viewMode}
+              />
+            )
+          ) : epId === ALL ? (
             projectEpisodes.length === 0 ? (
               <div className="text-center py-16 text-sm" style={{ color: 'var(--c-text5)' }}>회차가 없습니다.</div>
             ) : (
