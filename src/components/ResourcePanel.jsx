@@ -9,85 +9,77 @@ function ResourceCard({ resource, onUpdate, onDelete }) {
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState(resource.title || '');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const imgInputRef = useRef(null);
 
-  const saveMemo = () => {
-    onUpdate({ memo });
-    setEditingMemo(false);
-  };
+  const isMemo = resource.type === 'memo';
 
-  const saveTitle = () => {
-    onUpdate({ title });
-    setEditingTitle(false);
+  const saveMemo  = () => { onUpdate({ memo });  setEditingMemo(false); };
+  const saveTitle = () => { onUpdate({ title }); setEditingTitle(false); };
+
+  const handleImageChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => onUpdate({ imageData: ev.target.result });
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   return (
-    <div
-      className="rounded-lg overflow-hidden group"
-      style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)' }}
-    >
-      {/* Image thumbnail */}
-      {resource.imageData && (
-        <div style={{ position: 'relative', aspectRatio: '16/9', overflow: 'hidden', background: 'var(--c-bg)' }}>
-          <img
-            src={resource.imageData}
-            alt={resource.title || '이미지'}
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-          />
-        </div>
-      )}
-      {!resource.imageData && (
-        <div
-          className="flex items-center justify-center text-xs"
-          style={{ aspectRatio: '16/9', background: 'var(--c-bg)', color: 'var(--c-text6)', border: 'none' }}
-        >
-          이미지 없음
-        </div>
+    <div className="rounded-lg overflow-hidden group" style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)' }}>
+
+      {/* 이미지 영역 — 이미지 타입만 표시 */}
+      {!isMemo && (
+        <>
+          {resource.imageData ? (
+            <div style={{ position: 'relative', aspectRatio: '16/9', overflow: 'hidden', background: 'var(--c-bg)' }}>
+              <img src={resource.imageData} alt={resource.title || '이미지'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <button
+                onClick={() => imgInputRef.current?.click()}
+                className="absolute bottom-1 right-1 text-[10px] px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                style={{ background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none', cursor: 'pointer' }}
+              >교체</button>
+            </div>
+          ) : (
+            <div
+              onClick={() => imgInputRef.current?.click()}
+              className="flex items-center justify-center text-xs cursor-pointer"
+              style={{ aspectRatio: '16/9', background: 'var(--c-bg)', color: 'var(--c-text5)' }}
+            >+ 이미지 업로드</div>
+          )}
+          <input ref={imgInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageChange} />
+        </>
       )}
 
       <div className="p-3">
-        {/* Title */}
+        {/* 제목 / 이미지 설명 */}
         {editingTitle ? (
-          <input
-            autoFocus
-            value={title}
-            onChange={e => setTitle(e.target.value)}
-            onBlur={saveTitle}
+          <input autoFocus value={title} onChange={e => setTitle(e.target.value)} onBlur={saveTitle}
             onKeyDown={e => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') { setTitle(resource.title || ''); setEditingTitle(false); } }}
             className="w-full text-sm font-medium outline-none mb-1 rounded px-1"
-            style={{ background: 'var(--c-input)', color: 'var(--c-text)', border: '1px solid var(--c-accent)' }}
-          />
+            style={{ background: 'var(--c-input)', color: 'var(--c-text)', border: '1px solid var(--c-accent)' }} />
         ) : (
-          <div
-            className="text-sm font-medium mb-1 cursor-text"
+          <div className="text-sm font-medium mb-1 cursor-text"
             style={{ color: resource.title ? 'var(--c-text)' : 'var(--c-text6)', fontStyle: resource.title ? 'normal' : 'italic' }}
-            onClick={() => setEditingTitle(true)}
-          >
-            {resource.title || '제목 없음 (클릭해서 수정)'}
+            onClick={() => setEditingTitle(true)}>
+            {resource.title || (isMemo ? '제목 없음 (클릭해서 수정)' : '설명 없음 (클릭해서 수정)')}
           </div>
         )}
 
-        {/* Memo */}
+        {/* 메모 / 이미지 부가 설명 */}
         {editingMemo ? (
-          <textarea
-            autoFocus
-            value={memo}
-            onChange={e => setMemo(e.target.value)}
-            onBlur={saveMemo}
-            rows={3}
+          <textarea autoFocus value={memo} onChange={e => setMemo(e.target.value)} onBlur={saveMemo} rows={3}
             className="w-full text-xs rounded p-1 outline-none resize-none"
-            style={{ background: 'var(--c-input)', color: 'var(--c-text3)', border: '1px solid var(--c-border3)' }}
-          />
+            style={{ background: 'var(--c-input)', color: 'var(--c-text3)', border: '1px solid var(--c-border3)' }} />
         ) : (
-          <div
-            className="text-xs leading-relaxed cursor-text min-h-[2rem]"
+          <div className="text-xs leading-relaxed cursor-text min-h-[2rem]"
             style={{ color: resource.memo ? 'var(--c-text4)' : 'var(--c-text6)', fontStyle: resource.memo ? 'normal' : 'italic' }}
-            onClick={() => setEditingMemo(true)}
-          >
-            {resource.memo || '메모 클릭해서 입력…'}
+            onClick={() => setEditingMemo(true)}>
+            {resource.memo || (isMemo ? '메모 클릭해서 입력…' : '설명 클릭해서 입력…')}
           </div>
         )}
 
-        {/* Actions */}
+        {/* 액션 */}
         <div className="mt-2 flex justify-between items-center">
           <span className="text-[10px]" style={{ color: 'var(--c-text6)' }}>
             {new Date(resource.createdAt).toLocaleDateString('ko-KR')}
