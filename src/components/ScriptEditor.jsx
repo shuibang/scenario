@@ -498,7 +498,10 @@ function parseSurface(surface, metaRef, epId, projId) {
     }
     if (type === 'dialogue') {
       // sceneRefs 없는 dialogue는 HTML 서식 보존
-      const content = sceneRefs.length ? rawText : blockHtml(div);
+      // ce-char-badge 가 있는 신규 블록의 경우 .ce-speech 만 읽어야 배지 텍스트가 content에 포함되지 않음
+      const speechEl = div.querySelector('.ce-speech');
+      const contentEl = speechEl || div;
+      const content = sceneRefs.length ? rawText : blockHtml(contentEl);
       return {
         ...base,
         content,
@@ -833,7 +836,9 @@ const EditorSurface = forwardRef(function EditorSurface({
       const expected = blockDisplayContent(b);
       const isRich = b.type === 'action' || b.type === 'dialogue';
       const expectedPlain = isRich ? stripHtml(expected) : expected;
-      if (blockText(div) !== expectedPlain) {
+      // dialogue: badge 구조인 경우 .ce-speech 기준으로 비교
+      const compareEl = (b.type === 'dialogue' && div.querySelector('.ce-speech')) ? div.querySelector('.ce-speech') : div;
+      if (blockText(compareEl) !== expectedPlain) {
         if (isRich) setBlockHtml(div, expected); else setBlockText(div, expected);
       }
       // Sync char name for dialogue
@@ -1091,8 +1096,10 @@ const EditorSurface = forwardRef(function EditorSurface({
         const prevIsRich = prev.dataset.blockType === 'action' || prev.dataset.blockType === 'dialogue';
         const curIsRich  = type === 'action' || type === 'dialogue';
         if (prevIsRich || curIsRich) {
-          const prevHtml = blockHtml(prev);
-          const curHtml  = blockHtml(blockEl);
+          const prevSpeech = prev.querySelector('.ce-speech') || prev;
+          const curSpeech  = blockEl.querySelector('.ce-speech') || blockEl;
+          const prevHtml = blockHtml(prevSpeech);
+          const curHtml  = blockHtml(curSpeech);
           const caretPos = stripHtml(prevHtml).length;
           setBlockHtml(prev, prevHtml + curHtml);
           blockEl.remove();
@@ -1120,8 +1127,10 @@ const EditorSurface = forwardRef(function EditorSurface({
         const isRich = type === 'action' || type === 'dialogue'
           || next.dataset.blockType === 'action' || next.dataset.blockType === 'dialogue';
         if (isRich) {
-          const curHtml  = blockHtml(blockEl);
-          const nextHtml = blockHtml(next);
+          const curSpeech  = blockEl.querySelector('.ce-speech') || blockEl;
+          const nextSpeech = next.querySelector('.ce-speech') || next;
+          const curHtml  = blockHtml(curSpeech);
+          const nextHtml = blockHtml(nextSpeech);
           const caretPos = stripHtml(curHtml).length;
           setBlockHtml(blockEl, curHtml + nextHtml);
           next.remove();
