@@ -331,17 +331,6 @@ export default function SceneListPage() {
 
   const handleMetaChange = (sceneId, meta) => {
     dispatch({ type: 'UPDATE_SCENE', payload: { id: sceneId, ...meta, updatedAt: now() } });
-    // Also sync block content so ScriptEditor sees updated location/time when it reloads
-    const block = epBlocks.find(b => b.type === 'scene_number' && b.sceneId === sceneId);
-    if (block) {
-      const scene = epScenes.find(s => s.id === sceneId);
-      const updatedScene = { ...scene, ...meta };
-      const newContent = resolveSceneLabel({ ...updatedScene, label: '' });
-      const updatedBlocks = epBlocks.map(b =>
-        b.id === block.id ? { ...b, content: newContent, updatedAt: now() } : b
-      );
-      dispatch({ type: 'SET_BLOCKS', episodeId: epId, payload: updatedBlocks });
-    }
   };
 
   const handleCharsChange = (sceneId, characterIds) => {
@@ -387,14 +376,20 @@ export default function SceneListPage() {
 
   const handleAddScene = () => {
     if (!epId) return;
+    const sceneId = genId();
     const nextSeq = (epScenes.length > 0 ? Math.max(...epScenes.map(s => s.sceneSeq || 0)) : 0) + 1;
-    dispatch({ type: 'ADD_SCENE', payload: {
-      id: genId(), episodeId: epId, projectId: activeProjectId,
+    const newScene = {
+      id: sceneId, episodeId: epId, projectId: activeProjectId,
       sceneSeq: nextSeq, label: `S#${nextSeq}.`,
       status: 'draft', tags: [], characters: [], characterIds: [],
       content: '', location: '', subLocation: '', timeOfDay: '',
       specialSituation: '', sceneListContent: '',
       createdAt: now(), updatedAt: now(),
+    };
+    dispatch({ type: 'IMPORT_TREATMENT_TO_SCRIPT', payload: {
+      episodeId: epId,
+      newScenes: [newScene],
+      labelled: scriptBlocks.filter(b => b.episodeId === epId),
     }});
   };
 
