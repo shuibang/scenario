@@ -211,7 +211,7 @@ function CharacterUsage({ char, episodes, scenes, scriptBlocks }) {
                         : '';
                       const text = (b.content || '').trim();
                       return (
-                        <div key={b.id} className="text-xs rounded px-2 py-1.5"
+                        <div key={b.id} className="text-xs rounded px-3 py-2"
                           style={{ background: 'var(--c-tag)', borderLeft: '2px solid var(--c-accent)' }}>
                           {sceneLabel && (
                             <div className="text-[10px] mb-0.5" style={{ color: 'var(--c-text5)' }}>{sceneLabel.trim()}</div>
@@ -244,7 +244,7 @@ function CharacterUsage({ char, episodes, scenes, scriptBlocks }) {
                 ? ((sceneBlock.label || '') + ' ' + (sceneBlock.content || '').replace(/^S#\d+\.?\s*/i, '')).trim()
                 : s.location || '';
               return (
-                <div key={s.id} className="text-xs rounded px-2 py-1.5"
+                <div key={s.id} className="text-xs rounded px-3 py-2"
                   style={{ background: 'var(--c-tag)', borderLeft: '2px solid var(--c-accent2)' }}>
                   {ep && (
                     <span className="text-[10px] mr-1.5" style={{ color: 'var(--c-accent2)' }}>

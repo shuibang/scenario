@@ -390,7 +390,7 @@ export default function TreatmentPage() {
       )}
 
       <div className="flex-1 overflow-y-auto">
-      <div className="max-w-2xl mx-auto" style={{ padding: '10px 10px 40px' }}>
+      <div style={{ padding: '10px 10px 40px' }}>
 
         {/* Items */}
         <div className="space-y-1.5">

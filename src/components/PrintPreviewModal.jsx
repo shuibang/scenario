@@ -158,19 +158,20 @@ export default function PrintPreviewModal({ onClose }) {
       onClick={handleBackdrop}
     >
       <div
-        className="flex rounded-xl overflow-hidden shadow-2xl"
+        className="flex rounded-xl shadow-2xl"
         style={{
           width:      'min(960px, 95vw)',
           height:     'min(88vh, 760px)',
           background: 'var(--c-panel)',
           border:     '1px solid var(--c-border)',
+          overflow:   'clip',
         }}
         onClick={e => e.stopPropagation()}
       >
         {/* ── Left: Options ──────────────────────────────────────────────────── */}
         <div
           className="w-64 shrink-0 flex flex-col overflow-y-auto"
-          style={{ borderRight: '1px solid var(--c-border)', padding: '1.25rem' }}
+          style={{ borderRight: '1px solid var(--c-border)', padding: '1.25rem', WebkitOverflowScrolling: 'touch' }}
         >
           {/* Header */}
           <div className="flex items-center justify-between mb-4">

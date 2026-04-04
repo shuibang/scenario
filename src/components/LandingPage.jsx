@@ -4,7 +4,7 @@ const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
 // ─── 데이터 ────────────────────────────────────────────────────────────────────
 const COMPARE_ROWS = [
-  { label: '가격',              vals: ['무료', '$249(~35만원)', '$49(~7만원)', '연 ~$72', '연 $69~99'] },
+  { label: '가격',              vals: ['무료', '약 30~37만원 ($199~$249)', '₩88,000~₩141,000 ($59~$94)', '월 ₩7,500~₩15,000 ($5~$9.92)', '무료(2편 제한)~연 ₩149,000 ($99)'] },
   { label: '한국어 포맷',       vals: ['✅', '❌', '❌', '❌', '❌'] },
   { label: 'HWPX 내보내기',    vals: ['✅', '❌', '❌', '❌', '❌'] },
   { label: '씬번호 실시간 연동', vals: ['✅', '❌', '△', '❌', '❌'] },
@@ -374,6 +374,7 @@ function InjectStyles() {
       @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
       @keyframes slideDown { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
       @keyframes fadeUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+      @keyframes lp-fadein { from{opacity:0} to{opacity:1} }
     `;
     document.head.appendChild(s);
     return () => document.getElementById(id)?.remove();
@@ -392,7 +393,7 @@ export default function LandingPage({ onStart, onLogin }) {
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'var(--c-bg)', color: 'var(--c-text)', fontFamily: 'inherit', overflowY: 'auto', overflowX: 'hidden' }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'var(--c-bg)', color: 'var(--c-text)', fontFamily: 'inherit', overflowY: 'auto', overflowX: 'hidden',  }}>
       <InjectStyles />
 
       {/* ── 헤더 ── */}
@@ -537,7 +538,7 @@ export default function LandingPage({ onStart, onLogin }) {
             </tbody>
           </table>
         </Reveal>
-        <p style={{ fontSize: 11, color: 'var(--c-text6)', marginTop: 12, textAlign: 'center' }}>가격 기준: 2025년 기준, 환율 약 1,400원/USD 적용.</p>
+        <p style={{ fontSize: 11, color: 'var(--c-text6)', marginTop: 12, textAlign: 'center' }}>가격 기준: 2026년 기준, 환율 1,500원/USD 적용. Final Draft 정가 $249 / Scrivener 데스크톱 ₩88,000 · 번들 ₩140,800 / WriterDuet 월 $5~$9.92 / Arc Studio 무료(2편)~연 $99.</p>
       </section>
 
       {/* ── 가격 ── */}
@@ -579,6 +580,8 @@ export default function LandingPage({ onStart, onLogin }) {
 function LandingLoginModal({ onClose, onLogin }) {
   const googleBtnRef = useRef(null);
   const [error, setError] = useState('');
+  const onLoginRef = useRef(onLogin);
+  onLoginRef.current = onLogin;
 
   useEffect(() => {
     if (!GOOGLE_CLIENT_ID || !window.google?.accounts?.id) return;
@@ -590,7 +593,7 @@ function LandingLoginModal({ onClose, onLogin }) {
           if (payload) {
             const userData = { name: payload.name, email: payload.email, picture: payload.picture };
             localStorage.setItem('drama_auth_user', JSON.stringify(userData));
-            onLogin?.(userData);
+            onLoginRef.current?.(userData);
           } else {
             setError('로그인 실패: 토큰 파싱 오류');
           }
@@ -602,7 +605,7 @@ function LandingLoginModal({ onClose, onLogin }) {
         type: 'standard', theme: 'outline', size: 'large', text: 'continue_with', locale: 'ko', width: 280,
       });
     }
-  }, [onClose, onLogin]);
+  }, []);
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 999, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onClose}>

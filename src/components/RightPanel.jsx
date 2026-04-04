@@ -525,32 +525,17 @@ export default function RightPanel({ onScrollToScene }) {
       'resources'
     );
   } else if (activeDoc === 'treatment') {
-    const designTool = localStorage.getItem('drama_designTool') || 'treatment';
-    const isPrimary = designTool === 'treatment';
     contextContent = withMemo(
-      <PageInfoPanel icon="📝" title="트리트먼트" items={[
-        '각 씬의 주요 행동과 감정 변화를 간결하게 서술하세요.',
-        '대사보다는 장면의 흐름과 인물의 의도에 집중하세요.',
-        isPrimary
-          ? '✓ 주 설계 도구 — 대본으로 가져오기가 활성화되어 있습니다.'
-          : '트리트먼트를 먼저 쓰고 대본으로 발전시키는 방식이라면 마이페이지 설정에서 주 설계 도구로 지정하세요.',
-      ]} />,
+      <div className="flex flex-col items-center justify-center" style={{ padding: '12px', flex: 1 }}>
+        <AdBanner slot="treatment-panel" mobileHide={false} height={120} style={{ width: '100%' }} />
+      </div>,
       'treatment'
     );
   } else if (activeDoc === 'scenelist') {
-    const designTool = localStorage.getItem('drama_designTool') || 'treatment';
-    const isPrimary = designTool === 'scenelist';
     contextContent = withMemo(
-      <PageInfoPanel icon="🎬" title="씬리스트" items={[
-        '씬 번호, 장소, 시간대, 등장인물을 정리하세요.',
-        '씬리스트는 대본 전체 구조 파악에 도움이 됩니다.',
-        '씬번호 클릭 시 대본의 해당 씬으로 이동합니다.',
-        '장소·시간대는 대본과 자동 동기화됩니다.',
-        '내용 컬럼은 씬리스트 전용으로 자유롭게 메모하세요.',
-        isPrimary
-          ? '✓ 주 설계 도구 — 대본으로 가져오기가 활성화되어 있습니다.'
-          : '씬리스트를 먼저 짜고 대본으로 발전시키는 방식이라면 마이페이지 설정에서 주 설계 도구로 지정하세요.',
-      ]} />,
+      <div className="flex flex-col items-center justify-center" style={{ padding: '12px', flex: 1 }}>
+        <AdBanner slot="scenelist-panel" mobileHide={false} height={120} style={{ width: '100%' }} />
+      </div>,
       'scenelist'
     );
   } else if (activeDoc === 'structure') {

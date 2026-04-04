@@ -369,37 +369,15 @@ function EpisodeItem({ ep, isSingle, large }) {
 // ─── New project type picker ───────────────────────────────────────────────────
 function NewProjectModal({ onCommit, onCancel }) {
   const [title, setTitle] = useState('');
-  const [step, setStep] = useState('name'); // 'name' | 'type'
-
-  const handleNameCommit = () => {
-    if (!title.trim()) { onCancel(); return; }
-    setStep('type');
-  };
+  const [projectType, setProjectType] = useState(null); // null | 'single' | 'series'
+  const step = projectType === null ? 'type' : 'name';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={onCancel}>
-      <div className="rounded-xl p-5 w-72 flex flex-col gap-3" style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)' }} onClick={e => e.stopPropagation()}>
-        {step === 'name' ? (
+      <div className="rounded-xl p-5 w-80 flex flex-col gap-3" style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)' }} onClick={e => e.stopPropagation()}>
+        {step === 'type' ? (
           <>
-            <div className="text-sm font-semibold" style={{ color: 'var(--c-text)' }}>새 작품</div>
-            <input
-              autoFocus
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleNameCommit(); if (e.key === 'Escape') onCancel(); }}
-              placeholder="작품명 입력"
-              className="w-full text-sm px-3 py-2 rounded outline-none"
-              style={{ background: 'var(--c-input)', color: 'var(--c-text)', border: '1px solid var(--c-border3)' }}
-            />
-            <div className="flex gap-2 justify-end">
-              <button onClick={onCancel} className="text-xs px-3 py-1.5 rounded" style={{ color: 'var(--c-text5)', border: '1px solid var(--c-border3)', background: 'transparent', cursor: 'pointer' }}>취소</button>
-              <button onClick={handleNameCommit} className="text-xs px-3 py-1.5 rounded" style={{ color: '#fff', background: 'var(--c-accent)', border: 'none', cursor: 'pointer' }}>다음</button>
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="text-sm font-semibold" style={{ color: 'var(--c-text)' }}>작품 형식</div>
-            <div className="text-xs mb-1" style={{ color: 'var(--c-text5)' }}>"{title}"</div>
+            <div className="text-sm font-semibold" style={{ color: 'var(--c-text)' }}>작품 형식 선택</div>
             <div className="flex gap-2">
               {[
                 { type: 'single', label: '단막', desc: '회차 번호 없음' },
@@ -407,7 +385,7 @@ function NewProjectModal({ onCommit, onCancel }) {
               ].map(({ type, label, desc }) => (
                 <button
                   key={type}
-                  onClick={() => onCommit(title.trim(), type)}
+                  onClick={() => setProjectType(type)}
                   className="flex-1 py-3 rounded text-center"
                   style={{ border: '1px solid var(--c-border3)', background: 'var(--c-input)', cursor: 'pointer' }}
                 >
@@ -417,6 +395,27 @@ function NewProjectModal({ onCommit, onCancel }) {
               ))}
             </div>
             <button onClick={onCancel} className="text-xs self-end" style={{ color: 'var(--c-text6)', background: 'none', border: 'none', cursor: 'pointer' }}>취소</button>
+          </>
+        ) : (
+          <>
+            <div className="text-sm font-semibold" style={{ color: 'var(--c-text)' }}>새 작품</div>
+            <div className="text-xs" style={{ color: 'var(--c-text5)' }}>{projectType === 'single' ? '단막' : '미니시리즈'}</div>
+            <input
+              autoFocus
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && title.trim()) onCommit(title.trim(), projectType);
+                if (e.key === 'Escape') onCancel();
+              }}
+              placeholder="작품명 입력"
+              className="w-full text-sm px-3 py-2 rounded outline-none"
+              style={{ background: 'var(--c-input)', color: 'var(--c-text)', border: '1px solid var(--c-border3)' }}
+            />
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setProjectType(null)} className="text-xs px-3 py-1.5 rounded" style={{ color: 'var(--c-text5)', border: '1px solid var(--c-border3)', background: 'transparent', cursor: 'pointer' }}>이전</button>
+              <button onClick={() => { if (title.trim()) onCommit(title.trim(), projectType); }} className="text-xs px-3 py-1.5 rounded" style={{ color: '#fff', background: 'var(--c-accent)', border: 'none', cursor: 'pointer' }}>만들기</button>
+            </div>
           </>
         )}
       </div>

@@ -276,6 +276,10 @@ function decodeJwt(token) {
 function LoginModal({ onClose, onLogin }) {
   const googleBtnRef = useRef(null);
   const [error, setError] = useState('');
+  const onCloseRef = useRef(onClose);
+  const onLoginRef = useRef(onLogin);
+  onCloseRef.current = onClose;
+  onLoginRef.current = onLogin;
 
   useEffect(() => {
     if (!GOOGLE_CLIENT_ID || !window.google?.accounts?.id) return;
@@ -286,8 +290,8 @@ function LoginModal({ onClose, onLogin }) {
         if (payload) {
           const userData = { name: payload.name, email: payload.email, picture: payload.picture };
           localStorage.setItem('drama_auth_user', JSON.stringify(userData));
-          onLogin?.(userData);
-          onClose();
+          onLoginRef.current?.(userData);
+          onCloseRef.current?.();
         } else {
           setError('로그인 실패: 토큰 파싱 오류');
         }
@@ -303,7 +307,7 @@ function LoginModal({ onClose, onLogin }) {
         width: 280,
       });
     }
-  }, [onClose, onLogin]);
+  }, []); // 마운트 1회만 실행 — onClose/onLogin은 ref로 참조
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.55)' }} onClick={onClose}>
@@ -331,6 +335,27 @@ function LoginModal({ onClose, onLogin }) {
   );
 }
 
+// ─── Drive 클라이언트 모듈-레벨 싱글턴 ─────────────────────────────────────────
+// MenuBar가 breakpoint 전환으로 재마운트되어도 초기화·requestAccessToken을 1회만 실행
+const _drive = { client: null, initialized: false, syncing: false, handler: null };
+
+function initDriveOnce() {
+  if (_drive.initialized || !GOOGLE_CLIENT_ID) return;
+  const tryInit = () => {
+    if (!window.google?.accounts?.oauth2) { setTimeout(tryInit, 800); return; }
+    _drive.initialized = true;
+    _drive.client = window.google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope: 'https://www.googleapis.com/auth/drive.appdata',
+      callback: (tr) => _drive.handler?.(tr),
+    });
+    if (localStorage.getItem('drama_auth_user')) {
+      _drive.client.requestAccessToken({ prompt: '' });
+    }
+  };
+  tryInit();
+}
+
 // ─── MenuBar ──────────────────────────────────────────────────────────────────
 function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, authUser, setAuthUser }) {
   const { state, dispatch } = useApp();
@@ -340,13 +365,10 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, authUser, setA
   const [fontAvailability, setFontAvail] = useState(null);
   const [loginOpen, setLoginOpen]        = useState(false);
   const [driveStatus, setDriveStatus]    = useState('none'); // 'none'|'syncing'|'synced'|'error'
-  const tokenClientRef  = useRef(null);
-  const driveHandlerRef = useRef(null);
-  const syncingRef      = useRef(false); // v2: prevent concurrent Drive sync calls
 
-  // Drive 토큰 콜백 (항상 최신 state 참조를 위해 ref 사용)
-  driveHandlerRef.current = async (tokenResponse) => {
-    if (syncingRef.current) return; // v2: guard against concurrent calls
+  // Drive 토큰 콜백 — 항상 현재 마운트된 MenuBar의 상태 참조 (재마운트 후 자동 갱신)
+  _drive.handler = async (tokenResponse) => {
+    if (_drive.syncing) return;
     if (tokenResponse.error) {
       if (tokenResponse.error !== 'interaction_required' &&
           tokenResponse.error !== 'access_denied') {
@@ -354,7 +376,7 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, authUser, setA
       }
       return;
     }
-    syncingRef.current = true;
+    _drive.syncing = true;
     setAccessToken(tokenResponse.access_token, tokenResponse.expires_in);
     setDriveStatus('syncing');
     try {
@@ -372,35 +394,17 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, authUser, setA
       console.warn('[Drive] 불러오기 실패:', e);
       setDriveStatus('error');
     } finally {
-      syncingRef.current = false; // v2: always release lock
+      _drive.syncing = false;
     }
   };
 
-  // GIS 로드 후 Drive 토큰 클라이언트 초기화
-  useEffect(() => {
-    if (!GOOGLE_CLIENT_ID) return;
-    const tryInit = () => {
-      if (!window.google?.accounts?.oauth2) {
-        setTimeout(tryInit, 800);
-        return;
-      }
-      tokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
-        client_id: GOOGLE_CLIENT_ID,
-        scope: 'https://www.googleapis.com/auth/drive.appdata',
-        callback: (tr) => driveHandlerRef.current(tr),
-      });
-      // 기존 로그인 유저 → 자동 silent 재인증 시도
-      if (localStorage.getItem('drama_auth_user')) {
-        tokenClientRef.current.requestAccessToken({ prompt: '' });
-      }
-    };
-    tryInit();
-  }, []);
+  // GIS 로드 후 Drive 토큰 클라이언트 초기화 (재마운트 시 건너뜀)
+  useEffect(() => { initDriveOnce(); }, []);
 
   // 새 로그인 시 Drive 인증 요청
   useEffect(() => {
-    if (authUser && tokenClientRef.current && driveStatus === 'none') {
-      tokenClientRef.current.requestAccessToken({ prompt: '' });
+    if (authUser && _drive.client && driveStatus === 'none') {
+      _drive.client.requestAccessToken({ prompt: '' });
     }
   }, [authUser]);
 
@@ -417,7 +421,7 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, authUser, setA
     color: 'var(--c-text2)',
     border: '1px solid var(--c-border3)',
     padding: '1px 4px',
-    fontSize: '11px',
+    fontSize: '12px',
     borderRadius: '0.25rem',
     outline: 'none',
   };
@@ -458,7 +462,7 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, authUser, setA
                   title="Drive 연동 실패. 클릭해서 재시도"
                   onClick={() => {
                     setDriveStatus('none');
-                    tokenClientRef.current?.requestAccessToken({ prompt: '' });
+                    _drive.client?.requestAccessToken({ prompt: '' });
                   }}
                 >Drive 오류 (재시도)</span>
               )}
@@ -558,7 +562,7 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, authUser, setA
 
         {sep}
 
-        <label className="text-[10px] shrink-0" style={{ color: 'var(--c-text6)' }}>글꼴</label>
+        <label className="text-[11px] shrink-0" style={{ color: 'var(--c-text6)' }}>글꼴</label>
         <select value={stylePreset?.fontFamily ?? '함초롱바탕'} onChange={handleFontFamily}
           style={{ ...selectStyle, maxWidth: '110px' }}
         >
@@ -577,14 +581,14 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, authUser, setA
         </select>
         {fontStatusBadge}
 
-        <label className="text-[10px] ml-1 shrink-0" style={{ color: 'var(--c-text6)' }}>크기</label>
+        <label className="text-[11px] ml-1 shrink-0" style={{ color: 'var(--c-text6)' }}>크기</label>
         <select value={stylePreset?.fontSize ?? 11} onChange={handleFontSize} style={selectStyle}>
           {[9,10,11,12,13,14,16,18].map(s => <option key={s} value={s}>{s}pt</option>)}
         </select>
 
         {sep}
 
-        <label className="text-[10px] shrink-0" style={{ color: 'var(--c-text6)' }}>인물/대사 간격</label>
+        <label className="text-[11px] shrink-0" style={{ color: 'var(--c-text6)' }}>인물/대사 간격</label>
         <input
           type="range" min="4" max="14" step="0.5"
           value={parseFloat(stylePreset?.dialogueGap ?? '7')}
@@ -592,7 +596,7 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, authUser, setA
           className="w-16 shrink-0"
           style={{ accentColor: 'var(--c-accent)', cursor: 'pointer' }}
         />
-        <span className="text-[10px] shrink-0" style={{ color: 'var(--c-text5)', minWidth: '2.5rem' }}>
+        <span className="text-[11px] shrink-0" style={{ color: 'var(--c-text5)', minWidth: '2.5rem' }}>
           {stylePreset?.dialogueGap ?? '7em'}
         </span>
 
@@ -617,7 +621,7 @@ function MenuButton({ label, onClick, disabled, accent, fixedWidth, title, style
       disabled={disabled}
       title={title}
       style={{
-        padding: '3px 10px', borderRadius: 4, fontSize: 11,
+        padding: '3px 10px', borderRadius: 4, fontSize: 12,
         color: accent ? 'var(--c-accent)' : 'var(--c-text3)',
         border: `1px solid ${accent ? 'var(--c-accent)' : 'var(--c-border3)'}`,
         background: 'transparent',
@@ -687,7 +691,7 @@ function CollapseButton({ side, collapsed, onToggle }) {
 
 
 // ─── Shell ────────────────────────────────────────────────────────────────────
-function Shell() {
+function Shell({ authUser, setAuthUser }) {
   const [scrollToSceneId, setScrollToSceneId] = useState(null);
   const [isDark, setIsDark] = useState(() => {
     const saved = localStorage.getItem('drama_theme');
@@ -696,16 +700,6 @@ function Shell() {
   });
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false);
   const { state, dispatch } = useApp();
-
-  // ── 인증 상태 (MenuBar에서 올림) ──────────────────────────────────────────────
-  const [authUser, setAuthUser] = useState(() => {
-    try {
-      const saved = localStorage.getItem('drama_auth_user');
-      return saved ? JSON.parse(saved) : null;
-    } catch { return null; }
-  });
-  // 로그인 없이 시작하기 클릭 시 true
-  const [showEditor, setShowEditor] = useState(false);
 
   // Panel widths with localStorage persistence
   const [panelWidths, setPanelWidths] = useState(() => loadPanelWidths());
@@ -724,11 +718,11 @@ function Shell() {
   const [leftCollapsed,  setLeftCollapsed]  = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
 
-  // 트리트먼트·씬리스트 페이지 전환 시 오른쪽 패널 자동 닫기
+  // 트리트먼트·씬리스트 페이지 전환 시 오른쪽 패널 자동 열기
   useEffect(() => {
     const { activeDoc } = state;
     if (activeDoc === 'treatment' || activeDoc === 'scenelist') {
-      setRightCollapsed(true);
+      setRightCollapsed(false);
     }
   }, [state.activeDoc]);
 
@@ -845,16 +839,6 @@ function Shell() {
     }
   }, [contextSceneId, dispatch]);
 
-  // ── 랜딩 페이지: 비로그인 + 에디터 진입 전 ────────────────────────────────────
-  if (!authUser && !showEditor) {
-    return (
-      <LandingPage
-        onStart={() => setShowEditor(true)}
-        onLogin={(userData) => { setAuthUser(userData); setShowEditor(true); }}
-      />
-    );
-  }
-
   const menuBar = (
     <MenuBar
       isDark={isDark}
@@ -953,7 +937,7 @@ function Shell() {
           {!rightCollapsed && (
             <>
               <DragHandle onDrag={updateRightWidth} />
-              <div data-tour-id="right-panel" style={{ width: panelWidths.right, flexShrink: 0, overflow: 'hidden' }}>
+              <div data-tour-id="right-panel" style={{ width: panelWidths.right, flexShrink: 0, overflow: 'clip' }}>
                 <RightPanel onScrollToScene={id => setScrollToSceneId(id)} />
               </div>
             </>
@@ -1003,7 +987,7 @@ function Shell() {
         {!rightCollapsed && (
           <>
             <DragHandle onDrag={updateRightWidth} />
-            <div data-tour-id="right-panel" style={{ width: panelWidths.right, flexShrink: 0, overflow: 'hidden' }}>
+            <div data-tour-id="right-panel" style={{ width: panelWidths.right, flexShrink: 0, overflow: 'clip' }}>
               <RightPanel onScrollToScene={id => setScrollToSceneId(id)} />
             </div>
           </>
@@ -1110,19 +1094,51 @@ function LandingPreview() {
   );
 }
 
+// 모듈-레벨 플래그: Shell이 한 번이라도 렌더됐으면 true — React remount·state 리셋 무관하게 유지
+let _shellEverRendered = (() => {
+  try { return !!localStorage.getItem('drama_auth_user') || localStorage.getItem('drama_editor_entered') === 'true'; }
+  catch { return false; }
+})();
+
 export default function App() {
-  if (window.location.hash.startsWith('#review=')) {
-    return <SharedReviewView />;
+  const [authUser, setAuthUser] = useState(() => {
+    try { const s = localStorage.getItem('drama_auth_user'); return s ? JSON.parse(s) : null; }
+    catch { return null; }
+  });
+  const [, forceUpdate] = useState(0);
+
+  if (window.location.hash.startsWith('#review=')) return <SharedReviewView />;
+  if (window.location.hash.startsWith('#log='))    return <LogShareView />;
+  if (window.location.hash === '#preview-landing') return <LandingPreview />;
+
+  // 매 렌더마다 localStorage 직접 확인 + 모듈 플래그 — 어떤 state 리셋에도 안전
+  const lsAuth    = (() => { try { return !!localStorage.getItem('drama_auth_user'); } catch { return false; } })();
+  const lsEntered = (() => { try { return localStorage.getItem('drama_editor_entered') === 'true'; } catch { return false; } })();
+  const canEnter  = !!authUser || lsAuth || lsEntered || _shellEverRendered;
+
+  if (!canEnter) {
+    return (
+      <LandingPage
+        onStart={() => {
+          try { localStorage.setItem('drama_editor_entered', 'true'); } catch {}
+          _shellEverRendered = true;
+          forceUpdate(n => n + 1);
+        }}
+        onLogin={(userData) => {
+          try { localStorage.setItem('drama_editor_entered', 'true'); } catch {}
+          _shellEverRendered = true;
+          setAuthUser(userData);
+        }}
+      />
+    );
   }
-  if (window.location.hash.startsWith('#log=')) {
-    return <LogShareView />;
-  }
-  if (window.location.hash === '#preview-landing') {
-    return <LandingPreview />;
-  }
+
+  // Shell 렌더 시 플래그 확정
+  _shellEverRendered = true;
+
   return (
     <AppProvider>
-      <Shell />
+      <Shell authUser={authUser} setAuthUser={setAuthUser} />
     </AppProvider>
   );
 }

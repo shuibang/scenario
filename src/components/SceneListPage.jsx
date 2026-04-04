@@ -343,6 +343,21 @@ export default function SceneListPage() {
 
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState('');
+  const [helpOpen, setHelpOpen] = useState(false);
+  const helpRef = useRef(null);
+
+  useEffect(() => {
+    if (!helpOpen) return;
+    const handler = (e) => {
+      if (!helpRef.current?.contains(e.target)) setHelpOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('touchstart', handler);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('touchstart', handler);
+    };
+  }, [helpOpen]);
 
   const handleImportToScript = () => {
     // 씬은 있지만 scene_number 블록이 없는 씬만 추가
@@ -408,6 +423,38 @@ export default function SceneListPage() {
           ))}
         </select>
         <span className="text-xs" style={{ color: 'var(--c-text6)' }}>{epScenes.length}개 씬</span>
+        {/* 도움말 */}
+        <div ref={helpRef} style={{ position: 'relative', display: 'inline-flex' }}>
+          <button
+            onClick={() => setHelpOpen(v => !v)}
+            title="도움말"
+            style={{
+              width: 18, height: 18, borderRadius: '50%', border: '1px solid var(--c-border3)',
+              background: helpOpen ? 'var(--c-active)' : 'transparent',
+              color: 'var(--c-text5)', fontSize: 11, fontWeight: 700,
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              lineHeight: 1, flexShrink: 0,
+            }}
+          >?</button>
+          {helpOpen && (
+            <div style={{
+              position: 'absolute', top: '24px', left: 0, zIndex: 200,
+              background: 'var(--c-card)', border: '1px solid var(--c-border)',
+              borderRadius: 8, padding: '10px 14px', width: 240,
+              boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+            }}>
+              <div className="text-xs font-semibold mb-2" style={{ color: 'var(--c-text3)' }}>씬리스트 안내</div>
+              {[
+                '씬 번호, 장소, 시간대, 등장인물을 정리하세요.',
+                '씬번호 클릭 시 대본의 해당 씬으로 이동합니다.',
+                '장소·시간대는 대본과 자동 동기화됩니다.',
+                '내용 컬럼은 씬리스트 전용 메모 공간입니다.',
+              ].map((t, i) => (
+                <div key={i} className="text-[11px] leading-relaxed" style={{ color: 'var(--c-text5)' }}>· {t}</div>
+              ))}
+            </div>
+          )}
+        </div>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           {importMsg && <span className="text-xs" style={{ color: 'var(--c-accent2)' }}>{importMsg}</span>}
           <button
