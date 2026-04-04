@@ -1066,7 +1066,7 @@ const EditorSurface = forwardRef(function EditorSurface({
 });
 
 // ─── ScriptEditor (main) ──────────────────────────────────────────────────────
-export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboardUp }) {
+export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboardUp, onScrollRefReady }) {
   const { state, dispatch } = useApp();
   const {
     activeEpisodeId, activeProjectId, scriptBlocks,
@@ -1096,6 +1096,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   const hasKeyboard = !!keyboardUp; // App.jsx에서 내려온 키보드 감지값 사용
   const charCheckBtnRef = useRef(null);
   const editorScrollRef = useRef(null);
+  useEffect(() => { if (onScrollRefReady) onScrollRefReady(editorScrollRef); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keep refs in sync every render so unmount-flush sees latest values
   blocksRef.current = blocks;

@@ -98,6 +98,134 @@ function DragHandle({ onDrag, isLeft }) {
   );
 }
 
+// ─── Timeline Strip ───────────────────────────────────────────────────────────
+
+function getTimelineColor(ratio) {
+  // 0→0.85: 연한 라벤더(#c7d2fe) → 짙은 남색(#1e1b4b)
+  // 0.85→1: 짙은 남색 → 살짝 옅은 인디고(#4338ca)
+  const lerp = (a, b, t) => Math.round(a + (b - a) * t);
+  const lerpColor = (c1, c2, t) => ({
+    r: lerp(c1[0], c2[0], t),
+    g: lerp(c1[1], c2[1], t),
+    b: lerp(c1[2], c2[2], t),
+  });
+  const light  = [199, 210, 254]; // #c7d2fe indigo-200
+  const dark   = [30,  46, 129];  // #1e2e81
+  const mid    = [67,  56, 202];  // #4338ca indigo-700
+  let c;
+  if (ratio <= 0.85) {
+    c = lerpColor(light, dark, ratio / 0.85);
+  } else {
+    c = lerpColor(dark, mid, (ratio - 0.85) / 0.15);
+  }
+  return `rgb(${c.r},${c.g},${c.b})`;
+}
+
+function TimelineStrip({ scrollRef }) {
+  const { state } = useApp();
+  const [scrollRatio, setScrollRatio] = useState(0);
+  const activeProject = state.projects.find(p => p.id === state.activeProjectId);
+  const totalMinutes = activeProject?.targetMinutes || 70;
+
+  useEffect(() => {
+    const el = scrollRef?.current;
+    if (!el) return;
+    const update = () => {
+      const { scrollTop, scrollHeight, clientHeight } = el;
+      setScrollRatio(scrollHeight <= clientHeight ? 0 : scrollTop / (scrollHeight - clientHeight));
+    };
+    el.addEventListener('scroll', update, { passive: true });
+    update();
+    return () => el.removeEventListener('scroll', update);
+  }, [scrollRef]);
+
+  // 1분 간격 마커, 5분마다 레이블
+  const markers = [];
+  for (let m = 0; m <= totalMinutes; m++) {
+    const ratio = m / totalMinutes;
+    const color = getTimelineColor(ratio);
+    const isLabel = m % 5 === 0;
+    markers.push({ m, ratio, color, isLabel });
+  }
+
+  // 현재 위치 표시용 분
+  const currentMin = Math.round(scrollRatio * totalMinutes);
+
+  return (
+    <div
+      className="shrink-0 flex flex-col relative select-none"
+      style={{ width: 36, borderLeft: '1px solid var(--c-border)', background: 'var(--c-panel)', overflow: 'hidden' }}
+    >
+      <div style={{ position: 'relative', flex: 1 }}>
+        {markers.map(({ m, ratio, color, isLabel }) => (
+          <div
+            key={m}
+            style={{
+              position: 'absolute',
+              top: `${ratio * 100}%`,
+              right: 0,
+              left: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'flex-end',
+              paddingRight: 4,
+              height: 1,
+            }}
+          >
+            {isLabel && (
+              <span style={{
+                fontSize: 9,
+                color,
+                fontWeight: m === currentMin ? 700 : 400,
+                whiteSpace: 'nowrap',
+                lineHeight: 1,
+                opacity: 0.85,
+              }}>
+                {Math.floor(m / 60)}:{String(m % 60).padStart(2, '0')}
+              </span>
+            )}
+            {!isLabel && (
+              <span style={{
+                display: 'inline-block',
+                width: m % 5 === 0 ? 6 : 3,
+                height: 1,
+                background: color,
+                opacity: 0.5,
+              }} />
+            )}
+          </div>
+        ))}
+        {/* 현재 위치 인디케이터 */}
+        <div style={{
+          position: 'absolute',
+          top: `${scrollRatio * 100}%`,
+          left: 0, right: 0,
+          height: 1,
+          background: 'var(--c-accent)',
+          opacity: 0.7,
+        }} />
+      </div>
+    </div>
+  );
+}
+
+function ScriptWithTimeline({ scrollToSceneId, onScrollHandled, keyboardUp }) {
+  const scrollRef = useRef(null);
+  return (
+    <div className="h-full flex flex-row min-h-0 overflow-hidden">
+      <div className="flex-1 min-w-0 min-h-0">
+        <ScriptEditor
+          scrollToSceneId={scrollToSceneId}
+          onScrollHandled={onScrollHandled}
+          keyboardUp={keyboardUp}
+          onScrollRefReady={(ref) => { scrollRef.current = ref.current; }}
+        />
+      </div>
+      <TimelineStrip scrollRef={scrollRef} />
+    </div>
+  );
+}
+
 // ─── Center panel ─────────────────────────────────────────────────────────────
 function CenterPanel({ scrollToSceneId, onScrollHandled, keyboardUp }) {
   const { state } = useApp();
@@ -129,7 +257,7 @@ function CenterPanel({ scrollToSceneId, onScrollHandled, keyboardUp }) {
   if (activeDoc === 'relationships') return <RelationshipsPage />;
   if (activeDoc === 'mypage') return <MyPage />;
   if (activeDoc === 'script' && activeEpisodeId) {
-    return <ScriptEditor scrollToSceneId={scrollToSceneId} onScrollHandled={onScrollHandled} keyboardUp={keyboardUp} />;
+    return <ScriptWithTimeline scrollToSceneId={scrollToSceneId} onScrollHandled={onScrollHandled} keyboardUp={keyboardUp} />;
   }
   return (
     <div className="h-full flex items-center justify-center" style={{ background: 'var(--c-bg)' }}>

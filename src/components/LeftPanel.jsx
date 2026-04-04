@@ -359,6 +359,7 @@ function EpisodeItem({ ep, isSingle, large }) {
 function NewProjectModal({ onCommit, onCancel }) {
   const [title, setTitle] = useState('');
   const [projectType, setProjectType] = useState(null); // null | 'single' | 'series'
+  const [targetMinutes, setTargetMinutes] = useState(70);
   const step = projectType === null ? 'type' : 'name';
 
   return (
@@ -394,16 +395,27 @@ function NewProjectModal({ onCommit, onCancel }) {
               value={title}
               onChange={e => setTitle(e.target.value)}
               onKeyDown={e => {
-                if (e.key === 'Enter' && title.trim()) onCommit(title.trim(), projectType);
+                if (e.key === 'Enter' && title.trim()) onCommit(title.trim(), projectType, targetMinutes);
                 if (e.key === 'Escape') onCancel();
               }}
               placeholder="작품명 입력"
               className="w-full text-sm px-3 py-2 rounded outline-none"
               style={{ background: 'var(--c-input)', color: 'var(--c-text)', border: '1px solid var(--c-border3)' }}
             />
+            <div className="flex items-center gap-2">
+              <span className="text-xs shrink-0" style={{ color: 'var(--c-text5)' }}>목표 시간</span>
+              <input
+                type="number" min="30" max="180" step="5"
+                value={targetMinutes}
+                onChange={e => setTargetMinutes(Math.max(30, Math.min(180, Number(e.target.value))))}
+                className="text-xs px-2 py-1 rounded outline-none"
+                style={{ width: 56, background: 'var(--c-input)', color: 'var(--c-text)', border: '1px solid var(--c-border3)', textAlign: 'center' }}
+              />
+              <span className="text-xs" style={{ color: 'var(--c-text5)' }}>분</span>
+            </div>
             <div className="flex gap-2 justify-end">
               <button onClick={() => setProjectType(null)} className="text-xs px-3 py-1.5 rounded" style={{ color: 'var(--c-text5)', border: '1px solid var(--c-border3)', background: 'transparent', cursor: 'pointer' }}>이전</button>
-              <button onClick={() => { if (title.trim()) onCommit(title.trim(), projectType); }} className="text-xs px-3 py-1.5 rounded" style={{ color: '#fff', background: 'var(--c-accent)', border: 'none', cursor: 'pointer' }}>만들기</button>
+              <button onClick={() => { if (title.trim()) onCommit(title.trim(), projectType, targetMinutes); }} className="text-xs px-3 py-1.5 rounded" style={{ color: '#fff', background: 'var(--c-accent)', border: 'none', cursor: 'pointer' }}>만들기</button>
             </div>
           </>
         )}
@@ -417,8 +429,8 @@ export default function LeftPanel({ section = 'all' }) {
   const { projects } = state;
   const [addingProject, setAddingProject] = useState(false);
 
-  const handleAddProject = (title, projectType) => {
-    const p = { id: genId(), title, genre: '', status: 'draft', projectType, createdAt: now(), updatedAt: now() };
+  const handleAddProject = (title, projectType, targetMinutes = 70) => {
+    const p = { id: genId(), title, genre: '', status: 'draft', projectType, targetMinutes, createdAt: now(), updatedAt: now() };
     dispatch({ type: 'ADD_PROJECT', payload: p });
     dispatch({ type: 'SET_ACTIVE_PROJECT', id: p.id });
     setAddingProject(false);
