@@ -23,12 +23,15 @@
   gap: 10px;
   padding: var(--m-pad-y) var(--m-pad-x);
   font-size: var(--m-fs-base);
+  line-height: 1.2;
   color: var(--c-text);
   border-bottom: 1px solid var(--c-border);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   transition: background 0.1s;
   box-sizing: border-box;
+  white-space: nowrap;
+  overflow: hidden;
 }
 .mobile-layout .m-item:active {
   background: var(--c-hover);
