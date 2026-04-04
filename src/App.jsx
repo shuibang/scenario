@@ -198,8 +198,21 @@ function TimelineStrip({ scrollEl }) {
   return (
     <div
       className="shrink-0 select-none no-print"
-      style={{ width: 36, borderLeft: '1px solid var(--c-border)', background: 'var(--c-panel)', overflow: 'hidden', position: 'relative' }}
+      style={{ width: 36, borderLeft: '1px solid var(--c-border)', background: 'var(--c-panel)', display: 'flex', flexDirection: 'column' }}
     >
+      {/* 툴바와 높이 맞춤 헤더 */}
+      <div style={{
+        height: 37, flexShrink: 0,
+        borderBottom: '1px solid var(--c-border2)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <span style={{
+          fontSize: 9, color: 'var(--c-text6)', letterSpacing: 1,
+          writingMode: 'vertical-rl', transform: 'rotate(180deg)',
+        }}>타임라인</span>
+      </div>
+      {/* 마커 영역 */}
+      <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
       {/* contentHeight 높이의 내부 컨테이너를 scrollTop만큼 위로 이동 → 콘텐츠와 동기 스크롤 */}
       <div style={{
         position: 'absolute',
@@ -247,6 +260,7 @@ function TimelineStrip({ scrollEl }) {
             )}
           </div>
         ))}
+      </div>
       </div>
     </div>
   );
