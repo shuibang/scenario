@@ -40,11 +40,11 @@ export default function AdBanner({ slot, mobileHide = true, height = 56, style =
   return (
     <div
       className={`${visibilityClass} shrink-0 overflow-hidden ${className}`}
-      style={{ minHeight: height, maxHeight: style.maxHeight ?? undefined, ...style }}
+      style={{ height, minHeight: height, maxHeight: height, ...style }}
     >
       <ins
         className="adsbygoogle"
-        style={{ display: 'block' }}
+        style={{ display: 'block', width: '100%', height: '100%' }}
         data-ad-client={AD_CLIENT}
         data-ad-slot={adSlot}
         data-ad-format={format}

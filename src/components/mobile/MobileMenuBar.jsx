@@ -237,6 +237,8 @@ export default function MobileMenuBar({ onSave, onPrintPreview, WorkTimer }) {
                 </div>
               )}
 
+              <div style={{ height: 1, background: 'var(--c-border)', margin: '4px 0' }} />
+              <AdBanner slot="mobile-bottom" mobileHide={false} height={60} />
             </div>
           )}
         </div>
