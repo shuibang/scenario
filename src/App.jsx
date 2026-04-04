@@ -130,8 +130,7 @@ function TimelineStrip({ scrollEl }) {
 
   const activeProject = state.projects.find(p => p.id === state.activeProjectId);
   const activeEpisodeId = state.activeEpisodeId;
-  const episode = activeProject?.episodes?.find(e => e.id === activeEpisodeId);
-  const blocks = episode?.blocks || [];
+  const blocks = state.scriptBlocks.filter(b => b.episodeId === activeEpisodeId);
   const stylePreset = activeProject?.stylePreset || {};
   const targetMinutes = activeProject?.targetMinutes || 70;
 
