@@ -14,6 +14,7 @@ import {
 } from '../print/fontStorage';
 import { resetPageHints } from './OnboardingTour';
 import AdBanner from './AdBanner';
+import { NOTICES } from './UpdateBanner';
 
 // ─── Log PDF ──────────────────────────────────────────────────────────────────
 const LOG_PDF_FONT = '함초롱바탕';
@@ -797,6 +798,22 @@ function SettingsTab() {
   );
 }
 
+// ─── NoticesTab ───────────────────────────────────────────────────────────────
+function NoticesTab() {
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="text-sm font-semibold mb-2" style={{ color: 'var(--c-text)' }}>수정사항 공지</div>
+      {NOTICES.map(n => (
+        <div key={n.id} className="rounded-lg px-4 py-3"
+          style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)' }}>
+          <div className="text-[10px] mb-1 font-semibold" style={{ color: 'var(--c-accent)' }}>{n.date}</div>
+          <div className="text-xs leading-relaxed" style={{ color: 'var(--c-text3)' }}>{n.content}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── Placeholder tabs ─────────────────────────────────────────────────────────
 const KAKAO_PAY_URL = 'https://qr.kakaopay.com/Ej8gwMmym';
 function SupportCard() {
@@ -969,6 +986,7 @@ function PlaceholderTab({ icon, title, desc }) {
 const TABS = [
   { id: 'stats',      label: '작업통계' },
   { id: 'settings',  label: '설정' },
+  { id: 'notices',   label: '공지사항' },
   { id: 'qa',        label: 'Q&A' },
   { id: 'errors',    label: '오류제출' },
   { id: 'membership',label: '멤버십' },
@@ -1039,6 +1057,7 @@ export default function MyPage() {
                style={isMobile ? { padding: '24px 20px', paddingBottom: 'calc((clamp(52px, 14vw, 64px) + 46dvh + 16px) / 4)' } : {}}>
             {activeTab === 'stats'      && <StatsTab />}
             {activeTab === 'settings'   && <SettingsTab />}
+            {activeTab === 'notices'    && <NoticesTab />}
             {activeTab === 'qa'         && <QnATab />}
             {activeTab === 'errors'     && <ErrorReportTab />}
             {activeTab === 'membership' && (

@@ -598,7 +598,7 @@ function SceneRefDropdown({ query, scenes, onSelect, onClose }) {
 }
 
 // ─── CharPickerOverlay ────────────────────────────────────────────────────────
-function CharPickerOverlay({ anchor, projectChars, onSelect, onClose, mobile = false }) {
+function CharPickerOverlay({ anchor, projectChars, onSelect, onClose, onAddNew, mobile = false }) {
   const [query, setQuery] = useState('');
   const [activeIdx, setActiveIdx] = useState(-1);
   const inputRef = useRef(null);
@@ -697,11 +697,23 @@ function CharPickerOverlay({ anchor, projectChars, onSelect, onClose, mobile = f
           </div>
         ))}
         {filtered.length === 0 && query.trim() && (
-          <div
-            onMouseDown={e => { e.preventDefault(); onSelect({ id: undefined, name: query.trim(), givenName: query.trim() }); }}
-            className="px-3 py-1.5 text-sm cursor-pointer"
-            style={{ color: 'var(--c-accent2)' }}
-          >"{query}" 그대로 사용</div>
+          <div className="flex items-center gap-1 px-2 py-1">
+            <div
+              onMouseDown={e => { e.preventDefault(); onSelect({ id: undefined, name: query.trim(), givenName: query.trim() }); }}
+              className="flex-1 px-2 py-1 text-sm cursor-pointer rounded"
+              style={{ color: 'var(--c-accent2)' }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-active)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+            >"{query}" 그대로 사용</div>
+            {onAddNew && (
+              <button
+                onMouseDown={e => { e.preventDefault(); onAddNew(query.trim()); }}
+                className="shrink-0 text-xs px-2 py-1 rounded"
+                style={{ background: 'var(--c-accent)', color: '#fff', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                title="인물 페이지에 자동 추가"
+              >+ 인물 추가</button>
+            )}
+          </div>
         )}
         {projectChars.length === 0 && !query && (
           <div className="px-3 py-2 text-xs" style={{ color: 'var(--c-text6)' }}>등록된 인물 없음</div>
@@ -2057,6 +2069,12 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
               char.id || '',
               char.givenName || char.name || ''
             );
+            setCharPickerState(null);
+          }}
+          onAddNew={(name) => {
+            const newChar = { id: genId(), projectId: activeProjectId, name, givenName: name, role: 'extra', createdAt: now() };
+            dispatch({ type: 'ADD_CHARACTER', payload: newChar });
+            surfaceApiRef.current?.updateBlockChar(charPickerState.blockId, newChar.id, name);
             setCharPickerState(null);
           }}
           onClose={() => {

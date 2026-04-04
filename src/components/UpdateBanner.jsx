@@ -6,7 +6,17 @@ import React, { useState } from 'react';
  * 새 공지 추가: NOTICES 배열 맨 앞에 항목 추가 (id는 고유값)
  * 사용자가 닫으면 localStorage에 id를 기록 → 재방문 시 안 보임
  */
-const NOTICES = [
+export const NOTICES = [
+  {
+    id: 'v3-20260404',
+    date: '2026-04-04',
+    content: 'UI 개선: 광고영역 표기, 씬리스트 가로출력, 인물 첫등장 뱃지, 체크리스트 줄바꿈, Save the Cat 기본 접힘',
+  },
+  {
+    id: 'v2-20260404',
+    date: '2026-04-04',
+    content: '자료수집 그리드/목록 뷰 토글, 메모/이미지 카드 타입 분리, 표지↔작품명 동기화',
+  },
   {
     id: 'v1-20260404',
     date: '2026-04-04',
