@@ -328,6 +328,8 @@ const AppContext = createContext(null);
 export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(historyReducer, initialState);
   const persistTimer = useRef(null);
+  // 시스템 로드(INIT/LOAD_FROM_DRIVE) 중엔 drama_saved_at을 갱신하지 않기 위한 플래그
+  const skipSavedAtRef = useRef(false);
 
   useEffect(() => {
     const stored = getAll(DB_KEYS.projects);
@@ -337,6 +339,7 @@ export function AppProvider({ children }) {
         // eslint-disable-next-line no-unused-vars
         ({ subtitle, ...ep }) => ep
       );
+      skipSavedAtRef.current = true; // INIT은 사용자 편집이 아님 → savedAt 갱신 건너뜀
       dispatch({
         type: 'INIT',
         payload: {
@@ -393,7 +396,11 @@ export function AppProvider({ children }) {
         if (localStorage.getItem('drama_auth_user')) {
           setItem(DB_KEYS.stylePresets, state.stylePreset);
         }
-        localStorage.setItem('drama_saved_at', new Date().toISOString());
+        // INIT/LOAD_FROM_DRIVE(시스템 로드) 직후엔 사용자 편집 시각을 덮어쓰지 않음
+        if (!skipSavedAtRef.current) {
+          localStorage.setItem('drama_saved_at', new Date().toISOString());
+        }
+        skipSavedAtRef.current = false;
       } catch (e) {
         console.error('[AppContext] 저장 실패:', e);
         // QuotaExceededError = localStorage 용량 초과
@@ -441,8 +448,18 @@ export function AppProvider({ children }) {
     }
   }, [state.initialized, state.activeProjectId, state.projects]);
 
+  // Drive에서 불러올 때 사용 — skipSavedAt 플래그 자동 설정
+  const loadFromDriveData = (drivePayload) => {
+    skipSavedAtRef.current = true;
+    // LOAD_FROM_DRIVE 후 drama_saved_at을 Drive의 savedAt으로 덮어씀 (다음 비교 기준)
+    if (drivePayload.savedAt) {
+      try { localStorage.setItem('drama_saved_at', drivePayload.savedAt); } catch {}
+    }
+    dispatch({ type: 'LOAD_FROM_DRIVE', payload: drivePayload });
+  };
+
   return (
-    <AppContext.Provider value={{ state, dispatch, genId, now }}>
+    <AppContext.Provider value={{ state, dispatch, loadFromDriveData, genId, now }}>
       {children}
     </AppContext.Provider>
   );

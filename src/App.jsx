@@ -38,6 +38,7 @@ import UpdateBanner from './components/UpdateBanner';
 import { applyInlineFormat, stripHtml } from './utils/textFormat';
 import { getLayoutMetrics } from './print/LineTokenizer';
 import { saveReviewPayload } from './utils/reviewShare';
+import SyncConflictModal from './components/SyncConflictModal';
 
 // ─── Panel width persistence ───────────────────────────────────────────────────
 const PANEL_WIDTHS_KEY = 'panelWidths';
@@ -549,8 +550,8 @@ function initDriveOnce() {
 }
 
 // ─── MenuBar ──────────────────────────────────────────────────────────────────
-function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, authUser, setAuthUser }) {
-  const { state, dispatch } = useApp();
+function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, authUser, setAuthUser, onSyncConflict }) {
+  const { state, dispatch, loadFromDriveData } = useApp();
   const { saveStatus, saveErrorMsg, activeProjectId, stylePreset, undoStack, redoStack } = state;
   const canUndo = undoStack?.length > 0;
   const canRedo = redoStack?.length > 0;
@@ -573,14 +574,23 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, authUser, setA
     setDriveStatus('syncing');
     try {
       const driveData = await loadFromDrive();
-      if (driveData?.savedAt) {
-        const driveSavedAt = new Date(driveData.savedAt).getTime();
-        const localSavedAt = new Date(localStorage.getItem('drama_saved_at') || 0).getTime();
-        if (driveSavedAt > localSavedAt) {
-          dispatch({ type: 'LOAD_FROM_DRIVE', payload: driveData });
-        }
+      const localSavedAt = localStorage.getItem('drama_saved_at') || null;
+      const hasLocalData = (state.projects?.length ?? 0) > 0;
+
+      if (!driveData?.savedAt) {
+        // Drive에 데이터 없음 → 로컬을 Drive에 업로드 (조용히)
+        setDriveStatus('synced');
+      } else if (!hasLocalData) {
+        // 로컬에 의미있는 데이터 없음 → Drive 데이터 자동 로드
+        loadFromDriveData(driveData);
+        setDriveStatus('synced');
+      } else {
+        // 양쪽 모두 데이터 있음 → 충돌 해결 UI 표시
+        onSyncConflict?.({ localSavedAt, driveData });
+        setDriveStatus('none');
+        _drive.syncing = false;
+        return;
       }
-      setDriveStatus('synced');
       setTimeout(() => setDriveStatus('none'), 3000);
     } catch (e) {
       console.warn('[Drive] 불러오기 실패:', e);
@@ -891,7 +901,10 @@ function Shell({ authUser, setAuthUser }) {
     return window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false);
-  const { state, dispatch } = useApp();
+  const { state, dispatch, loadFromDriveData } = useApp();
+
+  // Drive 동기화 충돌 — { localSavedAt, driveData } | null
+  const [syncConflict, setSyncConflict] = useState(null);
 
   // Panel widths with localStorage persistence
   const [panelWidths, setPanelWidths] = useState(() => loadPanelWidths());
@@ -1043,11 +1056,42 @@ function Shell({ authUser, setAuthUser }) {
       onSave={handleSave}
       authUser={authUser}
       setAuthUser={setAuthUser}
+      onSyncConflict={setSyncConflict}
     />
   );
   const modals = (
     <>
       {printPreviewOpen && <PrintPreviewModal onClose={() => setPrintPreviewOpen(false)} />}
+      {syncConflict && (
+        <SyncConflictModal
+          localSavedAt={syncConflict.localSavedAt}
+          driveData={syncConflict.driveData}
+          onKeepLocal={() => {
+            // 로컬 유지 → Drive에 현재 데이터 업로드
+            import('./store/googleDrive').then(({ saveToDrive }) => {
+              saveToDrive({
+                projects:       state.projects,
+                episodes:       state.episodes,
+                characters:     state.characters,
+                scenes:         state.scenes,
+                scriptBlocks:   state.scriptBlocks,
+                coverDocs:      state.coverDocs,
+                synopsisDocs:   state.synopsisDocs,
+                resources:      state.resources,
+                workTimeLogs:   state.workTimeLogs,
+                checklistItems: state.checklistItems,
+                stylePreset:    state.stylePreset,
+              }).catch(() => {});
+            });
+            setSyncConflict(null);
+          }}
+          onLoadDrive={() => {
+            loadFromDriveData(syncConflict.driveData);
+            setSyncConflict(null);
+          }}
+          onDismiss={() => setSyncConflict(null)}
+        />
+      )}
       {!isMobile && <OnboardingTour />}
       {saveToast && (
         <div style={{
