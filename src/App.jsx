@@ -575,9 +575,16 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, authUser, setA
     try {
       const driveData = await loadFromDrive();
       const localSavedAt = localStorage.getItem('drama_saved_at') || null;
-      const hasLocalData = (state.projects?.length ?? 0) > 0;
+      const hasLocalData = (() => {
+        try {
+          const raw = localStorage.getItem('drama_projects');
+          return raw ? JSON.parse(raw).length > 0 : false;
+        } catch { return false; }
+      })();
 
-      if (!driveData?.savedAt) {
+      const driveHasData = (driveData?.projects?.length ?? 0) > 0;
+
+      if (!driveData?.savedAt || !driveHasData) {
         // Drive에 데이터 없음 → 로컬을 Drive에 업로드 (조용히)
         setDriveStatus('synced');
       } else if (!hasLocalData) {
