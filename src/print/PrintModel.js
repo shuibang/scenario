@@ -40,6 +40,10 @@ function resolveCharName(block, characters) {
 function normalizeBlock(block, characters) {
   const charName = resolveCharName(block, characters);
   let content = block.content || '';
+  // scene_number: content에 라벨 prefix(S#n.) 포함된 경우 제거 (에디터 저장 방식 혼용 대응)
+  if (block.type === 'scene_number') {
+    content = content.replace(/^S#\d+\.?\s*/, '');
+  }
   // Migration: old badge-span format stored charName at start of content
   if (block.type === 'dialogue' && charName && content.startsWith(charName)) {
     content = content.slice(charName.length).trimStart();

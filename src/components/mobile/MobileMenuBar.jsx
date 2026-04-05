@@ -19,7 +19,6 @@ export default function MobileMenuBar({ onSave, onPrintPreview, WorkTimer }) {
   const { state, dispatch } = useApp();
   const { activeProjectId, stylePreset } = state;
   const [menuOpen, setMenuOpen] = useState(false);
-  const [myOpen, setMyOpen]     = useState(false);
   const menuRef = useRef(null);
   const googleBtnRef = useRef(null);
 
@@ -93,15 +92,15 @@ export default function MobileMenuBar({ onSave, onPrintPreview, WorkTimer }) {
     tryInit();
   }, []);
 
-  // 메뉴 열릴 때 Google 버튼 렌더링
+  // 메뉴 열릴 때 Google 버튼 렌더링 (폴백용 hidden 컨테이너)
   useEffect(() => {
     if (!menuOpen || authUser || !GOOGLE_CLIENT_ID) return;
     if (!window.google?.accounts?.id) return;
     const el = googleBtnRef.current;
     if (!el) return;
     window.google.accounts.id.renderButton(el, {
-      type: 'standard', theme: 'outline', size: 'large',
-      text: 'continue_with', locale: 'ko', width: 200,
+      type: 'standard', theme: 'outline', size: 'medium',
+      text: 'signin_with', locale: 'ko', width: 160,
     });
   }, [menuOpen, authUser]);
 
@@ -111,14 +110,19 @@ export default function MobileMenuBar({ onSave, onPrintPreview, WorkTimer }) {
     }
   }, [authUser]);
 
-  // Close dropdown when tapping outside
+  // Close dropdown when tapping outside + prevent body scroll
   useEffect(() => {
     if (!menuOpen) return;
     const handler = (e) => {
       if (!menuRef.current?.contains(e.target)) setMenuOpen(false);
     };
     document.addEventListener('pointerdown', handler);
-    return () => document.removeEventListener('pointerdown', handler);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('pointerdown', handler);
+      document.body.style.overflow = prev;
+    };
   }, [menuOpen]);
 
   const dropItemStyle = {
@@ -200,7 +204,28 @@ export default function MobileMenuBar({ onSave, onPrintPreview, WorkTimer }) {
                 <div style={{ padding: '10px 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <div style={{ fontSize: 12, color: 'var(--c-text4)' }}>Google로 로그인하면 Drive에 자동 저장됩니다.</div>
                   {GOOGLE_CLIENT_ID ? (
-                    <div ref={googleBtnRef} />
+                    <>
+                      <button
+                        onClick={() => window.google?.accounts?.id?.prompt?.()}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 8,
+                          width: '100%', padding: '8px 12px', borderRadius: 6,
+                          border: '1px solid var(--c-border3)', background: 'var(--c-card)',
+                          color: 'var(--c-text)', fontSize: 13, cursor: 'pointer',
+                          fontWeight: 500,
+                        }}
+                      >
+                        <svg width="16" height="16" viewBox="0 0 48 48" style={{ flexShrink: 0 }}>
+                          <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                          <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                          <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                          <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                        </svg>
+                        구글 로그인
+                      </button>
+                      {/* 폴백: hidden 컨테이너 */}
+                      <div ref={googleBtnRef} style={{ display: 'none' }} />
+                    </>
                   ) : (
                     <div style={{ fontSize: 11, color: 'var(--c-text6)' }}>로그인 기능 준비 중</div>
                   )}
@@ -209,35 +234,24 @@ export default function MobileMenuBar({ onSave, onPrintPreview, WorkTimer }) {
 
               <div style={{ height: 1, background: 'var(--c-border)', margin: '4px 0' }} />
 
-              {/* 마이페이지 */}
-              <button
-                style={dropItemStyle}
-                onClick={(e) => { e.stopPropagation(); setMyOpen(v => !v); }}
-              >
-                <span>👤</span><span>마이페이지</span>
-                <span style={{ marginLeft: 'auto' }}>{myOpen ? '˅' : '›'}</span>
-              </button>
-              {myOpen && (
-                <div style={{ background: 'var(--c-active)' }}>
-                  {[
-                    { label: '작업통계', tab: 'stats' },
-                    { label: '설정',     tab: 'settings' },
-                    { label: 'Q&A',      tab: 'qa' },
-                    { label: '멤버십',   tab: 'membership' },
-                    { label: '오류 보고',tab: 'errors' },
-                  ].map(({ label, tab }) => (
-                    <button
-                      key={tab}
-                      style={{ ...dropItemStyle, paddingLeft: 36, fontSize: 'clamp(10px, 2.8vw, 12px)', color: 'var(--c-text5)' }}
-                      onClick={() => {
-                        dispatch({ type: 'SET_ACTIVE_DOC', payload: 'mypage' });
-                        setTimeout(() => window.dispatchEvent(new CustomEvent('mypage:tab', { detail: tab })), 0);
-                        setMenuOpen(false);
-                      }}
-                    >{label}</button>
-                  ))}
-                </div>
-              )}
+              {[
+                { icon: '📢', label: '공지사항', tab: 'notices' },
+                { icon: '👤', label: '마이페이지', tab: 'stats' },
+                { icon: '💬', label: 'Q&A',       tab: 'qa' },
+                { icon: '🐞', label: '오류 보고',  tab: 'errors' },
+              ].map(({ icon, label, tab }) => (
+                <button
+                  key={tab}
+                  style={dropItemStyle}
+                  onClick={() => {
+                    dispatch({ type: 'SET_ACTIVE_DOC', payload: 'mypage' });
+                    setTimeout(() => window.dispatchEvent(new CustomEvent('mypage:tab', { detail: tab })), 0);
+                    setMenuOpen(false);
+                  }}
+                >
+                  <span>{icon}</span><span>{label}</span>
+                </button>
+              ))}
 
               <div style={{ height: 1, background: 'var(--c-border)', margin: '4px 0' }} />
               <AdBanner slot="mobile-bottom" mobileHide={false} height={60} />

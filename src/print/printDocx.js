@@ -62,6 +62,40 @@ function baseRun(text, props, dp) {
   });
 }
 
+// ─── HTML → TextRun[] (b/i/u 태그만 처리) ─────────────────────────────────────
+function htmlToRuns(html, dp, extraProps = {}) {
+  if (!html) return [baseRun('', extraProps, dp)];
+  // Replace <br> with newline
+  const normalized = html.replace(/<br\s*\/?>/gi, '\n');
+  const runs = [];
+  // Parse segments: text and <b>/<i>/<u> spans
+  // We iterate with a simple state stack
+  const tagRe = /<(\/?)([biu])\b[^>]*>/gi;
+  let last = 0;
+  const stack = { b: 0, i: 0, u: 0 };
+  let match;
+  const flush = (text) => {
+    if (!text) return;
+    runs.push(new TextRun({
+      text,
+      font:      { name: dp.fontFamily },
+      size:      dp.fontSizeHalfPt,
+      bold:      (stack.b > 0) || !!extraProps.bold,
+      italics:   (stack.i > 0) || !!extraProps.italics,
+      underline: (stack.u > 0) ? {} : extraProps.underline,
+    }));
+  };
+  while ((match = tagRe.exec(normalized)) !== null) {
+    flush(normalized.slice(last, match.index));
+    last = match.index + match[0].length;
+    const closing = match[1] === '/';
+    const tag = match[2].toLowerCase();
+    stack[tag] = closing ? Math.max(0, stack[tag] - 1) : stack[tag] + 1;
+  }
+  flush(normalized.slice(last));
+  return runs.length ? runs : [baseRun('', extraProps, dp)];
+}
+
 // ─── Paragraph spacing ────────────────────────────────────────────────────────
 function lineSpacing(dp) {
   return {
@@ -73,13 +107,13 @@ function lineSpacing(dp) {
 }
 
 // ─── Common paragraph builder ─────────────────────────────────────────────────
+// opts.html=true → text is HTML, parse inline formatting
 function para(text, dp, opts = {}) {
-  const run = baseRun(text, {
-    bold:   opts.bold   || false,
-    italics: opts.italic || false,
-  }, dp);
+  const children = opts.html
+    ? htmlToRuns(text, dp, { bold: opts.bold || false, italics: opts.italic || false })
+    : [baseRun(text, { bold: opts.bold || false, italics: opts.italic || false }, dp)];
   return new Paragraph({
-    children:  [run],
+    children,
     alignment: opts.center ? AlignmentType.CENTER
              : opts.right  ? AlignmentType.RIGHT
              : opts.noJustify ? AlignmentType.LEFT
@@ -104,13 +138,12 @@ function sectionBreak() {
 // ─── Dialogue paragraph (character name + speech, tab-based) ──────────────────
 function dialoguePara(charName, speech, dp) {
   const gapTwips = dp.dialogueGapTwips;
-  // Single tab jumps to gapTwips where speech starts.
-  // Hanging indent: continuation lines align with speech start position.
+  const speechRuns = htmlToRuns(speech, dp);
   return new Paragraph({
     children: [
       new TextRun({ text: String(charName || ''), bold: true, font: { name: dp.fontFamily }, size: dp.fontSizeHalfPt }),
       new TextRun({ children: [new Tab()], font: { name: dp.fontFamily }, size: dp.fontSizeHalfPt }),
-      new TextRun({ text: String(speech || ''), font: { name: dp.fontFamily }, size: dp.fontSizeHalfPt }),
+      ...speechRuns,
     ],
     tabStops: [
       { type: TabStopType.LEFT, position: gapTwips },
@@ -160,7 +193,7 @@ function pageNumFooter(dp) {
 }
 
 // ─── Build DOCX sections array ────────────────────────────────────────────────
-function buildDocxSections(printModel, dp) {
+function buildDocxSections(printModel, dp, { hancom = false } = {}) {
   const docxSections = [];
 
   for (const section of printModel.sections) {
@@ -187,13 +220,14 @@ function buildDocxSections(printModel, dp) {
       continue;
     }
 
-    // All other sections get page number footer (reset to 1)
+    // 쪽번호 footer (모든 포맷 동일하게 적용)
     const footer = pageNumFooter(dp);
 
     if (section.type === 'synopsis') {
       const addBlock = (label, text) => {
         if (!text) return;
         paras.push(para(label, dp, { bold: true }));
+        paras.push(blankPara(dp)); // 항목명과 내용 사이 줄바꿈
         text.split('\n').forEach(l => paras.push(para(l, dp)));
         paras.push(blankPara(dp));
       };
@@ -202,6 +236,7 @@ function buildDocxSections(printModel, dp) {
       addBlock('기획의도', section.intent);
       if (section.characters.length) {
         paras.push(para('인물설정', dp, { bold: true }));
+        paras.push(blankPara(dp)); // 인물설정 뒤 줄바꿈 (인물소개와 통일)
         section.characters.forEach(c => {
           // Format: 이름 (성별 / 나이) 직업
           const agePart = [c.gender, c.age].filter(Boolean).join(' / ');
@@ -217,7 +252,7 @@ function buildDocxSections(printModel, dp) {
     else if (section.type === 'episode') {
       const epTitle = `${section.episodeNumber}회 ${section.episodeTitle}`.trim();
       paras.push(para(epTitle, dp, { bold: true, center: true }));
-      paras.push(blankPara(dp));
+      if (!hancom) paras.push(blankPara(dp)); // 회차표기 뒤 빈줄 (한글은 생략)
 
       let prevBlock = null;
       for (const block of section.blocks) {
@@ -227,8 +262,9 @@ function buildDocxSections(printModel, dp) {
             paras.push(para(`${block.label} ${block.content}`.trim(), dp, { bold: true, noJustify: true }));
             break;
           case 'action':
-            block.content.split('\n').forEach(l =>
-              paras.push(para(l, dp, { indent: 8 }))
+            // HTML 서식 포함 가능 — 줄 단위로 분리하되 각 줄을 html 모드로 렌더
+            (block.content || '').split('\n').forEach(l =>
+              paras.push(para(l, dp, { indent: 8, html: true }))
             );
             break;
           case 'dialogue':
@@ -260,7 +296,7 @@ function buildDocxSections(printModel, dp) {
       });
     }
 
-    docxSections.push({
+    const sectionDef = {
       properties: {
         type: SectionType.NEXT_PAGE,
         page: {
@@ -269,9 +305,10 @@ function buildDocxSections(printModel, dp) {
           pageNumbers: { start: 1, formatType: NumberFormat.DECIMAL },
         },
       },
-      footers: { default: footer },
       children: paras,
-    });
+    };
+    if (footer) sectionDef.footers = { default: footer };
+    docxSections.push(sectionDef);
   }
 
   return docxSections;
@@ -284,7 +321,7 @@ function buildDocxSections(printModel, dp) {
  * Builds and downloads a .docx file.
  * onStep(label) is called at each stage for UI progress tracking.
  */
-export async function exportDocx(appState, selections, { onStep = () => {} } = {}) {
+export async function exportDocx(appState, selections, { onStep = () => {}, hancom = false } = {}) {
   console.log('[printDocx] export start — selections:', selections);
   let printModel, sections, blob;
   try {
@@ -295,7 +332,7 @@ export async function exportDocx(appState, selections, { onStep = () => {} } = {
 
     onStep('레이아웃');
     const dp      = presetToDocxProps(preset);
-    sections      = buildDocxSections(printModel, dp);
+    sections      = buildDocxSections(printModel, dp, { hancom });
     console.log('[printDocx] docxSections built:', sections.length, 'sections');
 
     if (!sections.length) {

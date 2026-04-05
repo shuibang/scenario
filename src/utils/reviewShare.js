@@ -3,10 +3,9 @@
  */
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY,
-);
+const supabase = (import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY)
+  ? createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY)
+  : null;
 
 function genId() {
   return Math.random().toString(36).slice(2, 10); // 8자리 영숫자
@@ -18,6 +17,7 @@ function genId() {
  * @returns {Promise<string>} id
  */
 export async function saveReviewPayload(payload) {
+  if (!supabase) throw new Error('Supabase 환경변수가 설정되지 않았습니다.');
   const id = genId();
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7일
   const { error } = await supabase.from('review_links').insert({ id, payload, expires_at: expiresAt });
@@ -31,6 +31,7 @@ export async function saveReviewPayload(payload) {
  * @returns {Promise<object>} payload
  */
 export async function loadReviewPayload(id) {
+  if (!supabase) throw new Error('Supabase 환경변수가 설정되지 않았습니다.');
   const { data, error } = await supabase
     .from('review_links')
     .select('payload')

@@ -35,9 +35,10 @@ import MobileBottomPanel from './components/mobile/MobileBottomPanel';
 // ─── v2: shared utilities ─────────────────────────────────────────────────────
 import { mobileTbtnStyle } from './styles/tokens';
 import UpdateBanner from './components/UpdateBanner';
-import { applyInlineFormat } from './utils/textFormat';
+import { applyInlineFormat, stripHtml } from './utils/textFormat';
 import { getLayoutMetrics } from './print/LineTokenizer';
 import { saveReviewPayload } from './utils/reviewShare';
+import SyncConflictModal from './components/SyncConflictModal';
 
 // ─── Panel width persistence ───────────────────────────────────────────────────
 const PANEL_WIDTHS_KEY = 'panelWidths';
@@ -151,17 +152,17 @@ function TimelineStrip({ scrollEl }) {
           total += 1 + 12 / lineHpt;
           break;
         case 'action': {
-          const lines = Math.max(1, Math.ceil((b.content?.length || 0) / (charsPerLine - 2)));
+          const lines = Math.max(1, Math.ceil((stripHtml(b.content)?.length || 0) / (charsPerLine - 2)));
           total += lines * (1 + 1 / lineHpt);
           break;
         }
         case 'dialogue': {
-          const lines = Math.max(1, Math.ceil((b.content?.length || 0) / charsInSpeech));
+          const lines = Math.max(1, Math.ceil((stripHtml(b.content)?.length || 0) / charsInSpeech));
           total += lines * (1 + 1 / lineHpt);
           break;
         }
         default: {
-          const lines = Math.max(1, Math.ceil((b.content?.length || 0) / charsPerLine));
+          const lines = Math.max(1, Math.ceil((stripHtml(b.content)?.length || 0) / charsPerLine));
           total += lines * (1 + 1 / lineHpt);
         }
       }
@@ -267,7 +268,7 @@ function TimelineStrip({ scrollEl }) {
   );
 }
 
-function ScriptWithTimeline({ scrollToSceneId, onScrollHandled, keyboardUp }) {
+function ScriptWithTimeline({ scrollToSceneId, onScrollHandled, keyboardUp, isMobile }) {
   const [scrollEl, setScrollEl] = useState(null);
   return (
     <div className="h-full flex flex-row min-h-0 overflow-hidden">
@@ -276,6 +277,7 @@ function ScriptWithTimeline({ scrollToSceneId, onScrollHandled, keyboardUp }) {
           scrollToSceneId={scrollToSceneId}
           onScrollHandled={onScrollHandled}
           keyboardUp={keyboardUp}
+          isMobile={isMobile}
           onScrollRefReady={(ref) => { setScrollEl(ref.current); }}
         />
       </div>
@@ -285,7 +287,7 @@ function ScriptWithTimeline({ scrollToSceneId, onScrollHandled, keyboardUp }) {
 }
 
 // ─── Center panel ─────────────────────────────────────────────────────────────
-function CenterPanel({ scrollToSceneId, onScrollHandled, keyboardUp }) {
+function CenterPanel({ scrollToSceneId, onScrollHandled, keyboardUp, isMobile }) {
   const { state } = useApp();
   const { activeDoc, activeEpisodeId, activeProjectId, initialized } = state;
 
@@ -315,7 +317,7 @@ function CenterPanel({ scrollToSceneId, onScrollHandled, keyboardUp }) {
   if (activeDoc === 'relationships') return <RelationshipsPage />;
   if (activeDoc === 'mypage') return <MyPage />;
   if (activeDoc === 'script' && activeEpisodeId) {
-    return <ScriptWithTimeline scrollToSceneId={scrollToSceneId} onScrollHandled={onScrollHandled} keyboardUp={keyboardUp} />;
+    return <ScriptWithTimeline scrollToSceneId={scrollToSceneId} onScrollHandled={onScrollHandled} keyboardUp={keyboardUp} isMobile={isMobile} />;
   }
   return (
     <div className="h-full flex items-center justify-center" style={{ background: 'var(--c-bg)' }}>
@@ -548,8 +550,8 @@ function initDriveOnce() {
 }
 
 // ─── MenuBar ──────────────────────────────────────────────────────────────────
-function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, authUser, setAuthUser }) {
-  const { state, dispatch } = useApp();
+function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, authUser, setAuthUser, onSyncConflict }) {
+  const { state, dispatch, loadFromDriveData } = useApp();
   const { saveStatus, saveErrorMsg, activeProjectId, stylePreset, undoStack, redoStack } = state;
   const canUndo = undoStack?.length > 0;
   const canRedo = redoStack?.length > 0;
@@ -572,14 +574,30 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, authUser, setA
     setDriveStatus('syncing');
     try {
       const driveData = await loadFromDrive();
-      if (driveData?.savedAt) {
-        const driveSavedAt = new Date(driveData.savedAt).getTime();
-        const localSavedAt = new Date(localStorage.getItem('drama_saved_at') || 0).getTime();
-        if (driveSavedAt > localSavedAt) {
-          dispatch({ type: 'LOAD_FROM_DRIVE', payload: driveData });
-        }
+      const localSavedAt = localStorage.getItem('drama_saved_at') || null;
+      const hasLocalData = (() => {
+        try {
+          const raw = localStorage.getItem('drama_projects');
+          return raw ? JSON.parse(raw).length > 0 : false;
+        } catch { return false; }
+      })();
+
+      const driveHasData = (driveData?.projects?.length ?? 0) > 0;
+
+      if (!driveData?.savedAt || !driveHasData) {
+        // Drive에 데이터 없음 → 로컬을 Drive에 업로드 (조용히)
+        setDriveStatus('synced');
+      } else if (!hasLocalData) {
+        // 로컬에 의미있는 데이터 없음 → Drive 데이터 자동 로드
+        loadFromDriveData(driveData);
+        setDriveStatus('synced');
+      } else {
+        // 양쪽 모두 데이터 있음 → 충돌 해결 UI 표시
+        onSyncConflict?.({ localSavedAt, driveData });
+        setDriveStatus('none');
+        _drive.syncing = false;
+        return;
       }
-      setDriveStatus('synced');
       setTimeout(() => setDriveStatus('none'), 3000);
     } catch (e) {
       console.warn('[Drive] 불러오기 실패:', e);
@@ -890,7 +908,10 @@ function Shell({ authUser, setAuthUser }) {
     return window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false);
-  const { state, dispatch } = useApp();
+  const { state, dispatch, loadFromDriveData } = useApp();
+
+  // Drive 동기화 충돌 — { localSavedAt, driveData } | null
+  const [syncConflict, setSyncConflict] = useState(null);
 
   // Panel widths with localStorage persistence
   const [panelWidths, setPanelWidths] = useState(() => loadPanelWidths());
@@ -943,10 +964,14 @@ function Shell({ authUser, setAuthUser }) {
     setMobileBottomOpen(false);
   }, [state.activeDoc]);
 
-  // 키보드 올라오면 하단 패널 자동 닫기 (메모 탭은 입력란이 하단이므로 제외)
+  // 키보드 올라오면 하단 패널 자동 닫기 — 단, 포커스가 하단패널 내부에 있으면 유지
   useEffect(() => {
-    if (keyboardUp && mobileTab !== 'memo') {
-      setMobileBottomOpen(false);
+    if (keyboardUp) {
+      const bottomPanel = document.querySelector('[data-bottom-panel]');
+      const hasFocusInPanel = bottomPanel?.contains(document.activeElement);
+      if (!hasFocusInPanel) {
+        setMobileBottomOpen(false);
+      }
     }
   }, [keyboardUp]);
 
@@ -1038,11 +1063,42 @@ function Shell({ authUser, setAuthUser }) {
       onSave={handleSave}
       authUser={authUser}
       setAuthUser={setAuthUser}
+      onSyncConflict={setSyncConflict}
     />
   );
   const modals = (
     <>
       {printPreviewOpen && <PrintPreviewModal onClose={() => setPrintPreviewOpen(false)} />}
+      {syncConflict && (
+        <SyncConflictModal
+          localSavedAt={syncConflict.localSavedAt}
+          driveData={syncConflict.driveData}
+          onKeepLocal={() => {
+            // 로컬 유지 → Drive에 현재 데이터 업로드
+            import('./store/googleDrive').then(({ saveToDrive }) => {
+              saveToDrive({
+                projects:       state.projects,
+                episodes:       state.episodes,
+                characters:     state.characters,
+                scenes:         state.scenes,
+                scriptBlocks:   state.scriptBlocks,
+                coverDocs:      state.coverDocs,
+                synopsisDocs:   state.synopsisDocs,
+                resources:      state.resources,
+                workTimeLogs:   state.workTimeLogs,
+                checklistItems: state.checklistItems,
+                stylePreset:    state.stylePreset,
+              }).catch(() => {});
+            });
+            setSyncConflict(null);
+          }}
+          onLoadDrive={() => {
+            loadFromDriveData(syncConflict.driveData);
+            setSyncConflict(null);
+          }}
+          onDismiss={() => setSyncConflict(null)}
+        />
+      )}
       {!isMobile && <OnboardingTour />}
       {saveToast && (
         <div style={{
@@ -1083,7 +1139,7 @@ function Shell({ authUser, setAuthUser }) {
         <div data-tour-id="center-panel" className="flex-1 min-h-0"
           style={{ paddingLeft: 'env(safe-area-inset-left, 0px)', paddingRight: 'env(safe-area-inset-right, 0px)', display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0, position: 'relative' }}
         >
-          <CenterPanel scrollToSceneId={scrollToSceneId} onScrollHandled={() => setScrollToSceneId(null)} keyboardUp={keyboardUp} />
+          <CenterPanel scrollToSceneId={scrollToSceneId} onScrollHandled={() => setScrollToSceneId(null)} keyboardUp={keyboardUp} isMobile={isMobile} />
         </div>
         {/* 광고: 키보드 올라오거나 패널 열리면 숨김 */}
         <div style={{ flexShrink: 0, height: (keyboardUp || mobileBottomOpen) ? 0 : 20, overflow: 'hidden', transition: 'height 0.2s ease' }}>
@@ -1233,6 +1289,7 @@ function LogShareView() {
   const s = { fontFamily: 'Pretendard, Apple SD Gothic Neo, sans-serif', maxWidth: 640, margin: '0 auto', padding: '40px 24px', color: '#1a1a1a' };
 
   return (
+    <div style={{ minHeight: '100vh', background: '#fff' }}>
     <div style={s}>
       <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>작업 기록 증빙</div>
       {exportedAt && <div style={{ fontSize: 12, color: '#999', marginBottom: 24 }}>내보내기: {fmtTs(exportedAt)}</div>}
@@ -1267,6 +1324,7 @@ function LogShareView() {
           );
         })}
       </div>
+    </div>
     </div>
   );
 }

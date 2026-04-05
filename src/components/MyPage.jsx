@@ -14,7 +14,7 @@ import {
 } from '../print/fontStorage';
 import { resetPageHints } from './OnboardingTour';
 import AdBanner from './AdBanner';
-import { NOTICES } from './UpdateBanner';
+import { NOTICES, ANNOUNCEMENTS } from './UpdateBanner';
 
 // ─── Log PDF ──────────────────────────────────────────────────────────────────
 const LOG_PDF_FONT = '함초롱바탕';
@@ -216,11 +216,11 @@ function StatsTab() {
     [workTimeLogs]
   );
 
-  const fmt = (sec) => {
+  const fmt = (sec, multiLine = false) => {
     const h = Math.floor(sec / 3600);
     const m = Math.floor((sec % 3600) / 60);
     const s = sec % 60;
-    if (h > 0) return `${h}시간 ${m}분`;
+    if (h > 0) return multiLine ? `${h}시간\n${m}분` : `${h}시간 ${m}분`;
     if (m > 0) return `${m}분 ${s}초`;
     return `${s}초`;
   };
@@ -238,7 +238,7 @@ function StatsTab() {
   };
 
   const labelStyle = { fontSize: '10px', color: 'var(--c-text6)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '0.25rem' };
-  const valStyle   = { fontSize: '1rem', fontWeight: 700, color: 'var(--c-text)', lineHeight: 1.2 };
+  const valStyle   = { fontSize: '1rem', fontWeight: 700, color: 'var(--c-text)', lineHeight: 1.3, whiteSpace: 'pre-line' };
 
   const handlePdfExport = async () => {
     setExportMsg('생성 중…');
@@ -267,8 +267,9 @@ function StatsTab() {
 
   return (
     <div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--c-text3)', marginBottom: 20, paddingBottom: 10, borderBottom: '1px solid var(--c-border)' }}>작업통계</div>
       {workTimeLogs.length > 0 && (
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-2 mb-6">
           <button onClick={handlePdfExport}
             className="text-xs px-3 py-1 rounded"
             style={{ background: 'var(--c-accent)', color: '#fff', border: 'none', cursor: 'pointer' }}>
@@ -286,7 +287,7 @@ function StatsTab() {
       <div className="grid grid-cols-3 gap-3">
         <div style={cardStyle}>
           <div style={labelStyle}>총 작업시간</div>
-          <div style={valStyle}>{fmt(totalSec)}</div>
+          <div style={valStyle}>{fmt(totalSec, true)}</div>
         </div>
         <div style={cardStyle}>
           <div style={labelStyle}>작업 일수</div>
@@ -581,7 +582,8 @@ function SettingsTab() {
   const labelStyle = { fontSize: '11px', color: 'var(--c-text5)', marginBottom: '2px', display: 'block' };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 5 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--c-text3)', marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid var(--c-border)' }}>설정</div>
 
       {/* 사용 가이드 다시 보기 */}
       <div
@@ -640,7 +642,7 @@ function SettingsTab() {
         style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)', padding: '12px 16px' }}
       >
         <div className="text-sm font-medium mb-1" style={{ color: 'var(--c-text)' }}>설계 도구 설정</div>
-        <div className="text-xs mb-6" style={{ color: 'var(--c-text5)', paddingBottom: 4 }}>
+        <div className="text-xs mb-6" style={{ color: 'var(--c-text5)', paddingBottom: 7 }}>
           주 설계 도구는 씬 추가·가져오기가 활성화됩니다. 연동을 켜면 변경사항이 대본에 자동 반영됩니다.
         </div>
         <div className="flex flex-col gap-3" style={{ paddingLeft: 20 }}>
@@ -667,7 +669,7 @@ function SettingsTab() {
                   {!isPrimary && (
                     <button
                       onClick={() => handleDesignTool(tool)}
-                      className="text-[10px] px-2 py-0.5 rounded"
+                      className="text-xs px-3 py-1.5 rounded"
                       style={{ background: 'transparent', color: 'var(--c-text5)', border: '1px solid var(--c-border3)', cursor: 'pointer' }}
                     >
                       주 도구로 설정
@@ -794,16 +796,45 @@ function SettingsTab() {
 
       {/* 사용자 폰트 관리 */}
       <FontManagementSection />
+
+      {/* 법적 주의 문구 */}
+      <div className="rounded-lg" style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)', padding: '12px 16px' }}>
+        <div className="text-xs font-semibold mb-2" style={{ color: 'var(--c-text5)' }}>이용 안내</div>
+        <div className="text-[10px] leading-relaxed space-y-1.5" style={{ color: 'var(--c-text6)' }}>
+          <p>· 본 서비스는 현 상태(AS-IS)로 제공되며, 기능의 정확성이나 가용성을 보장하지 않습니다.</p>
+          <p>· 작성된 대본과 데이터는 사용자 기기의 로컬 저장소에 보관되며, 서버에 별도 저장되지 않습니다.</p>
+          <p>· Google 계정으로 로그인 시 Google Drive에 자동 저장 기능을 제공합니다. 이 경우 Google의 개인정보 처리 방침이 적용됩니다.</p>
+          <p>· 서비스 이용 중 발생하는 데이터 손실에 대해 개발자는 책임을 지지 않습니다. 주기적인 백업을 권장합니다.</p>
+        </div>
+      </div>
     </div>
   );
 }
 
 // ─── NoticesTab ───────────────────────────────────────────────────────────────
 function NoticesTab() {
+  const [sub, setSub] = useState('updates');
+  const tabStyle = (id) => ({
+    padding: '6px 16px', fontSize: 13,
+    fontWeight: sub === id ? 600 : 400,
+    color: sub === id ? 'var(--c-accent)' : 'var(--c-text5)',
+    background: 'none', border: 'none',
+    borderBottom: sub === id ? '2px solid var(--c-accent)' : '2px solid transparent',
+    cursor: 'pointer', marginBottom: -1,
+  });
+
+  const items = sub === 'notices' ? ANNOUNCEMENTS : NOTICES;
+
   return (
     <div className="flex flex-col gap-3">
-      <div className="text-sm font-semibold mb-2" style={{ color: 'var(--c-text)' }}>수정사항 공지</div>
-      {NOTICES.map(n => (
+      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--c-text3)', marginBottom: 8, paddingBottom: 10, borderBottom: '1px solid var(--c-border)' }}>공지사항</div>
+      {/* 서브 탭 */}
+      <div style={{ display: 'flex', borderBottom: '1px solid var(--c-border)', marginBottom: 4 }}>
+        <button style={tabStyle('updates')} onClick={() => setSub('updates')}>업데이트</button>
+        <button style={tabStyle('notices')} onClick={() => setSub('notices')}>공지</button>
+      </div>
+
+      {items.map(n => (
         <div key={n.id} className="rounded-lg px-4 py-3"
           style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)' }}>
           <div className="text-[10px] mb-1 font-semibold" style={{ color: 'var(--c-accent)' }}>{n.date}</div>
@@ -902,7 +933,7 @@ function ErrorReportTab() {
   return (
     <div className="flex flex-col gap-6" style={{ maxWidth: 480 }}>
       <div>
-        <div className="text-sm font-semibold mb-1" style={{ color: 'var(--c-text2)' }}>오류 제출</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--c-text3)', marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid var(--c-border)' }}>오류 제출</div>
         <div className="text-xs" style={{ color: 'var(--c-text5)' }}>불편한 점이나 개선 아이디어를 알려주세요.</div>
       </div>
 
@@ -1012,16 +1043,30 @@ export default function MyPage() {
   const tabLabel = TABS.find(t => t.id === activeTab)?.label || '';
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col overflow-hidden" style={{ background: 'var(--c-bg)' }}>
-      {isMobile ? (
-        /* 모바일: 현재 섹션 이름만 표시 (내부 메뉴 없음, 햄버거로 전환) */
-        <div style={{
-          padding: '10px 20px', flexShrink: 0,
-          borderBottom: '1px solid var(--c-border)',
-          background: 'var(--c-panel)',
-          fontSize: 13, color: 'var(--c-text5)',
-        }}>
-          마이페이지 › <span style={{ color: 'var(--c-accent)', fontWeight: 600 }}>{tabLabel}</span>
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden" style={{ background: 'var(--c-bg)', padding: isMobile ? 0 : 10 }}>
+      {isMobile && ['stats', 'settings', 'membership'].includes(activeTab) ? (
+        /* 모바일: 마이페이지 주요 탭 바 */
+        <div style={{ flexShrink: 0, borderBottom: '1px solid var(--c-border)', background: 'var(--c-panel)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', padding: '8px 16px 0' }}>
+            {[
+              { id: 'stats',      label: '작업통계' },
+              { id: 'settings',   label: '설정' },
+              { id: 'membership', label: '멤버십' },
+            ].map(t => (
+              <button
+                key={t.id}
+                onClick={() => setActiveTab(t.id)}
+                style={{
+                  padding: '6px 14px',
+                  fontSize: 13, fontWeight: activeTab === t.id ? 600 : 400,
+                  color: activeTab === t.id ? 'var(--c-accent)' : 'var(--c-text5)',
+                  background: 'none', border: 'none',
+                  borderBottom: activeTab === t.id ? '2px solid var(--c-accent)' : '2px solid transparent',
+                  cursor: 'pointer', marginBottom: -1,
+                }}
+              >{t.label}</button>
+            ))}
+          </div>
         </div>
       ) : null}
 
@@ -1053,15 +1098,16 @@ export default function MyPage() {
 
         {/* 콘텐츠 */}
         <div className="flex-1 overflow-y-auto">
-          <div className={isMobile ? '' : 'max-w-2xl mx-auto pt-16 pb-10 px-10'}
-               style={isMobile ? { padding: '24px 20px', paddingBottom: 'calc((clamp(52px, 14vw, 64px) + 46dvh + 16px) / 4)' } : {}}>
+          <div className={isMobile ? '' : 'max-w-2xl mx-auto'}
+               style={isMobile ? { padding: '24px 20px', paddingBottom: 'calc((clamp(52px, 14vw, 64px) + 46dvh + 16px) / 4)' } : { padding: '24px 20px' }}>
             {activeTab === 'stats'      && <StatsTab />}
             {activeTab === 'settings'   && <SettingsTab />}
             {activeTab === 'notices'    && <NoticesTab />}
             {activeTab === 'qa'         && <QnATab />}
             {activeTab === 'errors'     && <ErrorReportTab />}
             {activeTab === 'membership' && (
-              <div className="flex flex-col items-center gap-8" style={{ paddingTop: 10 }}>
+              <div className="flex flex-col items-center gap-8">
+                <div style={{ width: '100%', fontSize: 13, fontWeight: 700, color: 'var(--c-text3)', marginBottom: 8, paddingBottom: 10, borderBottom: '1px solid var(--c-border)' }}>멤버십</div>
                 <PlaceholderTab icon="⭐" title="멤버십" desc="멤버십 기능은 준비 중입니다." />
                 {/* SupportCard 일시 비활성화 — 추후 복원 예정 */}
                 {false && <SupportCard />}

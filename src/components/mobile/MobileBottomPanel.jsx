@@ -28,8 +28,8 @@ const TAB_H     = 56;   // px — 탭바 고정 높이
 const OPEN_H    = 280;  // px — 열렸을 때 패널 전체 고정 높이
 const CONTENT_H = OPEN_H - TAB_H; // 콘텐츠 영역 = 224px
 const BANNER_H  = 24;   // px — 하단 광고 띠 (메모탭 전용)
-const AD_W      = '38%'; // 왼쪽 광고
-const MENU_W    = '62%'; // 오른쪽 메뉴
+const AD_W      = '25%'; // 왼쪽 광고 (대본 탭 버튼 폭과 동일)
+const MENU_W    = '75%'; // 오른쪽 메뉴
 
 export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, onClose }) {
   const { state, dispatch } = useApp();

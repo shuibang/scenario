@@ -16,6 +16,8 @@
  * }
  */
 
+function stripHtml(html) { return (html || '').replace(/<[^>]+>/g, ''); }
+
 // ─── A4 metrics ────────────────────────────────────────────────────────────────
 const PT_PER_MM   = 2.8346;
 const A4_W_MM     = 210;
@@ -31,7 +33,7 @@ export function getLayoutMetrics(preset) {
   const contentWpt = contentWmm * PT_PER_MM;   // ≈ 425 pt
   const contentHpt = contentHmm * PT_PER_MM;   // ≈ 658 pt
   const lineHpt    = fontSize * lineHeight;     // ≈ 17.6 pt
-  const linesPerPage = Math.floor(contentHpt / lineHpt); // ≈ 37
+  const linesPerPage = Math.floor(contentHpt / lineHpt);
 
   // dialogue gap in pt (preset.dialogueGap is "Nem" string)
   let dialogueGapPt = 7 * fontSize;
@@ -130,6 +132,7 @@ export function tokenizeSection(section, metrics) {
     const addSection = (label, text) => {
       if (!text) return;
       tokens.push(T('heading', label, { bold: true }));
+      tokens.push(B()); // 항목명과 내용 사이 줄바꿈
       // Split by newline paragraphs; each paragraph is its own blockText block
       // so the PDF renderer can justify interior lines when the para fits on one page.
       const paras = text.split('\n');
@@ -151,6 +154,7 @@ export function tokenizeSection(section, metrics) {
     addSection('기획의도', section.intent);
     if (section.characters.length) {
       tokens.push(T('heading', '인물설정', { bold: true }));
+      tokens.push(B()); // 인물설정 뒤 줄바꿈 (addSection과 동일하게)
       section.characters.forEach(c => {
         const agePart = [c.gender, c.age].filter(Boolean).join(' / ');
         const nameLine = `${c.name}${agePart ? ` (${agePart})` : ''}${c.job ? ` ${c.job}` : ''}`;
@@ -194,26 +198,34 @@ export function tokenizeSection(section, metrics) {
           break;
         }
         case 'action': {
-          const wrappedA = wrapText(block.content, charsPerLine - 2);
+          const plainA = stripHtml(block.content);
+          const rawHtmlA = block.content || '';
+          const hasHtmlA = rawHtmlA !== plainA;
+          const wrappedA = wrapText(plainA, charsPerLine - 2);
           wrappedA.forEach((t, i) =>
             tokens.push(T('action', t, {
               indent: 1,
               isFirstOfBlock: i === 0,
-              blockText:      i === 0 ? (block.content || '') : undefined,
+              blockText:      i === 0 ? plainA : undefined,
               blockLineCount: i === 0 ? wrappedA.length : undefined,
+              rawHtml:        (i === 0 && hasHtmlA) ? rawHtmlA : undefined,
             }))
           );
           break;
         }
         case 'dialogue': {
-          const wrappedD = wrapText(block.content, charsInSpeech);
+          const plainD = stripHtml(block.content);
+          const rawHtmlD = block.content || '';
+          const hasHtmlD = rawHtmlD !== plainD;
+          const wrappedD = wrapText(plainD, charsInSpeech);
           wrappedD.forEach((t, i) =>
             tokens.push(T('dialogue', t, {
               charName:       i === 0 ? block.charName : '',
               isFirstLine:    i === 0,
               isFirstOfBlock: i === 0,
-              blockText:      i === 0 ? (block.content || '') : undefined,
+              blockText:      i === 0 ? plainD : undefined,
               blockLineCount: i === 0 ? wrappedD.length : undefined,
+              rawHtml:        (i === 0 && hasHtmlD) ? rawHtmlD : undefined,
             }))
           );
           break;
@@ -241,7 +253,7 @@ export function tokenizeSection(section, metrics) {
         }
         default:
           if (block.content) {
-            wrapText(block.content, charsPerLine).forEach(t =>
+            wrapText(stripHtml(block.content), charsPerLine).forEach(t =>
               tokens.push(T('body', t))
             );
           }

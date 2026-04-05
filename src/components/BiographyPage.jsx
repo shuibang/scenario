@@ -103,11 +103,11 @@ export default function BiographyPage() {
         ) : (
           <>
             <div className="mb-6">
-              <div className="text-lg font-bold mb-0.5" style={{ color: 'var(--c-text)' }}>{charFullName(char) || charDisplayName(char)}</div>
-              <div className="text-xs" style={{ color: 'var(--c-text5)' }}>인물이력서</div>
+              <div className="text-lg font-bold mb-1.5" style={{ color: 'var(--c-text)' }}>{charFullName(char) || charDisplayName(char)}</div>
+              <div className="text-xs leading-relaxed" style={{ color: 'var(--c-text5)' }}>인물이 살아온 일생을 떠올리며 주요 사건과 감정을 기록해보세요.</div>
             </div>
 
-            <div className="space-y-2">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
               {items.map(it => (
                 <div key={it.id} className="flex gap-2 items-start">
                   <input value={it.year} onChange={e => updateItem(it.id, 'year', e.target.value)}

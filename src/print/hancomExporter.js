@@ -22,17 +22,16 @@ import { buildHwpx } from './hwpxBuilder';
  * Currently outputs .docx that HWP 2014+ and Hancom Office can open cleanly.
  */
 export async function exportHancom(appState, selections, { onStep = () => {} } = {}) {
-  // Apply Hancom-preferred settings on top of user preset:
-  // - Force 함초롱바탕 font (available in Hancom Office)
   const hancomState = {
     ...appState,
     stylePreset: {
       ...(appState.stylePreset || {}),
       fontFamily: getFontById('hcr-batang').cssFamily,
+      dialogueGap: '9em',
     },
   };
 
-  return exportDocx(hancomState, selections, { onStep });
+  return exportDocx(hancomState, selections, { onStep, hancom: true });
 }
 
 /**

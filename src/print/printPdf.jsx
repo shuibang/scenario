@@ -72,7 +72,7 @@ function makeStyles(preset, metrics) {
     coverTitle:       { fontSize: fs + 11, fontWeight: 700, marginBottom: 6, textAlign: 'center' },
     coverSubtitle:    { fontSize: fs + 2,  fontWeight: 400, marginBottom: 4, textAlign: 'center', color: '#555' },
     coverField:       { fontSize: fs,      marginBottom: 3, textAlign: 'center' },
-    // ── page number (absolute, no fixed — one PdfPage = one PDF page)
+    // ── page number
     pageNum: {
       position: 'absolute',
       bottom:   15 * MM_TO_PT,
@@ -85,31 +85,91 @@ function makeStyles(preset, metrics) {
     heading:  { fontWeight: 700, marginBottom: 2 },
     body:     { marginBottom: 1, textAlign: 'justify' },
     charName: { fontWeight: 700, marginTop: 6 },
-    charMeta: { marginLeft: 8, fontSize: fs - 1, color: '#444' },
     // ── episode
-    epTitle:   { fontSize: fs + 2, fontWeight: 700, textAlign: 'center' },
-    scene:     { fontWeight: 700, marginTop: 10, marginBottom: 2 },
-    action:    { marginLeft: '8mm', marginBottom: 1, textAlign: 'justify' },
+    epTitle:     { fontSize: fs + 2, fontWeight: 700, textAlign: 'center' },
+    scene:       { fontWeight: 700, marginTop: 10, marginBottom: 2 },
+    // action/paren: View wrapper로 paddingLeft 처리 → Text 너비가 정확히 계산됨
+    actionWrap:  { paddingLeft: '8mm', marginBottom: 1 },
+    action:      { textAlign: 'justify' },
     dialogueRow: { flexDirection: 'row', marginBottom: 1 },
     charCell:    { width: dialogueGapPt, fontWeight: 700, flexShrink: 0 },
     speechCell:  { flex: 1, textAlign: 'justify' },
-    paren:  { marginLeft: dialogueGapPt, fontSize: fs - 1, color: '#444' },
-    transition: { textAlign: 'right', marginVertical: 4 },
-    blank: { marginBottom: fs * lh },
+    parenWrap:   { paddingLeft: dialogueGapPt, marginBottom: 1 },
+    paren:       { fontSize: fs - 1, color: '#444' },
+    transition:  { textAlign: 'right', marginVertical: 4 },
+    blank:       { marginBottom: fs * lh },
   });
 }
 
+// ─── HTML → react-pdf children ────────────────────────────────────────────────
+// 규칙: <Text> 자식은 string만 OR <Text>[]만 — 혼합 불가 (react-pdf 제약)
+// 서식 태그 없으면 plain string 반환, 있으면 <Text>[] 반환
+function htmlToPdfChildren(html) {
+  if (!html) return '';
+  // <br> → newline, 알 수 없는 태그 제거 (b/i/u 제외)
+  const normalized = html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<(?!\/?[biu][\s>])[^>]+>/gi, '');
+
+  // 서식 태그 없으면 plain string (parent <Text>에 string 자식 → 안전)
+  if (!/<[biu][\s>]/i.test(normalized)) {
+    return normalized.replace(/<[^>]+>/g, '');
+  }
+
+  // 서식 태그 있음 → 모든 segment를 <Text>로 감쌈 (string 혼합 없음)
+  const tagRe = /<(\/?)([biu])[^>]*>/gi;
+  const segments = [];
+  let last = 0;
+  const stack = { b: 0, i: 0, u: 0 };
+  let match;
+  let key = 0;
+
+  const flush = (text) => {
+    const clean = text.replace(/<[^>]+>/g, '');
+    if (!clean) return;
+    // fontWeight/fontStyle 항상 명시 — undefined이면 부모 상속으로 bold+italic 조합 발생
+    // italic은 한국어 폰트 파일 미존재 → fontStyle 항상 'normal' (밑줄/볼드만 적용)
+    segments.push(
+      <Text key={key++} style={{
+        fontWeight:     stack.b > 0 ? 700 : 400,
+        fontStyle:      'normal',
+        textDecoration: stack.u > 0 ? 'underline' : undefined,
+      }}>{clean}</Text>
+    );
+  };
+
+  while ((match = tagRe.exec(normalized)) !== null) {
+    flush(normalized.slice(last, match.index));
+    last = match.index + match[0].length;
+    const closing = match[1] === '/';
+    const tag = match[2].toLowerCase();
+    stack[tag] = closing ? Math.max(0, stack[tag] - 1) : stack[tag] + 1;
+  }
+  flush(normalized.slice(last));
+
+  if (segments.length === 0) return '';
+  // 단일 segment도 <Text>[] 반환 — parent는 항상 <Text> 자식만 가짐
+  return segments;
+}
+
 // ─── Token → PDF element ──────────────────────────────────────────────────────
-// Receives either a single token or a pre-grouped text (for multi-line action/body).
 function TokenEl({ token, text, S }) {
-  const content = text ?? token.text;
+  const raw     = text ?? token.text ?? '';
+  const content = htmlToPdfChildren(raw);
+  // 서식 없는 plain text
+  const plain   = typeof content === 'string' ? content : raw.replace(/<[^>]+>/g, '');
+
   switch (token.kind) {
     case 'blank':
       return <View style={S.blank} />;
     case 'scene_number':
-      return <Text style={S.scene}>{content}</Text>;
+      return <Text style={S.scene}>{plain}</Text>;
     case 'action':
-      return <Text style={S.action}>{content}</Text>;
+      return (
+        <View style={S.actionWrap}>
+          <Text style={S.action}>{content}</Text>
+        </View>
+      );
     case 'dialogue':
       return (
         <View style={S.dialogueRow}>
@@ -118,15 +178,19 @@ function TokenEl({ token, text, S }) {
         </View>
       );
     case 'parenthetical':
-      return <Text style={S.paren}>{content}</Text>;
+      return (
+        <View style={S.parenWrap}>
+          <Text style={S.paren}>{plain}</Text>
+        </View>
+      );
     case 'transition':
-      return <Text style={S.transition}>{content}</Text>;
+      return <Text style={S.transition}>{plain}</Text>;
     case 'heading':
-      return <Text style={S.heading}>{content}</Text>;
+      return <Text style={S.heading}>{plain}</Text>;
     case 'ep_title':
-      return <Text style={S.epTitle}>{content}</Text>;
+      return <Text style={S.epTitle}>{plain}</Text>;
     case 'char_name':
-      return <Text style={S.charName}>{content}</Text>;
+      return <Text style={S.charName}>{plain}</Text>;
     case 'body':
     default:
       return <Text style={S.body}>{content}</Text>;
@@ -134,53 +198,37 @@ function TokenEl({ token, text, S }) {
 }
 
 // ─── A single PDF page ────────────────────────────────────────────────────────
-// blockText logic:
-//   • isFirstOfBlock=true tokens carry blockText (full unwrapped content) and
-//     blockLineCount (total pre-wrapped line count for this block).
-//   • The PDF renderer uses blockText ONLY when all lines of the block fit on
-//     this page (blockLineCount lines present consecutively). This lets pdfkit
-//     handle wrapping internally → textAlign:'justify' works on interior lines.
-//   • When a block is split across pages, each fragment falls back to pre-wrapped
-//     tok.text to respect the paginator's page boundaries.
-//   • isFirstOfBlock=false tokens at the start of a page are continuation lines
-//     from the previous page and render with tok.text as-is.
 function PdfPage({ tokens, pageNum, showPageNum, S }) {
   const renderList = [];
-  const absorbedKinds = new Set(); // kinds whose remaining false tokens are absorbed
+  const absorbedKinds = new Set();
 
   for (let i = 0; i < tokens.length; i++) {
     const tok = tokens[i];
 
     if (tok.isFirstOfBlock === false) {
-      if (absorbedKinds.has(tok.kind)) continue; // absorbed by preceding blockText
-      // Continuation line from a block that started on a previous page
+      if (absorbedKinds.has(tok.kind)) continue;
       renderList.push({ kind: tok.kind, text: tok.text, token: tok });
       continue;
     }
 
-    // isFirstOfBlock === true or undefined → start of new logical unit; clear absorbed set
     absorbedKinds.clear();
 
     if (tok.isFirstOfBlock === true && tok.blockLineCount > 1) {
-      // Count how many false tokens of this kind follow consecutively on this page
       let onPage = 0;
       for (let j = i + 1; j < tokens.length; j++) {
         const t = tokens[j];
-        if (t.isFirstOfBlock === false && t.kind === tok.kind) {
-          onPage++;
-        } else {
-          break; // hit blank, new block, or different kind
-        }
+        if (t.isFirstOfBlock === false && t.kind === tok.kind) onPage++;
+        else break;
       }
       const fullyOnPage = onPage >= tok.blockLineCount - 1;
       if (fullyOnPage) absorbedKinds.add(tok.kind);
       renderList.push({
         kind:  tok.kind,
-        text:  fullyOnPage ? (tok.blockText ?? tok.text) : tok.text,
+        text:  fullyOnPage ? (tok.rawHtml ?? tok.blockText ?? tok.text) : tok.text,
         token: tok,
       });
     } else {
-      renderList.push({ kind: tok.kind, text: tok.text, token: tok });
+      renderList.push({ kind: tok.kind, text: tok.rawHtml ?? tok.text, token: tok });
     }
   }
 
@@ -200,21 +248,20 @@ function PdfPage({ tokens, pageNum, showPageNum, S }) {
 function SceneListPage({ section, S }) {
   const fs = S.page.fontSize ?? 11;
   const COL = {
-    num:   { width: '8%',  fontWeight: 700 },
+    num:   { width: '8%' },
     head:  { width: '28%' },
     desc:  { width: '30%' },
     chars: { width: '20%' },
     tags:  { width: '14%' },
   };
-  const cellStyle = { fontSize: fs - 1, padding: '3pt 4pt', borderRight: '0.5pt solid #ccc' };
+  const cellStyle  = { fontSize: fs - 1, padding: '3pt 4pt', borderRight: '0.5pt solid #ccc' };
   const headerCell = { ...cellStyle, fontWeight: 700, backgroundColor: '#f0f0f0' };
-  const rowStyle = { flexDirection: 'row', borderBottom: '0.5pt solid #ddd' };
+  const rowStyle   = { flexDirection: 'row', borderBottom: '0.5pt solid #ddd' };
   const epTitle = `${section.episodeNumber}회 씬리스트${section.episodeTitle ? ` — ${section.episodeTitle}` : ''}`;
 
   return (
-    <Page size="A4" orientation="landscape" style={{ ...S.page, paddingTop: S.page.paddingTop }}>
+    <Page size="A4" orientation="landscape" style={S.page}>
       <Text style={{ fontSize: fs + 1, fontWeight: 700, textAlign: 'center', marginBottom: 8 }}>{epTitle}</Text>
-      {/* Header row */}
       <View style={{ flexDirection: 'row', borderBottom: '1pt solid #999', borderTop: '1pt solid #999', backgroundColor: '#f0f0f0' }}>
         <Text style={{ ...headerCell, width: COL.num.width }}>씬번호</Text>
         <Text style={{ ...headerCell, width: COL.head.width }}>씬헤딩</Text>
@@ -223,9 +270,9 @@ function SceneListPage({ section, S }) {
         <Text style={{ ...headerCell, width: COL.tags.width, borderRight: 'none' }}>태그</Text>
       </View>
       {section.scenes.map((scene, i) => {
-        const loc = [scene.specialSituation ? scene.specialSituation + ')' : '', scene.location, scene.subLocation].filter(Boolean).join(' ');
+        const loc  = [scene.specialSituation ? scene.specialSituation + ')' : '', scene.location, scene.subLocation].filter(Boolean).join(' ');
         const head = [loc, scene.timeOfDay ? `(${scene.timeOfDay})` : ''].filter(Boolean).join(' ');
-        const bg = i % 2 === 1 ? '#fafafa' : '#fff';
+        const bg   = i % 2 === 1 ? '#fafafa' : '#fff';
         return (
           <View key={scene.id} style={{ ...rowStyle, backgroundColor: bg }}>
             <Text style={{ ...cellStyle, width: COL.num.width, fontWeight: 700 }}>{scene.sceneNum}</Text>
@@ -302,11 +349,6 @@ function buildPdfDocument(printModel) {
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-/**
- * exportPdf(appState, selections, { onStep })
- * Generates a PDF blob and triggers download.
- * onStep(label) is called at each stage for UI progress tracking.
- */
 export async function exportPdf(appState, selections, { onStep = () => {} } = {}) {
   ensureFontsRegistered();
   console.log('[printPdf] export start — selections:', selections);
@@ -325,15 +367,9 @@ export async function exportPdf(appState, selections, { onStep = () => {} } = {}
     blob = await pdf(doc).toBlob();
     console.log('[printPdf] blob size:', blob.size, 'bytes');
   } catch (err) {
-    console.error('[printPdf] FAILED at render/blob step:', err);
+    console.error('[printPdf] FAILED:', err?.message);
     console.error('[printPdf] stack:', err?.stack);
-    if (err.message?.includes('font') || err.message?.includes('Font') || err.message?.includes('resolve')) {
-      throw new Error(`폰트 오류: ${err.message}\n\n'함초롱바탕' 글꼴로 변경 후 다시 시도하세요.`);
-    }
-    if (err.message?.includes('hasOwnProperty') || err.message?.includes('CreationDate') || err.message?.includes('undefined')) {
-      throw new Error(`PDF 렌더링 오류\n\n해결 방법:\n• 개발 서버를 재시작하세요 (Vite 캐시 초기화)\n• 또는 '함초롱바탕' 글꼴로 변경 후 다시 시도하세요.\n\n원본 오류: ${err.message}`);
-    }
-    throw err;
+    throw new Error(`PDF 생성 실패: ${err.message}`);
   }
   try {
     onStep('다운로드');
@@ -352,10 +388,6 @@ export async function exportPdf(appState, selections, { onStep = () => {} } = {}
   }
 }
 
-/**
- * getPdfBlob(appState, selections) → Blob
- * Used internally by preview.
- */
 export async function getPdfBlob(appState, selections) {
   ensureFontsRegistered();
   const preset     = appState.stylePreset;

@@ -3,6 +3,10 @@
  *
  * URL hash: #review=SHORT_ID  (Supabase 저장, 새 방식)
  *           #review=BASE64    (구형 링크 폴백)
+ *
+ * 레이아웃:
+ *   데스크톱: 좌(미리보기) + 우(피드백 280px) — 접기/펼치기 가능
+ *   모바일:   상(미리보기) + 하(피드백 고정바) — 접기/펼치기 가능
  */
 import React, { useState, useEffect } from 'react';
 import PreviewRenderer from '../print/PreviewRenderer';
@@ -16,11 +20,23 @@ function decodeLegacy(hash) {
   }
 }
 
+function useIsMobile() {
+  const [mobile, setMobile] = useState(() => window.innerWidth < 768);
+  useEffect(() => {
+    const fn = () => setMobile(window.innerWidth < 768);
+    window.addEventListener('resize', fn, { passive: true });
+    return () => window.removeEventListener('resize', fn);
+  }, []);
+  return mobile;
+}
+
 export default function SharedReviewView() {
-  const [data, setData]       = useState(null);
-  const [bad,  setBad]        = useState(false);
+  const [data, setData]         = useState(null);
+  const [bad,  setBad]          = useState(false);
   const [feedback, setFeedback] = useState('');
   const [copied,   setCopied]   = useState(false);
+  const [panelOpen, setPanelOpen] = useState(true);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     const val = window.location.hash.slice(8); // '#review=' 제거
@@ -74,10 +90,121 @@ export default function SharedReviewView() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // ── 공통 피드백 패널 내용 ─────────────────────────────────────────────────
+  const PANEL_H = 260; // 모바일 열렸을 때 높이
+  const feedbackContent = (
+    <>
+      <textarea
+        value={feedback}
+        onChange={e => setFeedback(e.target.value)}
+        placeholder={`${projectTitle}에 대한 피드백을 자유롭게 작성하세요.`}
+        style={{
+          flex: 1,
+          resize: 'none',
+          border: '1px solid #e0e0e0',
+          borderRadius: '8px',
+          padding: '10px',
+          fontSize: '12px',
+          lineHeight: 1.7,
+          color: '#333',
+          outline: 'none',
+          fontFamily: 'inherit',
+          minHeight: isMobile ? 120 : undefined,
+        }}
+        onFocus={e => { e.target.style.borderColor = '#5a5af5'; }}
+        onBlur={e => { e.target.style.borderColor = '#e0e0e0'; }}
+      />
+      <button
+        onClick={handleCopy}
+        disabled={!feedback.trim()}
+        style={{
+          marginTop: '10px',
+          padding: '10px',
+          background: feedback.trim() ? '#5a5af5' : '#ccc',
+          color: '#fff',
+          border: 'none',
+          borderRadius: '8px',
+          cursor: feedback.trim() ? 'pointer' : 'default',
+          fontSize: '13px',
+          fontWeight: 600,
+          transition: 'background 0.15s',
+        }}
+      >
+        {copied ? '복사됨 ✓' : '피드백 복사'}
+      </button>
+      <div style={{ marginTop: '8px', fontSize: '10px', color: '#bbb', lineHeight: 1.5, textAlign: 'center' }}>
+        복사한 피드백을 메시지·이메일로 작가에게 전달하세요.
+      </div>
+    </>
+  );
+
+  // ── 패널 헤더 (접기/펼치기 포함) ─────────────────────────────────────────
+  const panelHeader = (
+    <div style={{ display: 'flex', alignItems: 'center', marginBottom: panelOpen ? (isMobile ? 10 : 16) : 0 }}>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: '14px', fontWeight: 700, color: '#222' }}>피드백</div>
+        {panelOpen && !isMobile && (
+          <div style={{ fontSize: '11px', color: '#999', marginTop: 2 }}>작성 후 복사해서 전달하세요.</div>
+        )}
+      </div>
+      <button
+        onClick={() => setPanelOpen(v => !v)}
+        style={{
+          background: 'none', border: '1px solid #e0e0e0', borderRadius: 6,
+          cursor: 'pointer', fontSize: 12, color: '#888',
+          padding: '3px 10px', lineHeight: 1.4, flexShrink: 0,
+        }}
+      >
+        {panelOpen ? '접기 ▾' : '펼치기 ▴'}
+      </button>
+    </div>
+  );
+
+  // ── 모바일 레이아웃 ───────────────────────────────────────────────────────
+  if (isMobile) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#d8d8d8', fontFamily: 'sans-serif' }}>
+        {/* 미리보기 영역 */}
+        <div style={{
+          flex: 1, overflowY: 'auto', padding: '16px 8px',
+          paddingBottom: panelOpen ? PANEL_H + 52 : 52,
+          transition: 'padding-bottom 0.25s ease',
+        }}>
+          <div style={{ textAlign: 'center', marginBottom: '12px', fontSize: '13px', color: '#555', fontWeight: 600 }}>
+            {projectTitle} — 검토 요청
+          </div>
+          <PreviewRenderer appState={appState} selections={selections} columnWidth={Math.min(window.innerWidth - 32, 340)} />
+        </div>
+
+        {/* 하단 피드백 패널 (fixed) */}
+        <div style={{
+          position: 'fixed', bottom: 0, left: 0, right: 0,
+          background: '#fff',
+          borderTop: '1px solid #ddd',
+          boxShadow: '0 -2px 12px rgba(0,0,0,0.10)',
+          transition: 'height 0.25s ease',
+          height: panelOpen ? PANEL_H + 52 : 52,
+          overflow: 'hidden',
+          zIndex: 100,
+          display: 'flex', flexDirection: 'column',
+          padding: '12px 16px',
+        }}>
+          {panelHeader}
+          {panelOpen && (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              {feedbackContent}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── 데스크톱 레이아웃 ─────────────────────────────────────────────────────
   return (
     <div style={{ display: 'flex', height: '100vh', background: '#d8d8d8', fontFamily: 'sans-serif' }}>
 
-      {/* ── 미리보기 ── */}
+      {/* 미리보기 */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '24px 16px' }}>
         <div style={{ textAlign: 'center', marginBottom: '16px', fontSize: '13px', color: '#555', fontWeight: 600 }}>
           {projectTitle} — 검토 요청
@@ -85,60 +212,33 @@ export default function SharedReviewView() {
         <PreviewRenderer appState={appState} selections={selections} columnWidth={340} />
       </div>
 
-      {/* ── 피드백 패널 ── */}
+      {/* 피드백 패널 */}
       <div style={{
-        width: '280px', flexShrink: 0,
+        width: panelOpen ? '280px' : '48px', flexShrink: 0,
         background: '#fff', borderLeft: '1px solid #ddd',
         display: 'flex', flexDirection: 'column',
-        padding: '20px 16px',
+        padding: panelOpen ? '20px 16px' : '20px 8px',
+        transition: 'width 0.25s ease, padding 0.25s ease',
+        overflow: 'hidden',
       }}>
-        <div style={{ fontSize: '14px', fontWeight: 700, color: '#222', marginBottom: '4px' }}>피드백</div>
-        <div style={{ fontSize: '11px', color: '#999', marginBottom: '16px' }}>
-          작성 후 복사해서 전달하세요.
-        </div>
-
-        <textarea
-          value={feedback}
-          onChange={e => setFeedback(e.target.value)}
-          placeholder={`${projectTitle}에 대한 피드백을 자유롭게 작성하세요.`}
-          style={{
-            flex: 1,
-            resize: 'none',
-            border: '1px solid #e0e0e0',
-            borderRadius: '8px',
-            padding: '10px',
-            fontSize: '12px',
-            lineHeight: 1.7,
-            color: '#333',
-            outline: 'none',
-            fontFamily: 'inherit',
-          }}
-          onFocus={e => { e.target.style.borderColor = '#5a5af5'; }}
-          onBlur={e => { e.target.style.borderColor = '#e0e0e0'; }}
-        />
-
-        <button
-          onClick={handleCopy}
-          disabled={!feedback.trim()}
-          style={{
-            marginTop: '12px',
-            padding: '10px',
-            background: feedback.trim() ? '#5a5af5' : '#ccc',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '8px',
-            cursor: feedback.trim() ? 'pointer' : 'default',
-            fontSize: '13px',
-            fontWeight: 600,
-            transition: 'background 0.15s',
-          }}
-        >
-          {copied ? '복사됨 ✓' : '피드백 복사'}
-        </button>
-
-        <div style={{ marginTop: '10px', fontSize: '10px', color: '#bbb', lineHeight: 1.5, textAlign: 'center' }}>
-          복사한 피드백을 메시지·이메일로<br/>작가에게 전달하세요.
-        </div>
+        {panelOpen ? (
+          <>
+            {panelHeader}
+            {feedbackContent}
+          </>
+        ) : (
+          /* 접혔을 때: 세로 버튼만 */
+          <button
+            onClick={() => setPanelOpen(true)}
+            style={{
+              background: 'none', border: '1px solid #e0e0e0', borderRadius: 6,
+              cursor: 'pointer', fontSize: 11, color: '#888',
+              padding: '6px 4px', writingMode: 'vertical-rl', lineHeight: 1.4,
+            }}
+          >
+            피드백 펼치기 ▸
+          </button>
+        )}
       </div>
     </div>
   );

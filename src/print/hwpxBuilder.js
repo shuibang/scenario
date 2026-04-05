@@ -15,6 +15,7 @@ import JSZip from 'jszip';
 import { buildPrintModel } from './PrintModel';
 
 // ─── XML helpers ────────────────────────────────────────────────────────────
+const stripHtml = (s) => String(s ?? '').replace(/<[^>]+>/g, '');
 const esc = (s) => String(s ?? '')
   .replace(/&/g, '&amp;')
   .replace(/</g, '&lt;')
@@ -35,21 +36,66 @@ let _pid = 0;
 function resetIds() { _pid = 0; }
 
 /**
- * Build one HWPX paragraph element.
- * text:    string | '' (empty paragraph)
- * cid:     charShape id reference (0=normal, 1=title, 2=heading)
- * parid:   paraShape id reference (0=normal, 1=center, 2=heading, 3=dialogue)
- * sid:     style id reference
+ * HTML → 여러 hp:run 배열 (볼드/이탤릭/밑줄 인라인 서식 지원)
+ * charPr IDs: 0=일반, 4=볼드, 5=이탤릭, 6=밑줄
  */
-function para(text, { cid = 0, parid = 0, sid = 0 } = {}) {
+function htmlToRuns(html, baseCid = 0) {
+  if (!html) return `    <hp:run charPrIDRef="${baseCid}"><hp:t/></hp:run>`;
+  // <br> → 줄바꿈 문자 (HWPX는 hp:t 안에서 newline 지원 안 함 → 무시)
+  const text = html.replace(/<br\s*\/?>/gi, ' ');
+  // b/i/u 태그가 없으면 단일 run
+  if (!/<[biu][\s>]/i.test(text)) {
+    const plain = stripHtml(text);
+    const tEl = plain ? `<hp:t xml:space="preserve">${esc(plain)}</hp:t>` : `<hp:t/>`;
+    return `    <hp:run charPrIDRef="${baseCid}">${tEl}</hp:run>`;
+  }
+  // 태그 파싱 → run 분리
+  const tagRe = /<(\/?)([biu])[^>]*>/gi;
+  const stack = { b: 0, i: 0, u: 0 };
+  const runs = [];
+  let last = 0;
+  let match;
+  const flush = (raw) => {
+    const plain = stripHtml(raw);
+    if (!plain) return;
+    // 서식 우선순위: 볼드 > 이탤릭 > 밑줄 > 기본
+    const cid = stack.b > 0 ? 4
+              : stack.i > 0 ? 5
+              : stack.u > 0 ? 6
+              : baseCid;
+    runs.push(`    <hp:run charPrIDRef="${cid}"><hp:t xml:space="preserve">${esc(plain)}</hp:t></hp:run>`);
+  };
+  while ((match = tagRe.exec(text)) !== null) {
+    flush(text.slice(last, match.index));
+    last = match.index + match[0].length;
+    const closing = match[1] === '/';
+    const tag = match[2].toLowerCase();
+    stack[tag] = closing ? Math.max(0, stack[tag] - 1) : stack[tag] + 1;
+  }
+  flush(text.slice(last));
+  if (!runs.length) return `    <hp:run charPrIDRef="${baseCid}"><hp:t/></hp:run>`;
+  return runs.join('\n');
+}
+
+/**
+ * Build one HWPX paragraph element.
+ * text:    string | '' (empty) or HTML string when html=true
+ * cid:     charShape id reference (0=normal, 1=title, 2=heading, 3=bold-name)
+ * parid:   paraShape id reference
+ * sid:     style id reference
+ * html:    true → parse inline b/i/u tags into multiple runs
+ */
+function para(text, { cid = 0, parid = 0, sid = 0, html = false } = {}) {
   const pId = _pid++;
-  // Always include an explicit hp:run so HWP respects charPr height (e.g. 11pt)
-  // instead of falling back to its built-in default (10pt) for empty paragraphs.
-  const tEl = text ? `<hp:t xml:space="preserve">${esc(text)}</hp:t>` : `<hp:t/>`;
+  const runs = html
+    ? htmlToRuns(text, cid)
+    : (() => {
+        const plain = stripHtml(text || '');
+        const tEl = plain ? `<hp:t xml:space="preserve">${esc(plain)}</hp:t>` : `<hp:t/>`;
+        return `    <hp:run charPrIDRef="${cid}">${tEl}</hp:run>`;
+      })();
   return `  <hp:p id="${pId}" paraPrIDRef="${parid}" styleIDRef="${sid}" pageBreak="0" columnBreak="0" merged="0">
-    <hp:run charPrIDRef="${cid}">
-      ${tEl}
-    </hp:run>
+${runs}
   </hp:p>`;
 }
 
@@ -64,13 +110,12 @@ function dialoguePara(charName, content) {
   // Run 1 (bold): name + TWO tabs inside hp:t — tabs are children of hp:t (verified from real HWPX)
   // Run 2 (normal): speech text
   // paraPr 3: hc:left=0 (name flush left), hc:intent=dialogueTabHwp (continuation at speech position)
+  const speechRuns = htmlToRuns(content || '', 0);
   return `  <hp:p id="${pId}" paraPrIDRef="3" styleIDRef="3" pageBreak="0" columnBreak="0" merged="0">
     <hp:run charPrIDRef="3">
-      <hp:t xml:space="preserve">${esc(charName || '')}<hp:tab leader="0" type="1"/><hp:tab leader="0" type="1"/></hp:t>
+      <hp:t xml:space="preserve">${esc(stripHtml(charName || ''))}<hp:tab leader="0" type="1"/><hp:tab leader="0" type="1"/></hp:t>
     </hp:run>
-    <hp:run charPrIDRef="0">
-      <hp:t xml:space="preserve">${esc(content || '')}</hp:t>
-    </hp:run>
+${speechRuns}
   </hp:p>`;
 }
 
@@ -141,14 +186,15 @@ function xmlHeader(fontName, fontSizePt, dialogueTabHwp) {
 
   const fontLangs = ['HANGUL','LATIN','HANJA','JAPANESE','OTHER','SYMBOL','USER'];
 
-  // <hh:bold/> child element only — bold="1" attribute caused HWP to corrupt page orientation
-  const charPr = (id, height, bold) => `      <hh:charPr id="${id}" height="${height}" textColor="#000000"
+  // charPr: 참조 파일 구조 기반 (fontRef hangul="1" = 지정 폰트 사용)
+  // extra: 볼드/이탤릭/밑줄 자식 요소
+  const charPr = (id, height, extra = '') => `      <hh:charPr id="${id}" height="${height}" textColor="#000000" shadeColor="none"
           useFontSpace="0" useKerning="0" symMark="NONE" borderFillIDRef="1">
-        <hh:fontRef hangul="0" latin="0" hanja="0" japanese="0" other="0" symbol="0" user="0"/>
+        <hh:fontRef hangul="1" latin="1" hanja="1" japanese="1" other="1" symbol="1" user="1"/>
         <hh:ratio hangul="100" latin="100" hanja="100" japanese="100" other="100" symbol="100" user="100"/>
         <hh:spacing hangul="0" latin="0" hanja="0" japanese="0" other="0" symbol="0" user="0"/>
         <hh:relSz hangul="100" latin="100" hanja="100" japanese="100" other="100" symbol="100" user="100"/>
-        <hh:offset hangul="0" latin="0" hanja="0" japanese="0" other="0" symbol="0" user="0"/>${bold ? '\n        <hh:bold/>' : ''}
+        <hh:offset hangul="0" latin="0" hanja="0" japanese="0" other="0" symbol="0" user="0"/>${extra}
       </hh:charPr>`;
 
   // hc:intent (NOT hc:indent) is the correct HWPX element for first-line indent/outdent.
@@ -198,11 +244,14 @@ ${fontLangs.map(lang => `      <hh:fontface lang="${lang}" fontCnt="1">
     <hh:borderFills itemCnt="1">
 ${borderFill(1)}
     </hh:borderFills>
-    <hh:charProperties itemCnt="4">
-${charPr(0, normalH,  false)}
-${charPr(1, titleH,   true)}
-${charPr(2, headingH, true)}
-${charPr(3, normalH,  true)}
+    <hh:charProperties itemCnt="7">
+${charPr(0, normalH,  '')}
+${charPr(1, titleH,   '\n        <hh:bold/>')}
+${charPr(2, headingH, '\n        <hh:bold/>')}
+${charPr(3, normalH,  '\n        <hh:bold/>')}
+${charPr(4, normalH,  '\n        <hh:bold/>')}
+${charPr(5, normalH,  '\n        <hh:italic/>')}
+${charPr(6, normalH,  '\n        <hh:underline type="BOTTOM" shape="SOLID" color="#000000"/>')}
     </hh:charProperties>
     <hh:tabProperties itemCnt="1">
       <hh:tabPr id="0" autoTabLeft="0" autoTabRight="0">
@@ -235,20 +284,22 @@ ${paraPr(6, 'RIGHT',   0,   0,   0)}
 </hh:head>`;
 }
 
-// ─── secPr control paragraph (must be first paragraph in every section) ──────
-// Contains page setup, column layout, and lineseg metadata.
-// Structure verified from Skeleton.hwpx: hp:secPr lives inside hp:run inside hp:p.
-function secPrPara(margins) {
+// ─── secPr control paragraph ────────────────────────────────────────────────
+// resetPage=true: 이 구역부터 쪽번호 1로 리셋 (시놉시스/회차 첫 페이지)
+// resetPage=false: 연속 쪽번호 (표지 등)
+function secPrPara(margins, { resetPage = false } = {}) {
   const pId  = _pid++;
   const mTop = mmToHwp(margins.top);
   const mBot = mmToHwp(margins.bottom);
   const mLR  = mmToHwp(margins.left);
+  // page="1" → 이 구역 첫 쪽을 1로 강제 / page="0" → 이전 구역에서 연속
+  const pageNum = resetPage ? '1' : '0';
   return `  <hp:p id="${pId}" paraPrIDRef="0" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">
     <hp:run charPrIDRef="0">
       <hp:secPr id="" textDirection="HORIZONTAL" spaceColumns="1134" tabStop="8000"
                 outlineShapeIDRef="1" memoShapeIDRef="0" textVerticalWidthHead="0" masterPageCnt="0">
         <hp:grid lineGrid="0" charGrid="0" wonggojiFormat="0"/>
-        <hp:startNum pageStartsOn="BOTH" page="0" pic="0" tbl="0" equation="0"/>
+        <hp:startNum pageStartsOn="BOTH" page="${pageNum}" pic="0" tbl="0" equation="0"/>
         <hp:visibility hideFirstHeader="0" hideFirstFooter="0" hideFirstMasterPage="0"
                        border="SHOW_ALL" fill="SHOW_ALL" hideFirstPageNum="0"
                        hideFirstEmptyLine="0" showLineNumber="0"/>
@@ -285,7 +336,12 @@ function secPrPara(margins) {
         <hp:colPr id="" type="NEWSPAPER" layout="LEFT" colCount="1" sameSz="1" sameGap="0"/>
       </hp:ctrl>
     </hp:run>
-    <hp:run charPrIDRef="0"><hp:t/></hp:run>
+    <hp:run charPrIDRef="0">
+      <hp:ctrl>
+        <hp:pageNum pos="BOTTOM_CENTER" formatType="DIGIT" sideChar="-"/>
+      </hp:ctrl>
+      <hp:t/>
+    </hp:run>
     <hp:linesegarray>
       <hp:lineseg textpos="0" vertpos="0" vertsize="1100" textheight="1100" baseline="935"
                   spacing="660" horzpos="0" horzsize="42520" flags="393216"/>
@@ -310,9 +366,14 @@ function xmlSection(printModel, margins) {
 
   const roleLabel = { lead: '주인공', support: '조연', extra: '단역' };
 
+  // 표지는 쪽번호 없이, 나머지 섹션은 각각 1부터 리셋
+  // 섹션 구분: pageBreak 단락 대신 새 secPrPara 삽입 (쪽번호 리셋 포함)
   let firstSection = true;
   for (const sec of printModel.sections) {
-    if (!firstSection) pageBreak();
+    if (!firstSection) {
+      // 새 구역 시작 → secPrPara로 쪽번호 1부터 리셋
+      paras.push(secPrPara(margins, { resetPage: sec.type !== 'cover' }));
+    }
     firstSection = false;
 
     switch (sec.type) {
@@ -330,18 +391,18 @@ function xmlSection(printModel, margins) {
         break;
       }
       case 'synopsis': {
-        head('[ 시놉시스 ]');
-        empty();
-        if (sec.genre)  { head('장르');    normal(sec.genre);  empty(); }
-        if (sec.theme)  { head('주제');    normal(sec.theme);  empty(); }
-        if (sec.intent) { head('기획의도'); normal(sec.intent); empty(); }
+        if (sec.genre)  { head('장르');    empty(); normal(sec.genre);  empty(); }
+        if (sec.theme)  { head('주제');    empty(); normal(sec.theme);  empty(); }
+        if (sec.intent) { head('기획의도'); empty(); normal(sec.intent); empty(); }
         if (sec.story)  {
           head('줄거리');
+          empty();
           sec.story.split('\n').forEach(line => normal(line));
           empty();
         }
         if (sec.characters?.length) {
           head('인물설정');
+          empty();
           for (const c of sec.characters) {
             const meta = [c.gender, c.age, c.job, roleLabel[c.role] || c.role].filter(Boolean).join(' · ');
             normal(`${c.name}${meta ? '  (' + meta + ')' : ''}`);
@@ -364,7 +425,9 @@ function xmlSection(printModel, margins) {
               head(`${block.label || ''} ${block.content || ''}`.trim());
               break;
             case 'action':
-              if (block.content) block.content.split('\n').forEach(l => action(l));
+              if (block.content) block.content.split('\n').forEach(l =>
+                paras.push(para(l, { cid: 0, parid: 4, html: true }))
+              );
               break;
             case 'dialogue':
               dialogue(block.charName, block.content);

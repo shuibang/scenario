@@ -84,7 +84,7 @@ function CharacterForm({ initial, onSave, onCancel }) {
         </div>
         <div>
           <label className="block text-[10px] mb-1 uppercase tracking-wider" style={{ color: 'var(--c-text5)' }}>비중</label>
-          <select value={form.role} onChange={e => f('role', e.target.value)} style={inputStyle}>
+          <select value={form.role} onChange={e => f('role', e.target.value)} style={{ ...inputStyle, fontSize: '0.8125rem' }}>
             {Object.entries(ROLE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
         </div>
@@ -211,8 +211,8 @@ function CharacterUsage({ char, episodes, scenes, scriptBlocks }) {
                         : '';
                       const text = (b.content || '').trim();
                       return (
-                        <div key={b.id} className="text-xs rounded px-3 py-2"
-                          style={{ background: 'var(--c-tag)', borderLeft: '2px solid var(--c-accent)' }}>
+                        <div key={b.id} className="text-xs rounded py-2"
+                          style={{ background: 'var(--c-tag)', borderLeft: '2px solid var(--c-accent)', paddingLeft: 14, paddingRight: 12 }}>
                           {sceneLabel && (
                             <div className="text-[10px] mb-0.5" style={{ color: 'var(--c-text5)' }}>{sceneLabel.trim()}</div>
                           )}
@@ -252,8 +252,8 @@ function CharacterUsage({ char, episodes, scenes, scriptBlocks }) {
                   : s.location || '';
                 const isFirst = idx === 0;
                 return (
-                  <div key={s.id} className="text-xs rounded px-3 py-2"
-                    style={{ background: 'var(--c-tag)', borderLeft: `2px solid ${isFirst ? 'var(--c-accent)' : 'var(--c-accent2)'}` }}>
+                  <div key={s.id} className="text-xs rounded py-2"
+                    style={{ background: 'var(--c-tag)', borderLeft: `2px solid ${isFirst ? 'var(--c-accent)' : 'var(--c-accent2)'}`, paddingLeft: 14, paddingRight: 12 }}>
                     <div className="flex items-center gap-1.5">
                       {ep && (
                         <span className="text-[10px]" style={{ color: 'var(--c-accent2)' }}>
@@ -285,10 +285,12 @@ function CharacterIndexItem({ char, isSelected, onClick }) {
   return (
     <div
       onClick={onClick}
-      className="px-2 py-2 rounded cursor-pointer"
+      className="py-2 rounded cursor-pointer"
       style={{
         background: isSelected ? 'var(--c-active)' : 'transparent',
         borderLeft: `2px solid ${isSelected ? 'var(--c-accent)' : 'transparent'}`,
+        paddingLeft: isSelected ? 10 : 8,
+        paddingRight: 8,
       }}
     >
       <div className="text-sm font-medium truncate" style={{ color: isSelected ? 'var(--c-text)' : 'var(--c-text3)' }}>

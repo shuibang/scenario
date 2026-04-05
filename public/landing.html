@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>대본 작업실 — 드라마 작가를 위한 무료 대본 편집기</title>
+  <meta name="description" content="한국 드라마 작가를 위한 전문 대본 편집기. 설치 없이, 로그인 없이, 완전 무료. PDF·DOCX·HWPX 내보내기, 씬번호 자동 연동, 모바일 지원." />
+  <meta property="og:title" content="대본 작업실 — 드라마 작가를 위한 무료 대본 편집기" />
+  <meta property="og:description" content="한국 드라마 작가를 위한 전문 대본 편집기. 설치 없이, 로그인 없이, 완전 무료." />
+  <meta property="og:type" content="website" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #1a1a1a;
+      --panel:   #171717;
+      --header:  #111111;
+      --input:   #242424;
+      --card:    #1e1e1e;
+      --border:  #252525;
+      --border2: #2a2a2a;
+      --border3: #333333;
+      --text:    #e0e0e0;
+      --text2:   #bbbbbb;
+      --text3:   #888888;
+      --text4:   #666666;
+      --text5:   #555555;
+      --text6:   #444444;
+      --accent:  #5a5af5;
+      --accent2: #a78bfa;
+      --success: #22c55e;
+      --warn:    #f59e0b;
+    }
+
+    body {
+      font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    a { color: inherit; text-decoration: none; }
+    button { cursor: pointer; font-family: inherit; }
+    img { max-width: 100%; }
+
+    /* ── 헤더 ── */
+    .site-header {
+      position: sticky; top: 0; z-index: 100;
+      background: var(--header);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px; height: 52px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .logo { font-weight: 700; font-size: 16px; color: var(--accent); letter-spacing: 0.05em; }
+    .header-btns { display: flex; gap: 8px; }
+    .btn-outline {
+      padding: 5px 14px; border-radius: 6px; font-size: 12px;
+      border: 1px solid var(--border3); background: transparent;
+      color: var(--text3);
+    }
+    .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-primary {
+      padding: 5px 14px; border-radius: 6px; font-size: 12px;
+      background: var(--accent); color: #fff; border: none;
+    }
+    .btn-primary:hover { background: #6a6aff; }
+
+    /* ── 섹션 공통 ── */
+    .section { padding: 64px 24px; }
+    .section-inner { max-width: 1080px; margin: 0 auto; }
+    .section-inner-sm { max-width: 720px; margin: 0 auto; }
+    .section-inner-md { max-width: 800px; margin: 0 auto; }
+
+    .section-label {
+      text-align: center; font-size: 11px; color: var(--accent);
+      font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    .section-title {
+      text-align: center; font-size: clamp(20px, 4vw, 28px);
+      font-weight: 700; color: var(--text); margin-bottom: 32px;
+    }
+
+    /* ── 히어로 ── */
+    .hero {
+      padding: 72px 32px 56px;
+      max-width: 720px; margin: 0 auto; text-align: center;
+      animation: fadeUp 0.7s ease both;
+    }
+    .hero-badge {
+      display: inline-block; background: var(--accent); color: #fff;
+      font-size: 11px; font-weight: 600; padding: 3px 12px;
+      border-radius: 20px; margin-bottom: 20px; letter-spacing: 0.05em;
+    }
+    .hero h1 {
+      font-size: clamp(28px, 5vw, 48px); font-weight: 800;
+      line-height: 1.2; margin-bottom: 18px; color: var(--text);
+    }
+    .hero p {
+      font-size: clamp(14px, 2vw, 17px); color: var(--text4);
+      line-height: 1.75; margin-bottom: 32px;
+    }
+    .hero-cta { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+    .btn-hero-primary {
+      padding: 13px 28px; border-radius: 8px; font-size: 15px; font-weight: 700;
+      background: var(--accent); color: #fff; border: none;
+    }
+    .btn-hero-primary:hover { background: #6a6aff; }
+    .btn-hero-secondary {
+      padding: 13px 28px; border-radius: 8px; font-size: 15px; font-weight: 600;
+      background: transparent; color: var(--text3); border: 1px solid var(--border3);
+    }
+    .btn-hero-secondary:hover { border-color: var(--accent); color: var(--accent); }
+    .hero-note { font-size: 11px; color: var(--text6); margin-top: 12px; }
+
+    /* ── 기능 그리드 ── */
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 18px; margin-top: 32px;
+    }
+    .feature-card {
+      background: var(--card); border: 1px solid var(--border2);
+      border-radius: 10px; padding: 24px 20px;
+    }
+    .feature-icon { font-size: 26px; margin-bottom: 10px; }
+    .feature-title { font-size: 14px; font-weight: 700; margin-bottom: 8px; color: var(--text); }
+    .feature-desc { font-size: 13px; color: var(--text4); line-height: 1.7; }
+
+    /* ── 기타 기능 ── */
+    .extra-section {
+      background: var(--card);
+      border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+      padding: 40px 24px;
+    }
+    .extra-list { list-style: none; display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+    .extra-list li { font-size: 13px; color: var(--text3); display: flex; gap: 8px; align-items: flex-start; }
+    .extra-dot { color: var(--accent); flex-shrink: 0; margin-top: 2px; }
+
+    /* ── 만든 이유 ── */
+    .story-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 36px 40px;
+    }
+    .story-card h2 { font-size: 17px; font-weight: 700; margin-bottom: 18px; color: var(--text2); }
+    .story-p { font-size: 14px; color: var(--text3); line-height: 1.85; margin-bottom: 14px; }
+
+    /* ── 스크린샷 ── */
+    .screenshot-wrap {
+      position: relative; display: flex; align-items: flex-start;
+      justify-content: center;
+    }
+    .desktop-frame {
+      flex: 0 0 auto; width: min(780px, 85vw);
+      border-radius: 10px; overflow: hidden;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.35);
+      border: 1px solid var(--border);
+    }
+    .frame-bar {
+      height: 28px; background: var(--header);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; padding: 0 12px; gap: 6px;
+    }
+    .mac-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .mobile-frame {
+      flex: 0 0 auto; width: clamp(110px, 13vw, 170px);
+      margin-left: clamp(-55px, -6.5vw, -85px);
+      margin-top: clamp(28px, 5vw, 56px);
+      border-radius: 22px; overflow: hidden;
+      box-shadow: 0 16px 48px rgba(0,0,0,0.4);
+      border: 1px solid var(--border); background: #111;
+      position: relative; z-index: 2;
+    }
+    .mobile-notch {
+      height: 16px; background: #111;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .mobile-notch-bar { width: 44px; height: 7px; background: #222; border-radius: 4px; }
+
+    /* ── 비교표 ── */
+    .compare-wrap { overflow-x: auto; margin-top: 32px; border-radius: 10px; border: 1px solid var(--border); }
+    .compare-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 560px; }
+    .compare-table thead tr { background: var(--card); }
+    .compare-table th {
+      padding: 12px 16px; font-weight: 600;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .compare-table th:first-child { text-align: left; font-size: 11px; color: var(--text3); }
+    .compare-table th:not(:first-child) { text-align: center; }
+    .compare-table th:nth-child(2) { color: var(--accent); }
+    .compare-table td {
+      padding: 11px 16px; border-bottom: 1px solid var(--border2);
+      text-align: center;
+    }
+    .compare-table td:first-child { text-align: left; color: var(--text3); font-weight: 500; font-size: 12px; }
+    .compare-table tr:nth-child(even) { background: var(--card); }
+    .val-yes { color: var(--success); font-weight: 600; }
+    .val-no  { color: var(--text6); }
+    .val-warn { color: var(--warn); }
+    .val-our { color: var(--accent); font-weight: 600; }
+    .compare-note { font-size: 11px; color: var(--text6); margin-top: 12px; text-align: center; }
+
+    /* ── 가격 ── */
+    .price-section {
+      background: var(--card);
+      border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+      padding: 64px 24px; text-align: center;
+    }
+    .price-box {
+      display: inline-block; margin-top: 28px;
+      padding: 36px 56px; background: var(--bg);
+      border: 2px solid var(--accent); border-radius: 16px;
+    }
+    .price-num { font-size: 48px; font-weight: 800; color: var(--accent); line-height: 1; }
+    .price-desc { font-size: 13px; color: var(--text4); margin-top: 12px; line-height: 1.9; }
+    .price-note {
+      margin-top: 18px; padding: 10px 14px;
+      background: var(--input); border-radius: 8px;
+      font-size: 12px; color: var(--text5);
+    }
+
+    /* ── CTA ── */
+    .cta-section { padding: 72px 24px; text-align: center; }
+    .cta-section h2 {
+      font-size: clamp(22px, 4vw, 32px); font-weight: 700;
+      margin-bottom: 14px; color: var(--text);
+    }
+    .cta-section p { font-size: 14px; color: var(--text4); margin-bottom: 32px; }
+    .cta-btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+    /* ── 푸터 ── */
+    footer {
+      background: var(--header); border-top: 1px solid var(--border);
+      padding: 24px; text-align: center; font-size: 12px; color: var(--text6);
+    }
+    footer p + p { margin-top: 6px; }
+
+    /* ── 애니메이션 ── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .reveal {
+      opacity: 0; transform: translateY(28px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+
+    /* ── 모바일 ── */
+    @media (max-width: 600px) {
+      .story-card { padding: 24px 20px; }
+      .price-box { padding: 28px 32px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 헤더 -->
+  <header class="site-header">
+    <span class="logo">대본 작업실</span>
+    <div class="header-btns">
+      <a href="https://scenario-876h.vercel.app/"><button class="btn-outline">로그인</button></a>
+      <a href="https://scenario-876h.vercel.app/"><button class="btn-primary">바로 시작하기</button></a>
+    </div>
+  </header>
+
+  <!-- 히어로 -->
+  <div class="hero">
+    <span class="hero-badge">무료 베타 공개 중</span>
+    <h1>드라마 대본,<br>이제 편하게, 어디서든</h1>
+    <p>
+      한국 드라마 작가를 위해 직접 만든 전문 대본 편집기.<br>
+      설치 없이, 로그인 없이, 완전 무료로 지금 바로 시작하세요.
+    </p>
+    <div class="hero-cta">
+      <a href="https://scenario-876h.vercel.app/"><button class="btn-hero-primary">로그인 없이 시작하기 →</button></a>
+      <a href="https://scenario-876h.vercel.app/"><button class="btn-hero-secondary">구글 로그인 (자동저장)</button></a>
+    </div>
+    <p class="hero-note">로그인 없이도 이 기기에 자동저장 — 구글 로그인 시 어디서든 이어서 작업</p>
+  </div>
+
+  <!-- 스크린샷 -->
+  <div class="reveal section" style="padding-top: 0;">
+    <div class="section-inner">
+      <p class="section-label" style="margin-bottom: 24px;">실제 서비스 화면</p>
+      <div class="screenshot-wrap">
+        <div class="desktop-frame">
+          <div class="frame-bar">
+            <span class="mac-dot" style="background:#ff5f57;"></span>
+            <span class="mac-dot" style="background:#febc2e;"></span>
+            <span class="mac-dot" style="background:#28c840;"></span>
+            <div style="flex:1; margin-left:12px; height:16px; background:var(--input); border-radius:4px; max-width:280px;"></div>
+          </div>
+          <img src="/screenshots/desktop.png" alt="대본 작업실 데스크톱 화면" loading="lazy" style="width:100%; display:block;" />
+        </div>
+        <div class="mobile-frame">
+          <div class="mobile-notch"><div class="mobile-notch-bar"></div></div>
+          <img src="/screenshots/mobile.jpg" alt="대본 작업실 모바일 화면" loading="lazy" style="width:100%; display:block;" />
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 만든 이유 -->
+  <div class="reveal section" style="padding: 56px 24px;">
+    <div class="section-inner-sm">
+      <div class="story-card">
+        <h2>대본 쓰다 불편해서 직접 만들었어요</h2>
+        <p class="story-p">안녕하세요, 드라마 작가 지망생이자 개발자입니다.</p>
+        <p class="story-p">대본을 쓰면서 늘 불편했던 것들이 있었어요. 수정할 때마다 지문 속 씬 번호가 밀리진 않았는지 하나하나 고치고 확인하고… Final Draft는 너무 비싸고, Scrivener는 태그 문법을 배워야 하고, 따로 구입해야 하는 아이패드 버전에선 아예 적용도 안 되고.</p>
+        <p class="story-p" style="margin-bottom:0;">그래서 직접 만들었어요. 현재 베타 버전입니다. 버그나 불편한 점 피드백 주시면 빠르게 반영할게요!</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 주요 기능 -->
+  <section class="reveal section">
+    <div class="section-inner">
+      <h2 class="section-title">주요 기능</h2>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <div class="feature-icon">🔗</div>
+          <h3 class="feature-title">회상 씬 번호 자동 연동</h3>
+          <p class="feature-desc">지문에서 씬을 참조할 때, 씬 순서가 바뀌면 그 번호도 실시간으로 자동으로 따라 바뀝니다. Final Draft도, Scrivener도 지원하지 않는 기능입니다.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">✍️</div>
+          <h3 class="feature-title">버튼 + 단축키로 바로 쓰기</h3>
+          <p class="feature-desc">씬 헤딩, 지문, 대사, 씬 연결 — Ctrl+1/2/3으로 바로 전환됩니다. 태그 문법을 외울 필요 없고, 영어 표기도 단축키로 입력할 수 있어요.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🇰🇷</div>
+          <h3 class="feature-title">한국 대본 포맷 특화</h3>
+          <p class="feature-desc">공모전 당선 서식·드라마 대본집 기준의 "인물(여백)대사" 형식을 구현했습니다. PDF, DOCX, HWPX 내보내기를 지원합니다.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📱</div>
+          <h3 class="feature-title">모바일·태블릿 완벽 지원</h3>
+          <p class="feature-desc">아이패드, 폰에서도 편집 가능합니다. 구글 로그인만 하면 구글 드라이브에 자동저장됩니다. 언제 어디서나 이어서 쓰세요.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔒</div>
+          <h3 class="feature-title">AI 없음 — 단순 편집기</h3>
+          <p class="feature-desc">내 이야기가 어딘가에 쌓이는 찜찜함 없이, 온전히 내 것으로만 남아있어요. 편집 기능에만 집중했습니다.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📦</div>
+          <h3 class="feature-title">표지·시놉시스·구조 통합</h3>
+          <p class="feature-desc">표지, 시놉시스, 인물 관리, 씬리스트, 트리트먼트, 구조 점검까지 — 하나의 작업실에서 대본 작업의 전 과정을 관리하세요.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 기타 기능 -->
+  <div class="reveal extra-section">
+    <div class="section-inner-sm">
+      <h2 style="font-size:15px; font-weight:700; color:var(--text);">그 외 기능</h2>
+      <ul class="extra-list">
+        <li><span class="extra-dot">•</span>로그인 없이도 이 기기에 자동저장 (구글 로그인 시 어디서든 이어서 작업)</li>
+        <li><span class="extra-dot">•</span>다크모드 지원 (현재 기기 설정과 자동 연동)</li>
+        <li><span class="extra-dot">•</span>검토 링크 공유 기능 (읽기 전용)</li>
+        <li><span class="extra-dot">•</span>협업·공유 기능 예정 (베타버전 미지원)</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 비교표 -->
+  <section class="reveal section">
+    <div class="section-inner">
+      <h2 class="section-title">타 프로그램 비교</h2>
+      <div class="compare-wrap">
+        <table class="compare-table">
+          <thead>
+            <tr>
+              <th></th>
+              <th>대본 작업실</th>
+              <th>Final Draft</th>
+              <th>Scrivener</th>
+              <th>WriterDuet</th>
+              <th>Arc Studio</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>가격</td>
+              <td class="val-our">무료</td>
+              <td class="val-no">약 37만원 ($249)</td>
+              <td class="val-no">₩88,000~₩141,000</td>
+              <td class="val-no">월 ₩7,500~₩15,000</td>
+              <td class="val-no">무료(2편)~연 ₩149,000</td>
+            </tr>
+            <tr>
+              <td>한국어 포맷</td>
+              <td class="val-yes">✅</td><td class="val-no">❌</td><td class="val-no">❌</td><td class="val-no">❌</td><td class="val-no">❌</td>
+            </tr>
+            <tr>
+              <td>HWPX 내보내기</td>
+              <td class="val-yes">✅</td><td class="val-no">❌</td><td class="val-no">❌</td><td class="val-no">❌</td><td class="val-no">❌</td>
+            </tr>
+            <tr>
+              <td>씬번호 실시간 연동</td>
+              <td class="val-yes">✅</td><td class="val-no">❌</td><td class="val-warn">△</td><td class="val-no">❌</td><td class="val-no">❌</td>
+            </tr>
+            <tr>
+              <td>로그인 없이 사용</td>
+              <td class="val-yes">✅</td><td class="val-no">❌</td><td class="val-no">❌</td><td class="val-no">❌</td><td class="val-no">❌</td>
+            </tr>
+            <tr>
+              <td>모바일 편집</td>
+              <td class="val-yes">✅</td><td class="val-no">❌</td><td class="val-no">❌</td><td class="val-yes">✅</td><td class="val-warn">△ (iOS만)</td>
+            </tr>
+            <tr>
+              <td>시놉시스 통합편집</td>
+              <td class="val-yes">✅</td><td class="val-warn">△</td><td class="val-no">❌</td><td class="val-no">❌</td><td class="val-no">❌</td>
+            </tr>
+            <tr>
+              <td>인물 관리 패널</td>
+              <td class="val-yes">✅</td><td class="val-no">❌</td><td class="val-warn">△</td><td class="val-no">❌</td><td class="val-warn">△</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="compare-note">가격 기준: 2026년 기준, 환율 1,500원/USD 적용. Final Draft 정가 $249 / Scrivener 데스크톱 ₩88,000·번들 ₩140,800 / WriterDuet 월 $5~$9.92 / Arc Studio 무료(2편)~연 $99.</p>
+    </div>
+  </section>
+
+  <!-- 가격 -->
+  <div class="reveal price-section">
+    <h2 class="section-title" style="margin-bottom:0;">가격</h2>
+    <div class="price-box">
+      <div class="price-num">무료</div>
+      <div class="price-desc">로그인도, 설치도, 결제도 없어요.<br>광고만 조금 달았어요.</div>
+      <div class="price-note">추후 광고 제거 + 추가 기능을 담은 유료 앱을 플레이스토어/앱스토어에 출시 예정</div>
+    </div>
+  </div>
+
+  <!-- CTA -->
+  <div class="reveal cta-section">
+    <h2>지금 바로 시작해보세요</h2>
+    <p>설치 없이, 로그인 없이, 브라우저에서 바로 시작할 수 있어요.</p>
+    <div class="cta-btns">
+      <a href="https://scenario-876h.vercel.app/"><button class="btn-hero-primary">무료로 시작하기 →</button></a>
+      <a href="https://scenario-876h.vercel.app/"><button class="btn-hero-secondary">구글 로그인 (자동저장)</button></a>
+    </div>
+  </div>
+
+  <!-- 푸터 -->
+  <footer>
+    <p>대본 작업실 — 드라마 작가를 위한 무료 대본 편집기</p>
+    <p>버그 제보 및 피드백은 서비스 내 QnA 또는 이메일로 알려주세요</p>
+  </footer>
+
+  <script>
+    // 스크롤 리빌
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+  </script>
+</body>
+</html>

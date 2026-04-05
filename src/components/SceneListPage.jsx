@@ -344,6 +344,7 @@ export default function SceneListPage() {
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState('');
   const [helpOpen, setHelpOpen] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
   const helpRef = useRef(null);
 
   useEffect(() => {
@@ -460,6 +461,11 @@ export default function SceneListPage() {
             onClick={() => setImporting(true)}
             style={{ padding: '3px 10px', borderRadius: 4, fontSize: 11, background: 'transparent', color: 'var(--c-text3)', border: '1px solid var(--c-border3)', cursor: 'pointer' }}
           >대본으로 가져오기</button>
+          <button
+            onClick={() => setFullscreen(true)}
+            title="전체화면 보기"
+            style={{ padding: '3px 8px', borderRadius: 4, fontSize: 13, background: 'transparent', color: 'var(--c-text5)', border: '1px solid var(--c-border3)', cursor: 'pointer', lineHeight: 1 }}
+          >⤢</button>
         </div>
       </div>
 
@@ -471,6 +477,69 @@ export default function SceneListPage() {
           </span>
           <button onClick={handleImportToScript} className="px-3 py-1 rounded text-xs text-white" style={{ background: 'var(--c-accent)', border: 'none', cursor: 'pointer' }}>확인</button>
           <button onClick={() => setImporting(false)} className="px-3 py-1 rounded text-xs" style={{ color: 'var(--c-text4)', border: '1px solid var(--c-border3)', background: 'transparent', cursor: 'pointer' }}>취소</button>
+        </div>
+      )}
+
+      {/* 전체화면 오버레이 */}
+      {fullscreen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'var(--c-bg)', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: '1px solid var(--c-border2)', flexShrink: 0 }}>
+            <span className="text-sm font-medium" style={{ color: 'var(--c-text2)' }}>씬리스트</span>
+            <select value={epId || ''} onChange={e => setSelectedEpId(e.target.value)}
+              className="text-xs rounded outline-none px-2 py-1"
+              style={{ background: 'var(--c-input)', color: 'var(--c-text2)', border: '1px solid var(--c-border3)' }}>
+              {projectEpisodes.map(ep => (
+                <option key={ep.id} value={ep.id}>{ep.number}회 {ep.title || ''}</option>
+              ))}
+            </select>
+            <span className="text-xs" style={{ color: 'var(--c-text6)' }}>{epScenes.length}개 씬</span>
+            <button onClick={() => setFullscreen(false)}
+              style={{ marginLeft: 'auto', padding: '3px 10px', borderRadius: 4, fontSize: 12, background: 'transparent', color: 'var(--c-text4)', border: '1px solid var(--c-border3)', cursor: 'pointer' }}>
+              닫기
+            </button>
+          </div>
+          <div style={{ flex: 1, overflow: 'auto', position: 'relative' }}>
+            <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 24, pointerEvents: 'none', background: 'linear-gradient(to right, transparent, var(--c-bg))', zIndex: 2 }} />
+            {epScenes.length === 0 ? (
+              <div className="py-16 text-center text-sm" style={{ color: 'var(--c-text5)' }}>씬이 없습니다.</div>
+            ) : (
+              <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%', minWidth: '480px' }}>
+                <colgroup>
+                  <col style={{ width: '25%' }} />
+                  <col style={{ width: '35%' }} />
+                  <col style={{ width: '25%' }} />
+                  <col style={{ width: '15%' }} />
+                </colgroup>
+                <thead>
+                  <tr style={{ background: 'var(--c-panel)', borderBottom: '2px solid var(--c-border2)', position: 'sticky', top: 0, zIndex: 1 }}>
+                    {HEADERS.map(h => (
+                      <th key={h} className="px-3 py-2 text-left font-semibold text-xs" style={{ color: 'var(--c-text4)', whiteSpace: 'nowrap' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {epScenes.map((scene, idx) => (
+                    <SceneListRow
+                      key={scene.id} scene={scene} idx={idx}
+                      blockLabel={blockLabelMap.get(scene.id)}
+                      autoCharacters={sceneCharacters[scene.id] || ''}
+                      projectChars={projectChars}
+                      onContentChange={v => handleContentChange(scene.id, v)}
+                      onMetaChange={meta => handleMetaChange(scene.id, meta)}
+                      onCharsChange={ids => handleCharsChange(scene.id, ids)}
+                      onNavigate={() => { handleNavigate(scene); setFullscreen(false); }}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <div className="px-6 py-3">
+              <button onClick={handleAddScene} className="w-full py-2 rounded text-sm"
+                style={{ color: 'var(--c-text4)', border: '1px dashed var(--c-border3)', background: 'transparent', cursor: 'pointer' }}>
+                + 씬 추가
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -490,8 +559,8 @@ export default function SceneListPage() {
         ) : (
           <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%', minWidth: '480px' }}>
             <colgroup>
-              <col style={{ width: '30%' }} />   {/* 씬번호 + 장소 */}
-              <col style={{ width: '30%' }} />   {/* 내용 */}
+              <col style={{ width: '25%' }} />   {/* 씬번호 + 장소 */}
+              <col style={{ width: '35%' }} />   {/* 내용 */}
               <col style={{ width: '25%' }} />   {/* 등장인물 */}
               <col style={{ width: '15%' }} />   {/* 비고 */}
             </colgroup>

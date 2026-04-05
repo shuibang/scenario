@@ -158,11 +158,34 @@ function TagPicker({ scene, dispatch, onClose }) {
   );
 }
 
-function EpisodeSceneList({ ep, scenes, scriptBlocks, dispatch, compact = false, selectedSceneId, onSelectScene }) {
+function EpisodeSceneList({ ep, scenes, scriptBlocks, characters, episodes, dispatch, compact = false, selectedSceneId, onSelectScene }) {
   const epScenes = useMemo(() =>
     scenes.filter(s => s.episodeId === ep.id).sort((a, b) => a.sceneSeq - b.sceneSeq),
     [scenes, ep.id]
   );
+
+  // 씬별 첫등장 인물 계산
+  const firstAppearMap = useMemo(() => {
+    const map = {}; // sceneId → charName[]
+    const epMap = {};
+    for (const ep of episodes) epMap[ep.id] = ep;
+    for (const char of characters) {
+      const appeared = scenes
+        .filter(s => (s.characterIds || []).includes(char.id))
+        .sort((a, b) => {
+          const epA = a.episodeId ? (epMap[a.episodeId]?.number ?? 999) : 999;
+          const epB = b.episodeId ? (epMap[b.episodeId]?.number ?? 999) : 999;
+          if (epA !== epB) return epA - epB;
+          return (a.sceneSeq ?? 0) - (b.sceneSeq ?? 0);
+        });
+      if (!appeared.length) continue;
+      const firstId = appeared[0].id;
+      if (!map[firstId]) map[firstId] = [];
+      const name = char.lastName ? `${char.lastName}${char.firstName || ''}` : (char.name || char.firstName || '');
+      if (name) map[firstId].push(name);
+    }
+    return map;
+  }, [characters, episodes, scenes]);
   const [tagPickerSceneId, setTagPickerSceneId] = useState(null);
   useEffect(() => {
     if (!tagPickerSceneId) return;
@@ -259,10 +282,20 @@ function EpisodeSceneList({ ep, scenes, scriptBlocks, dispatch, compact = false,
                 onDragLeave={handleDragLeave}
                 onDrop={(e) => handleDrop(e, scene)}
               >
-                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => handleSceneClick(scene)}>
+                <div className="flex-1 min-w-0">
                   <div className={compact ? 'text-xs font-bold' : 'text-sm font-bold'} style={{ color: 'var(--c-text)' }}>
                     {label || (snb?.label || '')}
                   </div>
+                  {firstAppearMap[scene.id]?.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {firstAppearMap[scene.id].map(name => (
+                        <span key={name} className="text-[9px] px-1.5 py-0.5 rounded font-semibold"
+                          style={{ background: 'var(--c-accent)', color: '#fff' }}>
+                          [첫등장] {name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   {(meta.dialogue > 0 || meta.action > 0) && (
                     <div className="text-[10px] mt-0.5" style={{ color: 'var(--c-text6)' }}>
                       {meta.action > 0 && <span className="mr-2">지문 {meta.action}</span>}
@@ -290,6 +323,16 @@ function EpisodeSceneList({ ep, scenes, scriptBlocks, dispatch, compact = false,
                       T
                     </span>
                   )}
+                  <button
+                    title="대본으로 이동"
+                    onClick={e => { e.stopPropagation(); handleSceneClick(scene); }}
+                    style={{
+                      fontSize: 10, padding: '2px 6px', borderRadius: 4,
+                      border: '1px solid var(--c-border3)', background: 'var(--c-tag)',
+                      color: 'var(--c-text4)', cursor: 'pointer', lineHeight: 1.4,
+                      whiteSpace: 'nowrap', flexShrink: 0,
+                    }}
+                  >바로가기</button>
                   <button
                     title="구조지침 태그 추가"
                     onClick={e => { e.stopPropagation(); e.preventDefault(); setTagPickerSceneId(v => v === scene.id ? null : scene.id); }}
@@ -357,7 +400,10 @@ function BlockListView({ episodes, scriptBlocks, scenes, viewMode }) {
                               {b.charName || b.characterName}
                             </div>
                           )}
-                          {b.content || <span style={{ opacity: 0.4, fontStyle: 'italic' }}>내용 없음</span>}
+                          {b.content
+                            ? <span dangerouslySetInnerHTML={{ __html: b.content }} />
+                            : <span style={{ opacity: 0.4, fontStyle: 'italic' }}>내용 없음</span>
+                          }
                         </div>
                       ))}
                     </div>
@@ -375,7 +421,7 @@ function BlockListView({ episodes, scriptBlocks, scenes, viewMode }) {
 // ─── StructurePage ────────────────────────────────────────────────────────────
 export default function StructurePage() {
   const { state, dispatch } = useApp();
-  const { scenes, episodes, scriptBlocks, activeProjectId, activeEpisodeId } = state;
+  const { scenes, episodes, scriptBlocks, characters, activeProjectId, activeEpisodeId } = state;
 
   const ALL = '__all__';
   const [selectedSceneId, setSelectedSceneId] = useState(null);
@@ -511,6 +557,8 @@ export default function StructurePage() {
                     ep={ep}
                     scenes={scenes}
                     scriptBlocks={scriptBlocks}
+                    characters={characters}
+                    episodes={projectEpisodes}
                     dispatch={dispatch}
                     compact
                     selectedSceneId={selectedSceneId}
@@ -528,6 +576,8 @@ export default function StructurePage() {
               ep={selectedEp || projectEpisodes[0]}
               scenes={scenes}
               scriptBlocks={scriptBlocks}
+              characters={characters}
+              episodes={projectEpisodes}
               dispatch={dispatch}
               selectedSceneId={selectedSceneId}
               onSelectScene={handleSelectScene}
