@@ -193,7 +193,7 @@ function pageNumFooter(dp) {
 }
 
 // ─── Build DOCX sections array ────────────────────────────────────────────────
-function buildDocxSections(printModel, dp) {
+function buildDocxSections(printModel, dp, { hancom = false } = {}) {
   const docxSections = [];
 
   for (const section of printModel.sections) {
@@ -220,14 +220,14 @@ function buildDocxSections(printModel, dp) {
       continue;
     }
 
-    // All other sections get page number footer (reset to 1)
-    const footer = pageNumFooter(dp);
+    // 쪽번호: 한글 출력은 footer 없음 (hancom 호환성)
+    const footer = hancom ? null : pageNumFooter(dp);
 
     if (section.type === 'synopsis') {
       const addBlock = (label, text) => {
         if (!text) return;
         paras.push(para(label, dp, { bold: true }));
-        paras.push(blankPara(dp)); // 항목명과 내용 사이 줄바꿈
+        if (!hancom) paras.push(blankPara(dp)); // 항목명과 내용 사이 줄바꿈 (한글은 생략)
         text.split('\n').forEach(l => paras.push(para(l, dp)));
         paras.push(blankPara(dp));
       };
@@ -236,6 +236,7 @@ function buildDocxSections(printModel, dp) {
       addBlock('기획의도', section.intent);
       if (section.characters.length) {
         paras.push(para('인물설정', dp, { bold: true }));
+        if (!hancom) paras.push(blankPara(dp)); // 인물설정 뒤 줄바꿈 통일
         section.characters.forEach(c => {
           // Format: 이름 (성별 / 나이) 직업
           const agePart = [c.gender, c.age].filter(Boolean).join(' / ');
@@ -251,7 +252,7 @@ function buildDocxSections(printModel, dp) {
     else if (section.type === 'episode') {
       const epTitle = `${section.episodeNumber}회 ${section.episodeTitle}`.trim();
       paras.push(para(epTitle, dp, { bold: true, center: true }));
-      paras.push(blankPara(dp));
+      if (!hancom) paras.push(blankPara(dp)); // 회차표기 뒤 빈줄 (한글은 생략)
 
       let prevBlock = null;
       for (const block of section.blocks) {
@@ -295,7 +296,7 @@ function buildDocxSections(printModel, dp) {
       });
     }
 
-    docxSections.push({
+    const sectionDef = {
       properties: {
         type: SectionType.NEXT_PAGE,
         page: {
@@ -304,9 +305,10 @@ function buildDocxSections(printModel, dp) {
           pageNumbers: { start: 1, formatType: NumberFormat.DECIMAL },
         },
       },
-      footers: { default: footer },
       children: paras,
-    });
+    };
+    if (footer) sectionDef.footers = { default: footer };
+    docxSections.push(sectionDef);
   }
 
   return docxSections;
@@ -319,7 +321,7 @@ function buildDocxSections(printModel, dp) {
  * Builds and downloads a .docx file.
  * onStep(label) is called at each stage for UI progress tracking.
  */
-export async function exportDocx(appState, selections, { onStep = () => {} } = {}) {
+export async function exportDocx(appState, selections, { onStep = () => {}, hancom = false } = {}) {
   console.log('[printDocx] export start — selections:', selections);
   let printModel, sections, blob;
   try {
@@ -330,7 +332,7 @@ export async function exportDocx(appState, selections, { onStep = () => {} } = {
 
     onStep('레이아웃');
     const dp      = presetToDocxProps(preset);
-    sections      = buildDocxSections(printModel, dp);
+    sections      = buildDocxSections(printModel, dp, { hancom });
     console.log('[printDocx] docxSections built:', sections.length, 'sections');
 
     if (!sections.length) {

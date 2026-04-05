@@ -62,7 +62,7 @@ function makeStyles(preset, metrics) {
       color:         '#000',
       paddingTop:    margins.top    * MM_TO_PT,
       paddingRight:  margins.right  * MM_TO_PT,
-      paddingBottom: (margins.bottom + 8) * MM_TO_PT,  // +8mm for page number area
+      paddingBottom: margins.bottom * MM_TO_PT,
       paddingLeft:   margins.left   * MM_TO_PT,
     },
     // ── cover
@@ -138,9 +138,8 @@ function htmlToPdfChildren(html) {
 // Receives either a single token or a pre-grouped text (for multi-line action/body).
 function TokenEl({ token, text, S }) {
   const content = text ?? token.text;
-  // rawHtml: 서식 포함 HTML (첫 토큰만, 여러 줄 wrap 전 원문). text가 넘어오면 이미 plain.
-  const htmlSource = (text == null && token.rawHtml) ? token.rawHtml : content;
-  const richContent = htmlToPdfChildren(htmlSource);
+  // content는 renderList에서 rawHtml 또는 plain text로 전달됨
+  const richContent = htmlToPdfChildren(content);
   switch (token.kind) {
     case 'blank':
       return <View style={S.blank} />;
@@ -212,13 +211,15 @@ function PdfPage({ tokens, pageNum, showPageNum, S }) {
       }
       const fullyOnPage = onPage >= tok.blockLineCount - 1;
       if (fullyOnPage) absorbedKinds.add(tok.kind);
+      // fullyOnPage: rawHtml 있으면 서식 적용, 없으면 blockText(plain)
       renderList.push({
         kind:  tok.kind,
-        text:  fullyOnPage ? (tok.blockText ?? tok.text) : tok.text,
+        text:  fullyOnPage ? (tok.rawHtml ?? tok.blockText ?? tok.text) : tok.text,
         token: tok,
       });
     } else {
-      renderList.push({ kind: tok.kind, text: tok.text, token: tok });
+      // 단일 줄 또는 isFirstOfBlock 미정의: rawHtml 있으면 서식 적용
+      renderList.push({ kind: tok.kind, text: tok.rawHtml ?? tok.text, token: tok });
     }
   }
 
