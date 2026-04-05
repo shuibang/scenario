@@ -107,7 +107,7 @@ export default function BiographyPage() {
               <div className="text-xs" style={{ color: 'var(--c-text5)' }}>인물이력서</div>
             </div>
 
-            <div className="space-y-2">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
               {items.map(it => (
                 <div key={it.id} className="flex gap-2 items-start">
                   <input value={it.year} onChange={e => updateItem(it.id, 'year', e.target.value)}

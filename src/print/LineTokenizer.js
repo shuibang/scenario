@@ -33,7 +33,7 @@ export function getLayoutMetrics(preset) {
   const contentWpt = contentWmm * PT_PER_MM;   // ≈ 425 pt
   const contentHpt = contentHmm * PT_PER_MM;   // ≈ 658 pt
   const lineHpt    = fontSize * lineHeight;     // ≈ 17.6 pt
-  const linesPerPage = Math.floor(contentHpt / lineHpt) - 1; // -1 안전 여유 (하단 잘림 방지)
+  const linesPerPage = Math.floor(contentHpt / lineHpt);
 
   // dialogue gap in pt (preset.dialogueGap is "Nem" string)
   let dialogueGapPt = 7 * fontSize;

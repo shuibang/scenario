@@ -16,45 +16,6 @@ import {
   getFontById,
 } from '../print/FontRegistry';
 
-// ─── FontWarningBanner ────────────────────────────────────────────────────────
-function FontWarningBanner({ warnings, pdfFontName, selectedFontName, format }) {
-  if (!warnings.length && !pdfFontName) return null;
-
-  const isMismatch = pdfFontName && pdfFontName !== selectedFontName;
-  const showPdfInfo = format === 'pdf' && (warnings.length > 0 || isMismatch);
-
-  if (!showPdfInfo) return null;
-
-  return (
-    <div
-      style={{
-        background: '#fffbe6',
-        border: '1px solid #ffe58f',
-        borderRadius: 6,
-        padding: '8px 10px',
-        marginBottom: 10,
-        fontSize: 11,
-        lineHeight: 1.6,
-        color: '#7a5800',
-      }}
-    >
-      {isMismatch && (
-        <div style={{ marginBottom: warnings.length ? 4 : 0 }}>
-          PDF 출력 글꼴: <strong>{pdfFontName}</strong>
-          {selectedFontName !== pdfFontName && (
-            <span style={{ color: '#b36b00' }}> (선택: {selectedFontName})</span>
-          )}
-        </div>
-      )}
-      {warnings.map((w, i) => (
-        <div key={i} style={{ display: 'flex', gap: 4 }}>
-          <span>⚠</span>
-          <span>{w}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 // ─── PrintPreviewModal ────────────────────────────────────────────────────────
 export default function PrintPreviewModal({ onClose }) {
@@ -226,6 +187,9 @@ export default function PrintPreviewModal({ onClose }) {
 
           {/* Format */}
           <Section title="출력 형식">
+            <p className="text-[10px] mb-2" style={{ color: 'var(--c-text5)', lineHeight: 1.5 }}>
+              💡 베타 기준 <strong>워드(DOCX)</strong>가 가장 완성도 높게 구현되어 있습니다.
+            </p>
             {[
               { value: 'pdf',    label: 'PDF (인쇄)' },
               { value: 'docx',   label: '워드 (DOCX)' },
@@ -258,13 +222,13 @@ export default function PrintPreviewModal({ onClose }) {
             </p>
           )}
 
-          {/* Font warnings (PDF only) */}
-          <FontWarningBanner
-            warnings={fontWarnings}
-            pdfFontName={effectivePdfFont}
-            selectedFontName={selectedFontName}
-            format={format}
-          />
+
+          {/* 기울임체 미지원 경고 */}
+          {(format === 'pdf' || format === 'hwpx') && (
+            <div className="mb-3 px-2 py-1.5 rounded text-[10px]" style={{ background: 'var(--c-bg3)', color: 'var(--c-text5)', lineHeight: 1.5 }}>
+              ⚠ 기울임체(이탤릭)는 {format === 'pdf' ? 'PDF' : '한글(HWPX)'} 출력에서 지원되지 않습니다.
+            </div>
+          )}
 
           {/* Export error */}
           {error && (
@@ -294,7 +258,7 @@ export default function PrintPreviewModal({ onClose }) {
               : format === 'pdf' ? '인쇄 / PDF 저장' : '파일 다운로드'}
           </button>
 
-          <AdBanner slot="print-modal-left" mobileHide={false} height={60} style={{ marginTop: 12, borderRadius: 6 }} />
+          <AdBanner slot="print-modal-left" mobileHide={false} height={60} style={{ marginTop: 8, borderRadius: 6 }} />
         </div>
 
         {/* ── Right: Preview ──────────────────────────────────────────────────── */}

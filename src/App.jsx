@@ -1234,6 +1234,7 @@ function LogShareView() {
   const s = { fontFamily: 'Pretendard, Apple SD Gothic Neo, sans-serif', maxWidth: 640, margin: '0 auto', padding: '40px 24px', color: '#1a1a1a' };
 
   return (
+    <div style={{ minHeight: '100vh', background: '#fff' }}>
     <div style={s}>
       <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>작업 기록 증빙</div>
       {exportedAt && <div style={{ fontSize: 12, color: '#999', marginBottom: 24 }}>내보내기: {fmtTs(exportedAt)}</div>}
@@ -1268,6 +1269,7 @@ function LogShareView() {
           );
         })}
       </div>
+    </div>
     </div>
   );
 }

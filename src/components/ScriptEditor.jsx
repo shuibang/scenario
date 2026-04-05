@@ -16,10 +16,12 @@ const DEFAULT_SYMBOLS = ['(E)', '(F)', 'Flashback', 'Insert', 'Ins.', 'Subtitle)
 
 // ─── Symbol Picker ────────────────────────────────────────────────────────────
 function SymbolPicker({ mobile = false, closeToken = 0, onOpen }) {
-  const { state } = useApp();
+  const { state, dispatch } = useApp();
   // dropPos null = closed, { top?, bottom?, left } = open — 둘을 분리하지 않아 (0,0) 렌더 방지
   const [dropPos, setDropPos] = useState(null);
   const [activeIdx, setActiveIdx] = useState(-1);
+  const [editMode, setEditMode] = useState(false);
+  const [newSym, setNewSym] = useState('');
   const ref = useRef(null);
   const btnRef = useRef(null);
   const dropRef = useRef(null);
@@ -105,6 +107,21 @@ function SymbolPicker({ mobile = false, closeToken = 0, onOpen }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [open, activeIdx, allSymbols]);
 
+  const addCustomSym = () => {
+    const s = newSym.trim();
+    if (!s) return;
+    const cur = state.stylePreset?.customSymbols || [];
+    if (!cur.includes(s)) {
+      dispatch({ type: 'SET_STYLE_PRESET', payload: { customSymbols: [...cur, s] } });
+    }
+    setNewSym('');
+  };
+
+  const removeCustomSym = (sym) => {
+    const cur = state.stylePreset?.customSymbols || [];
+    dispatch({ type: 'SET_STYLE_PRESET', payload: { customSymbols: cur.filter(s => s !== sym) } });
+  };
+
   const insertSymbol = (sym) => {
     setDropPos(null);
     const surface = document.querySelector('[data-editor-surface]');
@@ -164,23 +181,55 @@ function SymbolPicker({ mobile = false, closeToken = 0, onOpen }) {
             minWidth: '180px', maxWidth: '280px', boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
           }}
         >
-          <div style={{ padding: '4px 12px 6px', fontSize: 10, fontWeight: 600, color: 'var(--c-text5)', borderBottom: '1px solid var(--c-border)' }}>기타 삽입</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 0, maxHeight: 192, overflowY: 'auto' }}>
-            {allSymbols.map((sym, i) => (
-              <div
-                key={sym}
-                onMouseDown={e => { e.preventDefault(); insertSymbol(sym); }}
-                onMouseEnter={() => setActiveIdx(i)}
-                onMouseLeave={() => setActiveIdx(-1)}
-                style={{
-                  padding: '6px 12px', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap',
-                  color: activeIdx === i ? 'var(--c-text)' : 'var(--c-text2)',
-                  background: activeIdx === i ? 'var(--c-active)' : 'transparent',
-                  width: '50%', boxSizing: 'border-box',
-                }}
-              >{sym}</div>
-            ))}
+          <div style={{ padding: '4px 12px 6px', fontSize: 10, fontWeight: 600, color: 'var(--c-text5)', borderBottom: '1px solid var(--c-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span>기타 삽입</span>
+            <button
+              onMouseDown={e => { e.preventDefault(); setEditMode(v => !v); }}
+              style={{ fontSize: 9, padding: '1px 6px', borderRadius: 4, border: '1px solid var(--c-border3)', background: editMode ? 'var(--c-accent)' : 'transparent', color: editMode ? '#fff' : 'var(--c-text5)', cursor: 'pointer' }}
+            >편집</button>
           </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 0, maxHeight: 192, overflowY: 'auto' }}>
+            {allSymbols.map((sym, i) => {
+              const isCustom = !DEFAULT_SYMBOLS.includes(sym);
+              return (
+                <div
+                  key={sym}
+                  onMouseEnter={() => !editMode && setActiveIdx(i)}
+                  onMouseLeave={() => setActiveIdx(-1)}
+                  style={{
+                    padding: '6px 12px', fontSize: 12, cursor: editMode ? 'default' : 'pointer', whiteSpace: 'nowrap',
+                    color: activeIdx === i ? 'var(--c-text)' : 'var(--c-text2)',
+                    background: activeIdx === i ? 'var(--c-active)' : 'transparent',
+                    width: '50%', boxSizing: 'border-box',
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  }}
+                >
+                  <span onMouseDown={e => { if (!editMode) { e.preventDefault(); insertSymbol(sym); } }}>{sym}</span>
+                  {editMode && isCustom && (
+                    <button
+                      onMouseDown={e => { e.preventDefault(); removeCustomSym(sym); }}
+                      style={{ fontSize: 10, color: '#f87171', background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}
+                    >×</button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {editMode && (
+            <div style={{ padding: '6px 8px', borderTop: '1px solid var(--c-border)', display: 'flex', gap: 4 }}>
+              <input
+                value={newSym}
+                onChange={e => setNewSym(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustomSym(); } }}
+                placeholder="추가할 단축어"
+                style={{ flex: 1, fontSize: 11, padding: '3px 6px', borderRadius: 4, border: '1px solid var(--c-border3)', background: 'var(--c-input)', color: 'var(--c-text)', outline: 'none' }}
+              />
+              <button
+                onMouseDown={e => { e.preventDefault(); addCustomSym(); }}
+                style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: 'var(--c-accent)', color: '#fff', border: 'none', cursor: 'pointer' }}
+              >추가</button>
+            </div>
+          )}
         </div>,
         document.body
       )}

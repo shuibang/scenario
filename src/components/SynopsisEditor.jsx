@@ -176,7 +176,6 @@ export default function SynopsisEditor() {
   }, [sections, dirty]);
 
   const plainAll = Object.values(sections).map(stripHtml).join(' ');
-  const wordCount = plainAll.replace(/\s+/g, ' ').trim().split(' ').filter(Boolean).length;
 
   const pageEst = (() => {
     const text = plainAll.trim();
@@ -219,7 +218,7 @@ export default function SynopsisEditor() {
         <span className="text-sm font-medium" style={{ color: 'var(--c-text2)' }}>작품 시놉시스</span>
         <span style={{ marginLeft: 'auto', fontSize: 12, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--c-text6)' }}>
           {pageEst > 0 && <span>{`약 ${pageEst}p`}</span>}
-          {dirty ? '저장 중…' : '● 저장됨'} · {wordCount}어
+          {dirty ? '저장 중…' : '● 저장됨'}
         </span>
       </div>
 

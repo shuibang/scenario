@@ -259,7 +259,7 @@ function EpisodeSceneList({ ep, scenes, scriptBlocks, dispatch, compact = false,
                 onDragLeave={handleDragLeave}
                 onDrop={(e) => handleDrop(e, scene)}
               >
-                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => handleSceneClick(scene)}>
+                <div className="flex-1 min-w-0">
                   <div className={compact ? 'text-xs font-bold' : 'text-sm font-bold'} style={{ color: 'var(--c-text)' }}>
                     {label || (snb?.label || '')}
                   </div>
@@ -290,6 +290,16 @@ function EpisodeSceneList({ ep, scenes, scriptBlocks, dispatch, compact = false,
                       T
                     </span>
                   )}
+                  <button
+                    title="대본으로 이동"
+                    onClick={e => { e.stopPropagation(); handleSceneClick(scene); }}
+                    style={{
+                      fontSize: 10, padding: '2px 6px', borderRadius: 4,
+                      border: '1px solid var(--c-border3)', background: 'var(--c-tag)',
+                      color: 'var(--c-text4)', cursor: 'pointer', lineHeight: 1.4,
+                      whiteSpace: 'nowrap', flexShrink: 0,
+                    }}
+                  >바로가기</button>
                   <button
                     title="구조지침 태그 추가"
                     onClick={e => { e.stopPropagation(); e.preventDefault(); setTagPickerSceneId(v => v === scene.id ? null : scene.id); }}

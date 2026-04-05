@@ -6,6 +6,16 @@ import React, { useState } from 'react';
  * 새 공지 추가: NOTICES 배열 맨 앞에 항목 추가 (id는 고유값)
  * 사용자가 닫으면 localStorage에 id를 기록 → 재방문 시 안 보임
  */
+// 별도 소식 (공지 탭) — 새 항목은 맨 앞에 추가
+export const ANNOUNCEMENTS = [
+  {
+    id: 'ann-20260404',
+    date: '2026-04-04',
+    content: '대본 작업실 베타 서비스를 시작합니다. 다양한 기능을 자유롭게 사용해 보시고 피드백 주시면 적극 반영하겠습니다.',
+  },
+];
+
+// 수정사항 (업데이트 탭) — 새 항목은 맨 앞에 추가
 export const NOTICES = [
   {
     id: 'v3-20260404',

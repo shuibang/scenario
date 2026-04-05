@@ -220,15 +220,10 @@ function buildDocxSections(printModel, dp, { hancom = false } = {}) {
       continue;
     }
 
-    // 쪽번호: 한글 출력은 footer 없음 (hancom 호환성)
-    const footer = hancom ? null : pageNumFooter(dp);
+    // 쪽번호 footer (모든 포맷 동일하게 적용)
+    const footer = pageNumFooter(dp);
 
     if (section.type === 'synopsis') {
-      // 한글 호환 DOCX에만 [시놉시스] 섹션 제목 표시
-      if (hancom) {
-        paras.push(para('시놉시스', dp, { bold: true, center: true }));
-        paras.push(blankPara(dp));
-      }
       const addBlock = (label, text) => {
         if (!text) return;
         paras.push(para(label, dp, { bold: true }));
