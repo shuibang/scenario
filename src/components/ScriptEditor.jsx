@@ -2233,8 +2233,10 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
             }
             return;
           }
-          // Click in the scroll wrapper below the surface — move cursor to end
-          surfaceApiRef.current?.focusEnd();
+          // Click in the scroll wrapper below the surface — only move to end if editor is empty
+          const surface = e.currentTarget.querySelector('[data-editor-surface]');
+          const hasContent = surface && surface.children.length > 0;
+          if (!hasContent) surfaceApiRef.current?.focusEnd();
           if (pendingBlockType) {
             const pt = pendingBlockType;
             setPendingBlockType(null);
