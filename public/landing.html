@@ -8,6 +8,8 @@
   <meta property="og:title" content="대본 작업실 — 드라마 작가를 위한 무료 대본 편집기" />
   <meta property="og:description" content="한국 드라마 작가를 위한 전문 대본 편집기. 설치 없이, 로그인 없이, 완전 무료." />
   <meta property="og:type" content="website" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5479563960989185"
+   crossorigin="anonymous"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -242,6 +244,23 @@
       from { opacity: 0; transform: translateY(24px); }
       to   { opacity: 1; transform: translateY(0); }
     }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+    @keyframes slideDown { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
+
+    .demo-btn {
+      font-size: 11px; padding: 2px 10px; border-radius: 12px;
+      border: 1px solid var(--border3); background: transparent;
+      color: var(--text4); transition: all 0.25s ease; user-select: none;
+    }
+    .demo-btn.active {
+      border-color: var(--accent); background: var(--accent);
+      color: #fff; font-weight: 600;
+    }
+    .blink-cursor {
+      display: inline-block; width: 2px; height: 0.85em;
+      background: var(--accent); vertical-align: middle; margin-left: 1px;
+      animation: blink 1s step-end infinite;
+    }
     .reveal {
       opacity: 0; transform: translateY(28px);
       transition: opacity 0.6s ease, transform 0.6s ease;
@@ -280,6 +299,83 @@
     </div>
     <p class="hero-note">로그인 없이도 이 기기에 자동저장 — 구글 로그인 시 어디서든 이어서 작업</p>
   </div>
+
+  <!-- 버튼/단축키 포맷 데모 -->
+  <section class="reveal section" style="padding: 0 24px 64px;">
+    <div style="max-width: 540px; margin: 0 auto;">
+      <div style="background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.22);">
+        <!-- 툴바 -->
+        <div style="background: var(--header); border-bottom: 1px solid var(--border); padding: 5px 10px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+          <span style="font-size:11px; color:var(--text4); padding:2px 10px; border:1px solid var(--border3); border-radius:12px; margin-right:2px;">1회</span>
+          <span id="btn-s" class="demo-btn">S#</span>
+          <span id="btn-action" class="demo-btn">지문</span>
+          <span id="btn-dia" class="demo-btn">대사</span>
+          <span class="demo-btn">등장</span>
+          <span class="demo-btn">연결</span>
+          <span class="demo-btn">기타</span>
+          <div style="flex:1;"></div>
+          <span style="font-size:10px; color:var(--text5); white-space:nowrap;">1/1 &nbsp;●&nbsp; 저장됨</span>
+        </div>
+        <!-- 편집 영역 -->
+        <div style="padding:14px 20px; font-family:monospace; font-size:12.5px; line-height:2.1; min-height:160px; background:var(--bg);">
+          <div id="demo-scene" style="transition: all 0.3s;"></div>
+          <div id="demo-action" style="transition: all 0.35s;"></div>
+          <div id="demo-dia" style="transition: all 0.35s;"></div>
+        </div>
+      </div>
+      <div id="demo-caption" style="text-align:center; margin-top:14px; font-size:12px; min-height:20px; color:var(--text5);"></div>
+    </div>
+  </section>
+
+  <!-- 씬번호 자동연동 데모 -->
+  <section class="reveal" style="background:var(--card); border-top:1px solid var(--border); border-bottom:1px solid var(--border); padding:64px 24px;">
+    <div style="max-width:800px; margin:0 auto;">
+      <p class="section-label">핵심 기능 시연</p>
+      <h2 class="section-title" style="margin-bottom:10px;">회상 씬 번호, 자동으로 따라갑니다</h2>
+      <p style="text-align:center; font-size:14px; color:var(--text4); margin-bottom:40px; line-height:1.7;">
+        "S#3씬에서 봤던 그 기억처럼—" 씬 순서가 바뀌어도<br>지문 속 참조 번호가 자동으로 갱신됩니다.
+      </p>
+      <div class="reveal" style="display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap; justify-content:center;">
+        <!-- 편집기 -->
+        <div style="flex:1 1 320px; max-width:420px; background:var(--bg); border:1px solid var(--border); border-radius:8px; overflow:hidden;">
+          <div style="height:28px; background:var(--header); border-bottom:1px solid var(--border); display:flex; align-items:center; padding:0 10px; gap:6px;">
+            <span style="font-size:10px; color:var(--text5); font-weight:600;">대본 편집기 — 1회차</span>
+            <div style="flex:1;"></div>
+            <span style="font-size:8.5px; padding:1px 5px; border:1px solid var(--border3); border-radius:3px; color:var(--text6);">Ctrl+1</span>
+            <span style="font-size:8.5px; padding:1px 5px; border:1px solid var(--border3); border-radius:3px; color:var(--text6);">Ctrl+2</span>
+            <span style="font-size:8.5px; padding:1px 5px; border:1px solid var(--border3); border-radius:3px; color:var(--text6);">Ctrl+3</span>
+          </div>
+          <div style="padding:12px 16px; font-family:monospace; font-size:12px; line-height:1.95;">
+            <div style="color:var(--accent); font-weight:700;">S#1. 카페 — 낮</div>
+            <div style="padding-left:1.4rem; color:var(--text3);">민준, 창가에 앉아 커피를 마신다.</div>
+            <div style="color:var(--text); white-space:pre;">민준     오늘따라 왜 이리 설레지.</div>
+            <div id="ref-new-scene" style="min-height:1.95em; margin-top:2px;"></div>
+            <div id="ref-scene2">
+              <span id="ref-s2-num" style="color:var(--accent); font-weight:700; transition:all 0.4s;">S#2</span><span style="color:var(--accent); font-weight:700;">. 골목 — 낮</span>
+              <span id="ref-shift-badge" style="display:none; font-size:9px; color:#f59e0b; margin-left:7px; font-weight:500;">↑ 번호 밀림</span>
+            </div>
+            <div style="padding-left:1.4rem; color:var(--text3);">서진이 걸어온다.</div>
+            <div style="margin-top:2px;">
+              <span id="ref-s3-num" style="color:var(--accent); font-weight:700; transition:all 0.4s;">S#3</span><span style="color:var(--accent); font-weight:700;">. 민준의 방 — 밤</span>
+            </div>
+            <div id="ref-action" style="padding-left:1.4rem; color:var(--text3); border-radius:3px; transition:background 0.35s ease;">
+              S#<span id="ref-num" style="transition:color 0.35s;">2</span>에서 봤던 그 눈빛이—
+            </div>
+          </div>
+        </div>
+        <!-- 씬리스트 -->
+        <div style="flex:0 0 auto; width:200px; background:var(--panel); border:1px solid var(--border); border-radius:8px; overflow:hidden;">
+          <div style="height:28px; background:var(--header); border-bottom:1px solid var(--border); display:flex; align-items:center; padding:0 10px;">
+            <span style="font-size:10px; color:var(--text5); font-weight:600; flex:1;">씬 리스트</span>
+            <span style="font-size:9px; color:var(--text6); background:var(--input); padding:1px 6px; border-radius:10px;">자동 연동</span>
+          </div>
+          <div id="ref-scenelist"></div>
+          <div style="padding:8px 12px; font-size:10px; color:var(--text6); text-align:center;">편집기에서 자동 생성됨</div>
+        </div>
+      </div>
+      <div id="ref-caption" style="text-align:center; margin-top:18px; font-size:12.5px; min-height:22px; color:var(--text5);">S#1 아래 줄에서 새 씬을 입력하면…</div>
+    </div>
+  </section>
 
   <!-- 스크린샷 -->
   <div class="reveal section" style="padding-top: 0;">
@@ -454,11 +550,227 @@
   </footer>
 
   <script>
-    // 스크롤 리빌
-    const observer = new IntersectionObserver((entries) => {
+    // ── 스크롤 리빌 ──────────────────────────────────────────────
+    const revealObs = new IntersectionObserver((entries) => {
       entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
     }, { threshold: 0.1 });
-    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+    document.querySelectorAll('.reveal').forEach(el => revealObs.observe(el));
+
+    // ── 유틸 ─────────────────────────────────────────────────────
+    function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    async function typeInto(el, text, speed = 46) {
+      el.textContent = '';
+      for (let i = 0; i < text.length; i++) {
+        el.textContent = text.slice(0, i + 1);
+        await wait(speed);
+      }
+    }
+
+    // ── 데모 1: 버튼/단축키 포맷 데모 ────────────────────────────
+    async function runFormatDemo() {
+      const elScene  = document.getElementById('demo-scene');
+      const elAction = document.getElementById('demo-action');
+      const elDia    = document.getElementById('demo-dia');
+      const caption  = document.getElementById('demo-caption');
+      const btnS     = document.getElementById('btn-s');
+      const btnA     = document.getElementById('btn-action');
+      const btnD     = document.getElementById('btn-dia');
+
+      const reset = () => {
+        elScene.innerHTML = '';
+        elAction.innerHTML = '';
+        elDia.innerHTML = '';
+        elScene.style.cssText = '';
+        elAction.style.cssText = '';
+        elDia.style.cssText = '';
+        [btnS, btnA, btnD].forEach(b => b.classList.remove('active'));
+        caption.style.color = 'var(--text5)';
+      };
+
+      while (true) {
+        reset();
+        await wait(700);
+
+        // Phase 1: scene 타이핑
+        caption.textContent = '텍스트 입력 후 버튼을 누르면…';
+        const sceneText = '카페 내부, 낮';
+        elScene.innerHTML = '<span class="blink-cursor"></span>';
+        for (let i = 0; i <= sceneText.length; i++) {
+          elScene.innerHTML = sceneText.slice(0, i) + '<span class="blink-cursor"></span>';
+          await wait(56);
+        }
+        await wait(480);
+
+        // Phase 2: S# 버튼 클릭
+        btnS.classList.add('active');
+        caption.style.color = 'var(--accent)';
+        caption.textContent = 'S# 클릭 → 씬 헤딩 포맷으로 변환';
+        elScene.style.color = 'var(--accent)';
+        elScene.style.fontWeight = '700';
+        elScene.textContent = 'S#1. ' + sceneText;
+        await wait(850);
+        btnS.classList.remove('active');
+
+        // Phase 3: action 타이핑
+        caption.style.color = 'var(--text5)';
+        caption.textContent = '텍스트 입력 후 버튼을 누르면…';
+        const actionText = '민준이 들어서며 주위를 둘러본다.';
+        elAction.style.color = 'var(--text)';
+        for (let i = 0; i <= actionText.length; i++) {
+          elAction.innerHTML = actionText.slice(0, i) + '<span class="blink-cursor"></span>';
+          await wait(46);
+        }
+        await wait(480);
+
+        // Phase 4: 지문 버튼 클릭
+        btnA.classList.add('active');
+        caption.style.color = 'var(--accent)';
+        caption.textContent = '지문 클릭 → 지문 포맷으로 변환';
+        elAction.style.paddingLeft = '1.5rem';
+        elAction.style.color = 'var(--text3)';
+        elAction.style.transition = 'all 0.35s';
+        elAction.textContent = actionText;
+        await wait(850);
+        btnA.classList.remove('active');
+
+        // Phase 5: dialogue 타이핑
+        caption.style.color = 'var(--text5)';
+        caption.textContent = '텍스트 입력 후 버튼을 누르면…';
+        const diaText = '민준   오늘 여기서 쓰는 거야.';
+        elDia.style.color = 'var(--text)';
+        for (let i = 0; i <= diaText.length; i++) {
+          elDia.innerHTML = diaText.slice(0, i) + '<span class="blink-cursor"></span>';
+          await wait(46);
+        }
+        await wait(480);
+
+        // Phase 6: 대사 버튼 클릭
+        btnD.classList.add('active');
+        caption.style.color = 'var(--accent)';
+        caption.textContent = '대사 클릭 → 한국 대본 대사 포맷으로 변환';
+        elDia.innerHTML = '<span style="font-weight:700;color:var(--text);min-width:7em;display:inline-block;">민준</span><span style="color:var(--text);">오늘 여기서 쓰는 거야.</span>';
+        elDia.style.display = 'flex';
+        await wait(850);
+        btnD.classList.remove('active');
+
+        // Phase 7: 완료
+        caption.style.color = 'var(--success, #22c55e)';
+        caption.textContent = '태그 문법 없이, 버튼·단축키로 바로 씁니다 ✓';
+        await wait(3000);
+      }
+    }
+
+    // ── 데모 2: 씬번호 자동연동 데모 ─────────────────────────────
+    function renderSceneList(shifted) {
+      const el = document.getElementById('ref-scenelist');
+      const scenes = shifted
+        ? [
+            { num: 1, title: '카페 — 낮', isNew: false },
+            { num: 2, title: '골목 — 저녁', isNew: true },
+            { num: 3, title: '골목 — 낮', isNew: false },
+            { num: 4, title: '민준의 방 — 밤', isNew: false },
+          ]
+        : [
+            { num: 1, title: '카페 — 낮', isNew: false },
+            { num: 2, title: '골목 — 낮', isNew: false },
+            { num: 3, title: '민준의 방 — 밤', isNew: false },
+          ];
+
+      el.innerHTML = scenes.map(s => `
+        <div style="padding:7px 12px; border-bottom:1px solid var(--border2); display:flex; gap:8px; align-items:center;
+          background:${s.isNew ? 'rgba(90,90,245,0.08)' : 'transparent'}; transition:all 0.45s ease;
+          ${s.isNew ? 'animation:slideDown 0.35s ease;' : ''}">
+          <span style="font-size:10px; font-weight:700; min-width:28px; color:${s.isNew ? 'var(--accent)' : 'var(--text6)'}; flex-shrink:0;">S#${s.num}</span>
+          <span style="font-size:11px; color:${s.isNew ? 'var(--accent)' : 'var(--text3)'}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${s.title}</span>
+          ${s.isNew ? '<span style="font-size:8px; color:var(--accent); font-weight:700; flex-shrink:0;">NEW</span>' : ''}
+        </div>
+      `).join('');
+    }
+
+    async function runRefDemo() {
+      const newScene  = document.getElementById('ref-new-scene');
+      const s2num     = document.getElementById('ref-s2-num');
+      const s3num     = document.getElementById('ref-s3-num');
+      const badge     = document.getElementById('ref-shift-badge');
+      const refNum    = document.getElementById('ref-num');
+      const refAction = document.getElementById('ref-action');
+      const caption   = document.getElementById('ref-caption');
+
+      const reset = () => {
+        newScene.innerHTML = '';
+        s2num.textContent = 'S#2';
+        s3num.textContent = 'S#3';
+        badge.style.display = 'none';
+        refNum.textContent = '2';
+        refNum.style.color = 'inherit';
+        refNum.style.fontWeight = '400';
+        refAction.style.background = 'transparent';
+        caption.style.color = 'var(--text5)';
+        caption.textContent = 'S#1 아래 줄에서 새 씬을 입력하면…';
+        renderSceneList(false);
+      };
+
+      while (true) {
+        reset();
+        await wait(1400);
+
+        // Phase 1: 타이핑
+        caption.textContent = '새 씬 헤딩 입력 중…';
+        caption.style.color = 'var(--accent)';
+        const newTitle = 'S#2. 골목 — 저녁';
+        newScene.style.color = 'var(--accent)';
+        newScene.style.fontWeight = '700';
+        for (let i = 0; i <= newTitle.length; i++) {
+          newScene.innerHTML = newTitle.slice(0, i) + '<span class="blink-cursor"></span>';
+          await wait(50);
+        }
+        await wait(650);
+
+        // Phase 2: 번호 밀림
+        caption.style.color = 'var(--text3)';
+        caption.textContent = '씬 번호가 자동으로 밀립니다 (S#2→S#3, S#3→S#4)';
+        newScene.textContent = newTitle;
+        s2num.textContent = 'S#3';
+        s3num.textContent = 'S#4';
+        badge.style.display = 'inline';
+        badge.style.animation = 'slideDown 0.3s ease';
+        renderSceneList(true);
+        await wait(1000);
+
+        // Phase 3: 참조 갱신
+        caption.style.color = 'var(--accent)';
+        caption.textContent = '지문 속 씬 참조도 자동 갱신 S#2→S#3 ✓';
+        refNum.textContent = '3';
+        refNum.style.color = 'var(--accent)';
+        refNum.style.fontWeight = '700';
+        refAction.style.background = 'rgba(90,90,245,0.18)';
+        await wait(1400);
+
+        // Phase 4: 완료
+        caption.style.color = '#22c55e';
+        caption.textContent = '씬리스트에도 실시간 반영 — Final Draft·Scrivener에 없는 기능 ✓';
+        await wait(3200);
+      }
+    }
+
+    // ── IntersectionObserver로 뷰포트 진입 시 데모 시작 ──────────
+    function startOnVisible(id, fn) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      let started = false;
+      const obs = new IntersectionObserver(entries => {
+        if (entries[0].isIntersecting && !started) {
+          started = true;
+          obs.disconnect();
+          fn();
+        }
+      }, { threshold: 0.2 });
+      obs.observe(el);
+    }
+
+    startOnVisible('demo-scene', runFormatDemo);
+    startOnVisible('ref-new-scene', runRefDemo);
   </script>
 </body>
 </html>
