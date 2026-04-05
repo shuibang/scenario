@@ -105,14 +105,7 @@ export default function QnATab() {
     <div>
       {/* 헤더 */}
       <div style={{ marginBottom: '1.5rem' }}>
-        <h2
-          style={{
-            fontSize: '18px', fontWeight: 700, color: 'var(--c-text)',
-            marginBottom: '6px',
-          }}
-        >
-          자주 묻는 질문
-        </h2>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--c-text3)', marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid var(--c-border)' }}>Q&amp;A</div>
         <p style={{ fontSize: '13px', color: 'var(--c-text5)', lineHeight: '1.6' }}>
           처음 사용하는 방법부터 저장, 출력, 공유, 작업기록까지 자주 묻는 질문을 모았습니다.
         </p>

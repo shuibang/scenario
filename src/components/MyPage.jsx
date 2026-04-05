@@ -267,6 +267,7 @@ function StatsTab() {
 
   return (
     <div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--c-text3)', marginBottom: 20, paddingBottom: 10, borderBottom: '1px solid var(--c-border)' }}>작업통계</div>
       {workTimeLogs.length > 0 && (
         <div className="flex items-center gap-2 mb-6">
           <button onClick={handlePdfExport}
@@ -581,7 +582,8 @@ function SettingsTab() {
   const labelStyle = { fontSize: '11px', color: 'var(--c-text5)', marginBottom: '2px', display: 'block' };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 5 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--c-text3)', marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid var(--c-border)' }}>설정</div>
 
       {/* 사용 가이드 다시 보기 */}
       <div
@@ -825,6 +827,7 @@ function NoticesTab() {
 
   return (
     <div className="flex flex-col gap-3">
+      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--c-text3)', marginBottom: 8, paddingBottom: 10, borderBottom: '1px solid var(--c-border)' }}>공지사항</div>
       {/* 서브 탭 */}
       <div style={{ display: 'flex', borderBottom: '1px solid var(--c-border)', marginBottom: 4 }}>
         <button style={tabStyle('updates')} onClick={() => setSub('updates')}>업데이트</button>
@@ -930,7 +933,7 @@ function ErrorReportTab() {
   return (
     <div className="flex flex-col gap-6" style={{ maxWidth: 480 }}>
       <div>
-        <div className="text-sm font-semibold mb-1" style={{ color: 'var(--c-text2)' }}>오류 제출</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--c-text3)', marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid var(--c-border)' }}>오류 제출</div>
         <div className="text-xs" style={{ color: 'var(--c-text5)' }}>불편한 점이나 개선 아이디어를 알려주세요.</div>
       </div>
 
@@ -1040,7 +1043,7 @@ export default function MyPage() {
   const tabLabel = TABS.find(t => t.id === activeTab)?.label || '';
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col overflow-hidden" style={{ background: 'var(--c-bg)' }}>
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden" style={{ background: 'var(--c-bg)', padding: isMobile ? 0 : 10 }}>
       {isMobile && ['stats', 'settings', 'membership'].includes(activeTab) ? (
         /* 모바일: 마이페이지 주요 탭 바 */
         <div style={{ flexShrink: 0, borderBottom: '1px solid var(--c-border)', background: 'var(--c-panel)' }}>
@@ -1095,15 +1098,16 @@ export default function MyPage() {
 
         {/* 콘텐츠 */}
         <div className="flex-1 overflow-y-auto">
-          <div className={isMobile ? '' : 'max-w-2xl mx-auto pt-16 pb-10 px-10'}
-               style={isMobile ? { padding: '24px 20px', paddingBottom: 'calc((clamp(52px, 14vw, 64px) + 46dvh + 16px) / 4)' } : {}}>
+          <div className={isMobile ? '' : 'max-w-2xl mx-auto'}
+               style={isMobile ? { padding: '24px 20px', paddingBottom: 'calc((clamp(52px, 14vw, 64px) + 46dvh + 16px) / 4)' } : { padding: '24px 20px' }}>
             {activeTab === 'stats'      && <StatsTab />}
             {activeTab === 'settings'   && <SettingsTab />}
             {activeTab === 'notices'    && <NoticesTab />}
             {activeTab === 'qa'         && <QnATab />}
             {activeTab === 'errors'     && <ErrorReportTab />}
             {activeTab === 'membership' && (
-              <div className="flex flex-col items-center gap-8" style={{ paddingTop: 10 }}>
+              <div className="flex flex-col items-center gap-8">
+                <div style={{ width: '100%', fontSize: 13, fontWeight: 700, color: 'var(--c-text3)', marginBottom: 8, paddingBottom: 10, borderBottom: '1px solid var(--c-border)' }}>멤버십</div>
                 <PlaceholderTab icon="⭐" title="멤버십" desc="멤버십 기능은 준비 중입니다." />
                 {/* SupportCard 일시 비활성화 — 추후 복원 예정 */}
                 {false && <SupportCard />}
