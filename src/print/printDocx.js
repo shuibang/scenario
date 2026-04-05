@@ -224,10 +224,15 @@ function buildDocxSections(printModel, dp, { hancom = false } = {}) {
     const footer = hancom ? null : pageNumFooter(dp);
 
     if (section.type === 'synopsis') {
+      // 한글 호환 DOCX에만 [시놉시스] 섹션 제목 표시
+      if (hancom) {
+        paras.push(para('시놉시스', dp, { bold: true, center: true }));
+        paras.push(blankPara(dp));
+      }
       const addBlock = (label, text) => {
         if (!text) return;
         paras.push(para(label, dp, { bold: true }));
-        if (!hancom) paras.push(blankPara(dp)); // 항목명과 내용 사이 줄바꿈 (한글은 생략)
+        paras.push(blankPara(dp)); // 항목명과 내용 사이 줄바꿈
         text.split('\n').forEach(l => paras.push(para(l, dp)));
         paras.push(blankPara(dp));
       };
@@ -236,7 +241,7 @@ function buildDocxSections(printModel, dp, { hancom = false } = {}) {
       addBlock('기획의도', section.intent);
       if (section.characters.length) {
         paras.push(para('인물설정', dp, { bold: true }));
-        if (!hancom) paras.push(blankPara(dp)); // 인물설정 뒤 줄바꿈 통일
+        paras.push(blankPara(dp)); // 인물설정 뒤 줄바꿈 (인물소개와 통일)
         section.characters.forEach(c => {
           // Format: 이름 (성별 / 나이) 직업
           const agePart = [c.gender, c.age].filter(Boolean).join(' / ');

@@ -17,17 +17,11 @@ import { exportDocx } from './printDocx';
 import { getFontById } from './FontRegistry';
 import { buildHwpx } from './hwpxBuilder';
 
-function stripHtml(html) { return (html || '').replace(/<[^>]+>/g, ''); }
-
 /**
  * exportHancom — Hancom-compatible export.
  * Currently outputs .docx that HWP 2014+ and Hancom Office can open cleanly.
  */
 export async function exportHancom(appState, selections, { onStep = () => {} } = {}) {
-  // Hancom DOCX:
-  // - 함초롱바탕 font
-  // - 대화 간격 9em (한글 렌더링에서 7em보다 여유 있게)
-  // - HTML 서식 태그 제거 (Hancom이 inline XML run을 올바르게 표시 못할 수 있음)
   const hancomState = {
     ...appState,
     stylePreset: {
@@ -35,11 +29,6 @@ export async function exportHancom(appState, selections, { onStep = () => {} } =
       fontFamily: getFontById('hcr-batang').cssFamily,
       dialogueGap: '9em',
     },
-    scriptBlocks: (appState.scriptBlocks || []).map(b =>
-      (b.type === 'action' || b.type === 'dialogue')
-        ? { ...b, content: stripHtml(b.content) }
-        : b
-    ),
   };
 
   return exportDocx(hancomState, selections, { onStep, hancom: true });

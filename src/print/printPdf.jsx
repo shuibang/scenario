@@ -102,7 +102,7 @@ function makeStyles(preset, metrics) {
 // ─── HTML → react-pdf inline Text children ────────────────────────────────────
 function htmlToPdfChildren(html) {
   if (!html || !/<[biu][\s>]/i.test(html)) return html || '';
-  const tagRe = /<(\/?)([biu])\b[^>]*>/gi;
+  const tagRe = /<(\/?)([biu])[^>]*>/gi;
   const segments = [];
   let last = 0;
   const stack = { b: 0, i: 0, u: 0 };
@@ -113,15 +113,16 @@ function htmlToPdfChildren(html) {
     const bold = stack.b > 0;
     const italic = stack.i > 0;
     const underline = stack.u > 0;
-    if (bold || italic || underline) {
-      segments.push(
-        <Text key={key++} style={{ fontWeight: bold ? 700 : undefined, fontStyle: italic ? 'italic' : undefined, textDecoration: underline ? 'underline' : undefined }}>
-          {text}
-        </Text>
-      );
-    } else {
-      segments.push(text);
-    }
+    // react-pdf: <Text> 안에 혼합 배열(string + <Text>)은 크래시 발생 → 모든 segment를 <Text>로 감쌈
+    segments.push(
+      <Text key={key++} style={{
+        fontWeight: bold ? 700 : undefined,
+        fontStyle: italic ? 'italic' : undefined,
+        textDecoration: underline ? 'underline' : undefined,
+      }}>
+        {text}
+      </Text>
+    );
   };
   while ((match = tagRe.exec(html)) !== null) {
     flush(html.slice(last, match.index));
@@ -131,7 +132,9 @@ function htmlToPdfChildren(html) {
     stack[tag] = closing ? Math.max(0, stack[tag] - 1) : stack[tag] + 1;
   }
   flush(html.slice(last));
-  return segments.length === 1 && typeof segments[0] === 'string' ? segments[0] : segments;
+  if (segments.length === 0) return '';
+  if (segments.length === 1) return segments[0];
+  return segments;
 }
 
 // ─── Token → PDF element ──────────────────────────────────────────────────────
@@ -364,15 +367,9 @@ export async function exportPdf(appState, selections, { onStep = () => {} } = {}
     blob = await pdf(doc).toBlob();
     console.log('[printPdf] blob size:', blob.size, 'bytes');
   } catch (err) {
-    console.error('[printPdf] FAILED at render/blob step:', err);
+    console.error('[printPdf] FAILED:', err?.message);
     console.error('[printPdf] stack:', err?.stack);
-    if (err.message?.includes('font') || err.message?.includes('Font') || err.message?.includes('resolve')) {
-      throw new Error(`폰트 오류: ${err.message}\n\n'함초롱바탕' 글꼴로 변경 후 다시 시도하세요.`);
-    }
-    if (err.message?.includes('hasOwnProperty') || err.message?.includes('CreationDate') || err.message?.includes('undefined')) {
-      throw new Error(`PDF 렌더링 오류\n\n해결 방법:\n• 개발 서버를 재시작하세요 (Vite 캐시 초기화)\n• 또는 '함초롱바탕' 글꼴로 변경 후 다시 시도하세요.\n\n원본 오류: ${err.message}`);
-    }
-    throw err;
+    throw new Error(`PDF 생성 실패: ${err.message}`);
   }
   try {
     onStep('다운로드');
