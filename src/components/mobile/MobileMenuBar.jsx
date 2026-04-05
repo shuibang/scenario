@@ -1,112 +1,53 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useApp } from '../../store/AppContext';
 import { FONTS } from '../../print/FontRegistry';
 import AdBanner from '../AdBanner';
 import { mobileTbtnStyle } from '../../styles/tokens';
 import { applyInlineFormat } from '../../utils/textFormat';
-import { setAccessToken, clearAccessToken, loadFromDrive } from '../../store/googleDrive';
+import { clearAccessToken, loadFromDrive, isTokenValid } from '../../store/googleDrive';
 import { isPublicPcMode } from '../../store/db';
+import { signInWithGoogle, supabaseSignOut, refreshDriveToken } from '../../store/supabaseClient';
 
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
-
-function decodeJwt(token) {
-  try {
-    return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-  } catch { return null; }
-}
-
-export default function MobileMenuBar({ onSave, onPrintPreview, WorkTimer }) {
+export default function MobileMenuBar({ onSave, onPrintPreview, WorkTimer, authUser, onLogout }) {
   const { state, dispatch } = useApp();
   const { activeProjectId, stylePreset } = state;
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
-  const googleBtnRef = useRef(null);
-
-  // ── 로그인 / Drive 상태
-  const [authUser, setAuthUser] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('drama_auth_user') || 'null'); } catch { return null; }
-  });
   const [driveStatus, setDriveStatus] = useState('none');
-  const tokenClientRef  = useRef(null);
-  const driveHandlerRef = useRef(null);
-  const syncingRef      = useRef(false);
+  const syncingRef = useRef(false);
 
-  driveHandlerRef.current = async (tokenResponse) => {
-    if (syncingRef.current) return;
-    if (tokenResponse.error) {
-      if (tokenResponse.error !== 'interaction_required' && tokenResponse.error !== 'access_denied') {
-        setDriveStatus('error');
-      }
-      return;
-    }
+  // Drive 동기화 — Supabase provider_token 사용 (모바일은 자동 적용, 충돌 UI 없음)
+  const runDriveSync = useCallback(async () => {
+    if (syncingRef.current || !isTokenValid()) return;
     syncingRef.current = true;
-    setAccessToken(tokenResponse.access_token, tokenResponse.expires_in);
     setDriveStatus('syncing');
     try {
       const driveData = await loadFromDrive();
       if (driveData?.savedAt) {
         const driveSavedAt = new Date(driveData.savedAt).getTime();
         const localSavedAt = new Date(localStorage.getItem('drama_saved_at') || 0).getTime();
-        if (driveSavedAt > localSavedAt) {
+        if (driveSavedAt > localSavedAt && (driveData.projects?.length ?? 0) > 0) {
           dispatch({ type: 'LOAD_FROM_DRIVE', payload: driveData });
         }
       }
       setDriveStatus('synced');
+      setTimeout(() => setDriveStatus('none'), 3000);
     } catch (e) {
+      if (e.message?.includes('401') || e.message?.includes('DRIVE_AUTH_REQUIRED')) {
+        const newToken = await refreshDriveToken();
+        if (newToken) { syncingRef.current = false; runDriveSync(); return; }
+      }
       console.warn('[Drive] 불러오기 실패:', e);
       setDriveStatus('error');
     } finally {
       syncingRef.current = false;
     }
-  };
+  }, [dispatch]);
 
-  // GIS 초기화
+  // 로그인 후 토큰 유효하면 Drive 동기화
   useEffect(() => {
-    if (!GOOGLE_CLIENT_ID) return;
-    const tryInit = () => {
-      if (!window.google?.accounts?.oauth2) { setTimeout(tryInit, 800); return; }
-      // Drive OAuth2 토큰 클라이언트
-      tokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
-        client_id: GOOGLE_CLIENT_ID,
-        scope: 'https://www.googleapis.com/auth/drive.appdata',
-        callback: (tr) => driveHandlerRef.current(tr),
-      });
-      // 사용자 ID 초기화 (로그인 버튼용)
-      if (window.google?.accounts?.id) {
-        window.google.accounts.id.initialize({
-          client_id: GOOGLE_CLIENT_ID,
-          callback: (response) => {
-            const payload = decodeJwt(response.credential);
-            if (payload) {
-              const userData = { name: payload.name, email: payload.email, picture: payload.picture };
-              localStorage.setItem('drama_auth_user', JSON.stringify(userData));
-              setAuthUser(userData);
-            }
-          },
-        });
-      }
-      if (localStorage.getItem('drama_auth_user')) {
-        tokenClientRef.current.requestAccessToken({ prompt: '' });
-      }
-    };
-    tryInit();
-  }, []);
-
-  // 메뉴 열릴 때 Google 버튼 렌더링 (폴백용 hidden 컨테이너)
-  useEffect(() => {
-    if (!menuOpen || authUser || !GOOGLE_CLIENT_ID) return;
-    if (!window.google?.accounts?.id) return;
-    const el = googleBtnRef.current;
-    if (!el) return;
-    window.google.accounts.id.renderButton(el, {
-      type: 'standard', theme: 'outline', size: 'medium',
-      text: 'signin_with', locale: 'ko', width: 160,
-    });
-  }, [menuOpen, authUser]);
-
-  useEffect(() => {
-    if (authUser && tokenClientRef.current && driveStatus === 'none') {
-      tokenClientRef.current.requestAccessToken({ prompt: '' });
+    if (authUser && isTokenValid() && driveStatus === 'none') {
+      runDriveSync();
     }
   }, [authUser]);
 
@@ -133,13 +74,12 @@ export default function MobileMenuBar({ onSave, onPrintPreview, WorkTimer }) {
     WebkitTapHighlightColor: 'transparent',
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if (isPublicPcMode()) { try { localStorage.clear(); } catch {} }
-    localStorage.removeItem('drama_auth_user');
-    window.google?.accounts.id.disableAutoSelect();
+    await supabaseSignOut();
     clearAccessToken();
     setDriveStatus('none');
-    setAuthUser(null);
+    onLogout?.();
     setMenuOpen(false);
   };
 
@@ -192,7 +132,12 @@ export default function MobileMenuBar({ onSave, onPrintPreview, WorkTimer }) {
                   {driveStatus === 'error' && (
                     <button
                       style={{ ...dropItemStyle, padding: '4px 0', fontSize: 11, color: '#f87171' }}
-                      onClick={() => { setDriveStatus('none'); tokenClientRef.current?.requestAccessToken({ prompt: '' }); }}
+                      onClick={async () => {
+                        setDriveStatus('none');
+                        const newToken = await refreshDriveToken();
+                        if (newToken) runDriveSync();
+                        else signInWithGoogle();
+                      }}
                     >재연결 시도</button>
                   )}
                   <button
@@ -203,32 +148,19 @@ export default function MobileMenuBar({ onSave, onPrintPreview, WorkTimer }) {
               ) : (
                 <div style={{ padding: '10px 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <div style={{ fontSize: 12, color: 'var(--c-text4)' }}>Google로 로그인하면 Drive에 자동 저장됩니다.</div>
-                  {GOOGLE_CLIENT_ID ? (
-                    <>
-                      <button
-                        onClick={() => window.google?.accounts?.id?.prompt?.()}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: 8,
-                          width: '100%', padding: '8px 12px', borderRadius: 6,
-                          border: '1px solid var(--c-border3)', background: 'var(--c-card)',
-                          color: 'var(--c-text)', fontSize: 13, cursor: 'pointer',
-                          fontWeight: 500,
-                        }}
-                      >
-                        <svg width="16" height="16" viewBox="0 0 48 48" style={{ flexShrink: 0 }}>
-                          <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-                          <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-                          <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-                          <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-                        </svg>
-                        구글 로그인
-                      </button>
-                      {/* 폴백: hidden 컨테이너 */}
-                      <div ref={googleBtnRef} style={{ display: 'none' }} />
-                    </>
-                  ) : (
-                    <div style={{ fontSize: 11, color: 'var(--c-text6)' }}>로그인 기능 준비 중</div>
-                  )}
+                  <button
+                    onClick={() => { signInWithGoogle(); }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      width: '100%', padding: '8px 12px', borderRadius: 6,
+                      border: '1px solid var(--c-border3)', background: 'var(--c-card)',
+                      color: 'var(--c-text)', fontSize: 13, cursor: 'pointer',
+                      fontWeight: 500,
+                    }}
+                  >
+                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="" style={{ width: 16, height: 16, flexShrink: 0 }} />
+                    Google로 로그인
+                  </button>
                 </div>
               )}
 

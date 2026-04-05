@@ -9,7 +9,8 @@ import {
   getFontByCssFamily,
 } from './print/FontRegistry';
 import { getItem, setItem, clearDramaStorage, isPublicPcMode, genId, now } from './store/db';
-import { setAccessToken, clearAccessToken, loadFromDrive } from './store/googleDrive';
+import { setAccessToken, clearAccessToken, loadFromDrive, isTokenValid } from './store/googleDrive';
+import { supabase, signInWithGoogle, supabaseSignOut, extractUserData, refreshDriveToken } from './store/supabaseClient';
 import LeftPanel from './components/LeftPanel';
 import RightPanel from './components/RightPanel';
 import ScriptEditor from './components/ScriptEditor';
@@ -455,52 +456,14 @@ function WorkTimer({ projectId, documentId, onComplete }) {
   );
 }
 
-// ─── Login modal — Google Identity Services ───────────────────────────────────
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+// ─── Login modal — Supabase OAuth ─────────────────────────────────────────────
+function LoginModal({ onClose }) {
+  const [loading, setLoading] = useState(false);
 
-function decodeJwt(token) {
-  try {
-    return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-  } catch (_) {
-    return null;
-  }
-}
-
-function LoginModal({ onClose, onLogin }) {
-  const googleBtnRef = useRef(null);
-  const [error, setError] = useState('');
-  const onCloseRef = useRef(onClose);
-  const onLoginRef = useRef(onLogin);
-  onCloseRef.current = onClose;
-  onLoginRef.current = onLogin;
-
-  useEffect(() => {
-    if (!GOOGLE_CLIENT_ID || !window.google?.accounts?.id) return;
-    window.google.accounts.id.initialize({
-      client_id: GOOGLE_CLIENT_ID,
-      callback: (response) => {
-        const payload = decodeJwt(response.credential);
-        if (payload) {
-          const userData = { name: payload.name, email: payload.email, picture: payload.picture };
-          localStorage.setItem('drama_auth_user', JSON.stringify(userData));
-          onLoginRef.current?.(userData);
-          onCloseRef.current?.();
-        } else {
-          setError('로그인 실패: 토큰 파싱 오류');
-        }
-      },
-    });
-    if (googleBtnRef.current) {
-      window.google.accounts.id.renderButton(googleBtnRef.current, {
-        type: 'standard',
-        theme: 'outline',
-        size: 'large',
-        text: 'continue_with',
-        locale: 'ko',
-        width: 280,
-      });
-    }
-  }, []); // 마운트 1회만 실행 — onClose/onLogin은 ref로 참조
+  const handleGoogle = async () => {
+    setLoading(true);
+    await signInWithGoogle(); // 리디렉트 → 돌아오면 onAuthStateChange가 처리
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.55)' }} onClick={onClose}>
@@ -509,16 +472,19 @@ function LoginModal({ onClose, onLogin }) {
           <div className="text-lg font-bold mb-1" style={{ color: 'var(--c-text)' }}>로그인 / 회원가입</div>
           <div className="text-xs" style={{ color: 'var(--c-text5)' }}>소셜 계정으로 바로 시작하세요</div>
         </div>
-        {GOOGLE_CLIENT_ID ? (
-          <div className="flex justify-center">
-            <div ref={googleBtnRef} />
-          </div>
-        ) : (
-          <div className="text-xs text-center py-2" style={{ color: 'var(--c-text5)' }}>
-            로그인 기능을 준비 중입니다.
-          </div>
-        )}
-        {error && <div className="text-xs text-center" style={{ color: 'var(--c-error, #ef4444)' }}>{error}</div>}
+        <button
+          onClick={handleGoogle}
+          disabled={loading}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            padding: '10px 16px', borderRadius: 6, border: '1px solid var(--c-border3)',
+            background: 'var(--c-card)', color: 'var(--c-text)', fontSize: 14,
+            cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1, width: '100%',
+          }}
+        >
+          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="" style={{ width: 18, height: 18 }} />
+          {loading ? '이동 중…' : 'Google로 계속하기'}
+        </button>
         <div className="text-[10px] text-center" style={{ color: 'var(--c-text6)' }}>
           Kakao / Naver 로그인은 준비 중입니다
         </div>
@@ -528,26 +494,8 @@ function LoginModal({ onClose, onLogin }) {
   );
 }
 
-// ─── Drive 클라이언트 모듈-레벨 싱글턴 ─────────────────────────────────────────
-// MenuBar가 breakpoint 전환으로 재마운트되어도 초기화·requestAccessToken을 1회만 실행
-const _drive = { client: null, initialized: false, syncing: false, handler: null };
-
-function initDriveOnce() {
-  if (_drive.initialized || !GOOGLE_CLIENT_ID) return;
-  const tryInit = () => {
-    if (!window.google?.accounts?.oauth2) { setTimeout(tryInit, 800); return; }
-    _drive.initialized = true;
-    _drive.client = window.google.accounts.oauth2.initTokenClient({
-      client_id: GOOGLE_CLIENT_ID,
-      scope: 'https://www.googleapis.com/auth/drive.appdata',
-      callback: (tr) => _drive.handler?.(tr),
-    });
-    if (localStorage.getItem('drama_auth_user')) {
-      _drive.client.requestAccessToken({ prompt: '' });
-    }
-  };
-  tryInit();
-}
+// ─── Drive 동기화 중복 방지 ────────────────────────────────────────────────────
+let _driveSyncing = false;
 
 // ─── MenuBar ──────────────────────────────────────────────────────────────────
 function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, authUser, setAuthUser, onSyncConflict }) {
@@ -559,18 +507,10 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, authUser, setA
   const [loginOpen, setLoginOpen]        = useState(false);
   const [driveStatus, setDriveStatus]    = useState('none'); // 'none'|'syncing'|'synced'|'error'
 
-  // Drive 토큰 콜백 — 항상 현재 마운트된 MenuBar의 상태 참조 (재마운트 후 자동 갱신)
-  _drive.handler = async (tokenResponse) => {
-    if (_drive.syncing) return;
-    if (tokenResponse.error) {
-      if (tokenResponse.error !== 'interaction_required' &&
-          tokenResponse.error !== 'access_denied') {
-        setDriveStatus('error');
-      }
-      return;
-    }
-    _drive.syncing = true;
-    setAccessToken(tokenResponse.access_token, tokenResponse.expires_in);
+  // Drive 동기화 — Supabase provider_token 사용
+  const runDriveSync = useCallback(async () => {
+    if (_driveSyncing || !isTokenValid()) return;
+    _driveSyncing = true;
     setDriveStatus('syncing');
     try {
       const driveData = await loadFromDrive();
@@ -581,39 +521,37 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, authUser, setA
           return raw ? JSON.parse(raw).length > 0 : false;
         } catch { return false; }
       })();
-
       const driveHasData = (driveData?.projects?.length ?? 0) > 0;
 
       if (!driveData?.savedAt || !driveHasData) {
-        // Drive에 데이터 없음 → 로컬을 Drive에 업로드 (조용히)
         setDriveStatus('synced');
       } else if (!hasLocalData) {
-        // 로컬에 의미있는 데이터 없음 → Drive 데이터 자동 로드
         loadFromDriveData(driveData);
         setDriveStatus('synced');
       } else {
-        // 양쪽 모두 데이터 있음 → 충돌 해결 UI 표시
         onSyncConflict?.({ localSavedAt, driveData });
         setDriveStatus('none');
-        _drive.syncing = false;
+        _driveSyncing = false;
         return;
       }
       setTimeout(() => setDriveStatus('none'), 3000);
     } catch (e) {
+      if (e.message?.includes('401') || e.message?.includes('DRIVE_AUTH_REQUIRED')) {
+        // 토큰 만료 → 갱신 시도
+        const newToken = await refreshDriveToken();
+        if (newToken) { _driveSyncing = false; runDriveSync(); return; }
+      }
       console.warn('[Drive] 불러오기 실패:', e);
       setDriveStatus('error');
     } finally {
-      _drive.syncing = false;
+      _driveSyncing = false;
     }
-  };
+  }, [loadFromDriveData, onSyncConflict]);
 
-  // GIS 로드 후 Drive 토큰 클라이언트 초기화 (재마운트 시 건너뜀)
-  useEffect(() => { initDriveOnce(); }, []);
-
-  // 새 로그인 시 Drive 인증 요청
+  // 로그인 후 토큰이 유효하면 Drive 동기화 실행
   useEffect(() => {
-    if (authUser && _drive.client && driveStatus === 'none') {
-      _drive.client.requestAccessToken({ prompt: '' });
+    if (authUser && isTokenValid() && driveStatus === 'none') {
+      runDriveSync();
     }
   }, [authUser]);
 
@@ -648,7 +586,7 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, authUser, setA
 
   return (
     <div data-tour-id="menubar" className="shrink-0 no-print" style={{ background: 'var(--c-header)', borderBottom: '1px solid var(--c-border)' }}>
-      {loginOpen && <LoginModal onClose={() => setLoginOpen(false)} onLogin={setAuthUser} />}
+      {loginOpen && <LoginModal onClose={() => setLoginOpen(false)} />}
 
       {/* ── Row 1: [left: login/mypage] [center: brand] [right: clock/timer] ── */}
       <div className="h-9 flex items-center px-4" style={{ borderBottom: '1px solid var(--c-border2)' }}>
@@ -669,16 +607,17 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, authUser, setA
                   className="text-[10px] cursor-pointer"
                   style={{ color: '#f87171' }}
                   title="Drive 연동 실패. 클릭해서 재시도"
-                  onClick={() => {
+                  onClick={async () => {
                     setDriveStatus('none');
-                    _drive.client?.requestAccessToken({ prompt: '' });
+                    const newToken = await refreshDriveToken();
+                    if (newToken) runDriveSync();
+                    else signInWithGoogle();
                   }}
                 >Drive 오류 (재시도)</span>
               )}
-              <button onClick={() => {
+              <button onClick={async () => {
                   if (isPublicPcMode()) clearDramaStorage();
-                  localStorage.removeItem('drama_auth_user');
-                  window.google?.accounts.id.disableAutoSelect();
+                  await supabaseSignOut();
                   clearAccessToken();
                   setDriveStatus('none');
                   setAuthUser(null);
@@ -1134,6 +1073,8 @@ function Shell({ authUser, setAuthUser }) {
           onSave={handleSave}
           onPrintPreview={() => setPrintPreviewOpen(true)}
           WorkTimer={WorkTimer}
+          authUser={authUser}
+          onLogout={() => setAuthUser(null)}
         />
         <UpdateBanner />
         <div data-tour-id="center-panel" className="flex-1 min-h-0"
@@ -1355,6 +1296,29 @@ export default function App() {
     catch { return null; }
   });
   const [, forceUpdate] = useState(0);
+
+  // Supabase 세션 복원 + 상태 변화 구독
+  useEffect(() => {
+    if (!supabase) return;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') && session) {
+        const userData = extractUserData(session);
+        if (userData) {
+          try { localStorage.setItem('drama_auth_user', JSON.stringify(userData)); } catch {}
+          _shellEverRendered = true;
+          setAuthUser(userData);
+        }
+        if (session.provider_token) {
+          setAccessToken(session.provider_token, 3600);
+        }
+      } else if (event === 'SIGNED_OUT') {
+        try { localStorage.removeItem('drama_auth_user'); } catch {}
+        clearAccessToken();
+        setAuthUser(null);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
   if (window.location.hash.startsWith('#review=')) return <SharedReviewView />;
   if (window.location.hash.startsWith('#log='))    return <LogShareView />;

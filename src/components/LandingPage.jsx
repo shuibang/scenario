@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+import React, { useState, useRef } from 'react';
+import { signInWithGoogle } from '../store/supabaseClient';
 
 // ─── 데이터 ────────────────────────────────────────────────────────────────────
 const COMPARE_ROWS = [
@@ -571,41 +570,19 @@ export default function LandingPage({ onStart, onLogin }) {
         <p style={{ margin: '6px 0 0' }}>버그 제보 및 피드백은 서비스 내 QnA 또는 이메일로 알려주세요</p>
       </footer>
 
-      {loginOpen && <LandingLoginModal onClose={() => setLoginOpen(false)} onLogin={handleLogin} />}
+      {loginOpen && <LandingLoginModal onClose={() => setLoginOpen(false)} />}
     </div>
   );
 }
 
 // ─── 랜딩용 로그인 모달 ──────────────────────────────────────────────────────
-function LandingLoginModal({ onClose, onLogin }) {
-  const googleBtnRef = useRef(null);
-  const [error, setError] = useState('');
-  const onLoginRef = useRef(onLogin);
-  onLoginRef.current = onLogin;
+function LandingLoginModal({ onClose }) {
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (!GOOGLE_CLIENT_ID || !window.google?.accounts?.id) return;
-    window.google.accounts.id.initialize({
-      client_id: GOOGLE_CLIENT_ID,
-      callback: (response) => {
-        try {
-          const payload = decodeJwt(response.credential);
-          if (payload) {
-            const userData = { name: payload.name, email: payload.email, picture: payload.picture };
-            localStorage.setItem('drama_auth_user', JSON.stringify(userData));
-            onLoginRef.current?.(userData);
-          } else {
-            setError('로그인 실패: 토큰 파싱 오류');
-          }
-        } catch { setError('로그인 오류가 발생했습니다'); }
-      },
-    });
-    if (googleBtnRef.current) {
-      window.google.accounts.id.renderButton(googleBtnRef.current, {
-        type: 'standard', theme: 'outline', size: 'large', text: 'continue_with', locale: 'ko', width: 280,
-      });
-    }
-  }, []);
+  const handleGoogle = async () => {
+    setLoading(true);
+    await signInWithGoogle(); // 리디렉트 후 onAuthStateChange가 처리
+  };
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 999, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onClose}>
@@ -614,23 +591,24 @@ function LandingLoginModal({ onClose, onLogin }) {
           <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--c-text)', marginBottom: 6 }}>로그인 / 회원가입</div>
           <div style={{ fontSize: 12, color: 'var(--c-text5)' }}>로그인하면 구글 드라이브에 자동저장됩니다</div>
         </div>
-        {GOOGLE_CLIENT_ID
-          ? <div style={{ display: 'flex', justifyContent: 'center' }}><div ref={googleBtnRef} /></div>
-          : <div style={{ fontSize: 12, textAlign: 'center', color: 'var(--c-text5)', padding: '8px 0' }}>로그인 기능을 준비 중입니다.</div>
-        }
-        {error && <div style={{ fontSize: 12, textAlign: 'center', color: '#ef4444' }}>{error}</div>}
+        <button
+          onClick={handleGoogle}
+          disabled={loading}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            padding: '10px 16px', borderRadius: 6, border: '1px solid var(--c-border3)',
+            background: 'var(--c-card)', color: 'var(--c-text)', fontSize: 14,
+            cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1, width: '100%',
+          }}
+        >
+          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="" style={{ width: 18, height: 18 }} />
+          {loading ? '이동 중…' : 'Google로 계속하기'}
+        </button>
         <div style={{ fontSize: 10, textAlign: 'center', color: 'var(--c-text6)' }}>Kakao / Naver 로그인은 준비 중입니다</div>
         <button onClick={onClose} style={{ fontSize: 12, color: 'var(--c-text6)', background: 'none', border: 'none', cursor: 'pointer' }}>닫기</button>
       </div>
     </div>
   );
-}
-
-function decodeJwt(token) {
-  try {
-    const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-    return JSON.parse(decodeURIComponent(escape(atob(base64))));
-  } catch { return null; }
 }
 
 // ─── 스타일 상수 ─────────────────────────────────────────────────────────────
