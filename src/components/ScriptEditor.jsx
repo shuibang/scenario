@@ -1469,9 +1469,16 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   }, [scrollToSceneId]);
 
   // ── Typewriter mode — keep cursor line centered in scroll container
+  // 타이핑 시에만 자동스크롤 — 클릭/탭으로 커서 이동할 때는 스크롤 안 함
   useEffect(() => {
     let rafId = null;
+    let lastEventWasKey = false;
+
+    const onKeyDown = () => { lastEventWasKey = true; };
+    const onPointerDown = () => { lastEventWasKey = false; };
+
     const onSelectionChange = () => {
+      if (!lastEventWasKey) return; // 클릭/탭 → 스크롤 건너뜀
       if (rafId) return; // throttle to one frame
       rafId = requestAnimationFrame(() => {
         rafId = null;
@@ -1497,8 +1504,12 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
         container.scrollTop += blockCenter - targetCenter;
       });
     };
+    document.addEventListener('keydown', onKeyDown, true);
+    document.addEventListener('pointerdown', onPointerDown, true);
     document.addEventListener('selectionchange', onSelectionChange);
     return () => {
+      document.removeEventListener('keydown', onKeyDown, true);
+      document.removeEventListener('pointerdown', onPointerDown, true);
       document.removeEventListener('selectionchange', onSelectionChange);
       if (rafId) cancelAnimationFrame(rafId);
     };

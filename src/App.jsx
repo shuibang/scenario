@@ -944,10 +944,14 @@ function Shell({ authUser, setAuthUser }) {
     setMobileBottomOpen(false);
   }, [state.activeDoc]);
 
-  // 키보드 올라오면 하단 패널 자동 닫기 (메모 탭은 입력란이 하단이므로 제외)
+  // 키보드 올라오면 하단 패널 자동 닫기 — 단, 포커스가 하단패널 내부에 있으면 유지
   useEffect(() => {
-    if (keyboardUp && mobileTab !== 'memo') {
-      setMobileBottomOpen(false);
+    if (keyboardUp) {
+      const bottomPanel = document.querySelector('[data-bottom-panel]');
+      const hasFocusInPanel = bottomPanel?.contains(document.activeElement);
+      if (!hasFocusInPanel) {
+        setMobileBottomOpen(false);
+      }
     }
   }, [keyboardUp]);
 
