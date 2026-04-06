@@ -39,8 +39,10 @@ function resolveCharName(block, characters) {
 // ─── Normalize a single script block for print
 function stripLiteralTags(str) {
   return (str || '')
-    .replace(/&lt;[^&]*&gt;/g, '') // &lt;br&gt; 등 엔티티 형태
-    .replace(/<[^>]+>/g, '');      // <br> 등 실제 태그 문자열
+    .replace(/&lt;br\s*\/?&gt;/gi, '\n') // &lt;br&gt; → 줄바꿈
+    .replace(/<br\s*\/?>/gi, '\n')       // <br> → 줄바꿈
+    .replace(/&lt;[^&]*&gt;/g, '')       // 나머지 엔티티 태그 제거
+    .replace(/<[^>]+>/g, '');            // 나머지 실제 태그 제거
 }
 
 function normalizeBlock(block, characters) {

@@ -18,8 +18,10 @@
 
 function stripHtml(html) {
   return (html || '')
-    .replace(/&lt;[^&]*&gt;/g, '') // 텍스트로 들어온 HTML 엔티티 태그 ex) &lt;br&gt;
-    .replace(/<[^>]+>/g, '');      // 실제 HTML 태그
+    .replace(/&lt;br\s*\/?&gt;/gi, '\n') // &lt;br&gt; → 줄바꿈
+    .replace(/<br\s*\/?>/gi, '\n')       // <br> → 줄바꿈
+    .replace(/&lt;[^&]*&gt;/g, '')       // 나머지 엔티티 태그 제거
+    .replace(/<[^>]+>/g, '');            // 나머지 실제 태그 제거
 }
 
 // ─── A4 metrics ────────────────────────────────────────────────────────────────
