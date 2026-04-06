@@ -29,8 +29,6 @@ const OPEN_H     = 280;  // px — 열렸을 때 패널 전체 고정 높이
 const CONTENT_H  = OPEN_H - TAB_H; // 콘텐츠 영역 = 224px
 const AD_W       = '25%'; // 왼쪽 광고 (대본 탭 버튼 폭과 동일)
 const MENU_W     = '75%'; // 오른쪽 메뉴
-const MEMO_AD_H  = 56;   // px — 메모탭 하단 광고 높이 (콘텐츠 224px의 1/4)
-const MEMO_ROW_H = CONTENT_H - MEMO_AD_H; // px — 메모탭 상단 콘텐츠 행 높이 = 168px
 
 export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, onClose }) {
   const { state, dispatch } = useApp();
@@ -96,16 +94,12 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, on
           {tab === 'memo' ? (
             <>
               {/* 좌: 코멘트 */}
-              <div style={{ position: 'absolute', top: 0, left: 0, width: '50%', bottom: MEMO_AD_H, borderRight: '1px solid var(--c-border)', overflow: 'hidden' }}>
+              <div style={{ position: 'absolute', top: 0, left: 0, width: '50%', bottom: 0, borderRight: '1px solid var(--c-border)', overflow: 'hidden' }}>
                 <MobileMemoTab />
               </div>
               {/* 우: 체크리스트 */}
-              <div style={{ position: 'absolute', top: 0, right: 0, width: '50%', bottom: MEMO_AD_H, overflowY: 'auto', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}>
+              <div style={{ position: 'absolute', top: 0, right: 0, width: '50%', bottom: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}>
                 <MobileChecklistPanel />
-              </div>
-              {/* 하단: 광고 */}
-              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: MEMO_AD_H, borderTop: '1px solid var(--c-border)', overflow: 'hidden' }}>
-                <AdBanner slot="mobile-memo-bottom" mobileHide={false} height={MEMO_AD_H} />
               </div>
             </>
           ) : (
