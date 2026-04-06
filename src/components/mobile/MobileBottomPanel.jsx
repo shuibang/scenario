@@ -30,6 +30,7 @@ const CONTENT_H  = OPEN_H - TAB_H; // 콘텐츠 영역 = 224px
 const AD_W       = '25%'; // 왼쪽 광고 (대본 탭 버튼 폭과 동일)
 const MENU_W     = '75%'; // 오른쪽 메뉴
 const MEMO_AD_H  = 56;   // px — 메모탭 하단 광고 높이 (콘텐츠 224px의 1/4)
+const MEMO_ROW_H = CONTENT_H - MEMO_AD_H; // px — 메모탭 상단 콘텐츠 행 높이 = 168px
 
 export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, onClose }) {
   const { state, dispatch } = useApp();
@@ -91,18 +92,18 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, on
 
       {/* 탭 콘텐츠 — 메모탭은 flex, 그 외는 absolute */}
       {open && tab === 'memo' && (
-        <div data-bottom-panel style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          {/* 상단: 코멘트(좌) + 체크리스트(우) */}
-          <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
+        <div data-bottom-panel style={{ flexShrink: 0, overflow: 'hidden' }}>
+          {/* 상단: 코멘트(좌) + 체크리스트(우) — 명시적 높이 */}
+          <div style={{ height: MEMO_ROW_H, display: 'flex', overflow: 'hidden' }}>
             <div style={{ width: '50%', flexShrink: 0, borderRight: '1px solid var(--c-border)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               <MobileMemoTab />
             </div>
-            <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}>
+            <div style={{ width: '50%', overflowY: 'auto', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}>
               <MobileChecklistPanel />
             </div>
           </div>
-          {/* 하단 광고 — 콘텐츠 높이의 1/4 */}
-          <div style={{ height: MEMO_AD_H, flexShrink: 0, borderTop: '1px solid var(--c-border)', overflow: 'hidden' }}>
+          {/* 하단 광고 — 명시적 높이 */}
+          <div style={{ height: MEMO_AD_H, borderTop: '1px solid var(--c-border)', overflow: 'hidden' }}>
             <AdBanner slot="mobile-memo-bottom" mobileHide={false} height={MEMO_AD_H} />
           </div>
         </div>
