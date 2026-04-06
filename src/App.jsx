@@ -968,6 +968,7 @@ function Shell({ authUser, setAuthUser }) {
   }, []);
 
   const [saveToast, setSaveToast] = useState(false);
+  const [saveToastMsg, setSaveToastMsg] = useState('저장되었습니다');
   const saveToastTimer = useRef(null);
 
   // 10분마다 자동저장 스냅샷
@@ -1015,10 +1016,18 @@ function Shell({ authUser, setAuthUser }) {
     (async () => {
       try {
         if (!isTokenValid()) await refreshDriveToken();
-        if (isTokenValid()) await saveSnapshot(snap, '수동저장', 'manual');
+        if (isTokenValid()) {
+          await saveSnapshot(snap, '수동저장', 'manual');
+        } else {
+          clearTimeout(saveToastTimer.current);
+          setSaveToastMsg('Drive 로그인 필요 — 백업 기록은 저장되지 않았습니다');
+          setSaveToast(true);
+          saveToastTimer.current = setTimeout(() => setSaveToast(false), 3500);
+        }
       } catch {}
     })();
     clearTimeout(saveToastTimer.current);
+    setSaveToastMsg('저장되었습니다');
     setSaveToast(true);
     saveToastTimer.current = setTimeout(() => setSaveToast(false), 2000);
   }, [state]);
@@ -1093,13 +1102,15 @@ function Shell({ authUser, setAuthUser }) {
       {saveToast && (
         <div style={{
           position: 'fixed', bottom: '32px', left: '50%', transform: 'translateX(-50%)',
-          background: 'var(--c-accent)', color: '#fff',
+          background: saveToastMsg === '저장되었습니다' ? 'var(--c-accent)' : '#b7791f',
+          color: '#fff',
           padding: '8px 20px', borderRadius: '8px',
           fontSize: '13px', zIndex: 9999,
           boxShadow: '0 2px 12px rgba(0,0,0,0.2)',
           pointerEvents: 'none',
+          maxWidth: 360, textAlign: 'center',
         }}>
-          저장되었습니다
+          {saveToastMsg}
         </div>
       )}
     </>

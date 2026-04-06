@@ -135,6 +135,11 @@ export default function SnapshotPanel({ onClose }) {
     setError(null);
     try {
       if (!isTokenValid()) await refreshDriveToken();
+      if (!isTokenValid()) {
+        setError('Drive 토큰이 만료되었습니다. Google 계정으로 다시 로그인해 주세요.');
+        setSnapshots([]);
+        return;
+      }
       const list = await loadSnapshots();
       setSnapshots(list);
     } catch {
@@ -267,14 +272,13 @@ export default function SnapshotPanel({ onClose }) {
         {/* 백업 버튼 */}
         <button
           onClick={handleBackup}
-          disabled={backing || notLoggedIn}
+          disabled={backing}
           style={{
             width: '100%', padding: '9px 0', borderRadius: 8, marginBottom: 14,
             background: backing ? 'transparent' : 'rgba(183,148,246,0.2)',
             border: '1px solid rgba(183,148,246,0.4)',
             color: '#b794f4', fontSize: 13, fontWeight: 700,
-            cursor: (backing || notLoggedIn) ? 'not-allowed' : 'pointer',
-            opacity: notLoggedIn ? 0.5 : 1,
+            cursor: backing ? 'not-allowed' : 'pointer',
           }}
         >
           {backing ? '백업 중…' : '지금 백업하기'}
