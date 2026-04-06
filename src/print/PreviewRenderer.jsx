@@ -8,7 +8,7 @@
  * Scales each A4 page to fit the available preview column width.
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { buildPrintModel } from './PrintModel';
 import { getLayoutMetrics, tokenizeSection, paginate } from './LineTokenizer';
 import { resolveFont } from './FontRegistry';
@@ -282,7 +282,21 @@ export default function PreviewRenderer({ appState, selections, columnWidth = 34
   const fontSize   = preset.fontSize    ?? 11;
   const lineHeight = preset.lineHeight  ?? 1.6;
   const margins    = preset.pageMargins ?? { top: 35, right: 30, bottom: 30, left: 30 };
-  const scale      = columnWidth / A4_W_PX;
+
+  // 실제 컨테이너 너비를 측정해서 scale 계산
+  const containerRef = useRef(null);
+  const [measuredWidth, setMeasuredWidth] = useState(columnWidth);
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => {
+      const w = entries[0]?.contentRect?.width;
+      if (w && w > 0) setMeasuredWidth(w);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const scale = measuredWidth / A4_W_PX;
 
   const printModel = useMemo(
     () => buildPrintModel(appState, selections, preset),
@@ -315,7 +329,7 @@ export default function PreviewRenderer({ appState, selections, columnWidth = 34
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, alignItems: 'center', padding: '16px 0' }}>
+    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', gap: 24, alignItems: 'center', padding: '16px 0' }}>
       {pages.map((p, i) => {
         const sectionLabel = p.isCover ? '표지'
           : p.section.type === 'synopsis' ? '시놉시스'

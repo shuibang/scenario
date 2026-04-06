@@ -52,7 +52,7 @@ function makeStyles(preset, metrics) {
   const { pdfFamily: ff } = resolveFont(preset, 'pdf');
   const fs   = preset?.fontSize    ?? 11;
   const lh   = preset?.lineHeight  ?? 1.6;
-  const { dialogueGapPt, margins } = metrics;
+  const { dialogueGapPt, margins, contentWpt } = metrics;
 
   return StyleSheet.create({
     page: {
@@ -76,7 +76,7 @@ function makeStyles(preset, metrics) {
     // ── page number
     pageNum: {
       position: 'absolute',
-      bottom:   15 * MM_TO_PT,
+      bottom:   '15mm',
       left: 0, right: 0,
       textAlign: 'center',
       fontSize: fs - 2,
@@ -89,13 +89,13 @@ function makeStyles(preset, metrics) {
     // ── episode
     epTitle:     { fontSize: fs + 2, fontWeight: 700, textAlign: 'center' },
     scene:       { fontWeight: 700, marginTop: 10, marginBottom: 2 },
-    // action/paren: View wrapper로 paddingLeft 처리 → Text 너비가 정확히 계산됨
-    actionWrap:  { paddingLeft: '8mm', marginBottom: 1 },
+    // action/paren: View wrapper에 width 명시 → 페이지 경계에서 flex 재계산 방지
+    actionWrap:  { width: contentWpt, paddingLeft: '8mm', marginBottom: 1 },
     action:      { textAlign: 'justify' },
-    dialogueRow: { flexDirection: 'row', marginBottom: 1 },
+    dialogueRow: { width: contentWpt, flexDirection: 'row', marginBottom: 1 },
     charCell:    { width: dialogueGapPt, fontWeight: 700, flexShrink: 0 },
-    speechCell:  { flex: 1, textAlign: 'justify' },
-    parenWrap:   { paddingLeft: dialogueGapPt, marginBottom: 1 },
+    speechCell:  { width: contentWpt - dialogueGapPt, textAlign: 'justify' },
+    parenWrap:   { width: contentWpt, paddingLeft: dialogueGapPt, marginBottom: 1 },
     paren:       { fontSize: fs - 1, color: '#444' },
     transition:  { textAlign: 'right', marginVertical: 4 },
     blank:       { marginBottom: fs * lh },
@@ -198,10 +198,57 @@ function TokenEl({ token, text, S }) {
   }
 }
 
+// ─── Split-block line renderer ────────────────────────────────────────────────
+// continuation / split 블록은 이미 pre-wrap된 줄들.
+// \n으로 합쳐 단일 <Text>에 넣으면 textkit이 각 줄을 독립 단락으로 처리해
+// justify가 오동작하므로, 줄마다 별도 <Text>로 렌더링한다.
+function SplitLines({ kind, lines, token, S }) {
+  const plain = (t) => t.replace(/<[^>]+>/g, '');
+  switch (kind) {
+    case 'action':
+      return (
+        <View style={S.actionWrap}>
+          {lines.map((ln, i) => (
+            <Text key={i} style={{ ...S.action, textAlign: 'left' }}>{plain(ln)}</Text>
+          ))}
+        </View>
+      );
+    case 'dialogue':
+      return (
+        <>
+          {lines.map((ln, i) => (
+            <View key={i} style={S.dialogueRow}>
+              <Text style={S.charCell}>{i === 0 ? (token.charName || '') : ''}</Text>
+              <Text style={{ ...S.speechCell, textAlign: 'left' }}>{plain(ln)}</Text>
+            </View>
+          ))}
+        </>
+      );
+    case 'parenthetical':
+      return (
+        <View style={S.parenWrap}>
+          {lines.map((ln, i) => (
+            <Text key={i} style={{ ...S.paren, textAlign: 'left' }}>{plain(ln)}</Text>
+          ))}
+        </View>
+      );
+    case 'body':
+    default:
+      return (
+        <>
+          {lines.map((ln, i) => (
+            <Text key={i} style={{ ...S.body, textAlign: 'left' }}>{htmlToPdfChildren(ln)}</Text>
+          ))}
+        </>
+      );
+  }
+}
+
 // ─── A single PDF page ────────────────────────────────────────────────────────
 function PdfPage({ tokens, pageNum, showPageNum, S }) {
-  // renderList 구성: 같은 블록의 continuation 줄들을 하나로 합쳐 렌더링
-  // → 분할된 단락도 내부 줄은 justify, 마지막 줄만 left-align(자연스러운 단락 끝)
+  // renderList 구성:
+  //   isSplit=false → 블록 전체가 이 페이지에 있음 → TokenEl (blockText 원문, react-pdf가 wrap)
+  //   isSplit=true  → 블록이 페이지를 걸침 → SplitLines (pre-wrap된 줄 개별 렌더, justify 오동작 방지)
   const renderList = [];
   let i = 0;
   while (i < tokens.length) {
@@ -215,13 +262,13 @@ function PdfPage({ tokens, pageNum, showPageNum, S }) {
         lines.push(tokens[i].text);
         i++;
       }
-      renderList.push({ kind: tok.kind, text: lines.join('\n'), token: tok });
+      renderList.push({ kind: tok.kind, lines, token: tok, isSplit: true });
       continue;
     }
 
-    // 단일 줄 블록 (blockLineCount 없거나 1)
+    // 단일 줄 블록
     if (!tok.blockLineCount || tok.blockLineCount <= 1) {
-      renderList.push({ kind: tok.kind, text: tok.rawHtml ?? tok.blockText ?? tok.text, token: tok });
+      renderList.push({ kind: tok.kind, text: tok.rawHtml ?? tok.blockText ?? tok.text, token: tok, isSplit: false });
       i++;
       continue;
     }
@@ -236,27 +283,29 @@ function PdfPage({ tokens, pageNum, showPageNum, S }) {
     const fullyOnPage = onPage >= tok.blockLineCount - 1;
 
     if (fullyOnPage) {
-      // 블록 전체가 이 페이지에 있음 → blockText(원문)로 justify 최적 렌더링
-      renderList.push({ kind: tok.kind, text: tok.rawHtml ?? tok.blockText ?? tok.text, token: tok });
+      // 블록 전체가 이 페이지 → blockText 원문으로 react-pdf가 직접 wrap (justify 정상)
+      renderList.push({ kind: tok.kind, text: tok.rawHtml ?? tok.blockText ?? tok.text, token: tok, isSplit: false });
       i++;
       while (i < tokens.length && tokens[i].isFirstOfBlock === false && tokens[i].kind === tok.kind) i++;
     } else {
-      // 블록이 다음 페이지로 이어짐 → 이 페이지의 줄들을 하나로 합침
+      // 블록이 다음 페이지로 이어짐 → 이 페이지 줄들을 pre-wrap 개별 렌더
       const lines = [tok.text];
       i++;
       while (i < tokens.length && tokens[i].isFirstOfBlock === false && tokens[i].kind === tok.kind) {
         lines.push(tokens[i].text);
         i++;
       }
-      renderList.push({ kind: tok.kind, text: lines.join('\n'), token: tok });
+      renderList.push({ kind: tok.kind, lines, token: tok, isSplit: true });
     }
   }
 
   return (
     <Page size="A4" style={S.page}>
-      {renderList.map((item, i) => (
-        <TokenEl key={i} token={item.token} text={item.text} S={S} />
-      ))}
+      {renderList.map((item, i) =>
+        item.isSplit
+          ? <SplitLines key={i} kind={item.kind} lines={item.lines} token={item.token} S={S} />
+          : <TokenEl key={i} token={item.token} text={item.text} S={S} />
+      )}
       {showPageNum && (
         <Text style={S.pageNum}>- {pageNum} -</Text>
       )}

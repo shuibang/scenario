@@ -49,9 +49,8 @@ export function getLayoutMetrics(preset) {
   const m = (preset?.dialogueGap || '7em').match(/^([\d.]+)em$/);
   if (m) dialogueGapPt = parseFloat(m[1]) * fontSize;
 
-  // Korean characters are full-width: each glyph is exactly fontSize pt wide.
-  // Using fontSize directly (ratio 1.0) ensures pre-wrapped tokens never exceed the content width in pdfkit.
-  const avgCharPt      = fontSize * 1.0;
+  // 함초롱바탕 한글 평균 자폭 ≈ fontSize * 0.55 (실측 기준)
+  const avgCharPt      = fontSize * 0.55;
   const charsPerLine   = Math.floor(contentWpt / avgCharPt);
   const speechWpt      = contentWpt - dialogueGapPt;
   const charsInSpeech  = Math.max(20, Math.floor(speechWpt / avgCharPt));
@@ -369,15 +368,24 @@ function isOrphanToken(t) {
 
 // ─── LineToken[] → Page[] (each page = LineToken[]) ──────────────────────────
 // sectionType: 섹션 종류에 따라 ② 조기 넘김의 블록 크기 상한이 달라짐.
-//   episode/scenelist: 씬 액션 등 어떤 크기의 블록도 이동 가능 (한 페이지 이내)
+//   episode/scenelist: 짧은 대사(≤4줄)만 이동 — 긴 액션 블록은 ③으로 자연 분할
 //   synopsis/characters/등: 짧은 블록(≤20%)만 이동 — 긴 줄거리 단락은 자연 분할
 export function paginate(tokens, metrics, sectionType = '') {
   const { linesPerPage } = metrics;
   const isEpisodeType = sectionType === 'episode' || sectionType === 'scenelist' || sectionType === '';
-  const maxBlockH = isEpisodeType ? linesPerPage : linesPerPage / 5;
+  // episode: 4줄 이하 블록만 ②로 이동 (긴 액션은 자연 분할 → 과도한 페이지 공백 방지)
+  // synopsis: 약 20% 이하 블록만 이동
+  const maxBlockH = isEpisodeType ? 4 : Math.ceil(linesPerPage / 5);
   const pages = [];
   let page = [];
   let used = 0;
+
+  const totalH = tokens.reduce((s, t) => s + (t.height || 1), 0);
+  const theoreticalPages = totalH / linesPerPage;
+  console.log(
+    `[paginate] sectionType=${sectionType}  linesPerPage=${linesPerPage.toFixed(2)}  maxBlockH=${maxBlockH}` +
+    `  totalTokens=${tokens.length}  totalH=${totalH.toFixed(2)}  theoreticalPages=${theoreticalPages.toFixed(2)}`
+  );
 
   // 현재 페이지 끝에서 고아 토큰을 제거하고 반환 (새 페이지 첫머리로 이동)
   const rescueTrailer = () => {
@@ -436,7 +444,33 @@ export function paginate(tokens, metrics, sectionType = '') {
     used += h;
   }
   if (page.length > 0) pages.push(page);
-  return pages.length ? pages : [[]];
+  const result = pages.length ? pages : [[]];
+
+  // ── 디버그 출력
+  result.forEach((pg, pi) => {
+    const usedH = pg.reduce((s, t) => s + (t.height || 1), 0);
+    const splitToks = pg.filter(t => t.isFirstOfBlock === false);
+    console.log(
+      `[paginate] page ${pi + 1}/${result.length}  tokens=${pg.length}  usedH=${usedH.toFixed(2)}/${linesPerPage.toFixed(2)}` +
+      (splitToks.length ? `  split=${splitToks.length}(${[...new Set(splitToks.map(t=>t.kind))].join(',')})` : '')
+    );
+    // 마지막 페이지가 절반 이하로 채워지면 경고
+    if (pi === result.length - 1 && usedH < linesPerPage * 0.5 && result.length > 1) {
+      console.warn(`[paginate] ⚠ 마지막 페이지가 ${(usedH/linesPerPage*100).toFixed(0)}%만 채워짐 (${usedH.toFixed(1)}/${linesPerPage.toFixed(1)})`);
+    }
+    // 모든 토큰 상세 출력 (마지막 페이지이거나 split이 있는 페이지)
+    if (splitToks.length || pi === result.length - 1) {
+      pg.forEach((t, ti) => {
+        const h = t.height || 1;
+        const isCont = t.isFirstOfBlock === false;
+        const flag = isCont ? '[CONT]' : '[FIRST]';
+        const extra = isCont ? '' : (t.blockLineCount > 1 ? ` blkLines=${t.blockLineCount}` : '');
+        console.log(`  [${ti}] ${flag} kind=${t.kind}  h=${h.toFixed(3)}${extra}  "${(t.text||'').slice(0,40)}"`);
+      });
+    }
+  });
+
+  return result;
 }
 
 // ─── Convenience: tokenize + paginate a section in one call ──────────────────
