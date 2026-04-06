@@ -12,7 +12,8 @@ const SLOT_CONFIG = {
   'bottom-fixed':      { adSlot: '3846187377', format: 'horizontal' },
   'print-modal-left':  { adSlot: '3846187377', format: 'horizontal' },
   'print-modal-right': { adSlot: '8715370672', format: 'auto' },
-  'mobile-bottom':     { adSlot: '2569066048', format: 'autorelaxed' },
+  'mobile-bottom':      { adSlot: '2569066048', format: 'autorelaxed' },
+  'mobile-memo-bottom': { adSlot: '2569066048', format: 'auto' },
 };
 // char-* 슬롯은 수직형
 function resolveConfig(slot) {

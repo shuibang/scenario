@@ -24,12 +24,13 @@ const PLAN_DOCS = [
   { doc: 'scenelist',  label: '씬리스트' },
 ];
 
-const TAB_H     = 56;   // px — 탭바 고정 높이
-const OPEN_H    = 280;  // px — 열렸을 때 패널 전체 고정 높이
-const CONTENT_H = OPEN_H - TAB_H; // 콘텐츠 영역 = 224px
-const BANNER_H  = 24;   // px — 하단 광고 띠 (메모탭 전용)
-const AD_W      = '25%'; // 왼쪽 광고 (대본 탭 버튼 폭과 동일)
-const MENU_W    = '75%'; // 오른쪽 메뉴
+const TAB_H      = 56;   // px — 탭바 고정 높이
+const OPEN_H     = 280;  // px — 열렸을 때 패널 전체 고정 높이
+const CONTENT_H  = OPEN_H - TAB_H; // 콘텐츠 영역 = 224px
+const AD_W       = '25%'; // 왼쪽 광고 (대본 탭 버튼 폭과 동일)
+const MENU_W     = '75%'; // 오른쪽 메뉴
+const MEMO_L_W   = 75;   // px — 메모탭 왼쪽(코멘트) 열 너비
+const MEMO_AD_H  = 56;   // px — 메모탭 하단 광고 높이 (콘텐츠 224px의 1/4)
 
 export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, onClose }) {
   const { state, dispatch } = useApp();
@@ -92,30 +93,26 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, on
       {/* 탭 콘텐츠 */}
       {open && (
         <div data-bottom-panel style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
-          {/* 왼쪽 광고 — position:absolute로 레이아웃 흐름 완전 분리 */}
+          {/* 왼쪽 — 메모탭: 코멘트 / 그 외: 광고 */}
           <div style={{
-            position: 'absolute', top: 0, left: 0, bottom: tab === 'memo' ? BANNER_H : 0,
-            width: AD_W, borderRight: '1px solid var(--c-border)', overflow: 'hidden',
-            display: tab === 'memo' ? 'none' : 'block',
+            position: 'absolute', top: 0, left: 0,
+            bottom: tab === 'memo' ? MEMO_AD_H : 0,
+            width: tab === 'memo' ? MEMO_L_W : AD_W,
+            borderRight: '1px solid var(--c-border)', overflow: 'hidden',
+            display: 'flex', flexDirection: 'column',
           }}>
-            <AdBanner slot="mobile-bottom-left" mobileHide={false} height={CONTENT_H} />
+            {tab === 'memo'
+              ? <MobileMemoTab />
+              : <AdBanner slot="mobile-bottom-left" mobileHide={false} height={CONTENT_H} />
+            }
           </div>
 
-          {/* 왼쪽 코멘트 — 메모탭 전용 */}
-          {tab === 'memo' && (
-            <div style={{
-              position: 'absolute', top: 0, left: 0, bottom: BANNER_H,
-              width: AD_W, borderRight: '1px solid var(--c-border)', overflow: 'hidden',
-              display: 'flex', flexDirection: 'column',
-            }}>
-              <MobileMemoTab />
-            </div>
-          )}
-
-          {/* 오른쪽 메뉴 — paddingLeft로 왼쪽 광고 공간 확보 */}
+          {/* 오른쪽 메뉴 */}
           <div style={{
-            position: 'absolute', top: 0, right: 0, bottom: 0,
-            width: MENU_W, overflowY: 'auto', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y',
+            position: 'absolute', top: 0, right: 0,
+            bottom: tab === 'memo' ? MEMO_AD_H : 0,
+            width: tab === 'memo' ? `calc(100% - ${MEMO_L_W}px)` : MENU_W,
+            overflowY: 'auto', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y',
           }}>
             {tab === 'script' && (
               <div data-tour-id="left-panel" className="m-panel-content">
@@ -147,10 +144,10 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, on
             {tab === 'memo' && <MobileChecklistPanel />}
           </div>
 
-          {/* 하단 광고 띠 — 메모탭 전용 (pointerEvents: none으로 메뉴 클릭 차단 방지) */}
+          {/* 하단 광고 — 메모탭 전용, 전체 너비 반응성 */}
           {tab === 'memo' && (
-            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: BANNER_H, overflow: 'hidden', borderTop: '1px solid var(--c-border)', pointerEvents: 'none' }}>
-              <AdBanner slot="mobile-memo-bottom" mobileHide={false} height={BANNER_H} />
+            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: MEMO_AD_H, borderTop: '1px solid var(--c-border)', overflow: 'hidden' }}>
+              <AdBanner slot="mobile-memo-bottom" mobileHide={false} height={MEMO_AD_H} />
             </div>
           )}
         </div>

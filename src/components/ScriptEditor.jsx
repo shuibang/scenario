@@ -14,8 +14,36 @@ const CHAR_SUGGEST_KEY = 'drama_charSuggestInAction';
 
 const DEFAULT_SYMBOLS = ['(E)', '(F)', 'Flashback', 'Insert', 'Ins.', 'Subtitle)', 'S.T.', '(N)', 'N.A.'];
 
+// ─── Builtin guide beats (태그추가용, StructurePage와 동기화 유지) ────────────
+const BUILTIN_GUIDES = [
+  {
+    id: 'save-the-cat',
+    name: 'Save the Cat (15비트)',
+    color: '#6366f1',
+    beats: ['오프닝','주제 명시','설정','기폭제','토론','2막 진입','B스토리','재미와 놀이','중간점','악당이 다가오다','절망의 순간','영혼의 어두운 밤','3막 진입','피날레','엔딩'],
+  },
+  {
+    id: '7-sequence',
+    name: '7시퀀스',
+    color: '#f59e0b',
+    beats: ['발단','전개1','전개2','전개3','클라이막스','결말1','결말2'],
+  },
+];
+
+// Slash command palette items
+// action: 'block' → applyBlockType, 'charcheck' → 등장, 'sceneref' → 연결, 'symbol' → 기타, 'tag' → 태그추가(모바일전용)
+const SLASH_COMMANDS = [
+  { type: 'scene_number', action: 'block',    icon: 'S#', label: '씬번호',  desc: '새 씬 시작' },
+  { type: 'action',       action: 'block',    icon: '지', label: '지문',    desc: '행동/상황 묘사' },
+  { type: 'dialogue',     action: 'block',    icon: '대', label: '대사',    desc: '인물 대사' },
+  { type: 'charcheck',    action: 'charcheck',icon: '👤', label: '등장',    desc: '씬 등장인물 추가' },
+  { type: 'sceneref',     action: 'sceneref', icon: '🔗', label: '연결',    desc: '다른 씬 참조 삽입' },
+  { type: 'symbol',       action: 'symbol',   icon: '기', label: '기타',    desc: '특수 기호 삽입' },
+  { type: 'tag',          action: 'tag',      icon: '🏷', label: '태그추가', desc: '구조 태그 지정', mobileOnly: true },
+];
+
 // ─── Symbol Picker ────────────────────────────────────────────────────────────
-function SymbolPicker({ mobile = false, closeToken = 0, onOpen }) {
+function SymbolPicker({ mobile = false, closeToken = 0, onOpen, forceOpen = null, onForceClose }) {
   const { state, dispatch } = useApp();
   // dropPos null = closed, { top?, bottom?, left } = open — 둘을 분리하지 않아 (0,0) 렌더 방지
   const [dropPos, setDropPos] = useState(null);
@@ -51,12 +79,20 @@ function SymbolPicker({ mobile = false, closeToken = 0, onOpen }) {
     if (closeToken > 0) setDropPos(null);
   }, [closeToken]);
 
+  // 슬래시 커맨드에서 forceOpen 위치로 열기 요청
+  useEffect(() => {
+    if (forceOpen) {
+      setDropPos(forceOpen);
+      onOpen?.();
+    }
+  }, [forceOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (!open) { setActiveIdx(-1); return; }
     const handler = (e) => {
       const inBtn = ref.current?.contains(e.target);
       const inDrop = dropRef.current?.contains(e.target);
-      if (!inBtn && !inDrop) setDropPos(null);
+      if (!inBtn && !inDrop) { setDropPos(null); onForceClose?.(); }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -577,6 +613,67 @@ function parseSurface(surface, metaRef, epId, projId) {
 }
 
 // ─── CharSuggestionPanel ──────────────────────────────────────────────────────
+// ─── SlashPalette ─────────────────────────────────────────────────────────────
+function SlashPalette({ commands, position, selectedIdx, onSelect, onClose }) {
+  if (!commands.length) return null;
+  return createPortal(
+    <>
+      <div
+        style={{ position: 'fixed', inset: 0, zIndex: 199 }}
+        onMouseDown={e => { e.preventDefault(); onClose(); }}
+      />
+      <div style={{
+        position: 'fixed', top: position.y, left: position.x,
+        zIndex: 200,
+        background: 'var(--c-panel)',
+        border: '1px solid var(--c-border)',
+        borderRadius: 8,
+        boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
+        minWidth: 200,
+        overflow: 'hidden',
+      }}>
+        <div style={{
+          padding: '4px 12px 3px',
+          fontSize: 10, color: 'var(--c-text6)',
+          borderBottom: '1px solid var(--c-border2)',
+        }}>
+          블록 타입 선택 — Tab 또는 클릭으로 적용
+        </div>
+        {commands.map((cmd, idx) => {
+          const sel = idx === selectedIdx;
+          return (
+            <div
+              key={cmd.type}
+              onMouseDown={e => { e.preventDefault(); onSelect(cmd.type); }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '8px 14px',
+                background: sel ? 'var(--c-accent)' : 'transparent',
+                cursor: 'pointer',
+                transition: 'background 0.1s',
+              }}
+            >
+              <span style={{
+                width: 28, height: 28, borderRadius: 6,
+                background: sel ? 'rgba(255,255,255,0.25)' : 'var(--c-border2)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 11, fontWeight: 700,
+                color: sel ? '#fff' : 'var(--c-text4)',
+                flexShrink: 0,
+              }}>{cmd.icon}</span>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: sel ? 700 : 500, color: sel ? '#fff' : 'var(--c-text)' }}>{cmd.label}</div>
+                <div style={{ fontSize: 11, color: sel ? 'rgba(255,255,255,0.75)' : 'var(--c-text5)' }}>{cmd.desc}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </>,
+    document.body
+  );
+}
+
 function CharSuggestionPanel({ charName, onConfirm, onDismiss, onDisable }) {
   return (
     <div
@@ -825,6 +922,11 @@ const EditorSurface = forwardRef(function EditorSurface({
   activeProjectId,
   onPaste,
   onUndo,          // () → 커스텀 Undo 핸들러
+  onSlashInput,    // ({ blockEl, query }) → 슬래시 팔레트 오픈
+  onSlashClose,    // () → 슬래시 팔레트 닫기
+  slashOpenRef,    // ref: 팔레트 열림 여부
+  onSlashKeyNav,   // (key) → ↑↓ 탐색
+  onSlashSelectCurrent, // () → Tab으로 현재 항목 선택
 }, ref) {
   const surfaceRef = useRef(null);
   const metaRef = useRef({});
@@ -1016,17 +1118,32 @@ const EditorSurface = forwardRef(function EditorSurface({
     if (composingRef.current) return;
     doParse();
 
-    // CharSuggestion: check if current action block content looks like a character name
     const sel = window.getSelection();
     const el = surfaceRef.current;
     if (!sel?.rangeCount || !el) return;
     const blockEl = findBlockEl(sel.getRangeAt(0).startContainer, el);
+
+    // Slash palette: 모든 블록 타입에서 / 로 시작하면 감지
+    if (blockEl) {
+      const bType = blockEl.dataset.blockType;
+      // dialogue는 .ce-speech 기준, 나머지는 전체 텍스트
+      const rawText = bType === 'dialogue'
+        ? (blockEl.querySelector('.ce-speech')?.innerText || '').replace(/\n$/, '')
+        : blockText(blockEl);
+      if (rawText.startsWith('/')) {
+        onSlashInput?.({ blockEl, query: rawText.slice(1) });
+        return; // 슬래시 메뉴 열린 동안 charSuggest 건너뜀
+      }
+    }
+    onSlashClose?.();
+
+    // CharSuggestion: check if current action block content looks like a character name
     if (blockEl?.dataset.blockType === 'action') {
       onCharSuggest?.(blockEl.dataset.blockId, blockText(blockEl));
     } else {
       onCharSuggest?.(null, null);
     }
-  }, [doParse, onCharSuggest]);
+  }, [doParse, onCharSuggest, onSlashInput, onSlashClose]);
 
   // ── KeyDown handler ───────────────────────────────────────────────────────
   const handleKeyDown = useCallback((e) => {
@@ -1040,6 +1157,30 @@ const EditorSurface = forwardRef(function EditorSurface({
     const blockEl = findBlockEl(range.startContainer, el);
     if (!blockEl) return;
     const type = blockEl.dataset.blockType;
+
+    // ── Slash palette keyboard handling
+    if (slashOpenRef?.current) {
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        onSlashKeyNav?.(e.key);
+        return;
+      }
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        onSlashSelectCurrent?.();
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onSlashClose?.();
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        onSlashSelectCurrent?.(); // Enter = 현재 항목 선택 (줄바꿈 없음)
+        return;
+      }
+    }
 
     // Ctrl+Shift+1/2/3/4 는 window 레벨 핸들러에서 처리 (포커스 무관하게 동작)
     if (ctrl && e.shiftKey && ['Digit1','Digit2','Digit3','Digit4'].includes(e.code)) {
@@ -1268,6 +1409,11 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   const [activeBlockType, setActiveBlockType] = useState(null);  // 현재 커서의 블록 타입 (툴바 하이라이트)
   const [charCheckPicker, setCharCheckPicker] = useState(null); // { sceneId, top, left, mobile }
   const [symbolPickerCloseToken, setSymbolPickerCloseToken] = useState(0);
+  const [slashPalette, setSlashPalette] = useState(null); // null | { blockEl, query, x, y, selectedIdx }
+  const [slashSymbolPos, setSlashSymbolPos] = useState(null); // null | { top, left } — 슬래시에서 기타 피커 강제 오픈
+  const [slashTagPicker, setSlashTagPicker] = useState(null); // null | { scene, top, left }
+  const slashOpenRef = useRef(false);
+  slashOpenRef.current = slashPalette !== null; // 매 렌더마다 ref 동기화
   const hasKeyboard = !!keyboardUp; // App.jsx에서 내려온 키보드 감지값 사용
   const charCheckBtnRef = useRef(null);
   const editorScrollRef = useRef(null);
@@ -1638,6 +1784,127 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     }
   }, []);
 
+  // ── Slash palette handlers
+  const handleSlashInput = useCallback(({ blockEl, query }) => {
+    const rect = blockEl.getBoundingClientRect();
+    const vvH = window.visualViewport?.height ?? window.innerHeight;
+    const paletteH = 280;
+    const spaceBelow = vvH - rect.bottom;
+    const y = spaceBelow >= paletteH ? rect.bottom + 4 : Math.max(4, rect.top - paletteH - 4);
+    setSlashPalette({ blockEl, query, x: rect.left, y, selectedIdx: 0 });
+  }, []);
+
+  const handleSlashClose = useCallback(() => setSlashPalette(null), []);
+
+  // 슬래시 팔레트에서 보여줄 항목 필터링 (isMobile 기반 mobileOnly 포함)
+  const getSlashFiltered = useCallback((query) => {
+    return SLASH_COMMANDS.filter(cmd => {
+      if (cmd.mobileOnly && !isMobile) return false;
+      if (!query) return true;
+      return cmd.label.includes(query) || cmd.type.includes(query) || cmd.desc.includes(query);
+    });
+  }, [isMobile]);
+
+  const handleSlashKeyNav = useCallback((key) => {
+    setSlashPalette(prev => {
+      if (!prev) return null;
+      const filtered = SLASH_COMMANDS.filter(cmd => {
+        if (cmd.mobileOnly && !isMobile) return false;
+        if (!prev.query) return true;
+        return cmd.label.includes(prev.query) || cmd.type.includes(prev.query) || cmd.desc.includes(prev.query);
+      });
+      const len = filtered.length;
+      if (!len) return null;
+      const delta = key === 'ArrowDown' ? 1 : -1;
+      return { ...prev, selectedIdx: ((prev.selectedIdx ?? 0) + delta + len) % len };
+    });
+  }, [isMobile]);
+
+  // 슬래시 액션 실행 공통 함수
+  const executeSlashAction = useCallback((cmd, blockEl) => {
+    // 블록 텍스트 지우고 커서 복구 (dialogue는 .ce-speech만 클리어)
+    const clearBlockSlash = (el) => {
+      if (!el) return;
+      if (el.dataset.blockType === 'dialogue') {
+        const speech = el.querySelector('.ce-speech');
+        if (speech) speech.textContent = '';
+      } else {
+        el.textContent = '';
+      }
+      try {
+        const target = el.dataset.blockType === 'dialogue'
+          ? (el.querySelector('.ce-speech') || el) : el;
+        const r = document.createRange();
+        r.setStart(target, 0);
+        r.collapse(true);
+        window.getSelection()?.removeAllRanges();
+        window.getSelection()?.addRange(r);
+      } catch (_) {}
+    };
+    if (blockEl && cmd.action !== 'sceneref' && cmd.action !== 'symbol') {
+      clearBlockSlash(blockEl);
+    }
+
+    if (cmd.action === 'block') {
+      requestAnimationFrame(() => applyBlockType(cmd.type));
+    } else if (cmd.action === 'charcheck') {
+      requestAnimationFrame(() => handleCharCheckRef.current?.());
+    } else if (cmd.action === 'sceneref') {
+      // 연결: 현재 블록 기준으로 sceneRefPicker 열기
+      const surface = document.querySelector('[data-editor-surface]');
+      const sel = window.getSelection();
+      let insertAfterId = blockEl?.dataset.blockId ?? null;
+      const rect = blockEl?.getBoundingClientRect() || { bottom: 120, left: 200 };
+      const savedRange = sel?.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
+      if (blockEl) clearBlockSlash(blockEl);
+      requestAnimationFrame(() => {
+        setSceneRefPicker({ top: rect.bottom + 4, left: rect.left, insertAfterId, savedRange, mobile: hasKeyboard });
+      });
+    } else if (cmd.action === 'symbol') {
+      // 기타: 블록 텍스트 지우고 기타 피커 열기
+      if (blockEl) clearBlockSlash(blockEl);
+      const rect3 = blockEl?.getBoundingClientRect() || { bottom: 120, left: 200 };
+      requestAnimationFrame(() => setSlashSymbolPos({ top: rect3.bottom + 4, left: rect3.left }));
+    } else if (cmd.action === 'tag') {
+      // 태그추가: 현재 씬의 태그 피커 열기
+      const sceneId = getCurrentSceneIdRef.current?.();
+      const rect2 = blockEl?.getBoundingClientRect() || { bottom: 120, left: 200 };
+      if (sceneId) {
+        requestAnimationFrame(() => {
+          // episodeScenes는 최신 값이 필요하므로 DOM에서 직접 resolve
+          const surface = document.querySelector('[data-editor-surface]');
+          const sceneEl = surface?.querySelector(`[data-scene-id="${sceneId}"]`);
+          const sceneLabel = sceneEl?.dataset?.label || '';
+          setSlashTagPicker({ sceneId, sceneLabel, top: rect2.bottom + 4, left: rect2.left });
+        });
+      }
+    }
+  }, [applyBlockType, hasKeyboard]);
+
+  const handleSlashSelectType = useCallback((cmdType) => {
+    setSlashPalette(prev => {
+      if (!prev) return null;
+      const cmd = SLASH_COMMANDS.find(c => c.type === cmdType);
+      if (cmd) executeSlashAction(cmd, prev.blockEl);
+      return null;
+    });
+  }, [executeSlashAction]);
+
+  const handleSlashSelectCurrent = useCallback(() => {
+    setSlashPalette(prev => {
+      if (!prev) return null;
+      const filtered = SLASH_COMMANDS.filter(cmd => {
+        if (cmd.mobileOnly && !isMobile) return false;
+        if (!prev.query) return true;
+        return cmd.label.includes(prev.query) || cmd.type.includes(prev.query) || cmd.desc.includes(prev.query);
+      });
+      const item = filtered[prev.selectedIdx ?? 0];
+      if (!item) return null;
+      executeSlashAction(item, prev.blockEl);
+      return null;
+    });
+  }, [executeSlashAction, isMobile]);
+
   // ── flushSave: 즉시 저장 (자동저장 타이머 무시)
   const flushSave = useCallback(() => {
     if (!activeEpisodeId || !blocks.length) return;
@@ -1712,6 +1979,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   }, [blocks, episodeScenes, projectChars]);
 
   const handleCharCheckRef = useRef(null);
+  const getCurrentSceneIdRef = useRef(null);
 
   const sceneRefPickerRef = useRef(null);
 
@@ -1795,6 +2063,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     }
     return null;
   }, []);
+  getCurrentSceneIdRef.current = getCurrentSceneId;
 
   // ── 등장체크: open char picker, add selected character to current scene's characterIds ─
   const handleCharCheck = useCallback(() => {
@@ -2129,7 +2398,9 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
           >연결</button>
           <SymbolPicker
             closeToken={symbolPickerCloseToken}
-            onOpen={() => { setCharCheckPicker(null); setSceneRefPicker(null); setCharPickerState(null); }}
+            onOpen={() => { setCharCheckPicker(null); setSceneRefPicker(null); setCharPickerState(null); setSlashPalette(null); }}
+            forceOpen={slashSymbolPos}
+            onForceClose={() => setSlashSymbolPos(null)}
           />
           {/* B/I/U 서식 버튼 — action/dialogue 블록에서 동작, 모바일에서는 MobileMenuBar에 있으므로 숨김 */}
           {!isMobile && <div style={{ borderLeft: '1px solid var(--c-border3)', paddingLeft: 6, marginLeft: 2, display: 'flex', gap: 2 }}>
@@ -2267,6 +2538,11 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
             activeProjectId={activeProjectId}
             onPaste={handleEditorPaste}
             onUndo={handleUndo}
+            onSlashInput={handleSlashInput}
+            onSlashClose={handleSlashClose}
+            slashOpenRef={slashOpenRef}
+            onSlashKeyNav={handleSlashKeyNav}
+            onSlashSelectCurrent={handleSlashSelectCurrent}
           />
           <div className="h-48" />
         </div>
@@ -2311,6 +2587,73 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
           );
         })()}
       </div>
+
+      {/* Slash Command Palette */}
+      {slashPalette && (() => {
+        const filtered = getSlashFiltered(slashPalette.query);
+        if (!filtered.length) return null;
+        return (
+          <SlashPalette
+            commands={filtered}
+            position={{ x: slashPalette.x, y: slashPalette.y }}
+            selectedIdx={slashPalette.selectedIdx ?? 0}
+            onSelect={handleSlashSelectType}
+            onClose={handleSlashClose}
+          />
+        );
+      })()}
+
+      {/* Slash tag picker (모바일 전용) */}
+      {slashTagPicker && (() => {
+        const sceneObj = episodeScenes.find(s => s.id === slashTagPicker.sceneId);
+        if (!sceneObj) return null;
+        return createPortal(
+          <>
+            <div style={{ position: 'fixed', inset: 0, zIndex: 219 }} onMouseDown={() => setSlashTagPicker(null)} />
+            <div style={{
+              position: 'fixed', top: slashTagPicker.top, left: slashTagPicker.left,
+              zIndex: 220, background: 'var(--c-panel)', border: '1px solid var(--c-border2)',
+              borderRadius: 8, boxShadow: '0 6px 20px rgba(0,0,0,0.2)',
+              minWidth: 180, maxHeight: 300, overflowY: 'auto', padding: '6px 0',
+            }}>
+              {BUILTIN_GUIDES.map(guide => (
+                <div key={guide.id}>
+                  <div style={{ padding: '4px 12px 2px', fontSize: 10, fontWeight: 600, color: guide.color, textTransform: 'uppercase' }}>
+                    {guide.name}
+                  </div>
+                  {guide.beats.map(beat => {
+                    const has = (sceneObj.tags || []).includes(beat);
+                    return (
+                      <button
+                        key={beat}
+                        onMouseDown={e => {
+                          e.preventDefault();
+                          const tags = has
+                            ? (sceneObj.tags || []).filter(t => t !== beat)
+                            : [...(sceneObj.tags || []), beat];
+                          dispatch({ type: 'UPDATE_SCENE', payload: { id: sceneObj.id, tags }, _record: true });
+                        }}
+                        style={{
+                          display: 'block', width: '100%', textAlign: 'left',
+                          padding: '6px 16px', fontSize: 12, border: 'none', cursor: 'pointer',
+                          background: has ? 'var(--c-active)' : 'none',
+                          color: has ? guide.color : 'var(--c-text3)',
+                        }}
+                      >{has ? '✓ ' : ''}{beat}</button>
+                    );
+                  })}
+                </div>
+              ))}
+              <div style={{ height: 1, background: 'var(--c-border)', margin: '4px 0' }} />
+              <button
+                onMouseDown={() => setSlashTagPicker(null)}
+                style={{ display: 'block', width: '100%', textAlign: 'center', padding: '5px 12px', fontSize: 11, color: 'var(--c-text5)', background: 'none', border: 'none', cursor: 'pointer' }}
+              >닫기</button>
+            </div>
+          </>,
+          document.body
+        );
+      })()}
 
       {/* Char Picker Overlay */}
       {charPickerState && (
@@ -2573,7 +2916,9 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
           <SymbolPicker
             mobile
             closeToken={symbolPickerCloseToken}
-            onOpen={() => { setCharCheckPicker(null); setSceneRefPicker(null); setCharPickerState(null); }}
+            onOpen={() => { setCharCheckPicker(null); setSceneRefPicker(null); setCharPickerState(null); setSlashPalette(null); }}
+            forceOpen={slashSymbolPos}
+            onForceClose={() => setSlashSymbolPos(null)}
           />
         </div>
       )}
