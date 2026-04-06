@@ -39,7 +39,7 @@ const SLASH_COMMANDS = [
   { type: 'charcheck',    action: 'charcheck',icon: '👤', label: '등장',    desc: '씬 등장인물 추가' },
   { type: 'sceneref',     action: 'sceneref', icon: '🔗', label: '연결',    desc: '다른 씬 참조 삽입' },
   { type: 'symbol',       action: 'symbol',   icon: '기', label: '기타',    desc: '특수 기호 삽입' },
-  { type: 'tag',          action: 'tag',      icon: '🏷', label: '태그추가', desc: '구조 태그 지정', mobileOnly: true },
+  { type: 'tag',          action: 'tag',      icon: '🏷', label: '태그추가', desc: '구조 태그 지정' },
 ];
 
 // ─── Symbol Picker ────────────────────────────────────────────────────────────
@@ -668,6 +668,121 @@ function SlashPalette({ commands, position, selectedIdx, onSelect, onClose }) {
             </div>
           );
         })}
+      </div>
+    </>,
+    document.body
+  );
+}
+
+// ─── SlashTagPickerPanel ──────────────────────────────────────────────────────
+function SlashTagPickerPanel({ position, scene, tagPool, onAdd, onRemove, onClose }) {
+  const [input, setInput] = useState('');
+  const [suggIdx, setSuggIdx] = useState(0);
+  const inputRef = React.useRef(null);
+
+  React.useEffect(() => {
+    // 포커스 — rAF으로 팔레트 렌더 후 focus
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, []);
+
+  const currentTags = scene.tags || [];
+
+  // 입력값 기준 추천 목록: 아직 안 붙은 태그 중 입력값 포함하는 것
+  const suggestions = input.trim()
+    ? tagPool.filter(t => !currentTags.includes(t) && t.includes(input.trim()))
+    : [];
+
+  const commitTag = (tag) => {
+    const t = (tag || input).trim().replace(/^#/, '');
+    if (!t) return;
+    onAdd(t);
+    setInput('');
+    setSuggIdx(0);
+    inputRef.current?.focus();
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); setSuggIdx(i => Math.min(i + 1, suggestions.length - 1)); return; }
+    if (e.key === 'ArrowUp')   { e.preventDefault(); setSuggIdx(i => Math.max(i - 1, 0)); return; }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (suggestions.length && suggIdx < suggestions.length) {
+        commitTag(suggestions[suggIdx]);
+      } else {
+        commitTag(input);
+      }
+      return;
+    }
+    if (e.key === 'Escape') { e.preventDefault(); onClose(); return; }
+  };
+
+  return createPortal(
+    <>
+      <div style={{ position: 'fixed', inset: 0, zIndex: 219 }} onMouseDown={onClose} />
+      <div
+        style={{
+          position: 'fixed', top: position.top, left: position.left,
+          zIndex: 220, background: 'var(--c-panel)', border: '1px solid var(--c-border2)',
+          borderRadius: 10, boxShadow: '0 6px 24px rgba(0,0,0,0.2)',
+          minWidth: 220, padding: '10px',
+        }}
+        onMouseDown={e => e.stopPropagation()}
+      >
+        {/* 현재 태그 */}
+        {currentTags.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+            {currentTags.map(tag => (
+              <span
+                key={tag}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 3,
+                  padding: '2px 8px', borderRadius: 99,
+                  background: 'var(--c-accent)', color: '#fff',
+                  fontSize: 11, fontWeight: 500,
+                }}
+              >
+                #{tag}
+                <button
+                  onMouseDown={e => { e.preventDefault(); onRemove(tag); }}
+                  style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.8)', cursor: 'pointer', fontSize: 12, padding: 0, lineHeight: 1 }}
+                >×</button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* 입력창 */}
+        <input
+          ref={inputRef}
+          value={input}
+          onChange={e => { setInput(e.target.value); setSuggIdx(0); }}
+          onKeyDown={handleKeyDown}
+          placeholder="태그 입력 후 Enter"
+          style={{
+            width: '100%', boxSizing: 'border-box',
+            padding: '6px 10px', borderRadius: 6,
+            border: '1px solid var(--c-border3)',
+            background: 'var(--c-bg)', color: 'var(--c-text)',
+            fontSize: 13, outline: 'none',
+          }}
+        />
+
+        {/* 자동완성 추천 */}
+        {suggestions.length > 0 && (
+          <div style={{ marginTop: 4, borderRadius: 6, overflow: 'hidden', border: '1px solid var(--c-border2)' }}>
+            {suggestions.slice(0, 8).map((s, i) => (
+              <div
+                key={s}
+                onMouseDown={e => { e.preventDefault(); commitTag(s); }}
+                style={{
+                  padding: '6px 10px', fontSize: 12, cursor: 'pointer',
+                  background: i === suggIdx ? 'var(--c-accent)' : 'var(--c-panel)',
+                  color: i === suggIdx ? '#fff' : 'var(--c-text3)',
+                }}
+              >#{s}</div>
+            ))}
+          </div>
+        )}
       </div>
     </>,
     document.body
@@ -1796,20 +1911,18 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
 
   const handleSlashClose = useCallback(() => setSlashPalette(null), []);
 
-  // 슬래시 팔레트에서 보여줄 항목 필터링 (isMobile 기반 mobileOnly 포함)
+  // 슬래시 팔레트에서 보여줄 항목 필터링
   const getSlashFiltered = useCallback((query) => {
     return SLASH_COMMANDS.filter(cmd => {
-      if (cmd.mobileOnly && !isMobile) return false;
       if (!query) return true;
       return cmd.label.includes(query) || cmd.type.includes(query) || cmd.desc.includes(query);
     });
-  }, [isMobile]);
+  }, []);
 
   const handleSlashKeyNav = useCallback((key) => {
     setSlashPalette(prev => {
       if (!prev) return null;
       const filtered = SLASH_COMMANDS.filter(cmd => {
-        if (cmd.mobileOnly && !isMobile) return false;
         if (!prev.query) return true;
         return cmd.label.includes(prev.query) || cmd.type.includes(prev.query) || cmd.desc.includes(prev.query);
       });
@@ -1894,7 +2007,6 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     setSlashPalette(prev => {
       if (!prev) return null;
       const filtered = SLASH_COMMANDS.filter(cmd => {
-        if (cmd.mobileOnly && !isMobile) return false;
         if (!prev.query) return true;
         return cmd.label.includes(prev.query) || cmd.type.includes(prev.query) || cmd.desc.includes(prev.query);
       });
@@ -2607,51 +2719,27 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
       {slashTagPicker && (() => {
         const sceneObj = episodeScenes.find(s => s.id === slashTagPicker.sceneId);
         if (!sceneObj) return null;
-        return createPortal(
-          <>
-            <div style={{ position: 'fixed', inset: 0, zIndex: 219 }} onMouseDown={() => setSlashTagPicker(null)} />
-            <div style={{
-              position: 'fixed', top: slashTagPicker.top, left: slashTagPicker.left,
-              zIndex: 220, background: 'var(--c-panel)', border: '1px solid var(--c-border2)',
-              borderRadius: 8, boxShadow: '0 6px 20px rgba(0,0,0,0.2)',
-              minWidth: 180, maxHeight: 300, overflowY: 'auto', padding: '6px 0',
-            }}>
-              {BUILTIN_GUIDES.map(guide => (
-                <div key={guide.id}>
-                  <div style={{ padding: '4px 12px 2px', fontSize: 10, fontWeight: 600, color: guide.color, textTransform: 'uppercase' }}>
-                    {guide.name}
-                  </div>
-                  {guide.beats.map(beat => {
-                    const has = (sceneObj.tags || []).includes(beat);
-                    return (
-                      <button
-                        key={beat}
-                        onMouseDown={e => {
-                          e.preventDefault();
-                          const tags = has
-                            ? (sceneObj.tags || []).filter(t => t !== beat)
-                            : [...(sceneObj.tags || []), beat];
-                          dispatch({ type: 'UPDATE_SCENE', payload: { id: sceneObj.id, tags }, _record: true });
-                        }}
-                        style={{
-                          display: 'block', width: '100%', textAlign: 'left',
-                          padding: '6px 16px', fontSize: 12, border: 'none', cursor: 'pointer',
-                          background: has ? 'var(--c-active)' : 'none',
-                          color: has ? guide.color : 'var(--c-text3)',
-                        }}
-                      >{has ? '✓ ' : ''}{beat}</button>
-                    );
-                  })}
-                </div>
-              ))}
-              <div style={{ height: 1, background: 'var(--c-border)', margin: '4px 0' }} />
-              <button
-                onMouseDown={() => setSlashTagPicker(null)}
-                style={{ display: 'block', width: '100%', textAlign: 'center', padding: '5px 12px', fontSize: 11, color: 'var(--c-text5)', background: 'none', border: 'none', cursor: 'pointer' }}
-              >닫기</button>
-            </div>
-          </>,
-          document.body
+        // 추천 태그 풀: 구조 지침 beats + 프로젝트 내 모든 씬의 기존 태그
+        const builtinBeats = BUILTIN_GUIDES.flatMap(g => g.beats);
+        const existingTags = [...new Set(scenes.flatMap(s => s.tags || []))];
+        const tagPool = [...new Set([...builtinBeats, ...existingTags])];
+        return (
+          <SlashTagPickerPanel
+            position={{ top: slashTagPicker.top, left: slashTagPicker.left }}
+            scene={sceneObj}
+            tagPool={tagPool}
+            onAdd={tag => {
+              const cur = sceneObj.tags || [];
+              if (!cur.includes(tag)) {
+                dispatch({ type: 'UPDATE_SCENE', payload: { id: sceneObj.id, tags: [...cur, tag] }, _record: true });
+              }
+            }}
+            onRemove={tag => {
+              const cur = sceneObj.tags || [];
+              dispatch({ type: 'UPDATE_SCENE', payload: { id: sceneObj.id, tags: cur.filter(t => t !== tag) }, _record: true });
+            }}
+            onClose={() => setSlashTagPicker(null)}
+          />
         );
       })()}
 
