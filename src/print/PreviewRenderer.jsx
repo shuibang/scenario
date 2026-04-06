@@ -309,7 +309,7 @@ export default function PreviewRenderer({ appState, selections, columnWidth = 34
                 {sectionLabel}
               </div>
             )}
-            <div style={{ width: A4_W_PX * scale, height: A4_H_PX * scale, position: 'relative' }}>
+            <div style={{ width: A4_W_PX * scale, height: A4_H_PX * scale, position: 'relative', overflow: 'hidden' }}>
               {p.isCover ? (
                 <CoverPage
                   section={p.section}
