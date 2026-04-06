@@ -919,9 +919,14 @@ function Shell({ authUser, setAuthUser }) {
 
   // ── Hash navigation: #/mypage → open MyPage
   useEffect(() => {
-    if (window.location.hash === '#/mypage') {
-      dispatch({ type: 'SET_ACTIVE_DOC', payload: 'mypage' });
-    }
+    const handleHashChange = () => {
+      if (window.location.hash === '#/mypage') {
+        dispatch({ type: 'SET_ACTIVE_DOC', payload: 'mypage' });
+      }
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    handleHashChange(); // 초기 로드 시도
+    return () => window.removeEventListener('hashchange', handleHashChange);
   }, [dispatch]);
 
   const updateLeftWidth = useCallback((delta) => {
