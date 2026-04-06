@@ -9,7 +9,7 @@ import {
   getFontByCssFamily,
 } from './print/FontRegistry';
 import { getItem, setItem, clearDramaStorage, isPublicPcMode, genId, now } from './store/db';
-import { setAccessToken, clearAccessToken, loadFromDrive, isTokenValid } from './store/googleDrive';
+import { setAccessToken, clearAccessToken, loadFromDrive, isTokenValid, saveSnapshot } from './store/googleDrive';
 import { supabase, signInWithGoogle, supabaseSignOut, extractUserData, refreshDriveToken } from './store/supabaseClient';
 import LeftPanel from './components/LeftPanel';
 import RightPanel from './components/RightPanel';
@@ -37,6 +37,7 @@ import MobileBottomPanel from './components/mobile/MobileBottomPanel';
 import { mobileTbtnStyle } from './styles/tokens';
 import UpdateBanner from './components/UpdateBanner';
 import { applyInlineFormat, stripHtml } from './utils/textFormat';
+import SnapshotPanel from './components/SnapshotPanel';
 import { getLayoutMetrics } from './print/LineTokenizer';
 import { saveReviewPayload } from './utils/reviewShare';
 import SyncConflictModal from './components/SyncConflictModal';
@@ -498,7 +499,7 @@ function LoginModal({ onClose }) {
 let _driveSyncing = false;
 
 // ─── MenuBar ──────────────────────────────────────────────────────────────────
-function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, authUser, setAuthUser, onSyncConflict }) {
+function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, authUser, setAuthUser, onSyncConflict }) {
   const { state, dispatch, loadFromDriveData } = useApp();
   const { saveStatus, saveErrorMsg, activeProjectId, stylePreset, undoStack, redoStack } = state;
   const canUndo = undoStack?.length > 0;
@@ -670,6 +671,7 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, authUser, setA
           style={saveStatus === 'error' ? { color: '#c00', borderColor: '#f99' } : undefined}
         />
         <MenuButton label="출력" onClick={onPrintPreview} disabled={!activeProjectId} accent />
+        <MenuButton label="백업/복원" onClick={onSnapshot} />
 
         {sep}
 
@@ -847,6 +849,7 @@ function Shell({ authUser, setAuthUser }) {
     return window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false);
+  const [snapshotOpen, setSnapshotOpen]         = useState(false);
   const { state, dispatch, loadFromDriveData } = useApp();
 
   // Drive 동기화 충돌 — { localSavedAt, driveData } | null
@@ -969,10 +972,26 @@ function Shell({ authUser, setAuthUser }) {
 
   const handleSave = useCallback(() => {
     window.dispatchEvent(new Event('script:requestSave'));
+    // 수동 저장 시 스냅샷 생성 (Drive 로그인 상태일 때만)
+    if (isTokenValid()) {
+      saveSnapshot({
+        projects:       state.projects,
+        episodes:       state.episodes,
+        characters:     state.characters,
+        scenes:         state.scenes,
+        scriptBlocks:   state.scriptBlocks,
+        coverDocs:      state.coverDocs,
+        synopsisDocs:   state.synopsisDocs,
+        resources:      state.resources,
+        workTimeLogs:   state.workTimeLogs,
+        checklistItems: state.checklistItems,
+        stylePreset:    state.stylePreset,
+      }, '수동저장').catch(() => {});
+    }
     clearTimeout(saveToastTimer.current);
     setSaveToast(true);
     saveToastTimer.current = setTimeout(() => setSaveToast(false), 2000);
-  }, []);
+  }, [state]);
 
   // 전역 Ctrl+S 단축키 → 토스트 포함 저장
   useEffect(() => {
@@ -1000,6 +1019,7 @@ function Shell({ authUser, setAuthUser }) {
       onToggleTheme={toggleTheme}
       onPrintPreview={() => setPrintPreviewOpen(true)}
       onSave={handleSave}
+      onSnapshot={() => setSnapshotOpen(true)}
       authUser={authUser}
       setAuthUser={setAuthUser}
       onSyncConflict={setSyncConflict}
@@ -1039,6 +1059,7 @@ function Shell({ authUser, setAuthUser }) {
         />
       )}
       {!isMobile && <OnboardingTour />}
+      {snapshotOpen && <SnapshotPanel onClose={() => setSnapshotOpen(false)} />}
       {saveToast && (
         <div style={{
           position: 'fixed', bottom: '32px', left: '50%', transform: 'translateX(-50%)',
@@ -1072,6 +1093,7 @@ function Shell({ authUser, setAuthUser }) {
         <MobileMenuBar
           onSave={handleSave}
           onPrintPreview={() => setPrintPreviewOpen(true)}
+          onSnapshot={() => setSnapshotOpen(true)}
           WorkTimer={WorkTimer}
           authUser={authUser}
           onLogout={() => setAuthUser(null)}

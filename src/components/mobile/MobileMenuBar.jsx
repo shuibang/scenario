@@ -8,7 +8,7 @@ import { clearAccessToken, loadFromDrive, isTokenValid } from '../../store/googl
 import { isPublicPcMode } from '../../store/db';
 import { signInWithGoogle, supabaseSignOut, refreshDriveToken } from '../../store/supabaseClient';
 
-export default function MobileMenuBar({ onSave, onPrintPreview, WorkTimer, authUser, onLogout }) {
+export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, WorkTimer, authUser, onLogout }) {
   const { state, dispatch } = useApp();
   const { activeProjectId, stylePreset } = state;
   const [menuOpen, setMenuOpen] = useState(false);
@@ -223,6 +223,7 @@ export default function MobileMenuBar({ onSave, onPrintPreview, WorkTimer, authU
           onClick={onPrintPreview}
           style={{ ...mobileTbtnStyle, color: 'var(--c-accent)', borderColor: 'var(--c-accent)' }}
         >출력</button>
+        <button onClick={onSnapshot} style={mobileTbtnStyle}>백업/복원</button>
         <div style={{ width: 1, height: 16, background: 'var(--c-border3)', margin: '0 2px', flexShrink: 0 }} />
         {[
           { label: 'B', title: '굵게', tag: 'bold', fw: 'bold' },
