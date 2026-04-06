@@ -214,35 +214,34 @@ function CoverPage({ section, margins, fontFamily, fontSize, lineHeight, scale }
         flexShrink:      0,
       }}
     >
-      {/* Content area wrapper */}
-      <div style={{ position: 'absolute', top: mmToYpx(top), right: mmToXpx(right), bottom: mmToYpx(bottom), left: mmToXpx(left) }}>
-        {/* Title group at ~1/3 page height (relative to content area) */}
-        {(() => {
-          const subtitleField = section.fields.find(f => f.label === '부제목' || f.id === 'subtitle');
-          const secondaryFields = section.fields.filter(f => f !== subtitleField);
-          return (
-            <>
-              <div style={{ position: 'absolute', top: '28%', left: 0, right: 0, textAlign: 'center' }}>
-                <div style={{ fontSize: `${fontSize + 11}pt`, fontWeight: 700, marginBottom: '6pt', fontFamily }}>
-                  {section.title}
+      {/* 커버 — 페이지 전체 기준 절대 위치 (PDF와 동일한 28%/70%) */}
+      {(() => {
+        const subtitleField   = section.fields.find(f => f.id === 'subtitle' || f.label === '부제목');
+        const secondaryFields = section.fields.filter(f => f !== subtitleField);
+        return (
+          <>
+            {/* 제목 + 부제 그룹: 페이지 28% 위치 */}
+            <div style={{ position: 'absolute', top: '28%', left: mmToXpx(left), right: mmToXpx(right), textAlign: 'center' }}>
+              <div style={{ fontSize: `${fontSize + 11}pt`, fontWeight: 700, marginBottom: `${fontSize * lineHeight}pt`, fontFamily }}>
+                {section.title}
+              </div>
+              {subtitleField && (
+                <div style={{ fontSize: `${fontSize + 5}pt`, color: '#555', marginBottom: '4pt', fontFamily }}>
+                  {subtitleField.value}
                 </div>
-                {subtitleField && (
-                  <div style={{ fontSize: `${fontSize + 2}pt`, color: '#555', marginBottom: '4pt', fontFamily }}>
-                    {subtitleField.value}
-                  </div>
-                )}
-              </div>
-              <div style={{ position: 'absolute', top: '70%', left: 0, right: 0, textAlign: 'center' }}>
-                {secondaryFields.map((f, i) => (
-                  <div key={i} style={{ fontSize: `${fontSize}pt`, marginBottom: '3pt', fontFamily }}>
-                    {f.value}
-                  </div>
-                ))}
-              </div>
-            </>
-          );
-        })()}
-      </div>
+              )}
+            </div>
+            {/* 기타 필드: 페이지 70% 위치 */}
+            <div style={{ position: 'absolute', top: '70%', left: mmToXpx(left), right: mmToXpx(right), textAlign: 'center' }}>
+              {secondaryFields.map((f, i) => (
+                <div key={i} style={{ fontSize: `${fontSize}pt`, marginBottom: '3pt', fontFamily }}>
+                  {f.value}
+                </div>
+              ))}
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 }

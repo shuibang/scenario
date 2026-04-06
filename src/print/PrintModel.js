@@ -88,7 +88,7 @@ export function buildPrintModel(appState, selections, preset) {
     sections.push({
       type:   'cover',
       title:  coverDoc.title || project?.title || '',
-      fields: [...fixedFields, ...customFields].map(f => ({ label: f.label, value: stripLiteralTags(f.value) })),
+      fields: [...fixedFields, ...customFields].map(f => ({ id: f.id, label: f.label, value: stripLiteralTags(f.value) })),
     });
   }
 

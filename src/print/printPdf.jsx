@@ -69,8 +69,8 @@ function makeStyles(preset, metrics) {
     coverWrap:        { flex: 1, position: 'relative' },
     coverTitleGroup:  { position: 'absolute', top: '28%', left: 0, right: 0, alignItems: 'center' },
     coverFieldsGroup: { position: 'absolute', top: '70%', left: 0, right: 0, alignItems: 'center' },
-    coverTitle:       { fontSize: fs + 11, fontWeight: 700, marginBottom: 6, textAlign: 'center' },
-    coverSubtitle:    { fontSize: fs + 2,  fontWeight: 400, marginBottom: 4, textAlign: 'center', color: '#555' },
+    coverTitle:       { fontSize: fs + 11, fontWeight: 700, marginBottom: fs * lh, textAlign: 'center' },
+    coverSubtitle:    { fontSize: fs + 5,  fontWeight: 400, marginBottom: 4, textAlign: 'center', color: '#555' },
     coverField:       { fontSize: fs,      marginBottom: 3, textAlign: 'center' },
     // ── page number
     pageNum: {
@@ -303,7 +303,7 @@ function CoverPage({ section, S }) {
         </View>
         <View style={S.coverFieldsGroup}>
           {secondaryFields.map((f, i) => (
-            <Text key={i} style={S.coverField}>{f.label}: {f.value}</Text>
+            <Text key={i} style={S.coverField}>{f.value}</Text>
           ))}
         </View>
       </View>

@@ -42,7 +42,7 @@ export function getLayoutMetrics(preset) {
   const contentWpt = contentWmm * PT_PER_MM;   // ≈ 425 pt
   const contentHpt = contentHmm * PT_PER_MM;   // ≈ 658 pt
   const lineHpt    = fontSize * lineHeight;     // ≈ 17.6 pt
-  const linesPerPage = Math.floor(contentHpt / lineHpt) - 1; // -1 안전 여유 (PDF와 동일)
+  const linesPerPage = Math.floor(contentHpt / lineHpt);
 
   // dialogue gap in pt (preset.dialogueGap is "Nem" string)
   let dialogueGapPt = 7 * fontSize;
@@ -128,7 +128,7 @@ export function tokenizeSection(section, metrics) {
   if (section.type === 'cover') {
     tokens.push(T('cover_title', section.title, { bold: true, center: true }));
     section.fields.forEach(f =>
-      tokens.push(T('cover_field', `${f.label}: ${f.value}`, { center: true }))
+      tokens.push(T('cover_field', f.value, { center: true }))
     );
     return tokens;
   }
@@ -170,9 +170,10 @@ export function tokenizeSection(section, metrics) {
         const nameLines = wrapText(nameLine, charsPerLine - 2);
         nameLines.forEach((t, i) =>
           tokens.push(T('body', (i === 0 ? '  ' : '    ') + t, {
-            isFirstOfBlock: i === 0,
-            blockText:      i === 0 ? ('  ' + nameLine) : undefined,
-            blockLineCount: i === 0 ? nameLines.length : undefined,
+            isFirstOfBlock:    i === 0,
+            isSynopsisCharName: i === 0, // 고아 복구: 다음 페이지의 설명과 함께 이동
+            blockText:         i === 0 ? ('  ' + nameLine) : undefined,
+            blockLineCount:    i === 0 ? nameLines.length : undefined,
           }))
         );
         if (c.description) {
@@ -351,6 +352,21 @@ export function tokenizeSection(section, metrics) {
   return tokens;
 }
 
+// ─── Orphan token detection ───────────────────────────────────────────────────
+// 페이지 맨 끝에 홀로 남으면 안 되는 구조적 토큰.
+// body 한 줄짜리 catch-all은 "그 외..." 같은 내용 줄도 구제해버리므로 제거.
+// 시놉시스 인물명은 isSynopsisCharName 플래그로 명시적으로 처리.
+function isOrphanToken(t) {
+  return (
+    t.kind === 'heading' ||
+    t.kind === 'blank' ||
+    t.kind === 'ep_title' ||
+    t.kind === 'char_name' ||
+    t.kind === 'scene_number' ||
+    t.isSynopsisCharName === true
+  );
+}
+
 // ─── LineToken[] → Page[] (each page = LineToken[]) ──────────────────────────
 export function paginate(tokens, metrics) {
   const { linesPerPage } = metrics;
@@ -358,15 +374,54 @@ export function paginate(tokens, metrics) {
   let page = [];
   let used = 0;
 
+  // 현재 페이지 끝에서 고아 토큰을 제거하고 반환 (새 페이지 첫머리로 이동)
+  const rescueTrailer = () => {
+    const trailer = [];
+    while (page.length > 0) {
+      if (isOrphanToken(page[page.length - 1])) trailer.unshift(page.pop());
+      else break;
+    }
+    return trailer;
+  };
+
+  const breakPage = (trailer = []) => {
+    if (page.length > 0) pages.push(page);
+    page = [...trailer];
+    used = trailer.reduce((s, t) => s + (t.height || 1), 0);
+  };
+
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i];
     const h = token.height || 1;
+    const isContinuation = token.isFirstOfBlock === false;
 
-    if (used + h > linesPerPage && page.length > 0) {
-      pages.push(page);
-      page = [];
-      used = 0;
+    if (!isContinuation) {
+      // ① 표준 페이지 넘김: 현재 페이지에 첫 줄이 안 들어갈 때
+      //    고아 토큰(heading·scene_number 등)을 새 페이지로 함께 이동
+      if (used + h > linesPerPage && page.length > 0) {
+        breakPage(rescueTrailer());
+      }
+
+      // ② 조기 페이지 넘김: 블록 전체가 현재 페이지엔 안 들어가지만 새 페이지엔 들어갈 때.
+      //    단, 페이지가 75% 이상 찼을 때만 발동 — 빈 공간이 많은데도 씬/단락을 넘기는 현상 방지
+      if (token.blockLineCount > 1 && used >= linesPerPage * 0.75) {
+        let blockH = h;
+        for (let j = i + 1; j < tokens.length; j++) {
+          if (tokens[j].isFirstOfBlock === false) blockH += (tokens[j].height || 1);
+          else break;
+        }
+        if (used + blockH > linesPerPage && blockH <= linesPerPage) {
+          breakPage(rescueTrailer());
+        }
+      }
+    } else {
+      // ③ 연속 줄이 이 줄을 추가하면 linesPerPage를 초과하는 경우 → 분할 허용
+      //    (블록이 한 페이지보다 긴 경우에만 해당)
+      if (used + h > linesPerPage && page.length > 0) {
+        breakPage();
+      }
     }
+
     page.push(token);
     used += h;
   }

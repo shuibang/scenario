@@ -160,7 +160,15 @@ function coverTitlePara(text, dp) {
   return new Paragraph({
     children: [new TextRun({ text, bold: true, font: { name: dp.fontFamily }, size: titleSizeHalfPt })],
     alignment: AlignmentType.CENTER,
-    // Do NOT use EXACT line rule — it clips oversized text. Let Word auto-size the title line.
+    spacing: { before: 0, after: 120 },
+  });
+}
+
+function coverSubtitlePara(text, dp) {
+  const subtitleSizeHalfPt = (dp.fontSize + 5) * 2;
+  return new Paragraph({
+    children: [new TextRun({ text, font: { name: dp.fontFamily }, size: subtitleSizeHalfPt, color: '555555' })],
+    alignment: AlignmentType.CENTER,
     spacing: { before: 0, after: 240 },
   });
 }
@@ -200,12 +208,15 @@ function buildDocxSections(printModel, dp, { hancom = false } = {}) {
     const paras = [];
 
     if (section.type === 'cover') {
+      const subtitleField   = section.fields.find(f => f.label === '부제목' || f.id === 'subtitle');
+      const secondaryFields = section.fields.filter(f => f !== subtitleField);
       // Cover: center-aligned, no footer (no page numbers)
       paras.push(blankPara(dp), blankPara(dp), blankPara(dp));
       paras.push(coverTitlePara(section.title, dp));
+      if (subtitleField) paras.push(coverSubtitlePara(subtitleField.value, dp));
       // Spacer between title and secondary fields (mirrors PDF 70% vs 28% positioning)
       for (let i = 0; i < 8; i++) paras.push(blankPara(dp));
-      section.fields.forEach(f => paras.push(para(`${f.label}: ${f.value}`, dp, { center: true })));
+      secondaryFields.forEach(f => paras.push(para(f.value, dp, { center: true })));
       docxSections.push({
         properties: {
           type: SectionType.NEXT_PAGE,

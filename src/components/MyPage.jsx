@@ -811,6 +811,49 @@ function SettingsTab() {
   );
 }
 
+// ─── AnnounceCard (title 있는 공지 — 토글 아코디언) ──────────────────────────
+function AnnounceCard({ item }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded-lg overflow-hidden"
+      style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)' }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+          padding: '10px 16px', background: 'none', border: 'none', cursor: 'pointer',
+          textAlign: 'left',
+        }}
+      >
+        <span
+          style={{
+            fontSize: 12, transition: 'transform 0.2s',
+            transform: open ? 'rotate(90deg)' : 'rotate(0deg)',
+            color: 'var(--c-text5)', flexShrink: 0,
+          }}
+        >▶</span>
+        <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: 'var(--c-text2)' }}>
+          {item.title}
+        </span>
+        <span style={{ fontSize: 10, color: 'var(--c-accent)', fontWeight: 600, flexShrink: 0 }}>
+          {item.date}
+        </span>
+      </button>
+      {open && (
+        <div style={{
+          padding: '0 16px 14px 36px',
+          borderTop: '1px solid var(--c-border)',
+        }}>
+          <div className="text-xs leading-relaxed"
+            style={{ color: 'var(--c-text3)', whiteSpace: 'pre-wrap', paddingTop: 12 }}>
+            {item.content}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── NoticesTab ───────────────────────────────────────────────────────────────
 function NoticesTab() {
   const [sub, setSub] = useState('notices');
@@ -834,7 +877,9 @@ function NoticesTab() {
         <button style={tabStyle('updates')} onClick={() => setSub('updates')}>업데이트</button>
       </div>
 
-      {items.map(n => (
+      {items.map(n => n.title ? (
+        <AnnounceCard key={n.id} item={n} />
+      ) : (
         <div key={n.id} className="rounded-lg px-4 py-3"
           style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)' }}>
           <div className="text-[10px] mb-1 font-semibold" style={{ color: 'var(--c-accent)' }}>{n.date}</div>
