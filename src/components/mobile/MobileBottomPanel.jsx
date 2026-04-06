@@ -92,9 +92,9 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, on
 
       {/* 탭 콘텐츠 — 메모탭은 flex, 그 외는 absolute */}
       {open && tab === 'memo' && (
-        <div data-bottom-panel style={{ flexShrink: 0, overflow: 'hidden' }}>
-          {/* 상단: 코멘트(좌) + 체크리스트(우) — 명시적 높이 */}
-          <div style={{ height: MEMO_ROW_H, display: 'flex', overflow: 'hidden' }}>
+        <div data-bottom-panel style={{ height: CONTENT_H, flexShrink: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          {/* 상단: 코멘트(좌) + 체크리스트(우) */}
+          <div style={{ height: MEMO_ROW_H, flexShrink: 0, display: 'flex', overflow: 'hidden' }}>
             <div style={{ width: '50%', flexShrink: 0, borderRight: '1px solid var(--c-border)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               <MobileMemoTab />
             </div>
@@ -102,8 +102,8 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, on
               <MobileChecklistPanel />
             </div>
           </div>
-          {/* 하단 광고 — 명시적 높이 */}
-          <div style={{ height: MEMO_AD_H, borderTop: '1px solid var(--c-border)', overflow: 'hidden' }}>
+          {/* 하단 광고 */}
+          <div style={{ height: MEMO_AD_H, flexShrink: 0, borderTop: '1px solid var(--c-border)', overflow: 'hidden' }}>
             <AdBanner slot="mobile-memo-bottom" mobileHide={false} height={MEMO_AD_H} />
           </div>
         </div>
