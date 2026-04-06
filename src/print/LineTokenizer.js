@@ -251,6 +251,8 @@ export function tokenizeSection(section, metrics) {
           tokens.push(T('transition', (block.content || '').toUpperCase(), { center: false }));
           break;
         }
+        case 'tag':
+          break; // 태그 블록은 출력 제외
         default:
           if (block.content) {
             wrapText(stripHtml(block.content), charsPerLine).forEach(t =>

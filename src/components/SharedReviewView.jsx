@@ -12,6 +12,12 @@ import React, { useState, useEffect } from 'react';
 import PreviewRenderer from '../print/PreviewRenderer';
 import { loadReviewPayload, isShortReviewId } from '../utils/reviewShare';
 
+const zBtnStyle = {
+  background: '#fff', border: '1px solid #ddd', borderRadius: 6,
+  cursor: 'pointer', fontSize: 16, color: '#444',
+  padding: '2px 10px', lineHeight: 1.4,
+};
+
 function decodeLegacy(hash) {
   try {
     return JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(hash.slice(8))))));
@@ -30,13 +36,20 @@ function useIsMobile() {
   return mobile;
 }
 
+const A4_W_PX = 794;
+
 export default function SharedReviewView() {
   const [data, setData]         = useState(null);
   const [bad,  setBad]          = useState(false);
   const [feedback, setFeedback] = useState('');
   const [copied,   setCopied]   = useState(false);
   const [panelOpen, setPanelOpen] = useState(true);
+  const [zoom, setZoom]         = useState(1.0);
   const isMobile = useIsMobile();
+
+  const zoomIn  = () => setZoom(z => Math.min(z + 0.1, 2.0));
+  const zoomOut = () => setZoom(z => Math.max(z - 0.1, 0.3));
+  const zoomReset = () => setZoom(1.0);
 
   useEffect(() => {
     const val = window.location.hash.slice(8); // '#review=' 제거
@@ -89,6 +102,15 @@ export default function SharedReviewView() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  // ── 줌 컨트롤 바 ──────────────────────────────────────────────────────────
+  const zoomBar = (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '6px 0', userSelect: 'none' }}>
+      <button onClick={zoomOut} style={zBtnStyle}>−</button>
+      <button onClick={zoomReset} style={{ ...zBtnStyle, minWidth: 48, fontSize: 11 }}>{Math.round(zoom * 100)}%</button>
+      <button onClick={zoomIn}  style={zBtnStyle}>+</button>
+    </div>
+  );
 
   // ── 공통 피드백 패널 내용 ─────────────────────────────────────────────────
   const PANEL_H = 260; // 모바일 열렸을 때 높이
@@ -162,18 +184,20 @@ export default function SharedReviewView() {
 
   // ── 모바일 레이아웃 ───────────────────────────────────────────────────────
   if (isMobile) {
+    const mobileColW = Math.round((window.innerWidth - 32) * zoom);
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#d8d8d8', fontFamily: 'sans-serif' }}>
         {/* 미리보기 영역 */}
         <div style={{
-          flex: 1, overflowY: 'auto', padding: '16px 8px',
+          flex: 1, overflowY: 'auto', overflowX: 'auto', padding: '8px',
           paddingBottom: panelOpen ? PANEL_H + 52 : 52,
           transition: 'padding-bottom 0.25s ease',
         }}>
-          <div style={{ textAlign: 'center', marginBottom: '12px', fontSize: '13px', color: '#555', fontWeight: 600 }}>
+          <div style={{ textAlign: 'center', marginBottom: '4px', fontSize: '13px', color: '#555', fontWeight: 600 }}>
             {projectTitle} — 검토 요청
           </div>
-          <PreviewRenderer appState={appState} selections={selections} columnWidth={Math.min(window.innerWidth - 32, 340)} />
+          {zoomBar}
+          <PreviewRenderer appState={appState} selections={selections} columnWidth={mobileColW} />
         </div>
 
         {/* 하단 피드백 패널 (fixed) */}
@@ -201,15 +225,21 @@ export default function SharedReviewView() {
   }
 
   // ── 데스크톱 레이아웃 ─────────────────────────────────────────────────────
+  const desktopPanelW = panelOpen ? 280 : 48;
+  // 피드백 패널 너비와 패딩 제외한 가용 폭 기반으로 기본 columnWidth 계산
+  const baseColW = Math.max(200, window.innerWidth - desktopPanelW - 80);
+  const desktopColW = Math.round(baseColW * zoom);
+
   return (
     <div style={{ display: 'flex', height: '100vh', background: '#d8d8d8', fontFamily: 'sans-serif' }}>
 
       {/* 미리보기 */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '24px 16px' }}>
-        <div style={{ textAlign: 'center', marginBottom: '16px', fontSize: '13px', color: '#555', fontWeight: 600 }}>
+      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', padding: '16px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '4px', fontSize: '13px', color: '#555', fontWeight: 600 }}>
           {projectTitle} — 검토 요청
         </div>
-        <PreviewRenderer appState={appState} selections={selections} columnWidth={340} />
+        {zoomBar}
+        <PreviewRenderer appState={appState} selections={selections} columnWidth={desktopColW} />
       </div>
 
       {/* 피드백 패널 */}
