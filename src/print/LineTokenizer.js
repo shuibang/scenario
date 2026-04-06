@@ -37,10 +37,11 @@ export function getLayoutMetrics(preset) {
   const fontSize   = preset?.fontSize   ?? 11;    // pt
   const lineHeight = preset?.lineHeight ?? 1.6;
 
-  const contentWmm = A4_W_MM - margins.left - margins.right;   // 150 mm
-  const contentHmm = A4_H_MM - margins.top  - margins.bottom;  // 232 mm
+  const PAGE_NUM_MM = 15; // 페이지 번호 영역 (하단에서 15mm 위치)
+  const contentWmm = A4_W_MM - margins.left - margins.right;
+  const contentHmm = A4_H_MM - margins.top  - margins.bottom - PAGE_NUM_MM; // 페이지 번호 영역 제외
   const contentWpt = contentWmm * PT_PER_MM;   // ≈ 425 pt
-  const contentHpt = contentHmm * PT_PER_MM;   // ≈ 658 pt
+  const contentHpt = contentHmm * PT_PER_MM;   // ≈ 615 pt
   const lineHpt    = fontSize * lineHeight;     // ≈ 17.6 pt
   const linesPerPage = Math.floor(contentHpt / lineHpt);
 
