@@ -235,7 +235,7 @@ function CoverPage({ section, margins, fontFamily, fontSize, lineHeight, scale }
               <div style={{ position: 'absolute', top: '70%', left: 0, right: 0, textAlign: 'center' }}>
                 {secondaryFields.map((f, i) => (
                   <div key={i} style={{ fontSize: `${fontSize}pt`, marginBottom: '3pt', fontFamily }}>
-                    {f.label}: {f.value}
+                    {f.value}
                   </div>
                 ))}
               </div>

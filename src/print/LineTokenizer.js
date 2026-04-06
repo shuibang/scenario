@@ -37,13 +37,12 @@ export function getLayoutMetrics(preset) {
   const fontSize   = preset?.fontSize   ?? 11;    // pt
   const lineHeight = preset?.lineHeight ?? 1.6;
 
-  const PAGE_NUM_MM = 15; // 페이지 번호 영역 (하단에서 15mm 위치)
   const contentWmm = A4_W_MM - margins.left - margins.right;
-  const contentHmm = A4_H_MM - margins.top  - margins.bottom - PAGE_NUM_MM; // 페이지 번호 영역 제외
+  const contentHmm = A4_H_MM - margins.top  - margins.bottom;
   const contentWpt = contentWmm * PT_PER_MM;   // ≈ 425 pt
-  const contentHpt = contentHmm * PT_PER_MM;   // ≈ 615 pt
+  const contentHpt = contentHmm * PT_PER_MM;   // ≈ 658 pt
   const lineHpt    = fontSize * lineHeight;     // ≈ 17.6 pt
-  const linesPerPage = Math.floor(contentHpt / lineHpt);
+  const linesPerPage = Math.floor(contentHpt / lineHpt) - 1; // -1 안전 여유 (PDF와 동일)
 
   // dialogue gap in pt (preset.dialogueGap is "Nem" string)
   let dialogueGapPt = 7 * fontSize;
