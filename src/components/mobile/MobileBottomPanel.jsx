@@ -94,7 +94,7 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, on
         <div data-bottom-panel style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           {/* 상단: 코멘트(좌) + 체크리스트(우) */}
           <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
-            <div style={{ width: '25%', flexShrink: 0, borderRight: '1px solid var(--c-border)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ width: '50%', flexShrink: 0, borderRight: '1px solid var(--c-border)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               <MobileMemoTab />
             </div>
             <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}>
