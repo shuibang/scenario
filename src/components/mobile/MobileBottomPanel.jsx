@@ -90,61 +90,62 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, on
         >{open ? '▾' : '▴'}</button>
       </div>
 
-      {/* 탭 콘텐츠 — 메모탭은 flex, 그 외는 absolute */}
-      {open && tab === 'memo' && (
-        <div data-bottom-panel style={{ height: CONTENT_H, flexShrink: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          {/* 상단: 코멘트(좌) + 체크리스트(우) */}
-          <div style={{ height: MEMO_ROW_H, flexShrink: 0, display: 'flex', overflow: 'hidden' }}>
-            <div style={{ width: '50%', flexShrink: 0, borderRight: '1px solid var(--c-border)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-              <MobileMemoTab />
-            </div>
-            <div style={{ width: '50%', overflowY: 'auto', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}>
-              <MobileChecklistPanel />
-            </div>
-          </div>
-          {/* 하단 광고 */}
-          <div style={{ height: MEMO_AD_H, flexShrink: 0, borderTop: '1px solid var(--c-border)', overflow: 'hidden' }}>
-            <AdBanner slot="mobile-memo-bottom" mobileHide={false} height={MEMO_AD_H} />
-          </div>
-        </div>
-      )}
-
-      {open && tab !== 'memo' && (
-        <div data-bottom-panel style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
-          {/* 왼쪽 광고 */}
-          <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: AD_W, borderRight: '1px solid var(--c-border)', overflow: 'hidden' }}>
-            <AdBanner slot="mobile-bottom-left" mobileHide={false} height={CONTENT_H} />
-          </div>
-          {/* 오른쪽 메뉴 */}
-          <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: MENU_W, overflowY: 'auto', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}>
-            {tab === 'script' && (
-              <div data-tour-id="left-panel" className="m-panel-content">
-                <MobileScriptTab onClose={onClose} />
+      {/* 탭 콘텐츠 */}
+      {open && (
+        <div data-bottom-panel style={{ position: 'relative', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+          {tab === 'memo' ? (
+            <>
+              {/* 좌: 코멘트 */}
+              <div style={{ position: 'absolute', top: 0, left: 0, width: '50%', bottom: MEMO_AD_H, borderRight: '1px solid var(--c-border)', overflow: 'hidden' }}>
+                <MobileMemoTab />
               </div>
-            )}
-            {tab === 'data' && (
-              <div className="m-panel-content">
-                {DATA_DOCS.map(({ doc, label }, i) => (
-                  <div
-                    key={`${doc}-${i}`}
-                    className={`m-item${activeDoc === doc ? ' active' : ''}`}
-                    onClick={() => { dispatch({ type: 'SET_ACTIVE_DOC', payload: doc }); onClose?.(); }}
-                  >{label}</div>
-                ))}
+              {/* 우: 체크리스트 */}
+              <div style={{ position: 'absolute', top: 0, right: 0, width: '50%', bottom: MEMO_AD_H, overflowY: 'auto', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}>
+                <MobileChecklistPanel />
               </div>
-            )}
-            {tab === 'plan' && (
-              <div className="m-panel-content">
-                {PLAN_DOCS.map(({ doc, label }) => (
-                  <div
-                    key={doc}
-                    className={`m-item${activeDoc === doc ? ' active' : ''}`}
-                    onClick={() => { dispatch({ type: 'SET_ACTIVE_DOC', payload: doc }); onClose?.(); }}
-                  >{label}</div>
-                ))}
+              {/* 하단: 광고 */}
+              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: MEMO_AD_H, borderTop: '1px solid var(--c-border)', overflow: 'hidden' }}>
+                <AdBanner slot="mobile-memo-bottom" mobileHide={false} height={MEMO_AD_H} />
               </div>
-            )}
-          </div>
+            </>
+          ) : (
+            <>
+              {/* 왼쪽 광고 */}
+              <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: AD_W, borderRight: '1px solid var(--c-border)', overflow: 'hidden' }}>
+                <AdBanner slot="mobile-bottom-left" mobileHide={false} height={CONTENT_H} />
+              </div>
+              {/* 오른쪽 메뉴 */}
+              <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: MENU_W, overflowY: 'auto', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}>
+                {tab === 'script' && (
+                  <div data-tour-id="left-panel" className="m-panel-content">
+                    <MobileScriptTab onClose={onClose} />
+                  </div>
+                )}
+                {tab === 'data' && (
+                  <div className="m-panel-content">
+                    {DATA_DOCS.map(({ doc, label }, i) => (
+                      <div
+                        key={`${doc}-${i}`}
+                        className={`m-item${activeDoc === doc ? ' active' : ''}`}
+                        onClick={() => { dispatch({ type: 'SET_ACTIVE_DOC', payload: doc }); onClose?.(); }}
+                      >{label}</div>
+                    ))}
+                  </div>
+                )}
+                {tab === 'plan' && (
+                  <div className="m-panel-content">
+                    {PLAN_DOCS.map(({ doc, label }) => (
+                      <div
+                        key={doc}
+                        className={`m-item${activeDoc === doc ? ' active' : ''}`}
+                        onClick={() => { dispatch({ type: 'SET_ACTIVE_DOC', payload: doc }); onClose?.(); }}
+                      >{label}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
