@@ -330,6 +330,9 @@ export function AppProvider({ children }) {
   const persistTimer = useRef(null);
   // 시스템 로드(INIT/LOAD_FROM_DRIVE) 중엔 drama_saved_at을 갱신하지 않기 위한 플래그
   const skipSavedAtRef = useRef(false);
+  // INIT/LOAD_FROM_DRIVE 직후 Drive 자동저장을 건너뛰기 위한 플래그
+  // (페이지 로드 시 데스크톱 데이터가 Drive를 덮어써서 모바일 데이터를 잃는 레이스컨디션 방지)
+  const skipDriveSaveRef = useRef(false);
 
   useEffect(() => {
     const stored = getAll(DB_KEYS.projects);
@@ -339,7 +342,8 @@ export function AppProvider({ children }) {
         // eslint-disable-next-line no-unused-vars
         ({ subtitle, ...ep }) => ep
       );
-      skipSavedAtRef.current = true; // INIT은 사용자 편집이 아님 → savedAt 갱신 건너뜀
+      skipSavedAtRef.current = true;  // INIT은 사용자 편집이 아님 → savedAt 갱신 건너뜀
+      skipDriveSaveRef.current = true; // INIT 직후 Drive 덮어쓰기 방지
       dispatch({
         type: 'INIT',
         payload: {
@@ -412,7 +416,10 @@ export function AppProvider({ children }) {
         return;
       }
       // Drive 자동저장 (토큰 유효할 때만)
-      if (isTokenValid()) {
+      // INIT/LOAD_FROM_DRIVE 직후 한 사이클은 건너뜀 — Drive 데이터를 덮어쓰는 레이스컨디션 방지
+      const skipDrive = skipDriveSaveRef.current;
+      skipDriveSaveRef.current = false;
+      if (isTokenValid() && !skipDrive) {
         saveToDrive({
           projects:       state.projects,
           episodes:       state.episodes,
@@ -451,6 +458,7 @@ export function AppProvider({ children }) {
   // Drive에서 불러올 때 사용 — skipSavedAt 플래그 자동 설정
   const loadFromDriveData = (drivePayload) => {
     skipSavedAtRef.current = true;
+    skipDriveSaveRef.current = true; // 방금 Drive에서 불러온 걸 즉시 다시 쓰지 않음
     // LOAD_FROM_DRIVE 후 drama_saved_at을 Drive의 savedAt으로 덮어씀 (다음 비교 기준)
     if (drivePayload.savedAt) {
       try { localStorage.setItem('drama_saved_at', drivePayload.savedAt); } catch {}
