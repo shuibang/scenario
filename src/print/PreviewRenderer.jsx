@@ -105,31 +105,50 @@ function A4Page({ tokens, pageNum, showPageNum, margins, metrics, fontFamily, fo
   const mmToYpx = (mm) => (mm / 297) * A4_H_PX;
   const mmToPx  = mmToXpx; // 가로 방향 (right/left)
 
-  // Build renderList: same blockText grouping as PdfPage in printPdf.jsx.
-  // When all lines of a wrapped block fit on this page, pass the full paragraph
-  // text (blockText) so the browser justifies interior lines naturally.
+  // renderList 구성: continuation 줄들을 하나로 합쳐 렌더링
+  // → 분할 단락도 내부 줄은 justify, 마지막 줄만 left-align (자연스러운 단락 끝)
   const renderList = [];
-  const absorbedKinds = new Set();
-  for (let i = 0; i < tokens.length; i++) {
+  let i = 0;
+  while (i < tokens.length) {
     const tok = tokens[i];
+
     if (tok.isFirstOfBlock === false) {
-      if (absorbedKinds.has(tok.kind)) continue;
-      renderList.push({ token: tok, text: tok.text });
+      const lines = [tok.text];
+      i++;
+      while (i < tokens.length && tokens[i].isFirstOfBlock === false && tokens[i].kind === tok.kind) {
+        lines.push(tokens[i].text);
+        i++;
+      }
+      renderList.push({ token: tok, text: lines.join('\n') });
       continue;
     }
-    absorbedKinds.clear();
-    if (tok.isFirstOfBlock === true && tok.blockLineCount > 1) {
-      let onPage = 0;
-      for (let j = i + 1; j < tokens.length; j++) {
-        const t = tokens[j];
-        if (t.isFirstOfBlock === false && t.kind === tok.kind) onPage++;
-        else break;
-      }
-      const fullyOnPage = onPage >= tok.blockLineCount - 1;
-      if (fullyOnPage) absorbedKinds.add(tok.kind);
-      renderList.push({ token: tok, text: fullyOnPage ? (tok.blockText ?? tok.text) : tok.text });
+
+    if (!tok.blockLineCount || tok.blockLineCount <= 1) {
+      renderList.push({ token: tok, text: tok.blockText ?? tok.text });
+      i++;
+      continue;
+    }
+
+    let onPage = 0;
+    for (let j = i + 1; j < tokens.length; j++) {
+      const t = tokens[j];
+      if (t.isFirstOfBlock === false && t.kind === tok.kind) onPage++;
+      else break;
+    }
+    const fullyOnPage = onPage >= tok.blockLineCount - 1;
+
+    if (fullyOnPage) {
+      renderList.push({ token: tok, text: tok.blockText ?? tok.text });
+      i++;
+      while (i < tokens.length && tokens[i].isFirstOfBlock === false && tokens[i].kind === tok.kind) i++;
     } else {
-      renderList.push({ token: tok, text: tok.text });
+      const lines = [tok.text];
+      i++;
+      while (i < tokens.length && tokens[i].isFirstOfBlock === false && tokens[i].kind === tok.kind) {
+        lines.push(tokens[i].text);
+        i++;
+      }
+      renderList.push({ token: tok, text: lines.join('\n') });
     }
   }
 
@@ -279,7 +298,7 @@ export default function PreviewRenderer({ appState, selections, columnWidth = 34
         continue;
       }
       const tokens    = tokenizeSection(section, metrics);
-      const paginated = paginate(tokens, metrics);
+      const paginated = paginate(tokens, metrics, section.type);
       paginated.forEach((pageTokens, pageIdx) => {
         result.push({ section, tokens: pageTokens, isCover: false, pageIdx });
       });

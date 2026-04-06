@@ -812,8 +812,8 @@ function SettingsTab() {
 }
 
 // ─── AnnounceCard (title 있는 공지 — 토글 아코디언) ──────────────────────────
-function AnnounceCard({ item }) {
-  const [open, setOpen] = useState(false);
+function AnnounceCard({ item, autoOpen }) {
+  const [open, setOpen] = useState(autoOpen || false);
   return (
     <div className="rounded-lg overflow-hidden"
       style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)' }}>
@@ -857,6 +857,17 @@ function AnnounceCard({ item }) {
 // ─── NoticesTab ───────────────────────────────────────────────────────────────
 function NoticesTab() {
   const [sub, setSub] = useState('notices');
+  const [openAnnouncementId, setOpenAnnouncementId] = useState(() => {
+    try {
+      const id = localStorage.getItem('drama_open_announcement_id');
+      if (id) {
+        localStorage.removeItem('drama_open_announcement_id');
+        return id;
+      }
+    } catch {}
+    return null;
+  });
+
   const tabStyle = (id) => ({
     padding: '6px 16px', fontSize: 13,
     fontWeight: sub === id ? 600 : 400,
@@ -878,7 +889,7 @@ function NoticesTab() {
       </div>
 
       {items.map(n => n.title ? (
-        <AnnounceCard key={n.id} item={n} />
+        <AnnounceCard key={n.id} item={n} autoOpen={openAnnouncementId === n.id} />
       ) : (
         <div key={n.id} className="rounded-lg px-4 py-3"
           style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)' }}>

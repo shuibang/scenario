@@ -199,36 +199,55 @@ function TokenEl({ token, text, S }) {
 
 // ─── A single PDF page ────────────────────────────────────────────────────────
 function PdfPage({ tokens, pageNum, showPageNum, S }) {
+  // renderList 구성: 같은 블록의 continuation 줄들을 하나로 합쳐 렌더링
+  // → 분할된 단락도 내부 줄은 justify, 마지막 줄만 left-align(자연스러운 단락 끝)
   const renderList = [];
-  const absorbedKinds = new Set();
-
-  for (let i = 0; i < tokens.length; i++) {
+  let i = 0;
+  while (i < tokens.length) {
     const tok = tokens[i];
 
+    // 페이지 중간에서 시작하는 continuation (직전 페이지에서 블록이 잘린 경우)
     if (tok.isFirstOfBlock === false) {
-      if (absorbedKinds.has(tok.kind)) continue;
-      renderList.push({ kind: tok.kind, text: tok.text, token: tok });
+      const lines = [tok.text];
+      i++;
+      while (i < tokens.length && tokens[i].isFirstOfBlock === false && tokens[i].kind === tok.kind) {
+        lines.push(tokens[i].text);
+        i++;
+      }
+      renderList.push({ kind: tok.kind, text: lines.join('\n'), token: tok });
       continue;
     }
 
-    absorbedKinds.clear();
+    // 단일 줄 블록 (blockLineCount 없거나 1)
+    if (!tok.blockLineCount || tok.blockLineCount <= 1) {
+      renderList.push({ kind: tok.kind, text: tok.rawHtml ?? tok.blockText ?? tok.text, token: tok });
+      i++;
+      continue;
+    }
 
-    if (tok.isFirstOfBlock === true && tok.blockLineCount > 1) {
-      let onPage = 0;
-      for (let j = i + 1; j < tokens.length; j++) {
-        const t = tokens[j];
-        if (t.isFirstOfBlock === false && t.kind === tok.kind) onPage++;
-        else break;
-      }
-      const fullyOnPage = onPage >= tok.blockLineCount - 1;
-      if (fullyOnPage) absorbedKinds.add(tok.kind);
-      renderList.push({
-        kind:  tok.kind,
-        text:  fullyOnPage ? (tok.rawHtml ?? tok.blockText ?? tok.text) : tok.text,
-        token: tok,
-      });
+    // 다중 줄 블록: 현재 페이지에 모두 있는지 확인
+    let onPage = 0;
+    for (let j = i + 1; j < tokens.length; j++) {
+      const t = tokens[j];
+      if (t.isFirstOfBlock === false && t.kind === tok.kind) onPage++;
+      else break;
+    }
+    const fullyOnPage = onPage >= tok.blockLineCount - 1;
+
+    if (fullyOnPage) {
+      // 블록 전체가 이 페이지에 있음 → blockText(원문)로 justify 최적 렌더링
+      renderList.push({ kind: tok.kind, text: tok.rawHtml ?? tok.blockText ?? tok.text, token: tok });
+      i++;
+      while (i < tokens.length && tokens[i].isFirstOfBlock === false && tokens[i].kind === tok.kind) i++;
     } else {
-      renderList.push({ kind: tok.kind, text: tok.rawHtml ?? tok.text, token: tok });
+      // 블록이 다음 페이지로 이어짐 → 이 페이지의 줄들을 하나로 합침
+      const lines = [tok.text];
+      i++;
+      while (i < tokens.length && tokens[i].isFirstOfBlock === false && tokens[i].kind === tok.kind) {
+        lines.push(tokens[i].text);
+        i++;
+      }
+      renderList.push({ kind: tok.kind, text: lines.join('\n'), token: tok });
     }
   }
 
@@ -329,7 +348,7 @@ function buildPdfDocument(printModel) {
     }
 
     const tokens    = tokenizeSection(section, metrics);
-    const paginated = paginate(tokens, metrics);
+    const paginated = paginate(tokens, metrics, section.type);
 
     paginated.forEach((pageTokens, pageIdx) => {
       pages.push(

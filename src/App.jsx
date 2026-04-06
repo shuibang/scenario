@@ -917,6 +917,13 @@ function Shell({ authUser, setAuthUser }) {
     }
   }, [keyboardUp]);
 
+  // ── Hash navigation: #/mypage → open MyPage
+  useEffect(() => {
+    if (window.location.hash === '#/mypage') {
+      dispatch({ type: 'SET_ACTIVE_DOC', payload: 'mypage' });
+    }
+  }, [dispatch]);
+
   const updateLeftWidth = useCallback((delta) => {
     setPanelWidths(prev => {
       const next = { ...prev, left: Math.min(MAX_LEFT, Math.max(MIN_LEFT, prev.left + delta)) };

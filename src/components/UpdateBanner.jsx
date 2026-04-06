@@ -52,9 +52,11 @@ export const NOTICES = [
 
 const STORAGE_KEY      = 'drama_dismissed_notice';
 const STORAGE_HIDE_KEY = 'drama_hide_notice_forever';
+const STORAGE_OPEN_ANNOUNCEMENT_KEY = 'drama_open_announcement_id';
 
 export default function UpdateBanner() {
   const latest = NOTICES[0];
+  const announcement = ANNOUNCEMENTS[0];
   const [dismissed, setDismissed] = useState(() => {
     try {
       if (localStorage.getItem(STORAGE_HIDE_KEY) === 'true') return true;
@@ -74,43 +76,60 @@ export default function UpdateBanner() {
     setDismissed(true);
   };
 
+  const handleAnnouncementClick = () => {
+    try { localStorage.setItem(STORAGE_OPEN_ANNOUNCEMENT_KEY, announcement.id); } catch {}
+    // MyPage로 URL 이동 (anchor hash navigation)
+    window.location.hash = '#/mypage';
+  };
+
   return (
-    <div
-      className="no-print"
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        padding: '5px 14px',
-        background: 'var(--c-active)',
-        borderBottom: '1px solid var(--c-border2)',
-        flexShrink: 0,
-      }}
-    >
-      <span style={{ fontSize: 11, color: 'var(--c-accent)', fontWeight: 600, flexShrink: 0 }}>
-        업데이트 {latest.date}
-      </span>
-      <span style={{ fontSize: 11, color: 'var(--c-text3)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {latest.content}
-      </span>
-      <button
-        onClick={dismissForever}
-        style={{
-          background: 'none', border: '1px solid var(--c-border3)', borderRadius: 4,
-          cursor: 'pointer', color: 'var(--c-text6)', fontSize: 10,
-          flexShrink: 0, padding: '2px 6px', whiteSpace: 'nowrap',
-        }}
-        title="이 배너를 다시 표시하지 않습니다"
-      >다시 보지 않기</button>
-      <button
-        onClick={dismissOnce}
-        style={{
-          background: 'none', border: 'none', cursor: 'pointer',
-          color: 'var(--c-text5)', fontSize: 14, lineHeight: 1,
-          flexShrink: 0, padding: '0 2px',
-        }}
-        title="닫기"
-      >×</button>
+    <div className="no-print" style={{ display: 'flex', flexDirection: 'column', gap: 5, padding: '5px 14px', background: 'var(--c-active)', borderBottom: '1px solid var(--c-border2)', flexShrink: 0 }}>
+      {/* 공지사항 배너 */}
+      {announcement && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 10, color: 'var(--c-accent)', fontWeight: 600, flexShrink: 0 }}>공지</span>
+          <button
+            onClick={handleAnnouncementClick}
+            style={{
+              flex: 1, textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer',
+              fontSize: 11, color: 'var(--c-text2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              padding: 0, textDecoration: 'underline', textDecorationColor: 'transparent',
+              transition: 'text-decoration-color 0.2s',
+            }}
+            onMouseEnter={e => e.target.style.textDecorationColor = 'currentColor'}
+            onMouseLeave={e => e.target.style.textDecorationColor = 'transparent'}
+          >
+            {announcement.title}
+          </button>
+        </div>
+      )}
+      {/* 업데이트 배너 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 11, color: 'var(--c-accent)', fontWeight: 600, flexShrink: 0 }}>
+          업데이트 {latest.date}
+        </span>
+        <span style={{ fontSize: 11, color: 'var(--c-text3)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {latest.content}
+        </span>
+        <button
+          onClick={dismissForever}
+          style={{
+            background: 'none', border: '1px solid var(--c-border3)', borderRadius: 4,
+            cursor: 'pointer', color: 'var(--c-text6)', fontSize: 10,
+            flexShrink: 0, padding: '2px 6px', whiteSpace: 'nowrap',
+          }}
+          title="이 배너를 다시 표시하지 않습니다"
+        >다시 보지 않기</button>
+        <button
+          onClick={dismissOnce}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: 'var(--c-text5)', fontSize: 14, lineHeight: 1,
+            flexShrink: 0, padding: '0 2px',
+          }}
+          title="닫기"
+        >×</button>
+      </div>
     </div>
   );
 }

@@ -368,8 +368,13 @@ function isOrphanToken(t) {
 }
 
 // ─── LineToken[] → Page[] (each page = LineToken[]) ──────────────────────────
-export function paginate(tokens, metrics) {
+// sectionType: 섹션 종류에 따라 ② 조기 넘김의 블록 크기 상한이 달라짐.
+//   episode/scenelist: 씬 액션 등 어떤 크기의 블록도 이동 가능 (한 페이지 이내)
+//   synopsis/characters/등: 짧은 블록(≤20%)만 이동 — 긴 줄거리 단락은 자연 분할
+export function paginate(tokens, metrics, sectionType = '') {
   const { linesPerPage } = metrics;
+  const isEpisodeType = sectionType === 'episode' || sectionType === 'scenelist' || sectionType === '';
+  const maxBlockH = isEpisodeType ? linesPerPage : linesPerPage / 5;
   const pages = [];
   let page = [];
   let used = 0;
@@ -386,8 +391,10 @@ export function paginate(tokens, metrics) {
 
   const breakPage = (trailer = []) => {
     if (page.length > 0) pages.push(page);
-    page = [...trailer];
-    used = trailer.reduce((s, t) => s + (t.height || 1), 0);
+    // 새 페이지 첫머리 빈줄 제거 (rescue된 heading 앞의 blank가 여백처럼 보이는 현상 방지)
+    const firstContent = trailer.findIndex(t => t.kind !== 'blank');
+    page = firstContent >= 0 ? [...trailer.slice(firstContent)] : [];
+    used = page.reduce((s, t) => s + (t.height || 1), 0);
   };
 
   for (let i = 0; i < tokens.length; i++) {
@@ -403,14 +410,17 @@ export function paginate(tokens, metrics) {
       }
 
       // ② 조기 페이지 넘김: 블록 전체가 현재 페이지엔 안 들어가지만 새 페이지엔 들어갈 때.
-      //    단, 페이지가 75% 이상 찼을 때만 발동 — 빈 공간이 많은데도 씬/단락을 넘기는 현상 방지
+      //    조건:
+      //      - 페이지 75% 이상 찼을 때만 발동 (빈 공간이 많은데도 넘기는 현상 방지)
+      //      - 블록 높이가 한 페이지의 약 20% 이하일 때만 발동
+      //        (줄거리 등 긴 단락은 ②로 이동하지 않고 ③으로 자연스럽게 분할)
       if (token.blockLineCount > 1 && used >= linesPerPage * 0.75) {
         let blockH = h;
         for (let j = i + 1; j < tokens.length; j++) {
           if (tokens[j].isFirstOfBlock === false) blockH += (tokens[j].height || 1);
           else break;
         }
-        if (used + blockH > linesPerPage && blockH <= linesPerPage) {
+        if (used + blockH > linesPerPage && blockH <= maxBlockH) {
           breakPage(rescueTrailer());
         }
       }
