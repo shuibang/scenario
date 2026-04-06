@@ -192,7 +192,11 @@ export default function SnapshotPanel({ onClose }) {
     setBacking(true);
     setError(null);
     try {
-      if (!isTokenValid()) await refreshDriveToken();
+      await refreshDriveToken();
+      if (!isTokenValid()) {
+        setError('Drive 로그인이 만료되었습니다. 다시 로그인해 주세요.');
+        return;
+      }
       await saveSnapshot({
         projects:       state.projects,
         episodes:       state.episodes,

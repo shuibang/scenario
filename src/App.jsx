@@ -977,7 +977,7 @@ function Shell({ authUser, setAuthUser }) {
     const timer = setInterval(async () => {
       if (!state.initialized || !state.projects.length) return;
       try {
-        if (!isTokenValid()) await refreshDriveToken();
+        await refreshDriveToken();
         if (!isTokenValid()) return;
         await saveSnapshot({
           projects:       state.projects,
