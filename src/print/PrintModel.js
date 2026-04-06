@@ -57,7 +57,7 @@ function normalizeBlock(block, characters) {
   return {
     id:         block.id,
     type:       block.type,
-    label:      block.label || '',
+    label:      stripLiteralTags(block.label || ''),
     content,
     charName,
     sceneId:    block.sceneId,
@@ -83,27 +83,28 @@ export function buildPrintModel(appState, selections, preset) {
     sections.push({
       type:   'cover',
       title:  coverDoc.title || project?.title || '',
-      fields: [...fixedFields, ...customFields].map(f => ({ label: f.label, value: f.value })),
+      fields: [...fixedFields, ...customFields].map(f => ({ label: f.label, value: stripLiteralTags(f.value) })),
     });
   }
 
   // ── 2. Synopsis (page numbers reset per section)
   if (selections.synopsis && synopsisDoc) {
     const s = synopsisDoc;
+    const st = (v) => stripLiteralTags(v || '');
     sections.push({
       type:       'synopsis',
-      genre:      s.genre  || '',
-      theme:      s.theme  || '',
-      intent:     s.intent || '',
-      story:      s.story  || s.content || '',
+      genre:      st(s.genre),
+      theme:      st(s.theme),
+      intent:     st(s.intent),
+      story:      st(s.story || s.content),
       characters: projectChars.map(c => ({
         id:          c.id,
-        name:        charFullName(c),
-        gender:      c.gender         || '',
-        age:         c.age            || '',
-        job:         charOccupation(c),
+        name:        st(charFullName(c)),
+        gender:      st(c.gender),
+        age:         st(c.age),
+        job:         st(charOccupation(c)),
         role:        c.role,
-        description: charIntro(c),
+        description: st(charIntro(c)),
       })),
     });
   }
