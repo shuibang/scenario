@@ -356,7 +356,7 @@ function sanitizeInlineHtml(html) {
   return html
     .replace(/<strong(\s[^>]*)?>/gi, '<b>').replace(/<\/strong>/gi, '</b>')
     .replace(/<em(\s[^>]*)?>/gi, '<i>').replace(/<\/em>/gi, '</i>')
-    .replace(/<br\s*\/?>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<(?!\/?(b|i|u)(\s[^>]*)?>)[^>]+>/gi, '')
     .replace(/\n$/, '');
 }
