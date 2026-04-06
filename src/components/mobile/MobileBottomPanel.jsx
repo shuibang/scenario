@@ -29,7 +29,7 @@ const OPEN_H     = 280;  // px — 열렸을 때 패널 전체 고정 높이
 const CONTENT_H  = OPEN_H - TAB_H; // 콘텐츠 영역 = 224px
 const AD_W       = '25%'; // 왼쪽 광고 (대본 탭 버튼 폭과 동일)
 const MENU_W     = '75%'; // 오른쪽 메뉴
-const MEMO_L_W   = 75;   // px — 메모탭 왼쪽(코멘트) 열 너비
+const MEMO_L_W   = '25%'; // 메모탭 왼쪽(코멘트) 열 너비
 const MEMO_AD_H  = 56;   // px — 메모탭 하단 광고 높이 (콘텐츠 224px의 1/4)
 
 export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, onClose }) {
@@ -111,7 +111,7 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, on
           <div style={{
             position: 'absolute', top: 0, right: 0,
             bottom: tab === 'memo' ? MEMO_AD_H : 0,
-            width: tab === 'memo' ? `calc(100% - ${MEMO_L_W}px)` : MENU_W,
+            width: tab === 'memo' ? '75%' : MENU_W,
             overflowY: 'auto', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y',
           }}>
             {tab === 'script' && (
