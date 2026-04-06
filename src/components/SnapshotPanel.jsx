@@ -18,6 +18,7 @@ import {
   deleteSnapshot,
   isTokenValid,
 } from '../store/googleDrive';
+import { refreshDriveToken } from '../store/supabaseClient';
 
 // ── 날짜 포맷 ────────────────────────────────────────────────────────────────
 function fmtDate(iso) {
@@ -43,16 +44,21 @@ function DeviceBadge({ label }) {
   );
 }
 
-// ── 라벨 뱃지 ────────────────────────────────────────────────────────────────
-function LabelBadge({ label }) {
-  const isAuto = label?.includes('자동저장');
+// ── 타입 뱃지 ────────────────────────────────────────────────────────────────
+const TYPE_STYLE = {
+  auto:    { bg: 'rgba(246,173,85,0.15)',  color: '#f6ad55', text: '자동저장' },
+  manual:  { bg: 'rgba(154,230,180,0.15)', color: '#68d391', text: '수동저장' },
+  backup:  { bg: 'rgba(183,148,246,0.15)', color: '#b794f4', text: '백업'     },
+  restore: { bg: 'rgba(160,174,192,0.15)', color: '#a0aec0', text: '복원 전'  },
+};
+function TypeBadge({ type, label }) {
+  const s = TYPE_STYLE[type] ?? TYPE_STYLE.manual;
   return (
     <span style={{
-      fontSize: 10, padding: '2px 6px', borderRadius: 4,
-      background: isAuto ? 'rgba(246,173,85,0.15)' : 'rgba(154,230,180,0.15)',
-      color: isAuto ? '#f6ad55' : '#68d391',
+      fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4,
+      background: s.bg, color: s.color, whiteSpace: 'nowrap',
     }}>
-      {label}
+      {s.text}{label && label !== s.text ? ` — ${label}` : ''}
     </span>
   );
 }
@@ -116,6 +122,7 @@ export default function SnapshotPanel({ onClose }) {
   const [confirm, setConfirm]       = useState(null);  // snap entry
   const [restoring, setRestoring]   = useState(false);
   const [deleting, setDeleting]     = useState(null);  // snap id
+  const [backing, setBacking]       = useState(false);
   const [toast, setToast]           = useState(null);
 
   const showToast = (msg) => {
@@ -127,10 +134,11 @@ export default function SnapshotPanel({ onClose }) {
     setLoading(true);
     setError(null);
     try {
+      if (!isTokenValid()) await refreshDriveToken();
       const list = await loadSnapshots();
       setSnapshots(list);
     } catch {
-      setError('스냅샷 목록을 불러오지 못했습니다.');
+      setError('스냅샷 목록을 불러오지 못했습니다. Drive 로그인을 확인해 주세요.');
     } finally {
       setLoading(false);
     }
@@ -142,6 +150,7 @@ export default function SnapshotPanel({ onClose }) {
     if (!confirm) return;
     setRestoring(true);
     try {
+      if (!isTokenValid()) await refreshDriveToken();
       // 1) 현재 상태 백업
       await saveSnapshot({
         projects:       state.projects,
@@ -155,7 +164,7 @@ export default function SnapshotPanel({ onClose }) {
         workTimeLogs:   state.workTimeLogs,
         checklistItems: state.checklistItems,
         stylePreset:    state.stylePreset,
-      }, '복원 전 자동저장');
+      }, '복원 전 자동저장', 'restore');
 
       // 2) 선택 스냅샷 로드
       const data = await loadSnapshotData(confirm.id);
@@ -171,6 +180,33 @@ export default function SnapshotPanel({ onClose }) {
       setConfirm(null);
     } finally {
       setRestoring(false);
+    }
+  };
+
+  const handleBackup = async () => {
+    setBacking(true);
+    setError(null);
+    try {
+      if (!isTokenValid()) await refreshDriveToken();
+      await saveSnapshot({
+        projects:       state.projects,
+        episodes:       state.episodes,
+        characters:     state.characters,
+        scenes:         state.scenes,
+        scriptBlocks:   state.scriptBlocks,
+        coverDocs:      state.coverDocs,
+        synopsisDocs:   state.synopsisDocs,
+        resources:      state.resources,
+        workTimeLogs:   state.workTimeLogs,
+        checklistItems: state.checklistItems,
+        stylePreset:    state.stylePreset,
+      }, '백업', 'backup');
+      await refresh();
+      showToast('백업 완료');
+    } catch {
+      setError('백업 중 오류가 발생했습니다. Drive 로그인을 확인해 주세요.');
+    } finally {
+      setBacking(false);
     }
   };
 
@@ -220,7 +256,7 @@ export default function SnapshotPanel({ onClose }) {
         )}
 
         {/* 헤더 */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--c-text)' }}>백업 / 복원</div>
           <button
             onClick={onClose}
@@ -228,10 +264,28 @@ export default function SnapshotPanel({ onClose }) {
           >×</button>
         </div>
 
+        {/* 백업 버튼 */}
+        <button
+          onClick={handleBackup}
+          disabled={backing || notLoggedIn}
+          style={{
+            width: '100%', padding: '9px 0', borderRadius: 8, marginBottom: 14,
+            background: backing ? 'transparent' : 'rgba(183,148,246,0.2)',
+            border: '1px solid rgba(183,148,246,0.4)',
+            color: '#b794f4', fontSize: 13, fontWeight: 700,
+            cursor: (backing || notLoggedIn) ? 'not-allowed' : 'pointer',
+            opacity: notLoggedIn ? 0.5 : 1,
+          }}
+        >
+          {backing ? '백업 중…' : '지금 백업하기'}
+        </button>
+
         {/* 안내 */}
-        <div style={{ fontSize: 12, color: 'var(--c-text5)', marginBottom: 16, lineHeight: 1.6 }}>
-          저장 버튼을 누를 때마다 스냅샷이 생성됩니다. 최대 {10}개 보관.
-          {notLoggedIn && <span style={{ color: '#f6ad55' }}> (Drive 로그인 필요)</span>}
+        <div style={{ fontSize: 11, color: 'var(--c-text6)', marginBottom: 14, lineHeight: 1.7 }}>
+          <b style={{ color: 'var(--c-text5)' }}>자동저장</b> 10분마다 · 3개 보관 &nbsp;|&nbsp;
+          <b style={{ color: 'var(--c-text5)' }}>수동저장</b> 저장 버튼 시 · 5개 보관 &nbsp;|&nbsp;
+          <b style={{ color: 'var(--c-text5)' }}>백업</b> 직접 생성 · 5개 보관
+          {notLoggedIn && <span style={{ color: '#f6ad55' }}> &nbsp;— Drive 로그인 필요</span>}
         </div>
 
         {/* 오류 */}
@@ -267,7 +321,7 @@ export default function SnapshotPanel({ onClose }) {
                 {/* 정보 */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
-                    <LabelBadge label={snap.label} />
+                    <TypeBadge type={snap.type} label={snap.label} />
                     <DeviceBadge label={snap.device} />
                     {i === 0 && <span style={{ fontSize: 10, color: 'var(--c-accent)' }}>최신</span>}
                   </div>

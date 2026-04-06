@@ -114,7 +114,7 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, on
 
           {/* 오른쪽 메뉴 — paddingLeft로 왼쪽 광고 공간 확보 */}
           <div style={{
-            position: 'absolute', top: 0, right: 0, bottom: tab === 'memo' ? BANNER_H : 0,
+            position: 'absolute', top: 0, right: 0, bottom: 0,
             width: MENU_W, overflowY: 'auto', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y',
           }}>
             {tab === 'script' && (
@@ -147,9 +147,9 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, on
             {tab === 'memo' && <MobileChecklistPanel />}
           </div>
 
-          {/* 하단 광고 띠 — 메모탭 전용 */}
+          {/* 하단 광고 띠 — 메모탭 전용 (pointerEvents: none으로 메뉴 클릭 차단 방지) */}
           {tab === 'memo' && (
-            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: BANNER_H, overflow: 'hidden', borderTop: '1px solid var(--c-border)' }}>
+            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: BANNER_H, overflow: 'hidden', borderTop: '1px solid var(--c-border)', pointerEvents: 'none' }}>
               <AdBanner slot="mobile-memo-bottom" mobileHide={false} height={BANNER_H} />
             </div>
           )}

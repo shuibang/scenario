@@ -1768,13 +1768,16 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
       }
     };
     const onSave = () => flushSave();
+    const onUndo = () => handleUndo();
     window.addEventListener('keydown', onKey);
     window.addEventListener('script:requestSave', onSave);
+    window.addEventListener('script:undo', onUndo);
     return () => {
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('script:requestSave', onSave);
+      window.removeEventListener('script:undo', onUndo);
     };
-  }, [flushSave, applyBlockType]);
+  }, [flushSave, applyBlockType, handleUndo]);
 
   // ── getCurrentSceneId: find the scene_number block's sceneId before the cursor ─
   const getCurrentSceneId = useCallback(() => {

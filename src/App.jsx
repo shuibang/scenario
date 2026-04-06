@@ -671,7 +671,6 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
           style={saveStatus === 'error' ? { color: '#c00', borderColor: '#f99' } : undefined}
         />
         <MenuButton label="출력" onClick={onPrintPreview} disabled={!activeProjectId} accent />
-        <MenuButton label="백업/복원" onClick={onSnapshot} />
 
         {sep}
 
@@ -690,6 +689,7 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
           className="w-6 h-6 rounded text-xs flex items-center justify-center shrink-0"
           style={{ color: canRedo ? 'var(--c-text3)' : 'var(--c-border3)', border: '1px solid var(--c-border3)', background: 'transparent', cursor: canRedo ? 'pointer' : 'not-allowed' }}
         >↪</button>
+        <MenuButton label="백업/복원" onClick={onSnapshot} />
 
         {sep}
 
@@ -970,24 +970,54 @@ function Shell({ authUser, setAuthUser }) {
   const [saveToast, setSaveToast] = useState(false);
   const saveToastTimer = useRef(null);
 
+  // 10분마다 자동저장 스냅샷
+  useEffect(() => {
+    const AUTO_INTERVAL = 10 * 60 * 1000;
+    const timer = setInterval(async () => {
+      if (!state.initialized || !state.projects.length) return;
+      try {
+        if (!isTokenValid()) await refreshDriveToken();
+        if (!isTokenValid()) return;
+        await saveSnapshot({
+          projects:       state.projects,
+          episodes:       state.episodes,
+          characters:     state.characters,
+          scenes:         state.scenes,
+          scriptBlocks:   state.scriptBlocks,
+          coverDocs:      state.coverDocs,
+          synopsisDocs:   state.synopsisDocs,
+          resources:      state.resources,
+          workTimeLogs:   state.workTimeLogs,
+          checklistItems: state.checklistItems,
+          stylePreset:    state.stylePreset,
+        }, '자동저장', 'auto');
+      } catch {}
+    }, AUTO_INTERVAL);
+    return () => clearInterval(timer);
+  }, [state]);
+
   const handleSave = useCallback(() => {
     window.dispatchEvent(new Event('script:requestSave'));
-    // 수동 저장 시 스냅샷 생성 (Drive 로그인 상태일 때만)
-    if (isTokenValid()) {
-      saveSnapshot({
-        projects:       state.projects,
-        episodes:       state.episodes,
-        characters:     state.characters,
-        scenes:         state.scenes,
-        scriptBlocks:   state.scriptBlocks,
-        coverDocs:      state.coverDocs,
-        synopsisDocs:   state.synopsisDocs,
-        resources:      state.resources,
-        workTimeLogs:   state.workTimeLogs,
-        checklistItems: state.checklistItems,
-        stylePreset:    state.stylePreset,
-      }, '수동저장').catch(() => {});
-    }
+    // 수동 저장 시 스냅샷 생성 — 토큰 없으면 갱신 후 시도
+    const snap = {
+      projects:       state.projects,
+      episodes:       state.episodes,
+      characters:     state.characters,
+      scenes:         state.scenes,
+      scriptBlocks:   state.scriptBlocks,
+      coverDocs:      state.coverDocs,
+      synopsisDocs:   state.synopsisDocs,
+      resources:      state.resources,
+      workTimeLogs:   state.workTimeLogs,
+      checklistItems: state.checklistItems,
+      stylePreset:    state.stylePreset,
+    };
+    (async () => {
+      try {
+        if (!isTokenValid()) await refreshDriveToken();
+        if (isTokenValid()) await saveSnapshot(snap, '수동저장', 'manual');
+      } catch {}
+    })();
     clearTimeout(saveToastTimer.current);
     setSaveToast(true);
     saveToastTimer.current = setTimeout(() => setSaveToast(false), 2000);

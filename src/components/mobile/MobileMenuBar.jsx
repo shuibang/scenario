@@ -186,7 +186,7 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
               ))}
 
               <div style={{ height: 1, background: 'var(--c-border)', margin: '4px 0' }} />
-              <AdBanner slot="mobile-bottom" mobileHide={false} height={60} />
+              <AdBanner slot="mobile-bottom" mobileHide={false} height={32} />
             </div>
           )}
         </div>
@@ -225,6 +225,16 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
         >출력</button>
         <button onClick={onSnapshot} style={mobileTbtnStyle}>백업/복원</button>
         <div style={{ width: 1, height: 16, background: 'var(--c-border3)', margin: '0 2px', flexShrink: 0 }} />
+        <button
+          title="되돌리기"
+          onMouseDown={e => { e.preventDefault(); window.dispatchEvent(new Event('script:undo')); }}
+          style={mobileTbtnStyle}
+        >↩</button>
+        <button
+          title="다시하기"
+          onMouseDown={e => { e.preventDefault(); dispatch({ type: 'REDO' }); }}
+          style={mobileTbtnStyle}
+        >↪</button>
         {[
           { label: 'B', title: '굵게', tag: 'bold', fw: 'bold' },
           { label: 'I', title: '기울임', tag: 'italic', fs: 'italic' },

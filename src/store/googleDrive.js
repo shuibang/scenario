@@ -10,7 +10,9 @@ const FILE_NAME  = 'drama_workspace.json';
 
 const SNAPSHOTS_INDEX = 'drama_snapshots.json';
 const SNAP_PREFIX     = 'drama_snap_';
-const MAX_SNAPSHOTS   = 10;
+
+// 타입별 보관 한도
+const SNAP_LIMITS = { auto: 3, manual: 5, backup: 5 };
 
 // ── Token 관리 ──────────────────────────────────────────────────────────────
 let _accessToken = null;
@@ -143,9 +145,10 @@ export async function loadSnapshots() {
 /**
  * 현재 workspace 상태를 스냅샷으로 저장
  * @param {object} payload - 저장할 state (projects, episodes, scriptBlocks …)
- * @param {string} label   - '수동저장' | '복원 전 자동저장' 등
+ * @param {string} label   - '자동저장' | '수동저장' | '백업' | '복원 전 자동저장'
+ * @param {'auto'|'manual'|'backup'} type
  */
-export async function saveSnapshot(payload, label = '수동저장') {
+export async function saveSnapshot(payload, label = '수동저장', type = 'manual') {
   if (!isTokenValid()) throw new Error('DRIVE_AUTH_REQUIRED');
 
   const id      = `${Date.now()}`;
@@ -158,15 +161,29 @@ export async function saveSnapshot(payload, label = '수동저장') {
   // 2) 인덱스 갱신
   const existing = await readFileByName(SNAPSHOTS_INDEX);
   const prev     = existing?.snapshots ?? [];
-  const entry    = { id, savedAt, label, device, projectCount: payload.projects?.length ?? 0 };
+  const entry    = { id, savedAt, label, type, device, projectCount: payload.projects?.length ?? 0 };
   const updated  = [entry, ...prev];
 
-  // 초과분 삭제 (fire-and-forget)
-  updated.slice(MAX_SNAPSHOTS).forEach(old =>
-    deleteFileByName(`${SNAP_PREFIX}${old.id}.json`).catch(() => {})
-  );
+  // 3) 타입별 한도 초과분 삭제
+  const byType = { auto: [], manual: [], backup: [], restore: [] };
+  updated.forEach(s => {
+    const t = s.type ?? 'manual';
+    if (!byType[t]) byType[t] = [];
+    byType[t].push(s);
+  });
+  const toDelete = [];
+  Object.entries(SNAP_LIMITS).forEach(([t, limit]) => {
+    if (byType[t]?.length > limit) {
+      toDelete.push(...byType[t].slice(limit));
+      byType[t] = byType[t].slice(0, limit);
+    }
+  });
+  toDelete.forEach(old => deleteFileByName(`${SNAP_PREFIX}${old.id}.json`).catch(() => {}));
 
-  await upsertFile(SNAPSHOTS_INDEX, JSON.stringify({ snapshots: updated.slice(0, MAX_SNAPSHOTS) }));
+  // 4) 전체 목록 최신순 정렬 후 저장
+  const kept = Object.values(byType).flat()
+    .sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt));
+  await upsertFile(SNAPSHOTS_INDEX, JSON.stringify({ snapshots: kept }));
   return entry;
 }
 
