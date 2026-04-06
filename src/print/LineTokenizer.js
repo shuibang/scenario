@@ -16,7 +16,11 @@
  * }
  */
 
-function stripHtml(html) { return (html || '').replace(/<[^>]+>/g, ''); }
+function stripHtml(html) {
+  return (html || '')
+    .replace(/&lt;[^&]*&gt;/g, '') // 텍스트로 들어온 HTML 엔티티 태그 ex) &lt;br&gt;
+    .replace(/<[^>]+>/g, '');      // 실제 HTML 태그
+}
 
 // ─── A4 metrics ────────────────────────────────────────────────────────────────
 const PT_PER_MM   = 2.8346;
