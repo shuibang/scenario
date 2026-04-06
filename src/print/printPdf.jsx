@@ -60,10 +60,11 @@ function makeStyles(preset, metrics) {
       fontSize:      fs,
       lineHeight:    lh,
       color:         '#000',
-      paddingTop:    margins.top    * MM_TO_PT,
-      paddingRight:  margins.right  * MM_TO_PT,
-      paddingBottom: margins.bottom * MM_TO_PT,
-      paddingLeft:   margins.left   * MM_TO_PT,
+      // mm 문자열로 지정 → react-pdf가 내부 단위 변환 직접 담당 (수치 오차 방지)
+      paddingTop:    `${margins.top}mm`,
+      paddingRight:  `${margins.right}mm`,
+      paddingBottom: `${margins.bottom}mm`,
+      paddingLeft:   `${margins.left}mm`,
     },
     // ── cover
     coverWrap:        { flex: 1, position: 'relative' },

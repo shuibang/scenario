@@ -917,18 +917,6 @@ function Shell({ authUser, setAuthUser }) {
     }
   }, [keyboardUp]);
 
-  // ── Hash navigation: #/mypage → open MyPage
-  useEffect(() => {
-    const handleHashChange = () => {
-      if (window.location.hash === '#/mypage') {
-        dispatch({ type: 'SET_ACTIVE_DOC', payload: 'mypage' });
-      }
-    };
-    window.addEventListener('hashchange', handleHashChange);
-    handleHashChange(); // 초기 로드 시도
-    return () => window.removeEventListener('hashchange', handleHashChange);
-  }, [dispatch]);
-
   const updateLeftWidth = useCallback((delta) => {
     setPanelWidths(prev => {
       const next = { ...prev, left: Math.min(MAX_LEFT, Math.max(MIN_LEFT, prev.left + delta)) };
