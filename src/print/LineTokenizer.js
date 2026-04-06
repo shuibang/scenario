@@ -18,12 +18,13 @@
 
 function stripHtml(html) {
   return (html || '')
-    .replace(/&lt;br\s*\/?&gt;/gi, '\n') // &lt;br&gt; → 줄바꿈
-    .replace(/<br\s*\/?>/gi, '\n')       // <br> → 줄바꿈
-    .replace(/&lt;[^&]*&gt;/g, '')       // 나머지 엔티티 태그 제거
-    .replace(/<[^>]+>/g, '')             // 나머지 실제 태그 제거
-    .replace(/\n{3,}/g, '\n\n')         // 연속 3개 이상 줄바꿈 → 2개로 압축
-    .trimEnd();                          // 끝에 붙은 빈 줄 제거
+    .replace(/&lt;br\s*\/?&gt;/gi, '\n')           // &lt;br&gt; → 줄바꿈
+    .replace(/<br\s*\/?>/gi, '\n')                  // <br> → 줄바꿈
+    .replace(/<\/(p|div|li|tr|h[1-6])>/gi, '\n')   // 블록 닫힘 태그 → 줄바꿈
+    .replace(/&lt;[^&]*&gt;/g, '')                  // 나머지 엔티티 태그 제거
+    .replace(/<[^>]+>/g, '')                        // 나머지 실제 태그 제거
+    .replace(/\n{3,}/g, '\n\n')                    // 연속 3개 이상 줄바꿈 → 2개로 압축
+    .trimEnd();                                     // 끝에 붙은 빈 줄 제거
 }
 
 // ─── A4 metrics ────────────────────────────────────────────────────────────────

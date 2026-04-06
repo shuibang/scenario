@@ -101,7 +101,9 @@ function TokenRow({ token, text: textProp, metrics, fontFamily, fontSize, lineHe
 // ─── Single A4 page ───────────────────────────────────────────────────────────
 function A4Page({ tokens, pageNum, showPageNum, margins, metrics, fontFamily, fontSize, lineHeight, scale }) {
   const { top, right, bottom, left } = margins;
-  const mmToPx = (mm) => (mm / 210) * A4_W_PX;
+  const mmToXpx = (mm) => (mm / 210) * A4_W_PX;
+  const mmToYpx = (mm) => (mm / 297) * A4_H_PX;
+  const mmToPx  = mmToXpx; // 가로 방향 (right/left)
 
   // Build renderList: same blockText grouping as PdfPage in printPdf.jsx.
   // When all lines of a wrapped block fit on this page, pass the full paragraph
@@ -150,10 +152,10 @@ function A4Page({ tokens, pageNum, showPageNum, margins, metrics, fontFamily, fo
       <div
         style={{
           position: 'absolute',
-          top:    mmToPx(top),
-          right:  mmToPx(right),
-          bottom: mmToPx(bottom),
-          left:   mmToPx(left),
+          top:    mmToYpx(top),
+          right:  mmToXpx(right),
+          bottom: mmToYpx(bottom),
+          left:   mmToXpx(left),
           overflow: 'hidden',
         }}
       >
@@ -193,7 +195,8 @@ function A4Page({ tokens, pageNum, showPageNum, margins, metrics, fontFamily, fo
 
 // ─── Cover page ───────────────────────────────────────────────────────────────
 function CoverPage({ section, margins, fontFamily, fontSize, lineHeight, scale }) {
-  const mmToPx = (mm) => (mm / 210) * A4_W_PX;
+  const mmToXpx = (mm) => (mm / 210) * A4_W_PX;
+  const mmToYpx = (mm) => (mm / 297) * A4_H_PX;
   const { top, right, bottom, left } = margins;
 
   return (
@@ -212,7 +215,7 @@ function CoverPage({ section, margins, fontFamily, fontSize, lineHeight, scale }
       }}
     >
       {/* Content area wrapper */}
-      <div style={{ position: 'absolute', top: mmToPx(top), right: mmToPx(right), bottom: mmToPx(bottom), left: mmToPx(left) }}>
+      <div style={{ position: 'absolute', top: mmToYpx(top), right: mmToXpx(right), bottom: mmToYpx(bottom), left: mmToXpx(left) }}>
         {/* Title group at ~1/3 page height (relative to content area) */}
         {(() => {
           const subtitleField = section.fields.find(f => f.label === '부제목' || f.id === 'subtitle');
