@@ -813,7 +813,7 @@ function SettingsTab() {
 
 // ─── NoticesTab ───────────────────────────────────────────────────────────────
 function NoticesTab() {
-  const [sub, setSub] = useState('updates');
+  const [sub, setSub] = useState('notices');
   const tabStyle = (id) => ({
     padding: '6px 16px', fontSize: 13,
     fontWeight: sub === id ? 600 : 400,
@@ -830,8 +830,8 @@ function NoticesTab() {
       <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--c-text3)', marginBottom: 8, paddingBottom: 10, borderBottom: '1px solid var(--c-border)' }}>공지사항</div>
       {/* 서브 탭 */}
       <div style={{ display: 'flex', borderBottom: '1px solid var(--c-border)', marginBottom: 4 }}>
-        <button style={tabStyle('updates')} onClick={() => setSub('updates')}>업데이트</button>
         <button style={tabStyle('notices')} onClick={() => setSub('notices')}>공지</button>
+        <button style={tabStyle('updates')} onClick={() => setSub('updates')}>업데이트</button>
       </div>
 
       {items.map(n => (
