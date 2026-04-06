@@ -237,10 +237,14 @@ function reducer(state, action) {
 
     case 'LOAD_FROM_DRIVE': {
       const p = action.payload;
+      const newEpisodes = p.episodes?.length > 0 ? p.episodes : state.episodes;
+      // 현재 보고 있던 에피소드가 Drive 데이터에도 존재하면 navigation 유지
+      const epStillExists = !!state.activeEpisodeId &&
+        newEpisodes.some(e => e.id === state.activeEpisodeId);
       return {
         ...state,
         projects:       p.projects?.length       > 0 ? p.projects       : state.projects,
-        episodes:       p.episodes?.length       > 0 ? p.episodes       : state.episodes,
+        episodes:       newEpisodes,
         characters:     p.characters?.length     > 0 ? p.characters     : state.characters,
         scenes:         p.scenes?.length         > 0 ? p.scenes         : state.scenes,
         scriptBlocks:   p.scriptBlocks?.length   > 0 ? p.scriptBlocks   : state.scriptBlocks,
@@ -250,9 +254,11 @@ function reducer(state, action) {
         workTimeLogs:   p.workTimeLogs?.length   > 0 ? p.workTimeLogs   : state.workTimeLogs,
         checklistItems: p.checklistItems?.length > 0 ? p.checklistItems : state.checklistItems,
         stylePreset:    p.stylePreset            ?? state.stylePreset,
-        activeProjectId: null,
-        activeEpisodeId: null,
-        activeDoc: null,
+        // 에피소드가 유지되면 ScriptEditor를 강제 리로드, 없으면 navigation 초기화
+        activeProjectId: epStillExists ? state.activeProjectId : null,
+        activeEpisodeId: epStillExists ? state.activeEpisodeId : null,
+        activeDoc:       epStillExists ? state.activeDoc       : null,
+        pendingScriptReload: epStillExists ? state.activeEpisodeId : state.pendingScriptReload,
       };
     }
 
