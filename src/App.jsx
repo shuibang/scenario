@@ -977,8 +977,13 @@ function Shell({ authUser, setAuthUser }) {
     const timer = setInterval(async () => {
       if (!state.initialized || !state.projects.length) return;
       try {
-        await refreshDriveToken();
-        if (!isTokenValid()) return;
+        const token = await refreshDriveToken();
+        if (!token) {
+          setSaveToastMsg('구글 드라이브 재연결이 필요해요');
+          setSaveToast(true);
+          setTimeout(() => setSaveToast(false), 3500);
+          return;
+        }
         await saveSnapshot({
           projects:       state.projects,
           episodes:       state.episodes,

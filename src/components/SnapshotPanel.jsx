@@ -192,9 +192,9 @@ export default function SnapshotPanel({ onClose }) {
     setBacking(true);
     setError(null);
     try {
-      await refreshDriveToken();
-      if (!isTokenValid()) {
-        setError('Drive 로그인이 만료되었습니다. 다시 로그인해 주세요.');
+      const token = await refreshDriveToken();
+      if (!token) {
+        setError('구글 드라이브 재연결이 필요해요');
         return;
       }
       await saveSnapshot({
