@@ -37,8 +37,12 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
         const newToken = await refreshDriveToken();
         if (newToken) { syncingRef.current = false; runDriveSync(); return; }
       }
+      if (e.message?.includes('403')) {
+        setDriveStatus('reauth');
+      } else {
+        setDriveStatus('error');
+      }
       console.warn('[Drive] 불러오기 실패:', e);
-      setDriveStatus('error');
     } finally {
       syncingRef.current = false;
     }
@@ -125,7 +129,8 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
                         {driveStatus === 'syncing' && '☁ 동기화 중…'}
                         {driveStatus === 'synced'  && '☁ Drive 연동됨'}
                         {driveStatus === 'error'   && '☁ 연동 실패'}
-                        {driveStatus === 'none'    && authUser.email}
+                        {driveStatus === 'reauth'  && '☁ 구글 드라이브 재연결 필요'}
+                        {(driveStatus === 'none' || !driveStatus) && authUser.email}
                       </div>
                     </div>
                   </div>
@@ -139,6 +144,12 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
                         else signInWithGoogle();
                       }}
                     >재연결 시도</button>
+                  )}
+                  {driveStatus === 'reauth' && (
+                    <button
+                      style={{ ...dropItemStyle, padding: '4px 0', fontSize: 11, color: '#f6ad55' }}
+                      onClick={() => signInWithGoogle()}
+                    >구글 드라이브 재연결이 필요해요 (탭해서 재로그인)</button>
                   )}
                   <button
                     onClick={handleLogout}

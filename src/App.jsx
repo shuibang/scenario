@@ -538,12 +538,15 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
       setTimeout(() => setDriveStatus('none'), 3000);
     } catch (e) {
       if (e.message?.includes('401') || e.message?.includes('DRIVE_AUTH_REQUIRED')) {
-        // 토큰 만료 → 갱신 시도
         const newToken = await refreshDriveToken();
         if (newToken) { _driveSyncing = false; runDriveSync(); return; }
       }
+      if (e.message?.includes('403')) {
+        setDriveStatus('reauth');
+      } else {
+        setDriveStatus('error');
+      }
       console.warn('[Drive] 불러오기 실패:', e);
-      setDriveStatus('error');
     } finally {
       _driveSyncing = false;
     }
@@ -615,6 +618,14 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
                     else signInWithGoogle();
                   }}
                 >Drive 오류 (재시도)</span>
+              )}
+              {driveStatus === 'reauth' && (
+                <span
+                  className="text-[10px] cursor-pointer"
+                  style={{ color: '#f6ad55' }}
+                  title="Google Drive 권한이 없습니다. 클릭해서 재로그인"
+                  onClick={() => signInWithGoogle()}
+                >구글 드라이브 재연결이 필요해요</span>
               )}
               <button onClick={async () => {
                   if (isPublicPcMode()) clearDramaStorage();

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
 import { getAll, setAll, getItem, setItem, DB_KEYS, genId, now } from './db';
 import { createSeedData } from '../data/seed';
-import { isTokenValid, saveToDrive } from './googleDrive';
+import { isTokenValid, saveToDrive, clearAccessToken } from './googleDrive';
 
 // ─── Default style preset ────────────────────────────────────────────────────
 export const DEFAULT_STYLE_PRESET = {
@@ -439,7 +439,10 @@ export function AppProvider({ children }) {
           checklistItems: state.checklistItems,
           stylePreset:    state.stylePreset,
         }).catch(e => {
-          if (e.message !== 'DRIVE_AUTH_REQUIRED') {
+          if (e.message?.includes('403')) {
+            clearAccessToken(); // 권한 없는 토큰 → 무효화해서 재시도 방지
+            console.warn('[Drive] 403 권한 오류 — 재로그인 필요');
+          } else if (e.message !== 'DRIVE_AUTH_REQUIRED') {
             console.warn('[Drive] 자동저장 실패:', e);
           }
         });
