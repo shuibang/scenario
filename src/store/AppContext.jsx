@@ -60,6 +60,7 @@ const initialState = {
   selectedStructureSceneId: null,  // scene selected in StructurePage → shared with RightPanel guide
   isPro: false,
   saveStatus: 'saved',
+  savedAt: null,
   scrollToSceneId: null,
   pendingScriptReload: null, // episodeId — tells ScriptEditor to reload blocks from store
   // Undo/Redo (session-only, not persisted)
@@ -229,7 +230,11 @@ function reducer(state, action) {
     case 'SET_SELECTED_STRUCTURE_SCENE':
       return { ...state, selectedStructureSceneId: action.id };
     case 'SET_SAVE_STATUS':
-      return { ...state, saveStatus: action.payload };
+      return {
+        ...state,
+        saveStatus: action.payload,
+        savedAt: action.payload === 'saved' ? Date.now() : state.savedAt,
+      };
     case 'SET_SAVE_ERROR_MSG':
       return { ...state, saveErrorMsg: action.payload };
     case 'SET_SCROLL_TO_SCENE':

@@ -505,9 +505,24 @@ let _driveSyncing = false;
 // ─── MenuBar ──────────────────────────────────────────────────────────────────
 function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, authUser, setAuthUser, onSyncConflict }) {
   const { state, dispatch, loadFromDriveData } = useApp();
-  const { saveStatus, saveErrorMsg, activeProjectId, stylePreset, undoStack, redoStack } = state;
+  const { saveStatus, saveErrorMsg, activeProjectId, stylePreset, undoStack, redoStack, savedAt } = state;
   const canUndo = undoStack?.length > 0 || !!activeProjectId;
   const [scriptCanRedo, setScriptCanRedo] = useState(false);
+
+  // 자동 저장 상대 시각 ("방금 저장됨" / "N분 전")
+  const [savedLabel, setSavedLabel] = useState('');
+  useEffect(() => {
+    const update = () => {
+      if (!savedAt || !activeProjectId) { setSavedLabel(''); return; }
+      const mins = Math.floor((Date.now() - savedAt) / 60_000);
+      if (mins < 1) setSavedLabel('방금 저장됨');
+      else if (mins < 60) setSavedLabel(`${mins}분 전 저장`);
+      else setSavedLabel(`${Math.floor(mins / 60)}시간 전 저장`);
+    };
+    update();
+    const id = setInterval(update, 30_000);
+    return () => clearInterval(id);
+  }, [savedAt, activeProjectId]);
   const canRedo = redoStack?.length > 0 || scriptCanRedo;
   useEffect(() => {
     const handler = (e) => setScriptCanRedo(e.detail?.canRedo ?? false);
@@ -691,6 +706,11 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
           title={saveStatus === 'error' && saveErrorMsg ? saveErrorMsg : undefined}
           style={saveStatus === 'error' ? { color: '#c00', borderColor: '#f99' } : undefined}
         />
+        {saveStatus === 'saved' && savedLabel && (
+          <span style={{ fontSize: 10, color: 'var(--c-text6)', whiteSpace: 'nowrap', opacity: 0.85 }}>
+            {savedLabel}
+          </span>
+        )}
         <MenuButton label="출력" onClick={onPrintPreview} disabled={!activeProjectId} accent />
 
         {sep}
