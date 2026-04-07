@@ -339,6 +339,7 @@ const AppContext = createContext(null);
 export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(historyReducer, initialState);
   const persistTimer = useRef(null);
+  const retryTimer   = useRef(null);
   // 시스템 로드(INIT/LOAD_FROM_DRIVE) 중엔 drama_saved_at을 갱신하지 않기 위한 플래그
   const skipSavedAtRef = useRef(false);
   // INIT/LOAD_FROM_DRIVE 직후 Drive 자동저장을 건너뛰기 위한 플래그
@@ -396,7 +397,8 @@ export function AppProvider({ children }) {
     if (!state.initialized) return;
     clearTimeout(persistTimer.current);
     persistTimer.current = setTimeout(() => {
-      try {
+      // localStorage 쓰기 시도 함수 — QuotaExceeded 외 오류는 1회 재시도 (Safari 간헐적 실패 대응)
+      const doWrite = () => {
         setAll(DB_KEYS.projects,      state.projects);
         setAll(DB_KEYS.episodes,      state.episodes);
         setAll(DB_KEYS.characters,    state.characters);
@@ -407,23 +409,39 @@ export function AppProvider({ children }) {
         setAll(DB_KEYS.resources,     state.resources);
         setAll(DB_KEYS.workTimeLogs,    state.workTimeLogs);
         setAll(DB_KEYS.checklistItems,  state.checklistItems);
-        // 로그인된 경우에만 스타일 설정 저장 (미로그인 시 세션 내에서만 유지)
         if (localStorage.getItem('drama_auth_user')) {
           setItem(DB_KEYS.stylePresets, state.stylePreset);
         }
-        // INIT/LOAD_FROM_DRIVE(시스템 로드) 직후엔 사용자 편집 시각을 덮어쓰지 않음
         if (!skipSavedAtRef.current) {
           localStorage.setItem('drama_saved_at', new Date().toISOString());
         }
         skipSavedAtRef.current = false;
+      };
+
+      try {
+        doWrite();
       } catch (e) {
-        console.error('[AppContext] 저장 실패:', e);
-        // QuotaExceededError = localStorage 용량 초과
-        const msg = e?.name === 'QuotaExceededError'
-          ? 'localStorage 용량 초과 — 오래된 데이터를 삭제하거나 브라우저 저장공간을 늘려주세요'
-          : `저장 실패: ${e?.message || '알 수 없는 오류'}`;
-        dispatch({ type: 'SET_SAVE_STATUS', payload: 'error' });
-        dispatch({ type: 'SET_SAVE_ERROR_MSG', payload: msg });
+        console.warn('[AppContext] 저장 실패 (1차):', e?.name, e?.message);
+        // 용량 초과는 재시도해도 소용없음 → 즉시 에러 표시
+        if (e?.name === 'QuotaExceededError') {
+          dispatch({ type: 'SET_SAVE_STATUS', payload: 'error' });
+          dispatch({ type: 'SET_SAVE_ERROR_MSG', payload: 'localStorage 용량 초과 — 오래된 데이터를 삭제하거나 브라우저 저장공간을 늘려주세요' });
+          return;
+        }
+        // 그 외 간헐적 오류(Safari 등) → 2초 후 1회 재시도
+        clearTimeout(retryTimer.current);
+        retryTimer.current = setTimeout(() => {
+          try {
+            doWrite();
+            // 재시도 성공 — 에러 상태 유지 중이면 해제
+            dispatch({ type: 'SET_SAVE_STATUS', payload: 'saved' });
+          } catch (e2) {
+            console.error('[AppContext] 저장 실패 (재시도):', e2?.name, e2?.message);
+            const msg = `저장 실패: ${e2?.message || '알 수 없는 오류'}`;
+            dispatch({ type: 'SET_SAVE_STATUS', payload: 'error' });
+            dispatch({ type: 'SET_SAVE_ERROR_MSG', payload: msg });
+          }
+        }, 2000);
         return;
       }
       // Drive 자동저장 (토큰 유효할 때만)
