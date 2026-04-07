@@ -55,28 +55,21 @@ export const NOTICES = [
   },
 ];
 
-const STORAGE_KEY      = 'drama_dismissed_notice';
-const STORAGE_HIDE_KEY = 'drama_hide_notice_forever';
+const STORAGE_KEY = 'drama_dismissed_notice';
 
 export default function UpdateBanner() {
   const latest = NOTICES[0];
   const announcement = ANNOUNCEMENTS[0];
   const [dismissed, setDismissed] = useState(() => {
     try {
-      if (localStorage.getItem(STORAGE_HIDE_KEY) === 'true') return true;
       return localStorage.getItem(STORAGE_KEY) === latest.id;
     } catch { return false; }
   });
 
   if (!latest || dismissed) return null;
 
-  const dismissOnce = () => {
+  const dismiss = () => {
     try { localStorage.setItem(STORAGE_KEY, latest.id); } catch {}
-    setDismissed(true);
-  };
-
-  const dismissForever = () => {
-    try { localStorage.setItem(STORAGE_HIDE_KEY, 'true'); } catch {}
     setDismissed(true);
   };
 
@@ -102,16 +95,7 @@ export default function UpdateBanner() {
           {latest.content}
         </span>
         <button
-          onClick={dismissForever}
-          style={{
-            background: 'none', border: '1px solid var(--c-border3)', borderRadius: 4,
-            cursor: 'pointer', color: 'var(--c-text6)', fontSize: 10,
-            flexShrink: 0, padding: '2px 6px', whiteSpace: 'nowrap',
-          }}
-          title="이 배너를 다시 표시하지 않습니다"
-        >다시 보지 않기</button>
-        <button
-          onClick={dismissOnce}
+          onClick={dismiss}
           style={{
             background: 'none', border: 'none', cursor: 'pointer',
             color: 'var(--c-text5)', fontSize: 14, lineHeight: 1,
