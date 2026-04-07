@@ -273,6 +273,15 @@ textarea {
   word-break: break-word;
 }
 
+/* Undo / Redo 피드백 flash */
+@keyframes ce-undo-flash-anim {
+  0%   { outline: 2px solid var(--c-accent); outline-offset: 3px; border-radius: 3px; }
+  100% { outline: 2px solid transparent;    outline-offset: 3px; border-radius: 3px; }
+}
+.ce-undo-flash {
+  animation: ce-undo-flash-anim 0.7s ease-out;
+}
+
 /* All block rows */
 .ce-block {
   display: block;

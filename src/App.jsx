@@ -505,7 +505,13 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
   const { state, dispatch, loadFromDriveData } = useApp();
   const { saveStatus, saveErrorMsg, activeProjectId, stylePreset, undoStack, redoStack } = state;
   const canUndo = undoStack?.length > 0 || !!activeProjectId;
-  const canRedo = redoStack?.length > 0;
+  const [scriptCanRedo, setScriptCanRedo] = useState(false);
+  const canRedo = redoStack?.length > 0 || scriptCanRedo;
+  useEffect(() => {
+    const handler = (e) => setScriptCanRedo(e.detail?.canRedo ?? false);
+    window.addEventListener('scriptundostate', handler);
+    return () => window.removeEventListener('scriptundostate', handler);
+  }, []);
   const [fontAvailability, setFontAvail] = useState(null);
   const [loginOpen, setLoginOpen]        = useState(false);
   const [driveStatus, setDriveStatus]    = useState('none'); // 'none'|'syncing'|'synced'|'error'
@@ -693,14 +699,14 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
 
         {/* Undo / Redo */}
         <button
-          onClick={() => { window.dispatchEvent(new CustomEvent('script:undo')); dispatch({ type: 'UNDO' }); }}
+          onClick={() => window.dispatchEvent(new CustomEvent('script:undo'))}
           disabled={!canUndo}
           title="되돌리기 (Ctrl+Z)"
           className="w-6 h-6 rounded text-xs flex items-center justify-center shrink-0"
           style={{ color: canUndo ? 'var(--c-text3)' : 'var(--c-border3)', border: '1px solid var(--c-border3)', background: 'transparent', cursor: canUndo ? 'pointer' : 'not-allowed' }}
         >↩</button>
         <button
-          onClick={() => dispatch({ type: 'REDO' })}
+          onClick={() => window.dispatchEvent(new CustomEvent('script:redo'))}
           disabled={!canRedo}
           title="다시하기 (Ctrl+Shift+Z / Ctrl+Y)"
           className="w-6 h-6 rounded text-xs flex items-center justify-center shrink-0"

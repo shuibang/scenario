@@ -1573,8 +1573,9 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   const editorScrollRef = useRef(null);
   useEffect(() => { if (onScrollRefReady) onScrollRefReady(editorScrollRef); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Undo 스택 (1초 디바운스로 스냅샷 저장, 최대 50개) ─────────────────────
+  // ── Undo / Redo 스택 ────────────────────────────────────────────────────────
   const undoStack = useRef([]);
+  const redoStack = useRef([]);
   const undoActive = useRef(false);
   const undoPushTimer = useRef(null);
   useEffect(() => {
@@ -1586,24 +1587,76 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
       if (last !== serialized) {
         undoStack.current.push(serialized);
         if (undoStack.current.length > 50) undoStack.current.shift();
+        redoStack.current = []; // 새 변경 → redo 스택 초기화
+        window.dispatchEvent(new CustomEvent('scriptundostate', {
+          detail: { canUndo: undoStack.current.length > 1, canRedo: false },
+        }));
       }
     }, 1000);
     return () => clearTimeout(undoPushTimer.current);
   }, [blocks]);
 
+  // 변경된 첫 블록을 찾아 scroll + flash 피드백
+  const flashChangedBlock = useCallback((prevBlocks, nextBlocks) => {
+    let changedId = null;
+    for (let i = 0; i < Math.max(prevBlocks.length, nextBlocks.length); i++) {
+      if (!prevBlocks[i] || !nextBlocks[i] || prevBlocks[i].content !== nextBlocks[i].content) {
+        changedId = nextBlocks[i]?.id ?? nextBlocks[nextBlocks.length - 1]?.id;
+        break;
+      }
+    }
+    if (!changedId || !editorScrollRef.current) return;
+    requestAnimationFrame(() => {
+      const surface = editorScrollRef.current?.querySelector('[data-editor-surface]');
+      const blockEl = surface?.querySelector(`[data-block-id="${changedId}"]`);
+      if (!blockEl) return;
+      blockEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      blockEl.classList.add('ce-undo-flash');
+      setTimeout(() => blockEl.classList.remove('ce-undo-flash'), 700);
+    });
+  }, []);
+
   const handleUndo = useCallback(() => {
     if (undoStack.current.length <= 1) return;
-    undoStack.current.pop(); // 현재 상태 제거
+    const currentSerialized = undoStack.current[undoStack.current.length - 1];
+    redoStack.current.push(currentSerialized);
+    if (redoStack.current.length > 50) redoStack.current.shift();
+    undoStack.current.pop();
     const prev = undoStack.current[undoStack.current.length - 1];
-    if (!prev) return;
+    if (!prev) { redoStack.current.pop(); return; }
     undoActive.current = true;
+    const currentBlocks = JSON.parse(currentSerialized);
     const restored = JSON.parse(prev);
     setBlocks(restored);
     requestAnimationFrame(() => {
       surfaceApiRef.current?.loadBlocks(restored);
       undoActive.current = false;
+      flashChangedBlock(currentBlocks, restored);
+      window.dispatchEvent(new CustomEvent('scriptundostate', {
+        detail: { canUndo: undoStack.current.length > 1, canRedo: redoStack.current.length > 0 },
+      }));
     });
-  }, []);
+  }, [flashChangedBlock]);
+
+  const handleRedo = useCallback(() => {
+    if (!redoStack.current.length) return;
+    const next = redoStack.current.pop();
+    const currentSerialized = undoStack.current[undoStack.current.length - 1];
+    undoStack.current.push(next);
+    if (undoStack.current.length > 50) undoStack.current.shift();
+    undoActive.current = true;
+    const currentBlocks = currentSerialized ? JSON.parse(currentSerialized) : [];
+    const restored = JSON.parse(next);
+    setBlocks(restored);
+    requestAnimationFrame(() => {
+      surfaceApiRef.current?.loadBlocks(restored);
+      undoActive.current = false;
+      flashChangedBlock(currentBlocks, restored);
+      window.dispatchEvent(new CustomEvent('scriptundostate', {
+        detail: { canUndo: undoStack.current.length > 1, canRedo: redoStack.current.length > 0 },
+      }));
+    });
+  }, [flashChangedBlock]);
 
   // Keep refs in sync every render so unmount-flush sees latest values
   blocksRef.current = blocks;
@@ -2204,15 +2257,18 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     };
     const onSave = () => flushSave();
     const onUndo = () => handleUndo();
+    const onRedo = () => handleRedo();
     window.addEventListener('keydown', onKey);
     window.addEventListener('script:requestSave', onSave);
     window.addEventListener('script:undo', onUndo);
+    window.addEventListener('script:redo', onRedo);
     return () => {
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('script:requestSave', onSave);
       window.removeEventListener('script:undo', onUndo);
+      window.removeEventListener('script:redo', onRedo);
     };
-  }, [flushSave, applyBlockType, handleUndo]);
+  }, [flushSave, applyBlockType, handleUndo, handleRedo]);
 
   // ── getCurrentSceneId: find the scene_number block's sceneId before the cursor ─
   const getCurrentSceneId = useCallback(() => {
