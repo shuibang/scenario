@@ -198,121 +198,18 @@ function TokenEl({ token, text, S }) {
   }
 }
 
-// ─── HTML-aware line splitter ──────────────────────────────────────────────────
-// rawHtml 전체를 plain-text 줄 경계에 맞게 분할하되 <b>/<i>/<u> 태그 유지.
-// lines: wrapText가 만든 plain-text 줄 배열 (동일 블록의 서브셋일 수 있음)
-function htmlSplitByLines(rawHtml, lines) {
-  if (!lines.length) return [];
-  if (!rawHtml) return lines.slice();
-
-  // plain text에서 이 lines 서브셋이 시작하는 오프셋을 찾는다.
-  // (continuation 토큰은 블록 중간부터 시작하므로 offset이 0이 아닐 수 있음)
-  const fullPlain = rawHtml.replace(/<[^>]+>/g, '');
-  const subsetPlain = lines.join('');
-  const startOffset = fullPlain.indexOf(subsetPlain);
-  const base = startOffset >= 0 ? startOffset : 0;
-
-  // 각 줄의 끝 오프셋 (전체 plain 기준)
-  const lineEnds = [];
-  let acc = base;
-  for (const ln of lines) {
-    acc += ln.length;
-    lineEnds.push(acc);
-  }
-
-  const result = new Array(lines.length).fill('');
-  let lineIdx = 0;
-  let charsSeen = base;        // 전체 plain 기준 현재 위치
-  const openCount = { b: 0, i: 0, u: 0 };
-
-  const getOpen  = () => Object.entries(openCount).flatMap(([t, n]) => Array(n).fill(`<${t}>`)).join('');
-  const getClose = () => Object.entries(openCount).flatMap(([t, n]) => Array(n).fill(`</${t}>`)).join('');
-
-  const tagRe = /<(\/?)([biu])[^>]*>|[^<]+/gi;
-  let match;
-
-  // 첫 번째 줄에 현재까지 열린 태그가 있으면 삽입 (continuation 경우)
-  // (base > 0 이면 해당 지점까지 HTML을 스캔해 openCount를 맞춰야 함)
-  if (base > 0) {
-    let pre = 0;
-    const preRe = /<(\/?)([biu])[^>]*>|[^<]+/gi;
-    let pm;
-    while ((pm = preRe.exec(rawHtml)) !== null && pre < base) {
-      const chunk = pm[0];
-      if (chunk.startsWith('<')) {
-        const closing = pm[1] === '/';
-        const tag = pm[2].toLowerCase();
-        openCount[tag] = closing ? Math.max(0, openCount[tag] - 1) : openCount[tag] + 1;
-      } else {
-        pre += chunk.length;
-        if (pre > base) break;
-      }
-    }
-    if (lineIdx < lines.length) result[lineIdx] = getOpen();
-  }
-
-  while ((match = tagRe.exec(rawHtml)) !== null) {
-    const chunk = match[0];
-    if (chunk.startsWith('<')) {
-      // HTML 태그 — 현재 줄에 추가, openCount 갱신
-      if (lineIdx < lines.length) result[lineIdx] += chunk;
-      const closing = match[1] === '/';
-      const tag = match[2].toLowerCase();
-      openCount[tag] = closing ? Math.max(0, openCount[tag] - 1) : openCount[tag] + 1;
-    } else {
-      // 일반 텍스트 — 줄 경계를 넘을 수 있음
-      let remaining = chunk;
-      while (remaining.length > 0 && lineIdx < lines.length) {
-        const lineEnd = lineEnds[lineIdx];
-        const charsLeft = lineEnd - charsSeen;
-        if (charsLeft <= 0) {
-          // 이 줄은 이미 채워짐 — 다음 줄로
-          result[lineIdx] += getClose();
-          lineIdx++;
-          if (lineIdx < lines.length) result[lineIdx] = getOpen();
-          continue;
-        }
-        if (remaining.length <= charsLeft) {
-          result[lineIdx] += remaining;
-          charsSeen += remaining.length;
-          remaining = '';
-        } else {
-          result[lineIdx] += remaining.slice(0, charsLeft);
-          charsSeen += charsLeft;
-          result[lineIdx] += getClose();
-          lineIdx++;
-          if (lineIdx < lines.length) result[lineIdx] = getOpen();
-          remaining = remaining.slice(charsLeft);
-        }
-      }
-    }
-    if (lineIdx >= lines.length) break;
-  }
-
-  // 마지막 줄 열린 태그 닫기
-  if (lineIdx < lines.length) result[lineIdx] += getClose();
-
-  return result;
-}
-
 // ─── Split-block line renderer ────────────────────────────────────────────────
 // continuation / split 블록은 이미 pre-wrap된 줄들.
 // \n으로 합쳐 단일 <Text>에 넣으면 textkit이 각 줄을 독립 단락으로 처리해
 // justify가 오동작하므로, 줄마다 별도 <Text>로 렌더링한다.
 function SplitLines({ kind, lines, token, S }) {
   const plain = (t) => t.replace(/<[^>]+>/g, '');
-  // action / dialogue는 인라인 서식 유지
-  const htmlLines = token.rawHtml
-    ? htmlSplitByLines(token.rawHtml, lines)
-    : null;
-  const richLine = (i) => htmlLines ? htmlToPdfChildren(htmlLines[i] || lines[i]) : plain(lines[i]);
-
   switch (kind) {
     case 'action':
       return (
         <View style={S.actionWrap}>
           {lines.map((ln, i) => (
-            <Text key={i} style={{ ...S.action, textAlign: 'left' }}>{richLine(i)}</Text>
+            <Text key={i} style={{ ...S.action, textAlign: 'left' }}>{plain(ln)}</Text>
           ))}
         </View>
       );
@@ -322,7 +219,7 @@ function SplitLines({ kind, lines, token, S }) {
           {lines.map((ln, i) => (
             <View key={i} style={S.dialogueRow}>
               <Text style={S.charCell}>{i === 0 ? (token.charName || '') : ''}</Text>
-              <Text style={{ ...S.speechCell, textAlign: 'left' }}>{richLine(i)}</Text>
+              <Text style={{ ...S.speechCell, textAlign: 'left' }}>{plain(ln)}</Text>
             </View>
           ))}
         </>
