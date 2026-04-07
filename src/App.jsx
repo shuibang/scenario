@@ -202,12 +202,13 @@ function TimelineStrip({ scrollEl }) {
     if (!pxPerSec) return [];
     const result = [];
     for (let s = 1; s <= totalSecs; s++) {
-      const is10s = s % 10 === 0;
-      const is5s  = !is10s && s % 5 === 0;
-      const is1s  = !is10s && !is5s;
+      const isMin = s % 60 === 0;
+      const is10s = !isMin && s % 10 === 0;
+      const is5s  = !isMin && !is10s && s % 5 === 0;
+      const is1s  = !isMin && !is10s && !is5s;
       if (is1s && !show1s) continue;
       if (is5s && !show5s) continue;
-      result.push({ s, top: s * pxPerSec, is10s, is5s });
+      result.push({ s, top: s * pxPerSec, isMin, is10s, is5s, minNum: isMin ? s / 60 : null });
     }
     return result;
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -216,26 +217,27 @@ function TimelineStrip({ scrollEl }) {
   return (
     <div
       className="shrink-0 select-none no-print"
-      style={{ width: 28, borderLeft: '1px solid var(--c-border)', background: 'var(--c-panel)', display: 'flex', flexDirection: 'column' }}
+      style={{ width: 36, borderLeft: '1px solid var(--c-border)', background: 'var(--c-panel)', display: 'flex', flexDirection: 'column' }}
     >
-      {/* 툴바 높이 맞춤 헤더 — "타임라인" 세로쓰기 */}
-      <div style={{
-        height: 37, flexShrink: 0,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        borderBottom: '1px solid var(--c-border2)',
-      }}>
-        <span style={{
-          fontSize: 8,
-          color: 'var(--c-text6)',
-          letterSpacing: 1,
-          writingMode: 'vertical-rl',
-          opacity: 0.5,
-          userSelect: 'none',
-        }}>타임라인</span>
-      </div>
+      {/* 툴바 높이 맞춤 빈 헤더 — 정렬용 스페이서 */}
+      <div style={{ height: 37, flexShrink: 0, borderBottom: '1px solid var(--c-border2)' }} />
 
       {/* 눈금 영역 — 콘텐츠와 동기 스크롤 */}
       <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+
+        {/* "타임라인" 고정 레이블 — 항상 상단에 표시 */}
+        <div style={{
+          position: 'absolute', top: 6, left: 0, right: 0, zIndex: 2,
+          display: 'flex', justifyContent: 'center', pointerEvents: 'none',
+        }}>
+          <span style={{
+            fontSize: 8, color: 'var(--c-text4)', letterSpacing: 2,
+            writingMode: 'vertical-rl', whiteSpace: 'nowrap',
+            opacity: 0.75, userSelect: 'none',
+          }}>타임라인</span>
+        </div>
+
+        {/* 스크롤 동기 눈금 컨테이너 */}
         <div style={{
           position: 'absolute',
           top: 0, left: 0, right: 0,
@@ -243,22 +245,27 @@ function TimelineStrip({ scrollEl }) {
           transform: `translateY(${-scrollTop}px)`,
           willChange: 'transform',
         }}>
-          {ticks.map(({ s, top, is10s, is5s }) => {
-            const tickW = is10s ? 10 : is5s ? 6 : 3;
-            const opacity = is10s ? 0.55 : is5s ? 0.35 : 0.2;
+          {ticks.map(({ s, top, isMin, is10s, is5s, minNum }) => {
+            const tickW   = isMin ? 14 : is10s ? 9 : is5s ? 5 : 3;
+            const opacity = isMin ? 0.85 : is10s ? 0.6 : is5s ? 0.4 : 0.25;
             return (
-              <div
-                key={s}
-                style={{
-                  position: 'absolute',
-                  top,
-                  right: 0,
-                  width: tickW,
-                  height: 1,
-                  background: 'var(--c-text6)',
-                  opacity,
-                }}
-              />
+              <div key={s} style={{ position: 'absolute', top, right: 0, left: 0, height: 1 }}>
+                {/* 눈금선 */}
+                <div style={{
+                  position: 'absolute', right: 0,
+                  width: tickW, height: 1,
+                  background: 'var(--c-text4)', opacity,
+                }} />
+                {/* 분 숫자 */}
+                {isMin && (
+                  <span style={{
+                    position: 'absolute', right: tickW + 3, top: -4,
+                    fontSize: 7, lineHeight: 1,
+                    color: 'var(--c-text4)', opacity: 0.8,
+                    whiteSpace: 'nowrap', userSelect: 'none',
+                  }}>{minNum}</span>
+                )}
+              </div>
             );
           })}
         </div>
