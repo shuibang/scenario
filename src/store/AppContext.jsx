@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
-import { getAll, setAll, getItem, setItem, DB_KEYS, genId, now } from './db';
+import { getAll, setAll, getItem, setItem, DB_KEYS, genId, now, migrateFromLocalStorage } from './db';
 import { createSeedData } from '../data/seed';
 import { isTokenValid, saveToDrive, clearAccessToken } from './googleDrive';
 
@@ -339,7 +339,6 @@ const AppContext = createContext(null);
 export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(historyReducer, initialState);
   const persistTimer = useRef(null);
-  const retryTimer   = useRef(null);
   // 시스템 로드(INIT/LOAD_FROM_DRIVE) 중엔 drama_saved_at을 갱신하지 않기 위한 플래그
   const skipSavedAtRef = useRef(false);
   // INIT/LOAD_FROM_DRIVE 직후 Drive 자동저장을 건너뛰기 위한 플래그
@@ -347,68 +346,77 @@ export function AppProvider({ children }) {
   const skipDriveSaveRef = useRef(false);
 
   useEffect(() => {
-    const stored = getAll(DB_KEYS.projects);
-    if (stored.length > 0) {
-      // Migration: strip legacy `subtitle` field from all episodes
-      const migratedEpisodes = getAll(DB_KEYS.episodes).map(
+    (async () => {
+      // 기존 localStorage 데이터 → IndexedDB 1회 마이그레이션
+      await migrateFromLocalStorage();
+
+      const projects = await getAll(DB_KEYS.projects);
+      if (projects.length > 0) {
+        // Migration: strip legacy `subtitle` field from all episodes
+        const rawEpisodes = await getAll(DB_KEYS.episodes);
         // eslint-disable-next-line no-unused-vars
-        ({ subtitle, ...ep }) => ep
-      );
-      skipSavedAtRef.current = true;  // INIT은 사용자 편집이 아님 → savedAt 갱신 건너뜀
-      skipDriveSaveRef.current = true; // INIT 직후 Drive 덮어쓰기 방지
-      dispatch({
-        type: 'INIT',
-        payload: {
-          projects:     getAll(DB_KEYS.projects),
-          episodes:     migratedEpisodes,
-          characters:   getAll(DB_KEYS.characters),
-          scenes:       getAll(DB_KEYS.scenes),
-          scriptBlocks: getAll(DB_KEYS.scriptBlocks),
-          coverDocs:    getAll(DB_KEYS.coverDocs),
-          synopsisDocs: getAll(DB_KEYS.synopsisDocs),
-          resources:    getAll(DB_KEYS.resources),
-          workTimeLogs:    getAll(DB_KEYS.workTimeLogs),
-          checklistItems:  getAll(DB_KEYS.checklistItems),
-        },
-      });
-      const savedPreset = getItem(DB_KEYS.stylePresets);
-      if (savedPreset) dispatch({ type: 'SET_STYLE_PRESET', payload: savedPreset });
-    } else {
-      // Check for shared data in URL
-      const hash = window.location.hash;
-      if (hash.startsWith('#share=')) {
-        try {
-          const decoded = JSON.parse(atob(decodeURIComponent(hash.slice(7))));
-          Object.entries(decoded).forEach(([key, data]) => {
-            if (DB_KEYS[key]) setAll(DB_KEYS[key], data);
-          });
-          window.location.hash = '';
-          dispatch({ type: 'INIT', payload: decoded });
-          return;
-        } catch { /* fallthrough to seed */ }
+        const migratedEpisodes = rawEpisodes.map(({ subtitle, ...ep }) => ep);
+        skipSavedAtRef.current  = true; // INIT은 사용자 편집이 아님 → savedAt 갱신 건너뜀
+        skipDriveSaveRef.current = true; // INIT 직후 Drive 덮어쓰기 방지
+        const [characters, scenes, scriptBlocks, coverDocs, synopsisDocs, resources, workTimeLogs, checklistItems] =
+          await Promise.all([
+            getAll(DB_KEYS.characters),
+            getAll(DB_KEYS.scenes),
+            getAll(DB_KEYS.scriptBlocks),
+            getAll(DB_KEYS.coverDocs),
+            getAll(DB_KEYS.synopsisDocs),
+            getAll(DB_KEYS.resources),
+            getAll(DB_KEYS.workTimeLogs),
+            getAll(DB_KEYS.checklistItems),
+          ]);
+        dispatch({
+          type: 'INIT',
+          payload: { projects, episodes: migratedEpisodes, characters, scenes, scriptBlocks, coverDocs, synopsisDocs, resources, workTimeLogs, checklistItems },
+        });
+        const savedPreset = getItem(DB_KEYS.stylePresets);
+        if (savedPreset) dispatch({ type: 'SET_STYLE_PRESET', payload: savedPreset });
+      } else {
+        // Check for shared data in URL
+        const hash = window.location.hash;
+        if (hash.startsWith('#share=')) {
+          try {
+            const decoded = JSON.parse(atob(decodeURIComponent(hash.slice(7))));
+            await Promise.all(
+              Object.entries(decoded)
+                .filter(([key]) => DB_KEYS[key])
+                .map(([key, data]) => setAll(DB_KEYS[key], data))
+            );
+            window.location.hash = '';
+            dispatch({ type: 'INIT', payload: decoded });
+            return;
+          } catch { /* fallthrough to seed */ }
+        }
+        const seed = createSeedData();
+        await Promise.all(
+          Object.entries(seed).map(([key, data]) => setAll(DB_KEYS[key], data))
+        );
+        dispatch({ type: 'INIT', payload: seed });
       }
-      const seed = createSeedData();
-      Object.entries(seed).forEach(([key, data]) => setAll(DB_KEYS[key], data));
-      dispatch({ type: 'INIT', payload: seed });
-    }
+    })();
   }, []);
 
   useEffect(() => {
     if (!state.initialized) return;
     clearTimeout(persistTimer.current);
-    persistTimer.current = setTimeout(() => {
-      // localStorage 쓰기 시도 함수 — QuotaExceeded 외 오류는 1회 재시도 (Safari 간헐적 실패 대응)
-      const doWrite = () => {
-        setAll(DB_KEYS.projects,      state.projects);
-        setAll(DB_KEYS.episodes,      state.episodes);
-        setAll(DB_KEYS.characters,    state.characters);
-        setAll(DB_KEYS.scenes,        state.scenes);
-        setAll(DB_KEYS.scriptBlocks,  state.scriptBlocks);
-        setAll(DB_KEYS.coverDocs,     state.coverDocs);
-        setAll(DB_KEYS.synopsisDocs,  state.synopsisDocs);
-        setAll(DB_KEYS.resources,     state.resources);
-        setAll(DB_KEYS.workTimeLogs,    state.workTimeLogs);
-        setAll(DB_KEYS.checklistItems,  state.checklistItems);
+    persistTimer.current = setTimeout(async () => {
+      try {
+        await Promise.all([
+          setAll(DB_KEYS.projects,      state.projects),
+          setAll(DB_KEYS.episodes,      state.episodes),
+          setAll(DB_KEYS.characters,    state.characters),
+          setAll(DB_KEYS.scenes,        state.scenes),
+          setAll(DB_KEYS.scriptBlocks,  state.scriptBlocks),
+          setAll(DB_KEYS.coverDocs,     state.coverDocs),
+          setAll(DB_KEYS.synopsisDocs,  state.synopsisDocs),
+          setAll(DB_KEYS.resources,     state.resources),
+          setAll(DB_KEYS.workTimeLogs,  state.workTimeLogs),
+          setAll(DB_KEYS.checklistItems, state.checklistItems),
+        ]);
         if (localStorage.getItem('drama_auth_user')) {
           setItem(DB_KEYS.stylePresets, state.stylePreset);
         }
@@ -416,32 +424,10 @@ export function AppProvider({ children }) {
           localStorage.setItem('drama_saved_at', new Date().toISOString());
         }
         skipSavedAtRef.current = false;
-      };
-
-      try {
-        doWrite();
       } catch (e) {
-        console.warn('[AppContext] 저장 실패 (1차):', e?.name, e?.message);
-        // 용량 초과는 재시도해도 소용없음 → 즉시 에러 표시
-        if (e?.name === 'QuotaExceededError') {
-          dispatch({ type: 'SET_SAVE_STATUS', payload: 'error' });
-          dispatch({ type: 'SET_SAVE_ERROR_MSG', payload: 'localStorage 용량 초과 — 오래된 데이터를 삭제하거나 브라우저 저장공간을 늘려주세요' });
-          return;
-        }
-        // 그 외 간헐적 오류(Safari 등) → 2초 후 1회 재시도
-        clearTimeout(retryTimer.current);
-        retryTimer.current = setTimeout(() => {
-          try {
-            doWrite();
-            // 재시도 성공 — 에러 상태 유지 중이면 해제
-            dispatch({ type: 'SET_SAVE_STATUS', payload: 'saved' });
-          } catch (e2) {
-            console.error('[AppContext] 저장 실패 (재시도):', e2?.name, e2?.message);
-            const msg = `저장 실패: ${e2?.message || '알 수 없는 오류'}`;
-            dispatch({ type: 'SET_SAVE_STATUS', payload: 'error' });
-            dispatch({ type: 'SET_SAVE_ERROR_MSG', payload: msg });
-          }
-        }, 2000);
+        console.error('[AppContext] IndexedDB 저장 실패:', e?.name, e?.message);
+        dispatch({ type: 'SET_SAVE_STATUS', payload: 'error' });
+        dispatch({ type: 'SET_SAVE_ERROR_MSG', payload: `저장 실패: ${e?.message || '알 수 없는 오류'}` });
         return;
       }
       // Drive 자동저장 (토큰 유효할 때만)
