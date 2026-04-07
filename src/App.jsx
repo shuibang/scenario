@@ -189,84 +189,79 @@ function TimelineStrip({ scrollEl }) {
     };
   }, [scrollEl]);
 
-  // 1분 = 1페이지 기준으로 각 마커의 픽셀 위치 계산
+  // 1분 = 1페이지, 초 단위 픽셀 계산
   const pxPerPage = contentHeight > 0 ? contentHeight / totalPages : 0;
+  const pxPerSec  = pxPerPage / 60;
 
-  const markers = [];
-  for (let m = 0; m <= targetMinutes; m++) {
-    const top = m * pxPerPage;
-    const ratio = m / Math.max(targetMinutes, 1);
-    const color = getTimelineColor(ratio);
-    const isLabel = m % 5 === 0;
-    markers.push({ m, top, color, isLabel });
-  }
+  // 눈금 밀도 조절: 간격이 너무 좁으면 세밀한 눈금 생략
+  const show1s = pxPerSec >= 3;
+  const show5s = pxPerSec * 5 >= 3;
+  const totalSecs = Math.ceil(targetMinutes * 60);
+
+  const ticks = useMemo(() => {
+    if (!pxPerSec) return [];
+    const result = [];
+    for (let s = 1; s <= totalSecs; s++) {
+      const is10s = s % 10 === 0;
+      const is5s  = !is10s && s % 5 === 0;
+      const is1s  = !is10s && !is5s;
+      if (is1s && !show1s) continue;
+      if (is5s && !show5s) continue;
+      result.push({ s, top: s * pxPerSec, is10s, is5s });
+    }
+    return result;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pxPerSec, totalSecs, show1s, show5s]);
 
   return (
     <div
       className="shrink-0 select-none no-print"
-      style={{ width: 36, borderLeft: '1px solid var(--c-border)', background: 'var(--c-panel)', display: 'flex', flexDirection: 'column' }}
+      style={{ width: 28, borderLeft: '1px solid var(--c-border)', background: 'var(--c-panel)', display: 'flex', flexDirection: 'column' }}
     >
-      {/* 툴바와 높이 맞춤 헤더 */}
+      {/* 툴바 높이 맞춤 헤더 — "타임라인" 세로쓰기 */}
       <div style={{
         height: 37, flexShrink: 0,
-        borderBottom: '1px solid var(--c-border2)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
+        borderBottom: '1px solid var(--c-border2)',
       }}>
         <span style={{
-          fontSize: 9, color: 'var(--c-text6)', letterSpacing: 1,
-          writingMode: 'vertical-rl', transform: 'rotate(180deg)',
+          fontSize: 8,
+          color: 'var(--c-text6)',
+          letterSpacing: 1,
+          writingMode: 'vertical-rl',
+          opacity: 0.5,
+          userSelect: 'none',
         }}>타임라인</span>
       </div>
-      {/* 마커 영역 */}
+
+      {/* 눈금 영역 — 콘텐츠와 동기 스크롤 */}
       <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
-      {/* contentHeight 높이의 내부 컨테이너를 scrollTop만큼 위로 이동 → 콘텐츠와 동기 스크롤 */}
-      <div style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        height: contentHeight,
-        transform: `translateY(${-scrollTop}px)`,
-        willChange: 'transform',
-      }}>
-        {markers.map(({ m, top, color, isLabel }) => (
-          <div
-            key={m}
-            style={{
-              position: 'absolute',
-              top,
-              left: 0,
-              right: 0,
-              height: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'flex-end',
-              paddingRight: 4,
-            }}
-          >
-            {isLabel ? (
-              <span style={{
-                fontSize: 9,
-                color,
-                fontWeight: 400,
-                whiteSpace: 'nowrap',
-                lineHeight: 1,
-                opacity: 0.9,
-              }}>
-                {m}분
-              </span>
-            ) : (
-              <span style={{
-                display: 'inline-block',
-                width: 3,
-                height: 1,
-                background: color,
-                opacity: 0.5,
-              }} />
-            )}
-          </div>
-        ))}
-      </div>
+        <div style={{
+          position: 'absolute',
+          top: 0, left: 0, right: 0,
+          height: contentHeight,
+          transform: `translateY(${-scrollTop}px)`,
+          willChange: 'transform',
+        }}>
+          {ticks.map(({ s, top, is10s, is5s }) => {
+            const tickW = is10s ? 10 : is5s ? 6 : 3;
+            const opacity = is10s ? 0.55 : is5s ? 0.35 : 0.2;
+            return (
+              <div
+                key={s}
+                style={{
+                  position: 'absolute',
+                  top,
+                  right: 0,
+                  width: tickW,
+                  height: 1,
+                  background: 'var(--c-text6)',
+                  opacity,
+                }}
+              />
+            );
+          })}
+        </div>
       </div>
     </div>
   );
