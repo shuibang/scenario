@@ -8,6 +8,8 @@ import { genId, now } from '../store/db';
 import { resolveSceneLabel, parseSceneContent } from '../utils/sceneResolver';
 import { resolveFont } from '../print/FontRegistry';
 import { getLayoutMetrics } from '../print/LineTokenizer';
+import EmotionTagPicker from './EmotionTagPicker';
+import { ALL_EMOTIONS as EMOTION_ALL, getRecommendedTag } from '../data/emotionTags';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const CHAR_SUGGEST_KEY = 'drama_charSuggestInAction';
@@ -30,16 +32,13 @@ const BUILTIN_GUIDES = [
   },
 ];
 
-// Slash command palette items
-// action: 'block' → applyBlockType, 'charcheck' → 등장, 'sceneref' → 연결, 'symbol' → 기타, 'tag' → 태그추가(모바일전용)
+// Slash command palette items (간소화 — 자주 쓰는 것만)
 const SLASH_COMMANDS = [
-  { type: 'scene_number', action: 'block',    icon: 'S#', label: '씬번호',  desc: '새 씬 시작' },
-  { type: 'action',       action: 'block',    icon: '지', label: '지문',    desc: '행동/상황 묘사' },
-  { type: 'dialogue',     action: 'block',    icon: '대', label: '대사',    desc: '인물 대사' },
-  { type: 'charcheck',    action: 'charcheck',icon: '👤', label: '등장',    desc: '씬 등장인물 추가' },
-  { type: 'sceneref',     action: 'sceneref', icon: '🔗', label: '연결',    desc: '다른 씬 참조 삽입' },
-  { type: 'symbol',       action: 'symbol',   icon: '기', label: '기타',    desc: '특수 기호 삽입' },
-  { type: 'tag',          action: 'tag',      icon: '🏷', label: '태그추가', desc: '구조 태그 지정' },
+  { type: 'scene_number', action: 'block',      icon: 'S#',  label: '씬번호',  desc: '새 씬 시작' },
+  { type: 'action',       action: 'block',      icon: '지',  label: '지문',    desc: '행동/상황 묘사' },
+  { type: 'dialogue',     action: 'block',      icon: '대',  label: '대사',    desc: '인물 대사' },
+  { type: 'symbol',       action: 'symbol',     icon: '기',  label: '기타',    desc: '특수 기호 삽입' },
+  { type: 'tag',          action: 'unifiedtag', icon: '태그', label: '태그',   desc: '구조태그·감정태그 검색' },
 ];
 
 // ─── Symbol Picker ────────────────────────────────────────────────────────────
@@ -98,10 +97,10 @@ function SymbolPicker({ mobile = false, closeToken = 0, onOpen, forceOpen = null
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
-  // Ctrl+6 단축키로 열기
+  // Ctrl+6 단축키로 열기 (Shift 없이만 — Ctrl+Shift+6은 태그 버튼)
   useEffect(() => {
     const onKey = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.code === 'Digit6') {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.code === 'Digit6') {
         e.preventDefault();
         if (open) {
           setDropPos(null);
@@ -569,6 +568,7 @@ function parseSurface(surface, metaRef, epId, projId) {
       updatedAt: rawText !== prev.rawText ? now() : (prev.updatedAt || now()),
       rawText, // internal cache for change detection
       sceneRefs,
+      emotionTag: prev.emotionTag || null,
     };
     if (type === 'scene_number') {
       // rawText는 DOM 표시용(라벨 제거된 값)이므로 parsed는 순수 내용
@@ -621,27 +621,13 @@ function SlashPalette({ commands, position, selectedIdx, onSelect, onClose }) {
   if (!commands.length) return null;
   return createPortal(
     <>
-      <div
-        style={{ position: 'fixed', inset: 0, zIndex: 199 }}
-        onMouseDown={e => { e.preventDefault(); onClose(); }}
-      />
+      <div style={{ position: 'fixed', inset: 0, zIndex: 199 }} onMouseDown={e => { e.preventDefault(); onClose(); }} />
       <div style={{
         position: 'fixed', top: position.y, left: position.x,
-        zIndex: 200,
-        background: 'var(--c-panel)',
-        border: '1px solid var(--c-border)',
-        borderRadius: 8,
-        boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
-        minWidth: 200,
-        overflow: 'hidden',
+        zIndex: 200, background: 'var(--c-panel)',
+        border: '1px solid var(--c-border)', borderRadius: 8,
+        boxShadow: '0 4px 20px rgba(0,0,0,0.2)', minWidth: 190, overflow: 'hidden',
       }}>
-        <div style={{
-          padding: '4px 12px 3px',
-          fontSize: 10, color: 'var(--c-text6)',
-          borderBottom: '1px solid var(--c-border2)',
-        }}>
-          블록 타입 선택 — Tab 또는 클릭으로 적용
-        </div>
         {commands.map((cmd, idx) => {
           const sel = idx === selectedIdx;
           return (
@@ -650,23 +636,21 @@ function SlashPalette({ commands, position, selectedIdx, onSelect, onClose }) {
               onMouseDown={e => { e.preventDefault(); onSelect(cmd.type); }}
               style={{
                 display: 'flex', alignItems: 'center', gap: 10,
-                padding: '8px 14px',
+                padding: '7px 14px',
                 background: sel ? 'var(--c-accent)' : 'transparent',
                 cursor: 'pointer',
-                transition: 'background 0.1s',
               }}
             >
               <span style={{
-                width: 28, height: 28, borderRadius: 6,
+                width: 26, height: 26, borderRadius: 6,
                 background: sel ? 'rgba(255,255,255,0.25)' : 'var(--c-border2)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 11, fontWeight: 700,
-                color: sel ? '#fff' : 'var(--c-text4)',
-                flexShrink: 0,
+                color: sel ? '#fff' : 'var(--c-text4)', flexShrink: 0,
               }}>{cmd.icon}</span>
               <div>
-                <div style={{ fontSize: 13, fontWeight: sel ? 700 : 500, color: sel ? '#fff' : 'var(--c-text)' }}>{cmd.label}</div>
-                <div style={{ fontSize: 11, color: sel ? 'rgba(255,255,255,0.75)' : 'var(--c-text5)' }}>{cmd.desc}</div>
+                <div style={{ fontSize: 12, fontWeight: sel ? 700 : 500, color: sel ? '#fff' : 'var(--c-text)' }}>{cmd.label}</div>
+                <div style={{ fontSize: 10, color: sel ? 'rgba(255,255,255,0.75)' : 'var(--c-text5)' }}>{cmd.desc}</div>
               </div>
             </div>
           );
@@ -791,6 +775,166 @@ function SlashTagPickerPanel({ position, scene, tagPool, onAdd, onRemove, onClos
     document.body
   );
 }
+
+// ─── UnifiedTagPicker ─────────────────────────────────────────────────────────
+function UnifiedTagPicker({ position, currentStructureTags, onAddStructure, onAddEmotion, onOpenFullPicker, onClose }) {
+  const [query, setQuery] = useState('');
+  const [selIdx, setSelIdx] = useState(0);
+  const inputRef = React.useRef(null);
+  React.useEffect(() => { requestAnimationFrame(() => inputRef.current?.focus()); }, []);
+
+  const q = query.trim().toLowerCase();
+
+  const emotionResults = useMemo(() => {
+    if (!q) {
+      const seen = new Set();
+      return EMOTION_ALL.filter(e => { if (seen.has(e.categoryLabel)) return false; seen.add(e.categoryLabel); return true; });
+    }
+    return EMOTION_ALL.filter(e => e.word.includes(q));
+  }, [q]);
+
+  const structureResults = useMemo(() => {
+    const all = BUILTIN_GUIDES.flatMap(g => g.beats.map(b => ({ beat: b, guideName: g.name, color: g.color })));
+    if (!q) return all;
+    return all.filter(r => r.beat.includes(q));
+  }, [q]);
+
+  // 전체 선택 가능 항목 flat list (키보드 네비용)
+  // type: 'emotion' | 'structure' | 'custom'
+  const allItems = useMemo(() => {
+    const items = [
+      ...emotionResults.slice(0, 8).map(em => ({ kind: 'emotion', em })),
+      ...structureResults.slice(0, 8).filter(r => !currentStructureTags.includes(r.beat)).map(r => ({ kind: 'structure', r })),
+    ];
+    if (q) items.push({ kind: 'custom' });
+    return items;
+  }, [emotionResults, structureResults, currentStructureTags, q]);
+
+  React.useEffect(() => { setSelIdx(0); }, [query]);
+
+  const commit = (item) => {
+    if (!item) return;
+    if (item.kind === 'emotion') { onAddEmotion(item.em); onClose(); }
+    else if (item.kind === 'structure') { onAddStructure(item.r.beat); onClose(); }
+    else if (item.kind === 'custom') { onOpenFullPicker(q); onClose(); }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); setSelIdx(i => Math.min(i + 1, allItems.length - 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setSelIdx(i => Math.max(i - 1, 0)); }
+    else if (e.key === 'Enter') { e.preventDefault(); commit(allItems[selIdx]); }
+    else if (e.key === 'Escape') { e.preventDefault(); onClose(); }
+  };
+
+  const isSelected = (kind, key) => {
+    const item = allItems[selIdx];
+    if (!item) return false;
+    if (kind === 'emotion' && item.kind === 'emotion') return item.em.word === key;
+    if (kind === 'structure' && item.kind === 'structure') return item.r.beat === key;
+    if (kind === 'custom' && item.kind === 'custom') return true;
+    return false;
+  };
+
+  return createPortal(
+    <>
+      <div style={{ position: 'fixed', inset: 0, zIndex: 299 }} onMouseDown={onClose} />
+      <div
+        style={{
+          position: 'fixed', top: position.top, left: position.left,
+          zIndex: 300, background: 'var(--c-panel)', border: '1px solid var(--c-border2)',
+          borderRadius: 10, boxShadow: '0 6px 24px rgba(0,0,0,0.22)',
+          width: 260, maxHeight: 360, display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        }}
+        onMouseDown={e => e.stopPropagation()}
+      >
+        <div style={{ padding: '8px 10px 6px', borderBottom: '1px solid var(--c-border2)' }}>
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="태그 검색..."
+            style={{
+              width: '100%', boxSizing: 'border-box', padding: '5px 10px', borderRadius: 6,
+              border: '1px solid var(--c-border3)', background: '#fff', color: '#222',
+              fontSize: 13, outline: 'none',
+            }}
+          />
+        </div>
+
+        <div style={{ overflowY: 'auto', flex: 1 }}>
+          {emotionResults.length > 0 && (
+            <>
+              <div style={{ padding: '4px 12px 2px', fontSize: 10, fontWeight: 600, color: 'var(--c-text6)', textTransform: 'uppercase', letterSpacing: '0.05em', background: 'var(--c-tag)' }}>감정태그</div>
+              {emotionResults.slice(0, 8).map(em => {
+                const sel = isSelected('emotion', em.word);
+                return (
+                  <div key={em.word}
+                    onMouseDown={e => { e.preventDefault(); onAddEmotion(em); onClose(); }}
+                    onMouseEnter={() => setSelIdx(allItems.findIndex(i => i.kind === 'emotion' && i.em.word === em.word))}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', cursor: 'pointer', fontSize: 12, color: 'var(--c-text)', background: sel ? 'var(--c-active)' : 'transparent' }}
+                  >
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: em.color, flexShrink: 0 }} />
+                    {em.word}
+                    <span style={{ marginLeft: 'auto', fontSize: 10, color: sel ? 'inherit' : 'var(--c-text6)' }}>{em.categoryLabel}</span>
+                  </div>
+                );
+              })}
+            </>
+          )}
+
+          {structureResults.length > 0 && (
+            <>
+              <div style={{ padding: '4px 12px 2px', fontSize: 10, fontWeight: 600, color: 'var(--c-text6)', textTransform: 'uppercase', letterSpacing: '0.05em', background: 'var(--c-tag)' }}>구조태그</div>
+              {structureResults.slice(0, 8).map(r => {
+                const has = currentStructureTags.includes(r.beat);
+                const sel = isSelected('structure', r.beat);
+                return (
+                  <div key={r.beat}
+                    onMouseDown={e => { e.preventDefault(); if (!has) { onAddStructure(r.beat); onClose(); } }}
+                    onMouseEnter={() => { if (!has) setSelIdx(allItems.findIndex(i => i.kind === 'structure' && i.r.beat === r.beat)); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', cursor: has ? 'default' : 'pointer', fontSize: 12, color: has ? 'var(--c-text5)' : 'var(--c-text)', opacity: has ? 0.5 : 1, background: sel ? 'var(--c-active)' : 'transparent' }}
+                  >
+                    <span style={{ width: 8, height: 2, background: r.color, flexShrink: 0, borderRadius: 1 }} />
+                    {r.beat}
+                    <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--c-text6)' }}>{has ? '✓' : r.guideName.split(' ')[0]}</span>
+                  </div>
+                );
+              })}
+            </>
+          )}
+
+          {!emotionResults.length && !structureResults.length && !q && (
+            <div style={{ padding: '14px', textAlign: 'center', fontSize: 12, color: 'var(--c-text5)' }}>검색어를 입력하세요</div>
+          )}
+
+          {/* 직접 입력 옵션 (검색어 있을 때 항상 표시) */}
+          {q && (() => {
+            const sel = isSelected('custom');
+            return (
+              <div
+                onMouseDown={e => { e.preventDefault(); onOpenFullPicker(q); onClose(); }}
+                onMouseEnter={() => setSelIdx(allItems.findIndex(i => i.kind === 'custom'))}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '7px 12px', cursor: 'pointer', fontSize: 12,
+                  color: sel ? 'var(--c-text)' : 'var(--c-text4)',
+                  background: sel ? 'var(--c-active)' : 'transparent',
+                  borderTop: '1px solid var(--c-border2)',
+                }}
+              >
+                <span style={{ fontSize: 11 }}>✏️</span>
+                <span>"{q}" 색상 직접 선택</span>
+              </div>
+            );
+          })()}
+        </div>
+      </div>
+    </>,
+    document.body
+  );
+}
+
 
 function CharSuggestionPanel({ charName, onConfirm, onDismiss, onDisable }) {
   return (
@@ -1049,15 +1193,35 @@ const EditorSurface = forwardRef(function EditorSurface({
   const surfaceRef = useRef(null);
   const metaRef = useRef({});
   const composingRef = useRef(false);
+  const slashOffsetRef = useRef(null); // { blockId, offset } — '/' 위치 추적
+  const fromParseRef = useRef(false); // doParse 직후엔 DOM 이미 최신 → useEffect 동기화 불필요
   const epIdRef = useRef(activeEpisodeId);
   const projIdRef = useRef(activeProjectId);
   epIdRef.current = activeEpisodeId;
   projIdRef.current = activeProjectId;
 
-  const syncMeta = useCallback((blocks) => {
+  const syncMeta = useCallback((blocks, syncDom = true) => {
     const m = {};
     blocks.forEach(b => { m[b.id] = b; });
     metaRef.current = m;
+    // 감정 dot DOM 동기화 — doParse 경로에서는 생략 (updateEmotionTag가 직접 처리)
+    if (!syncDom) return;
+    const el = surfaceRef.current;
+    if (el) {
+      blocks.forEach(b => {
+        const div = el.querySelector(`[data-block-id="${b.id}"]`);
+        if (!div) return;
+        if (b.emotionTag) {
+          div.dataset.emotionColor = b.emotionTag.color;
+          div.dataset.emotionWord = b.emotionTag.word;
+          div.style.setProperty('--emotion-dot-color', b.emotionTag.color);
+        } else {
+          delete div.dataset.emotionColor;
+          delete div.dataset.emotionWord;
+          div.style.removeProperty('--emotion-dot-color');
+        }
+      });
+    }
   }, []);
 
   // ── Initialize DOM on episode change ONLY ──────────────────────────────────
@@ -1074,6 +1238,12 @@ const EditorSurface = forwardRef(function EditorSurface({
   // ── Sync external block changes to non-focused DOM elements ───────────────
   // (e.g. sceneRef auto-update, external block type change)
   useEffect(() => {
+    // doParse 직후에는 DOM이 이미 최신 상태 → 200+ querySelector 루프 건너뜀
+    if (fromParseRef.current) {
+      fromParseRef.current = false;
+      return;
+    }
+
     syncMeta(initialBlocks);
     const el = surfaceRef.current;
     if (!el) return;
@@ -1090,8 +1260,6 @@ const EditorSurface = forwardRef(function EditorSurface({
       return;
     }
 
-    // activeElement는 contenteditable 루트(surface)를 반환하므로
-    // selection range로 현재 커서가 있는 블록을 찾아야 함
     const sel = window.getSelection();
     let activeBlockEl = null;
     if (sel?.rangeCount) {
@@ -1100,17 +1268,14 @@ const EditorSurface = forwardRef(function EditorSurface({
     initialBlocks.forEach(b => {
       const div = el.querySelector(`[data-block-id="${b.id}"]`);
       if (!div) return;
-      if (div === activeBlockEl) return; // skip block with cursor
-      // Sync content — rich blocks: compare plain text to avoid overwriting formatting
+      if (div === activeBlockEl) return;
       const expected = blockDisplayContent(b);
       const isRich = b.type === 'action' || b.type === 'dialogue';
       const expectedPlain = isRich ? stripHtml(expected) : expected;
-      // dialogue: badge 구조인 경우 .ce-speech 기준으로 비교
       const compareEl = (b.type === 'dialogue' && div.querySelector('.ce-speech')) ? div.querySelector('.ce-speech') : div;
       if (blockText(compareEl) !== expectedPlain) {
         if (isRich) setBlockHtml(div, expected); else setBlockText(div, expected);
       }
-      // Sync char name for dialogue
       if (b.type === 'dialogue') {
         const cn = b.characterName || b.charName || '';
         if (div.dataset.charName !== cn) {
@@ -1118,7 +1283,6 @@ const EditorSurface = forwardRef(function EditorSurface({
           div.dataset.charId = b.characterId || '';
         }
       }
-      // Sync scene label (data-label → CSS ::before 로 "S#n." 표시)
       if (b.type === 'scene_number' && b.label && div.dataset.label !== b.label) {
         div.dataset.label = b.label;
       }
@@ -1130,7 +1294,8 @@ const EditorSurface = forwardRef(function EditorSurface({
     const el = surfaceRef.current;
     if (!el) return;
     const blocks = parseSurface(el, metaRef, epIdRef.current, projIdRef.current);
-    syncMeta(blocks);
+    syncMeta(blocks, false); // metaRef만 업데이트, DOM dot는 updateEmotionTag가 처리
+    fromParseRef.current = true; // DOM이 최신 → useEffect([initialBlocks]) 루프 건너뜀
     onBlocksChange(blocks);
     // 현재 커서의 블록 타입을 선택 상태 콜백으로 전달
     const sel = window.getSelection();
@@ -1229,6 +1394,30 @@ const EditorSurface = forwardRef(function EditorSurface({
       document.execCommand(format, false, null);
       doParse();
     },
+    updateEmotionTag(blockId, emotionTag) {
+      // metaRef 즉시 업데이트 (이후 doParse 시 emotionTag 유실 방지)
+      metaRef.current[blockId] = {
+        ...(metaRef.current[blockId] || {}),
+        emotionTag: emotionTag ?? null,
+      };
+      // DOM dot 즉시 반영
+      const el = surfaceRef.current;
+      if (el) {
+        const div = el.querySelector(`[data-block-id="${blockId}"]`);
+        if (div) {
+          if (emotionTag) {
+            div.dataset.emotionColor = emotionTag.color;
+            div.dataset.emotionWord = emotionTag.word;
+            div.style.setProperty('--emotion-dot-color', emotionTag.color);
+          } else {
+            delete div.dataset.emotionColor;
+            delete div.dataset.emotionWord;
+            div.style.removeProperty('--emotion-dot-color');
+          }
+        }
+      }
+      // doParse는 호출하지 않음 — 호출자(ScriptEditor)에서 setBlocks로 직접 처리
+    },
   }), [doParse, onBadgeClick, syncMeta, onBlocksChange]);
 
   // ── Input handler ─────────────────────────────────────────────────────────
@@ -1241,18 +1430,36 @@ const EditorSurface = forwardRef(function EditorSurface({
     if (!sel?.rangeCount || !el) return;
     const blockEl = findBlockEl(sel.getRangeAt(0).startContainer, el);
 
-    // Slash palette: 모든 블록 타입에서 / 로 시작하면 감지
+    // Slash palette: 커서 앞에 '/'가 있으면 감지 (내용 있는 블록도 지원)
     if (blockEl) {
       const bType = blockEl.dataset.blockType;
-      // dialogue는 .ce-speech 기준, 나머지는 전체 텍스트
+      const textNode = bType === 'dialogue'
+        ? (blockEl.querySelector('.ce-speech') || blockEl)
+        : blockEl;
       const rawText = bType === 'dialogue'
         ? (blockEl.querySelector('.ce-speech')?.innerText || '').replace(/\n$/, '')
         : blockText(blockEl);
-      if (rawText.startsWith('/')) {
-        onSlashInput?.({ blockEl, query: rawText.slice(1) });
+      // 커서 위치 확인 — '/'가 바로 앞에 있는지
+      const range2 = sel?.rangeCount ? sel.getRangeAt(0) : null;
+      let caretOffset = 0;
+      if (range2) {
+        try {
+          const tempRange = document.createRange();
+          tempRange.setStart(textNode, 0);
+          tempRange.setEnd(range2.startContainer, range2.startOffset);
+          caretOffset = tempRange.toString().length;
+        } catch (_) { caretOffset = rawText.length; }
+      }
+      // '/' 바로 뒤에 커서가 있을 때 (또는 '/쿼리' 뒤에 커서가 있을 때)
+      const slashIdx = rawText.lastIndexOf('/', caretOffset - 1);
+      const query = slashIdx >= 0 ? rawText.slice(slashIdx + 1, caretOffset) : null;
+      if (slashIdx >= 0 && query !== null && !/\s/.test(query)) {
+        slashOffsetRef.current = { blockId: blockEl.dataset.blockId, slashIdx, caretOffset };
+        onSlashInput?.({ blockEl, query });
         return; // 슬래시 메뉴 열린 동안 charSuggest 건너뜀
       }
     }
+    slashOffsetRef.current = null;
     onSlashClose?.();
 
     // CharSuggestion: check if current action block content looks like a character name
@@ -1570,9 +1777,13 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   const [symbolPickerCloseToken, setSymbolPickerCloseToken] = useState(0);
   const [slashPalette, setSlashPalette] = useState(null); // null | { blockEl, query, x, y, selectedIdx }
   const [slashSymbolPos, setSlashSymbolPos] = useState(null); // null | { top, left } — 슬래시에서 기타 피커 강제 오픈
-  const [slashTagPicker, setSlashTagPicker] = useState(null); // null | { scene, top, left }
+  const [slashTagPicker, setSlashTagPicker] = useState(null); // legacy (구버전 호환)
+  const [slashEmotionPicker, setSlashEmotionPicker] = useState(null); // 🎭 버튼 전용 (3단계)
+  const [slashUnifiedTag, setSlashUnifiedTag] = useState(null); // null | { blockId, sceneId, top, left }
   const slashOpenRef = useRef(false);
   slashOpenRef.current = slashPalette !== null; // 매 렌더마다 ref 동기화
+  const slashPaletteRef = useRef(null);
+  slashPaletteRef.current = slashPalette; // executeSlashAction 클로저에서 최신 query 접근용
   const hasKeyboard = !!keyboardUp; // App.jsx에서 내려온 키보드 감지값 사용
   const charCheckBtnRef = useRef(null);
   const editorScrollRef = useRef(null);
@@ -1583,6 +1794,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   const redoStack = useRef([]);
   const undoActive = useRef(false);
   const undoPushTimer = useRef(null);
+  const isSavingRef = useRef(false); // SET_SAVE_STATUS 중복 dispatch 방지
   useEffect(() => {
     if (undoActive.current) return;
     clearTimeout(undoPushTimer.current);
@@ -1591,7 +1803,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
       const last = undoStack.current[undoStack.current.length - 1];
       if (last !== serialized) {
         undoStack.current.push(serialized);
-        if (undoStack.current.length > 50) undoStack.current.shift();
+        if (undoStack.current.length > 20) undoStack.current.shift();
         redoStack.current = []; // 새 변경 → redo 스택 초기화
         window.dispatchEvent(new CustomEvent('scriptundostate', {
           detail: { canUndo: undoStack.current.length > 1, canRedo: false },
@@ -1625,7 +1837,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     if (undoStack.current.length <= 1) return;
     const currentSerialized = undoStack.current[undoStack.current.length - 1];
     redoStack.current.push(currentSerialized);
-    if (redoStack.current.length > 50) redoStack.current.shift();
+    if (redoStack.current.length > 20) redoStack.current.shift();
     undoStack.current.pop();
     const prev = undoStack.current[undoStack.current.length - 1];
     if (!prev) { redoStack.current.pop(); return; }
@@ -1648,7 +1860,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     const next = redoStack.current.pop();
     const currentSerialized = undoStack.current[undoStack.current.length - 1];
     undoStack.current.push(next);
-    if (undoStack.current.length > 50) undoStack.current.shift();
+    if (undoStack.current.length > 20) undoStack.current.shift();
     undoActive.current = true;
     const currentBlocks = currentSerialized ? JSON.parse(currentSerialized) : [];
     const restored = JSON.parse(next);
@@ -1742,16 +1954,27 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   }, [pendingScriptReload]);
 
   // ── Debounced save + scene sync
+  // 최적화: JSON.stringify는 타이머 안에서만, dispatch('saving')는 1회만 → 매 키입력 25컴포넌트 리렌더 방지
   useEffect(() => {
     if (!activeEpisodeId || !blocks.length) return;
-    const serialized = JSON.stringify(blocks);
-    if (serialized === lastSavedBlocks.current) return;
-    dispatch({ type: 'SET_SAVE_STATUS', payload: 'saving' });
+    if (!isSavingRef.current) {
+      isSavingRef.current = true;
+      dispatch({ type: 'SET_SAVE_STATUS', payload: 'saving' });
+    }
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
-      const sceneBlocks = blocks.filter(b => b.type === 'scene_number');
+      const currentBlocks = blocksRef.current;
+      const serialized = JSON.stringify(currentBlocks);
+      if (serialized === lastSavedBlocks.current) {
+        dispatch({ type: 'SET_SAVE_STATUS', payload: 'saved' });
+        isSavingRef.current = false;
+        return;
+      }
+      const currentScenes = scenesRef.current;
+      const sceneBlocks = currentBlocks.filter(b => b.type === 'scene_number');
+      const sceneMapForSave = new Map(currentScenes.map(s => [s.id, s]));
       const updatedScenes = sceneBlocks.map((b, idx) => {
-        const existing = scenes.find(s => s.id === b.sceneId);
+        const existing = sceneMapForSave.get(b.sceneId);
         return {
           id: b.sceneId || genId(),
           episodeId: activeEpisodeId, projectId: activeProjectId,
@@ -1760,7 +1983,6 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
           tags: existing?.tags || [], characters: existing?.characters || [],
           characterIds: existing?.characterIds || [],
           content: b.content,
-          // Preserve structured metadata set via RightPanel / SceneListPage
           location:          existing?.location          ?? '',
           subLocation:       existing?.subLocation       ?? '',
           timeOfDay:         existing?.timeOfDay         ?? '',
@@ -1770,13 +1992,13 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
           createdAt: existing?.createdAt || now(), updatedAt: now(),
         };
       });
-      dispatch({ type: 'SET_BLOCKS', episodeId: activeEpisodeId, payload: blocks });
-      // scene_number 블록이 없으면 SYNC_SCENES 하지 않음 — 씬리스트에서 추가한 orphan 씬들이 사라지는 버그 방지
+      dispatch({ type: 'SET_BLOCKS', episodeId: activeEpisodeId, payload: currentBlocks });
       if (updatedScenes.length > 0) {
         dispatch({ type: 'SYNC_SCENES', episodeId: activeEpisodeId, payload: updatedScenes });
       }
       dispatch({ type: 'SET_SAVE_STATUS', payload: 'saved' });
       lastSavedBlocks.current = serialized;
+      isSavingRef.current = false;
     }, 800);
     return () => clearTimeout(saveTimer.current);
   }, [blocks, activeEpisodeId]);
@@ -1911,13 +2133,14 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   // ── sceneRefs auto-update
   useEffect(() => {
     if (!blocks.length) return;
+    const sceneMap = new Map(scenes.map(s => [s.id, s]));
     let anyChanged = false;
     const updated = blocks.map(b => {
       if (!b.sceneRefs?.length) return b;
       let content = b.content;
       let blockChanged = false;
       const newRefs = b.sceneRefs.map(ref => {
-        const scene = scenes.find(s => s.id === ref.sceneId);
+        const scene = sceneMap.get(ref.sceneId);
         if (!scene) return ref;
         const rawText = scene.content || resolveSceneLabel({ ...scene, label: '' }) || scene.label;
         // displayText includes parentheses e.g. "(S#3 거실)"
@@ -1953,10 +2176,11 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
 
   // ── Broken scene refs
   const brokenSceneRefs = useMemo(() => {
+    const sceneIdSet = new Set(scenes.map(s => s.id));
     const broken = [];
     blocks.forEach(b => {
       (b.sceneRefs || []).forEach(ref => {
-        if (!scenes.find(s => s.id === ref.sceneId))
+        if (!sceneIdSet.has(ref.sceneId))
           broken.push({ blockId: b.id, refSceneId: ref.sceneId, displayText: ref.displayText });
       });
     });
@@ -2067,18 +2291,45 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
 
   // 슬래시 액션 실행 공통 함수
   const executeSlashAction = useCallback((cmd, blockEl) => {
-    // 블록 텍스트 지우고 커서 복구 (dialogue는 .ce-speech만 클리어)
+    const isDialogue = blockEl?.dataset.blockType === 'dialogue';
+    const targetEl = isDialogue
+      ? (blockEl?.querySelector('.ce-speech') || blockEl)
+      : blockEl;
+
+    // unifiedtag: '/' + 쿼리만 제거하고 앞 내용 보존
+    const removeSlashOnly = (el, target) => {
+      if (!el || !target) return;
+      const query = slashPaletteRef.current?.query || '';
+      const toRemove = '/' + query;
+      const raw = target.innerText || target.textContent || '';
+      const idx = raw.lastIndexOf(toRemove);
+      if (idx >= 0) {
+        target.textContent = raw.slice(0, idx) + raw.slice(idx + toRemove.length);
+        try {
+          const r = document.createRange();
+          if (target.firstChild?.nodeType === Node.TEXT_NODE) {
+            r.setStart(target.firstChild, Math.min(idx, target.firstChild.length));
+          } else {
+            r.setStart(target, 0);
+          }
+          r.collapse(true);
+          window.getSelection()?.removeAllRanges();
+          window.getSelection()?.addRange(r);
+        } catch (_) {}
+      }
+    };
+
+    // 전체 삭제 (block 타입 변경 시)
     const clearBlockSlash = (el) => {
       if (!el) return;
-      if (el.dataset.blockType === 'dialogue') {
+      const target = isDialogue ? (el.querySelector('.ce-speech') || el) : el;
+      if (isDialogue) {
         const speech = el.querySelector('.ce-speech');
         if (speech) speech.textContent = '';
       } else {
         el.textContent = '';
       }
       try {
-        const target = el.dataset.blockType === 'dialogue'
-          ? (el.querySelector('.ce-speech') || el) : el;
         const r = document.createRange();
         r.setStart(target, 0);
         r.collapse(true);
@@ -2086,8 +2337,13 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
         window.getSelection()?.addRange(r);
       } catch (_) {}
     };
+
     if (blockEl && cmd.action !== 'sceneref' && cmd.action !== 'symbol') {
-      clearBlockSlash(blockEl);
+      if (cmd.action === 'unifiedtag') {
+        removeSlashOnly(blockEl, targetEl);
+      } else {
+        clearBlockSlash(blockEl);
+      }
     }
 
     if (cmd.action === 'block') {
@@ -2110,17 +2366,14 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
       if (blockEl) clearBlockSlash(blockEl);
       const rect3 = blockEl?.getBoundingClientRect() || { bottom: 120, left: 200 };
       requestAnimationFrame(() => setSlashSymbolPos({ top: rect3.bottom + 4, left: rect3.left }));
-    } else if (cmd.action === 'tag') {
-      // 태그추가: 현재 씬의 태그 피커 열기
+    } else if (cmd.action === 'unifiedtag') {
+      // 통합 태그: 구조태그 + 감정태그 한 번에
+      const blockId = blockEl?.dataset.blockId;
       const sceneId = getCurrentSceneIdRef.current?.();
       const rect2 = blockEl?.getBoundingClientRect() || { bottom: 120, left: 200 };
-      if (sceneId) {
+      if (blockId || sceneId) {
         requestAnimationFrame(() => {
-          // episodeScenes는 최신 값이 필요하므로 DOM에서 직접 resolve
-          const surface = document.querySelector('[data-editor-surface]');
-          const sceneEl = surface?.querySelector(`[data-scene-id="${sceneId}"]`);
-          const sceneLabel = sceneEl?.dataset?.label || '';
-          setSlashTagPicker({ sceneId, sceneLabel, top: rect2.bottom + 4, left: rect2.left });
+          setSlashUnifiedTag({ blockId, sceneId, top: rect2.bottom + 4, left: rect2.left });
         });
       }
     }
@@ -2179,47 +2432,46 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
 
   // ── 씬번호 블록에 인물 태그 표시 (등장체크 + 대사에서 감지된 인물)
   useEffect(() => {
-    const surface = document.querySelector('[data-editor-surface]');
-    if (!surface || !blocks.length) return;
+    // 디바운스 300ms — 매 키입력마다 O(n²) DOM 업데이트 방지
+    const charTagTimer = setTimeout(() => {
+      const surface = document.querySelector('[data-editor-surface]');
+      const currentBlocks = blocksRef.current;
+      if (!surface || !currentBlocks.length) return;
 
-    // 씬별로 대사 인물 수집
-    const dialogueCharsByScene = {};
-    let currentSceneId = null;
-    for (const b of blocks) {
-      if (b.type === 'scene_number') {
-        currentSceneId = b.sceneId;
-        if (!dialogueCharsByScene[currentSceneId]) dialogueCharsByScene[currentSceneId] = new Set();
-      } else if (b.type === 'dialogue' && currentSceneId) {
-        const name = b.characterName || b.charName || '';
-        if (name) dialogueCharsByScene[currentSceneId].add(name);
+      const sceneMap = new Map(episodeScenes.map(s => [s.id, s]));
+      const charMap  = new Map(projectChars.map(c => [c.id, c]));
+
+      // 씬별로 대사 인물 수집 — 인물정보(characterId)가 등록된 인물만
+      const dialogueCharsByScene = {};
+      let currentSceneId = null;
+      for (const b of currentBlocks) {
+        if (b.type === 'scene_number') {
+          currentSceneId = b.sceneId;
+          if (!dialogueCharsByScene[currentSceneId]) dialogueCharsByScene[currentSceneId] = new Set();
+        } else if (b.type === 'dialogue' && currentSceneId && b.characterId && charMap.has(b.characterId)) {
+          const c = charMap.get(b.characterId);
+          const name = c.givenName || c.name || '';
+          if (name) dialogueCharsByScene[currentSceneId].add(name);
+        }
       }
-    }
 
-    // 씬번호 DOM 업데이트
-    surface.querySelectorAll('[data-block-type="scene_number"]').forEach(div => {
-      const sceneId = div.dataset.sceneId;
-      if (!sceneId) return;
+      // 씬번호 DOM 업데이트
+      surface.querySelectorAll('[data-block-type="scene_number"]').forEach(div => {
+        const sceneId = div.dataset.sceneId;
+        if (!sceneId) return;
 
-      const detected = dialogueCharsByScene[sceneId] || new Set();
+        const detected = dialogueCharsByScene[sceneId] || new Set();
+        const scene = sceneMap.get(sceneId);
+        const checkedNames = (scene?.characterIds || [])
+          .map(id => { const c = charMap.get(id); return c ? (c.givenName || c.name || '') : ''; })
+          .filter(Boolean);
 
-      // 등장체크로 등록된 인물 (characterIds → 이름 resolve)
-      const scene = episodeScenes.find(s => s.id === sceneId);
-      const checkedNames = (scene?.characterIds || [])
-        .map(id => {
-          const c = projectChars.find(ch => ch.id === id);
-          return c ? (c.givenName || c.name || '') : '';
-        })
-        .filter(Boolean);
-
-      // 합치기 (등장체크 우선, 중복 제거)
-      const all = [...new Set([...checkedNames, ...detected])];
-
-      if (all.length) {
-        div.dataset.charTags = all.join(' · ');
-      } else {
-        delete div.dataset.charTags;
-      }
-    });
+        const all = [...new Set([...checkedNames, ...detected])];
+        if (all.length) { div.dataset.charTags = all.join(' · '); }
+        else { delete div.dataset.charTags; }
+      });
+    }, 300);
+    return () => clearTimeout(charTagTimer);
   }, [blocks, episodeScenes, projectChars]);
 
   const handleCharCheckRef = useRef(null);
@@ -2247,6 +2499,25 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     };
   }, [sceneRefPicker]);
 
+  // ── 태그 피커 열기 (버튼/단축키 공통) ──────────────────────────────────────
+  const openEmotionPickerOnCursor = useCallback(() => {
+    const surface = document.querySelector('[data-editor-surface]');
+    const sel = window.getSelection();
+    if (!sel?.rangeCount || !surface) return;
+    let node = sel.getRangeAt(0).startContainer;
+    node = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+    let blockEl = null;
+    while (node && node !== surface) {
+      if (node.dataset?.blockId) { blockEl = node; break; }
+      node = node.parentElement;
+    }
+    if (!blockEl) return;
+    const blockId = blockEl.dataset.blockId;
+    const sceneId = getCurrentSceneIdRef.current?.();
+    const rect = blockEl.getBoundingClientRect();
+    setSlashUnifiedTag({ blockId, sceneId, top: rect.bottom + 4, left: rect.left });
+  }, []);
+
   // ── Ctrl+Shift+1/2/3/4 단축키 + 상단바 저장 버튼 이벤트
   useEffect(() => {
     const blockTypeMap = { 'Digit1': 'scene_number', 'Digit2': 'action', 'Digit3': 'dialogue' };
@@ -2259,6 +2530,9 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
       } else if (e.code === 'Digit4') {
         e.preventDefault();
         handleCharCheckRef.current?.();
+      } else if (e.code === 'Digit6') {
+        e.preventDefault();
+        openEmotionPickerOnCursor();
       } else if (e.code === 'Digit5') {
         e.preventDefault();
         // 커서 위치 기준 씬연결 피커 열기
@@ -2292,7 +2566,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
       window.removeEventListener('script:undo', onUndo);
       window.removeEventListener('script:redo', onRedo);
     };
-  }, [flushSave, applyBlockType, handleUndo, handleRedo]);
+  }, [flushSave, applyBlockType, handleUndo, handleRedo, openEmotionPickerOnCursor]);
 
   // ── getCurrentSceneId: find the scene_number block's sceneId before the cursor ─
   const getCurrentSceneId = useCallback(() => {
@@ -2377,29 +2651,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     return () => window.removeEventListener('keydown', handler, { capture: true });
   }, [charSuggestState]);
 
-  // ── Inject character tags as data-attr on scene_number DOM blocks ──────────
-  useEffect(() => {
-    const surface = document.querySelector('[data-editor-surface]');
-    if (!surface) return;
-    blocks.filter(b => b.type === 'scene_number').forEach(b => {
-      const div = surface.querySelector(`[data-scene-id="${b.sceneId}"]`);
-      if (!div) return;
-      const scene = episodeScenes.find(s => s.id === b.sceneId);
-      if (!scene?.characterIds?.length) {
-        div.removeAttribute('data-char-tags');
-        return;
-      }
-      const names = scene.characterIds
-        .map(id => {
-          const c = projectChars.find(ch => ch.id === id);
-          return c ? (c.givenName || c.name || '') : '';
-        })
-        .filter(Boolean)
-        .join(' · ');
-      if (names) div.dataset.charTags = names;
-      else div.removeAttribute('data-char-tags');
-    });
-  }, [blocks, episodeScenes, projectChars]);
+  // ── (인물태그 DOM 주입은 위 디바운스 effect에서 통합 처리) ──────────────────
 
   // ── Paste: 시나리오 자동 파싱
   const handleEditorPaste = useCallback((e) => {
@@ -2649,6 +2901,17 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
             forceOpen={slashSymbolPos}
             onForceClose={() => setSlashSymbolPos(null)}
           />
+          <button
+            onMouseDown={e => { e.preventDefault(); openEmotionPickerOnCursor(); }}
+            title="감정태그 (Ctrl+Shift+6)"
+            style={{
+              flexShrink: 0, width: BTN_W, textAlign: 'center',
+              fontSize: 'clamp(10px, 2.8vw, 13px)', color: 'var(--c-text4)',
+              padding: '4px 0', border: '1px solid var(--c-border3)',
+              borderRadius: 6, background: 'transparent', cursor: 'pointer',
+              WebkitTapHighlightColor: 'transparent', marginLeft: 4,
+            }}
+          >태그</button>
           {/* B/I/U 서식 버튼 — action/dialogue 블록에서 동작, 모바일에서는 MobileMenuBar에 있으므로 숨김 */}
           {!isMobile && <div style={{ borderLeft: '1px solid var(--c-border3)', paddingLeft: 6, marginLeft: 2, display: 'flex', gap: 2 }}>
             {[
@@ -2766,8 +3029,16 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
         }}
       >
         <div
-          className="max-w-2xl mx-auto py-8 px-6 md:px-16"
-          style={{ fontFamily: editorFontFamily, fontSize: editorFontSize, lineHeight: editorLineHeight }}
+          className="max-w-2xl mx-auto"
+          style={{
+            fontFamily: editorFontFamily,
+            fontSize: editorFontSize,
+            lineHeight: editorLineHeight,
+            paddingTop: '2rem',
+            paddingBottom: '2rem',
+            paddingLeft: isMobile ? '1.5rem' : '3rem',
+            paddingRight: '1.5rem',
+          }}
         >
           <EditorSurface
             ref={surfaceApiRef}
@@ -2874,6 +3145,75 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
               dispatch({ type: 'UPDATE_SCENE', payload: { id: sceneObj.id, tags: cur.filter(t => t !== tag) }, _record: true });
             }}
             onClose={() => setSlashTagPicker(null)}
+          />
+        );
+      })()}
+
+      {/* Slash Emotion Tag Picker */}
+      {slashEmotionPicker && createPortal(
+        <>
+          <div
+            style={{ position: 'fixed', inset: 0, zIndex: 299 }}
+            onMouseDown={(e) => { e.preventDefault(); setSlashEmotionPicker(null); }}
+          />
+          <div style={{
+            position: 'fixed',
+            top: slashEmotionPicker.top,
+            left: Math.min(slashEmotionPicker.left, window.innerWidth - 296),
+            zIndex: 300,
+          }}>
+            <EmotionTagPicker
+              existingTag={slashEmotionPicker.existingTag}
+              initialWord={slashEmotionPicker.initialWord || ''}
+              onSelect={(tag) => {
+                const bid = slashEmotionPicker.blockId;
+                surfaceApiRef.current?.updateEmotionTag(bid, tag);
+                setBlocks(prev => prev.map(b => b.id === bid ? { ...b, emotionTag: tag } : b));
+                dispatch({ type: 'UPDATE_BLOCK_EMOTION', blockId: bid, emotionTag: tag });
+                setSlashEmotionPicker(null);
+              }}
+              onClose={() => setSlashEmotionPicker(null)}
+            />
+          </div>
+        </>,
+        document.body
+      )}
+
+      {/* Unified Tag Picker (구조태그 + 감정태그 통합 검색) */}
+      {slashUnifiedTag && (() => {
+        const tagScene = episodeScenes.find(s => s.id === slashUnifiedTag.sceneId);
+        const currentStructureTags = tagScene?.tags || [];
+        const safeLeft = Math.min(slashUnifiedTag.left, window.innerWidth - 272);
+        return (
+          <UnifiedTagPicker
+            position={{ top: slashUnifiedTag.top, left: safeLeft }}
+            currentStructureTags={currentStructureTags}
+            onAddStructure={(beat) => {
+              if (tagScene) {
+                const tags = currentStructureTags.includes(beat)
+                  ? currentStructureTags
+                  : [...currentStructureTags, beat];
+                dispatch({ type: 'UPDATE_SCENE', payload: { id: tagScene.id, tags }, _record: true });
+              }
+              setSlashUnifiedTag(null);
+            }}
+            onAddEmotion={(em) => {
+              const blockId = slashUnifiedTag.blockId;
+              if (blockId) {
+                const tag = getRecommendedTag(em.word);
+                surfaceApiRef.current?.updateEmotionTag(blockId, tag);
+                setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, emotionTag: tag } : b));
+                dispatch({ type: 'UPDATE_BLOCK_EMOTION', blockId, emotionTag: tag });
+              }
+              setSlashUnifiedTag(null);
+            }}
+            onOpenFullPicker={(word) => {
+              const { blockId, top, left } = slashUnifiedTag;
+              const existing = scriptBlocks.find(b => b.id === blockId)?.emotionTag || null;
+              setSlashEmotionPicker({ blockId, top, left, existingTag: existing, initialWord: word });
+              setSlashUnifiedTag(null);
+            }}
+            onClose={() => setSlashUnifiedTag(null)}
           />
         );
       })()}
@@ -3143,6 +3483,15 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
             forceOpen={slashSymbolPos}
             onForceClose={() => setSlashSymbolPos(null)}
           />
+          <button
+            onMouseDown={e => { e.preventDefault(); openEmotionPickerOnCursor(); }}
+            style={{
+              flex: '0 0 auto', width: 44, fontSize: 14, padding: '5px 0',
+              borderRadius: 6, textAlign: 'center',
+              border: '1px solid var(--c-border3)', background: 'transparent',
+              color: 'var(--c-text4)', cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+            }}
+          >태그</button>
         </div>
       )}
     </div>

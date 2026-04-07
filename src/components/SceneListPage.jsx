@@ -210,7 +210,7 @@ function SceneListRow({ scene, idx, blockLabel, autoCharacters, projectChars, on
         </div>
       </td>
 
-      {/* 내용 (독립 입력 — 씬리스트 전용) */}
+      {/* 내용 (씬리스트 입력 → 씬보드에 표시) */}
       <td className="px-2 py-1">
         <input
           value={contentVal}
@@ -224,6 +224,7 @@ function SceneListRow({ scene, idx, blockLabel, autoCharacters, projectChars, on
             border: '1px solid transparent',
           }}
           onFocus={e => { e.target.style.borderColor = 'var(--c-accent)'; }}
+          onBlur={e => { e.target.style.borderColor = 'transparent'; onContentChange(contentVal); }}
         />
       </td>
 

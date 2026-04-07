@@ -155,6 +155,14 @@ function reducer(state, action) {
         ],
       };
 
+    case 'UPDATE_BLOCK_EMOTION':
+      return {
+        ...state,
+        scriptBlocks: state.scriptBlocks.map(b =>
+          b.id === action.blockId ? { ...b, emotionTag: action.emotionTag ?? null } : b
+        ),
+      };
+
     // Atomic import: multiple ADD_SCENE + SET_BLOCKS collapsed into one undo step
     case 'IMPORT_TREATMENT_TO_SCRIPT': {
       const { episodeId, newScenes, labelled, updatedSummaryItems } = action.payload;

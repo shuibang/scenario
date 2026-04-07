@@ -495,6 +495,17 @@ export default function RightPanel({ onScrollToScene }) {
     ? episodeScenes.filter(s => (s.tags || []).includes(tagFilter))
     : episodeScenes;
 
+  // Precompute for SceneOutlineContent — O(1) per scene instead of O(n²)
+  const epBlocksForOutline = useMemo(
+    () => scriptBlocks.filter(b => b.episodeId === activeEpisodeId),
+    [scriptBlocks, activeEpisodeId]
+  );
+  const sceneNumBlockBySceneId = useMemo(() => {
+    const m = {};
+    epBlocksForOutline.forEach(b => { if (b.type === 'scene_number') m[b.sceneId] = b; });
+    return m;
+  }, [epBlocksForOutline]);
+
   const isScriptView = activeDoc === 'script' && activeEpisodeId;
   const isCharView = activeDoc === 'characters';
   // 표지: 체크리스트만 표시 (문맥 패널 없음)
@@ -639,15 +650,7 @@ export default function RightPanel({ onScrollToScene }) {
             </div>
           ) : (
             filteredScenes.map(scene => {
-              const allEpBlocks = scriptBlocks.filter(b => b.episodeId === activeEpisodeId);
-              const sceneNumBlock = allEpBlocks.find(b => b.type === 'scene_number' && b.sceneId === scene.id);
-              const sceneNumBlocks = allEpBlocks.filter(b => b.type === 'scene_number');
-              const sceneIdx = sceneNumBlocks.indexOf(sceneNumBlock);
-              const nextSceneBlock = sceneNumBlocks[sceneIdx + 1];
-              const startI = sceneNumBlock ? allEpBlocks.indexOf(sceneNumBlock) : -1;
-              const endI = nextSceneBlock ? allEpBlocks.indexOf(nextSceneBlock) : allEpBlocks.length;
-              const segmentBlocks = startI >= 0 ? allEpBlocks.slice(startI + 1, endI) : [];
-
+              const sceneNumBlock = sceneNumBlockBySceneId[scene.id];
               return (
                 <SceneItem
                   key={scene.id}
