@@ -1734,12 +1734,14 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   useEffect(() => {
     let rafId = null;
     let lastEventWasKey = false;
+    let pointerActive = false; // pointerdown ~ pointerup 사이: drag/click 중
 
     const onKeyDown = () => { lastEventWasKey = true; };
-    const onPointerDown = () => { lastEventWasKey = false; };
+    const onPointerDown = () => { lastEventWasKey = false; pointerActive = true; };
+    const onPointerUp   = () => { pointerActive = false; };
 
     const onSelectionChange = () => {
-      if (!lastEventWasKey) return; // 클릭/탭 → 스크롤 건너뜀
+      if (!lastEventWasKey || pointerActive) return; // 클릭/드래그 중 → 스크롤 건너뜀
       if (rafId) return; // throttle to one frame
       rafId = requestAnimationFrame(() => {
         rafId = null;
@@ -1779,10 +1781,12 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     };
     document.addEventListener('keydown', onKeyDown, true);
     document.addEventListener('pointerdown', onPointerDown, true);
+    document.addEventListener('pointerup',   onPointerUp,   true);
     document.addEventListener('selectionchange', onSelectionChange);
     return () => {
       document.removeEventListener('keydown', onKeyDown, true);
       document.removeEventListener('pointerdown', onPointerDown, true);
+      document.removeEventListener('pointerup',   onPointerUp,   true);
       document.removeEventListener('selectionchange', onSelectionChange);
       if (rafId) cancelAnimationFrame(rafId);
     };

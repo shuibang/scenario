@@ -332,6 +332,7 @@ textarea {
   color: var(--c-text);
   cursor: pointer;
   user-select: none;
+  pointer-events: none;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
