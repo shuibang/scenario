@@ -1348,6 +1348,11 @@ const EditorSurface = forwardRef(function EditorSurface({
       onUndo?.();
       return;
     }
+    if (ctrl && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+      e.preventDefault();
+      window.dispatchEvent(new CustomEvent('script:redo'));
+      return;
+    }
 
     // ── Ctrl+B/I/U: 인라인 서식 (action/dialogue 블록에서만)
     if (ctrl && !e.shiftKey && (e.key === 'b' || e.key === 'i' || e.key === 'u')) {
