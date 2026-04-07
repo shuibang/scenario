@@ -1819,6 +1819,25 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ── editor:flush event — immediately sync local blocks to global state
+  // Fired by App.jsx before opening the print modal to prevent stale preview
+  useEffect(() => {
+    const handler = () => {
+      const epId = activeEpisodeIdRef.current;
+      const currentBlocks = blocksRef.current;
+      if (!epId || !currentBlocks.length) return;
+      const serialized = JSON.stringify(currentBlocks);
+      if (serialized === lastSavedBlocks.current) return; // no change
+      clearTimeout(saveTimer.current);
+      dispatch({ type: 'SET_BLOCKS', episodeId: epId, payload: currentBlocks });
+      dispatch({ type: 'SET_SAVE_STATUS', payload: 'saved' });
+      lastSavedBlocks.current = serialized;
+    };
+    window.addEventListener('editor:flush', handler);
+    return () => window.removeEventListener('editor:flush', handler);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ── Scroll to scene
   useEffect(() => {
     if (!scrollToSceneId) return;

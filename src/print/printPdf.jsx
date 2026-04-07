@@ -398,6 +398,7 @@ function buildPdfDocument(printModel) {
     }
 
     const tokens    = tokenizeSection(section, metrics);
+    if (!tokens.length) continue; // 내용 없는 섹션은 빈 페이지 생성 방지
     const paginated = paginate(tokens, metrics, section.type);
 
     paginated.forEach((pageTokens, pageIdx) => {

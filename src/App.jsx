@@ -1083,7 +1083,7 @@ function Shell({ authUser, setAuthUser }) {
     <MenuBar
       isDark={isDark}
       onToggleTheme={toggleTheme}
-      onPrintPreview={() => setPrintPreviewOpen(true)}
+      onPrintPreview={() => { window.dispatchEvent(new CustomEvent('editor:flush')); setPrintPreviewOpen(true); }}
       onSave={handleSave}
       onSnapshot={() => setSnapshotOpen(true)}
       authUser={authUser}
@@ -1160,7 +1160,7 @@ function Shell({ authUser, setAuthUser }) {
       >
         <MobileMenuBar
           onSave={handleSave}
-          onPrintPreview={() => setPrintPreviewOpen(true)}
+          onPrintPreview={() => { window.dispatchEvent(new CustomEvent('editor:flush')); setPrintPreviewOpen(true); }}
           onSnapshot={() => setSnapshotOpen(true)}
           WorkTimer={WorkTimer}
           authUser={authUser}
