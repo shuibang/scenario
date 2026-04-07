@@ -285,7 +285,7 @@ function ColorBar({ tab, scenes, scriptBlocks, characters, epId, selectedCharKey
 }
 
 // ─── SceneBoardCard ───────────────────────────────────────────────────────────
-function SceneBoardCard({ scene, isSelected, isOver, isDragging, onClick, onDelete, sceneChars, dragProps, dispatch }) {
+function SceneBoardCard({ scene, seqNum, isSelected, isOver, isDragging, onClick, onDelete, sceneChars, dragProps, dispatch }) {
   const [deleteMode, setDeleteMode] = useState(false);
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
   const cardRef = useRef(null);
@@ -326,7 +326,8 @@ function SceneBoardCard({ scene, isSelected, isOver, isDragging, onClick, onDele
       {/* 씬정보 + 삭제 버튼 */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 }}>
         <div style={{ fontSize: 10, color: 'var(--c-text5)', fontWeight: 600 }}>
-          {scene.content || `S#${scene.sceneSeq}`}
+          <span style={{ color: 'var(--c-accent2)', marginRight: 4 }}>S#{seqNum}</span>
+          {scene.content && <span>{scene.content.replace(/^S#\d+\.?\s*/i, '')}</span>}
         </div>
         {deleteMode && (
           <button
@@ -503,6 +504,7 @@ function SceneBoardTab({ epId, scenes, scriptBlocks, characters, dispatch, onSel
           <SceneBoardCard
             key={scene.id}
             scene={scene}
+            seqNum={idx + 1}
             isSelected={selectedSceneId === scene.id}
             isOver={overIdx === idx}
             isDragging={dragIdx === idx}
