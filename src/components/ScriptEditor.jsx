@@ -1750,19 +1750,31 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
         const range = sel.getRangeAt(0);
         // Only act when cursor is inside this editor
         if (!container.contains(range.startContainer)) return;
-        // Find the block-level div containing the cursor
-        let node = range.startContainer;
-        while (node && node !== container) {
-          if (node.nodeType === 1 && node.dataset?.blockId) break;
-          node = node.parentElement;
-        }
-        const blockEl = (node && node !== container) ? node : null;
-        if (!blockEl) return;
-        const blockRect    = blockEl.getBoundingClientRect();
+        // 커서 실제 위치 기준으로 스크롤 (블록 전체 중심이 아니라 커서 라인 기준)
+        const caretRect     = range.getBoundingClientRect();
         const containerRect = container.getBoundingClientRect();
-        const blockCenter   = blockRect.top + blockRect.height / 2 - containerRect.top;
-        const targetCenter  = containerRect.height / 2;
-        container.scrollTop += blockCenter - targetCenter;
+        // caretRect가 비어있으면 (빈 줄 등) fallback으로 블록 중심 사용
+        if (!caretRect || caretRect.height === 0) {
+          let node = range.startContainer;
+          while (node && node !== container) {
+            if (node.nodeType === 1 && node.dataset?.blockId) break;
+            node = node.parentElement;
+          }
+          const blockEl = (node && node !== container) ? node : null;
+          if (!blockEl) return;
+          const blockRect   = blockEl.getBoundingClientRect();
+          const blockCenter = blockRect.top + blockRect.height / 2 - containerRect.top;
+          container.scrollTop += blockCenter - containerRect.height / 2;
+          return;
+        }
+        const caretTop    = caretRect.top - containerRect.top;
+        const caretBottom = caretRect.bottom - containerRect.top;
+        const margin      = 80; // 커서 위아래 여유 공간 (px)
+        // 이미 화면 안에 있으면 스크롤하지 않음
+        if (caretTop >= margin && caretBottom <= containerRect.height - margin) return;
+        // 화면 밖으로 나간 경우 커서를 세로 중앙에 맞춤
+        const caretCenter = caretRect.top + caretRect.height / 2 - containerRect.top;
+        container.scrollTop += caretCenter - containerRect.height / 2;
       });
     };
     document.addEventListener('keydown', onKeyDown, true);

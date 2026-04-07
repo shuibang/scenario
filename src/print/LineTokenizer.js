@@ -217,7 +217,7 @@ export function tokenizeSection(section, metrics) {
               isFirstOfBlock: i === 0,
               blockText:      i === 0 ? plainA : undefined,
               blockLineCount: i === 0 ? wrappedA.length : undefined,
-              rawHtml:        (i === 0 && hasHtmlA) ? rawHtmlA : undefined,
+              rawHtml:        hasHtmlA ? rawHtmlA : undefined,
             }))
           );
           break;
@@ -234,7 +234,7 @@ export function tokenizeSection(section, metrics) {
               isFirstOfBlock: i === 0,
               blockText:      i === 0 ? plainD : undefined,
               blockLineCount: i === 0 ? wrappedD.length : undefined,
-              rawHtml:        (i === 0 && hasHtmlD) ? rawHtmlD : undefined,
+              rawHtml:        hasHtmlD ? rawHtmlD : undefined,
             }))
           );
           break;

@@ -75,15 +75,17 @@ function DragHandle({ onDrag, isLeft }) {
       startX.current = ev.clientX;
       onDrag(delta);
     };
-    const onUp = () => {
+    const cleanup = () => {
       dragging.current = false;
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
       window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('mouseup', cleanup);
+      window.removeEventListener('blur', cleanup);
     };
     window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
+    window.addEventListener('mouseup', cleanup);
+    window.addEventListener('blur', cleanup);
   };
 
   return (
@@ -502,7 +504,7 @@ let _driveSyncing = false;
 function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, authUser, setAuthUser, onSyncConflict }) {
   const { state, dispatch, loadFromDriveData } = useApp();
   const { saveStatus, saveErrorMsg, activeProjectId, stylePreset, undoStack, redoStack } = state;
-  const canUndo = undoStack?.length > 0;
+  const canUndo = undoStack?.length > 0 || !!activeProjectId;
   const canRedo = redoStack?.length > 0;
   const [fontAvailability, setFontAvail] = useState(null);
   const [loginOpen, setLoginOpen]        = useState(false);
@@ -685,9 +687,13 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
 
         {sep}
 
+        <MenuButton label="백업/복원" onClick={onSnapshot} />
+
+        {sep}
+
         {/* Undo / Redo */}
         <button
-          onClick={() => dispatch({ type: 'UNDO' })}
+          onClick={() => { window.dispatchEvent(new CustomEvent('script:undo')); dispatch({ type: 'UNDO' }); }}
           disabled={!canUndo}
           title="되돌리기 (Ctrl+Z)"
           className="w-6 h-6 rounded text-xs flex items-center justify-center shrink-0"
@@ -700,7 +706,6 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
           className="w-6 h-6 rounded text-xs flex items-center justify-center shrink-0"
           style={{ color: canRedo ? 'var(--c-text3)' : 'var(--c-border3)', border: '1px solid var(--c-border3)', background: 'transparent', cursor: canRedo ? 'pointer' : 'not-allowed' }}
         >↪</button>
-        <MenuButton label="백업/복원" onClick={onSnapshot} />
 
         {sep}
 
