@@ -369,7 +369,7 @@ function blockHtml(el) {
 }
 function setBlockHtml(el, html) {
   if (!el) return;
-  el.innerHTML = html;
+  el.innerHTML = html || '<br>';
 }
 
 // ─── Blocks → innerHTML ──────────────────────────────────────────────────────
@@ -410,7 +410,9 @@ function blocksToHtml(blocks) {
     const displayContent = blockDisplayContent(b);
     // action/dialogue 블록: HTML 서식 포함 가능 → esc 생략 (sanitizeInlineHtml로 이미 안전)
     const isRichBlock = (b.type === 'action' || b.type === 'dialogue') && !b.sceneRefs?.length;
-    const dc = b.sceneRefs?.length ? buildRichHtml(displayContent, b.sceneRefs) : isRichBlock ? displayContent : esc(displayContent);
+    const dcRaw = b.sceneRefs?.length ? buildRichHtml(displayContent, b.sceneRefs) : isRichBlock ? displayContent : esc(displayContent);
+    // 빈 블록에 <br> 삽입 — 브라우저가 화살표 키 caret stop으로 인식하도록
+    const dc = dcRaw || '<br>';
     switch (b.type) {
       case 'scene_number': {
         const label = esc(b.label || '');
@@ -449,6 +451,7 @@ function blockText(el) {
 
 function setBlockText(el, text) {
   if (!el) return;
+  if (!text) { el.innerHTML = '<br>'; return; }
   el.innerText = text;
 }
 
@@ -509,13 +512,13 @@ function insertBlockAfterEl(surface, refEl, type, text, charMeta = {}, epId, pro
   if (type === 'scene_number') {
     div.dataset.label = '';
     div.dataset.sceneId = genId();
-    div.innerText = text;
+    div.innerHTML = text ? esc(text) : '<br>';
   } else if (type === 'dialogue') {
     div.dataset.charName = charMeta.charName || '';
     div.dataset.charId = charMeta.charId || '';
-    div.innerText = text;
+    div.innerHTML = text ? esc(text) : '<br>';
   } else {
-    div.innerText = text;
+    div.innerHTML = text ? esc(text) : '<br>';
   }
   if (refEl?.parentNode === surface) surface.insertBefore(div, refEl.nextSibling);
   else surface.appendChild(div);
