@@ -231,9 +231,9 @@ function TimelineStrip({ scrollEl }) {
           display: 'flex', justifyContent: 'center', pointerEvents: 'none',
         }}>
           <span style={{
-            fontSize: 8, color: 'var(--c-text4)', letterSpacing: 2,
+            fontSize: 9, color: 'var(--c-text3)', letterSpacing: 2,
             writingMode: 'vertical-rl', whiteSpace: 'nowrap',
-            opacity: 0.75, userSelect: 'none',
+            opacity: 0.85, userSelect: 'none',
           }}>타임라인</span>
         </div>
 
@@ -260,8 +260,8 @@ function TimelineStrip({ scrollEl }) {
                 {isMin && (
                   <span style={{
                     position: 'absolute', right: tickW + 3, top: -4,
-                    fontSize: 7, lineHeight: 1,
-                    color: 'var(--c-text4)', opacity: 0.8,
+                    fontSize: 8, lineHeight: 1,
+                    color: 'var(--c-text3)', opacity: 0.9,
                     whiteSpace: 'nowrap', userSelect: 'none',
                   }}>{minNum}</span>
                 )}
