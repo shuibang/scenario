@@ -1276,6 +1276,42 @@ const EditorSurface = forwardRef(function EditorSurface({
     if (!blockEl) return;
     const type = blockEl.dataset.blockType;
 
+    // ── ArrowUp/Down: 빈 블록 건너뜀 방지
+    // 브라우저는 <br>만 있는 빈 블록을 수직 탐색에서 건너뛰므로 직접 처리.
+    if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !e.shiftKey && !ctrl) {
+      const isUp = e.key === 'ArrowUp';
+      const caretRect  = range.getBoundingClientRect();
+      const blockRect  = blockEl.getBoundingClientRect();
+      const lineH      = parseFloat(window.getComputedStyle(blockEl).lineHeight) || 20;
+      const onFirstLine = caretRect.top <= blockRect.top + lineH;
+      const onLastLine  = caretRect.bottom >= blockRect.bottom - lineH;
+
+      if (isUp && onFirstLine) {
+        const prev = prevBlockEl(el, blockEl);
+        if (prev) {
+          const isEmpty = !blockText(prev);
+          if (isEmpty) {
+            // 빈 블록으로 명시적 이동
+            e.preventDefault();
+            setCaret(prev, 0);
+            doParse();
+            return;
+          }
+        }
+      } else if (!isUp && onLastLine) {
+        const next = nextBlockEl(el, blockEl);
+        if (next) {
+          const isEmpty = !blockText(next);
+          if (isEmpty) {
+            e.preventDefault();
+            setCaret(next, 0);
+            doParse();
+            return;
+          }
+        }
+      }
+    }
+
     // ── Slash palette keyboard handling
     if (slashOpenRef?.current) {
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
