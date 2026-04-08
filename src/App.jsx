@@ -921,12 +921,20 @@ function Shell({ authUser, setAuthUser }) {
   // ── Focus mode
   const [focusMode, setFocusMode] = useState(false);
   useEffect(() => {
-    if (focusMode && isMobile) {
+    if (focusMode) {
       document.documentElement.requestFullscreen?.().catch(() => {});
-    } else if (!focusMode && document.fullscreenElement) {
+    } else if (document.fullscreenElement) {
       document.exitFullscreen?.().catch(() => {});
     }
-  }, [focusMode, isMobile]);
+  }, [focusMode]);
+  // 브라우저 자체 ESC로 fullscreen 해제 시 focusMode도 같이 해제
+  useEffect(() => {
+    const onFsChange = () => {
+      if (!document.fullscreenElement) setFocusMode(false);
+    };
+    document.addEventListener('fullscreenchange', onFsChange);
+    return () => document.removeEventListener('fullscreenchange', onFsChange);
+  }, []);
 
   // 트리트먼트·씬리스트 페이지 전환 시 오른쪽 패널 자동 열기
   useEffect(() => {
