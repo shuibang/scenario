@@ -3544,39 +3544,36 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
 function FocusModeExitBtn({ onExit }) {
   const [hovered, setHovered] = useState(false);
   return (
-    <div
+    <button
+      onClick={onExit}
+      title="집중 모드 종료 (ESC)"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
         position: 'fixed',
-        top: 0,
-        right: 0,
-        width: 80,
-        height: 48,
+        top: 16,
+        right: 16,
         zIndex: 9999,
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'flex-end',
-        paddingRight: 12,
+        gap: 6,
+        padding: '7px 14px',
+        borderRadius: 20,
+        border: 'none',
+        background: hovered ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.22)',
+        color: '#fff',
+        fontSize: 13,
+        fontWeight: 500,
+        cursor: 'pointer',
+        opacity: hovered ? 1 : 0.45,
+        transition: 'opacity 0.2s, background 0.2s',
+        boxShadow: '0 2px 12px rgba(0,0,0,0.25)',
+        backdropFilter: 'blur(4px)',
+        WebkitBackdropFilter: 'blur(4px)',
+        whiteSpace: 'nowrap',
       }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      onTouchStart={() => setHovered(v => !v)}
     >
-      <button
-        onClick={onExit}
-        title="집중 모드 종료 (ESC)"
-        style={{
-          padding: '4px 10px',
-          borderRadius: 8,
-          border: '1px solid var(--c-border3)',
-          background: 'var(--c-card)',
-          color: 'var(--c-text4)',
-          fontSize: 11,
-          cursor: 'pointer',
-          opacity: hovered ? 0.9 : 0.12,
-          transition: 'opacity 0.25s',
-          whiteSpace: 'nowrap',
-        }}
-      >✕ 종료</button>
-    </div>
+      <span style={{ fontSize: 11 }}>✕</span> 닫기
+    </button>
   );
 }
