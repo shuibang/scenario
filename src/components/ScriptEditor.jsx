@@ -2787,6 +2787,25 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [focusMode, setFocusMode]);
 
+  // 집중 모드 배율
+  const PAPER_PX = 680; // 인쇄 기준 용지 콘텐츠 너비(px)
+  const [focusZoomPct, setFocusZoomPct] = useState(100); // 100 = 폭맞춤
+  const [scrollContainerW, setScrollContainerW] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const el = editorScrollRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => {
+      setScrollContainerW(entries[0]?.contentRect?.width ?? el.clientWidth);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  // focusMode 해제 시 배율 리셋
+  useEffect(() => { if (!focusMode) setFocusZoomPct(100); }, [focusMode]);
+  // fitScale: 용지폭이 화면 너비에 꽉 차는 배율 (패딩 32px 여유)
+  const fitScale = scrollContainerW > 0 ? (scrollContainerW - 32) / PAPER_PX : 1;
+  const appliedScale = focusMode ? fitScale * (focusZoomPct / 100) : 1;
+
   // 커서 자동스크롤 — 커서가 뷰 밖으로 나갈 때만 스크롤 (smooth 제거로 흔들림 방지)
   useEffect(() => {
     let raf = null;
@@ -3040,6 +3059,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
       <div
         ref={editorScrollRef}
         className="flex-1 min-h-0 overflow-y-auto relative"
+        style={{ overflowX: 'hidden' }}
         onClick={(e) => {
           const inSurface = !!e.target.closest('[data-editor-surface]');
           if (inSurface) {
@@ -3063,8 +3083,24 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
         }}
       >
         <div
-          style={{
-            maxWidth: focusMode ? '56rem' : '42rem',
+          style={focusMode ? {
+            // 집중 모드: 고정 용지폭 + scale 변환, transform-origin top-center
+            width: PAPER_PX,
+            marginLeft: 'auto',
+            marginRight: 'auto',
+            fontFamily: editorFontFamily,
+            fontSize: editorFontSize,
+            lineHeight: editorLineHeight,
+            paddingTop: '2rem',
+            paddingBottom: '2rem',
+            paddingLeft: '3rem',
+            paddingRight: '3rem',
+            transform: `scale(${appliedScale})`,
+            transformOrigin: 'top center',
+            // transform:scale은 layout에 영향 없으므로 여백을 scale만큼 늘려줌
+            marginBottom: `calc(${PAPER_PX}px * ${appliedScale - 1})`,
+          } : {
+            maxWidth: '42rem',
             marginLeft: 'auto',
             marginRight: 'auto',
             fontFamily: editorFontFamily,
@@ -3074,7 +3110,6 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
             paddingBottom: '2rem',
             paddingLeft: isMobile ? '1.5rem' : '3rem',
             paddingRight: '1.5rem',
-            transition: 'max-width 0.25s ease',
           }}
         >
           <EditorSurface
@@ -3532,9 +3567,16 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
         </div>
       )}
 
-      {/* 집중 모드 종료 버튼 — 화면 우상단 고정 */}
+      {/* 집중 모드 — 배율 컨트롤 + 닫기 버튼 */}
       {focusMode && setFocusMode && (
-        <FocusModeExitBtn onExit={() => setFocusMode(false)} />
+        <>
+          <FocusZoomControl
+            zoomPct={focusZoomPct}
+            onChange={setFocusZoomPct}
+            fitScale={fitScale}
+          />
+          <FocusModeExitBtn onExit={() => setFocusMode(false)} />
+        </>
       )}
     </div>
   );
@@ -3575,5 +3617,55 @@ function FocusModeExitBtn({ onExit }) {
     >
       <span style={{ fontSize: 11 }}>✕</span> 닫기
     </button>
+  );
+}
+
+// ─── FocusZoomControl ─────────────────────────────────────────────────────────
+function FocusZoomControl({ zoomPct, onChange, fitScale }) {
+  const [hovered, setHovered] = useState(false);
+  const displayPct = Math.round(fitScale * zoomPct);
+
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        position: 'fixed',
+        bottom: 24,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 9999,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '6px 14px',
+        borderRadius: 20,
+        background: hovered ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.22)',
+        backdropFilter: 'blur(4px)',
+        WebkitBackdropFilter: 'blur(4px)',
+        boxShadow: '0 2px 12px rgba(0,0,0,0.25)',
+        opacity: hovered ? 1 : 0.45,
+        transition: 'opacity 0.2s, background 0.2s',
+        userSelect: 'none',
+      }}
+    >
+      <button
+        onMouseDown={e => { e.preventDefault(); onChange(v => Math.max(50, v - 10)); }}
+        style={{ background: 'none', border: 'none', color: '#fff', fontSize: 18, cursor: 'pointer', lineHeight: 1, padding: '0 4px' }}
+      >−</button>
+      <span style={{ color: '#fff', fontSize: 12, minWidth: 44, textAlign: 'center' }}>
+        {displayPct}%
+      </span>
+      <button
+        onMouseDown={e => { e.preventDefault(); onChange(v => Math.min(200, v + 10)); }}
+        style={{ background: 'none', border: 'none', color: '#fff', fontSize: 18, cursor: 'pointer', lineHeight: 1, padding: '0 4px' }}
+      >+</button>
+      <div style={{ width: 1, height: 14, background: 'rgba(255,255,255,0.3)', margin: '0 2px' }} />
+      <button
+        onMouseDown={e => { e.preventDefault(); onChange(100); }}
+        title="폭 맞춤으로 초기화"
+        style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.7)', fontSize: 11, cursor: 'pointer', padding: '0 2px' }}
+      >폭맞춤</button>
+    </div>
   );
 }
