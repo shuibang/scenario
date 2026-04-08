@@ -2961,7 +2961,17 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
           {setFocusMode && (
             <button
               title="집중 작업 모드 — 패널 숨기고 대본만 표시 (ESC로 종료)"
-              onMouseDown={e => { e.preventDefault(); setFocusMode(v => !v); }}
+              onMouseDown={e => {
+                e.preventDefault();
+                const entering = !focusMode;
+                setFocusMode(entering);
+                // useEffect는 비동기라 제스처 컨텍스트가 끊김 — 여기서 직접 호출
+                if (entering) {
+                  document.documentElement.requestFullscreen?.().catch(() => {});
+                } else if (document.fullscreenElement) {
+                  document.exitFullscreen?.().catch(() => {});
+                }
+              }}
               style={{
                 padding: '3px 8px', borderRadius: 6, fontSize: 11,
                 border: '1px solid var(--c-border3)',

@@ -921,9 +921,9 @@ function Shell({ authUser, setAuthUser }) {
   // ── Focus mode
   const [focusMode, setFocusMode] = useState(false);
   useEffect(() => {
-    if (focusMode) {
-      document.documentElement.requestFullscreen?.().catch(() => {});
-    } else if (document.fullscreenElement) {
+    // 진입은 ScriptEditor 버튼 핸들러에서 동기 호출 (제스처 컨텍스트 유지)
+    // 여기서는 focusMode 해제 시 fullscreen 종료만 담당
+    if (!focusMode && document.fullscreenElement) {
       document.exitFullscreen?.().catch(() => {});
     }
   }, [focusMode]);
@@ -1266,13 +1266,15 @@ function Shell({ authUser, setAuthUser }) {
           {!focusMode && <CollapseButton side="right" collapsed={rightCollapsed} onToggle={() => setRightCollapsed(v => !v)} />}
         </div>
 
-        {!focusMode && <AdBanner
-          slot="bottom-fixed"
-          mobileHide={false}
-          height={48}
-          className="no-print"
-          style={{ margin: '0 8px 6px', borderRadius: 6 }}
-        />}
+        <div style={{ overflow: 'hidden', height: focusMode ? 0 : 'auto' }}>
+          <AdBanner
+            slot="bottom-fixed"
+            mobileHide={false}
+            height={48}
+            className="no-print"
+            style={{ margin: '0 8px 6px', borderRadius: 6 }}
+          />
+        </div>
 
         {modals}
       </div>
@@ -1316,13 +1318,15 @@ function Shell({ authUser, setAuthUser }) {
         )}
       </div>
 
-      {!focusMode && <AdBanner
-        slot="bottom-fixed"
-        mobileHide={false}
-        height={48}
-        className="no-print"
-        style={{ margin: '0 8px 6px', borderRadius: 6 }}
-      />}
+      <div style={{ overflow: 'hidden', height: focusMode ? 0 : 'auto' }}>
+        <AdBanner
+          slot="bottom-fixed"
+          mobileHide={false}
+          height={48}
+          className="no-print"
+          style={{ margin: '0 8px 6px', borderRadius: 6 }}
+        />
+      </div>
 
       {modals}
     </div>
