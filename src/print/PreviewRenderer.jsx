@@ -16,6 +16,58 @@ import { resolveFont } from './FontRegistry';
 // ─── A4 physical dimensions at 96 dpi ─────────────────────────────────────────
 const A4_W_PX = 794;  // 210 mm
 const A4_H_PX = 1123; // 297 mm
+const A4_L_W_PX = 1123; // landscape width
+const A4_L_H_PX = 794;  // landscape height
+
+// ─── SceneList preview (가로 A4 표) ──────────────────────────────────────────
+function SceneListPreview({ section, scale }) {
+  const FS = 10;
+  const COL = ['6%', '11%', '10%', '6%', '6%', '12%', '38%', '11%'];
+  const HEADERS = ['씬번호', '장소', '세부장소', '낮', '밤', '등장인물', '내용 요약', '비고'];
+  const epTitle = `${section.episodeNumber}회 씬리스트${section.episodeTitle ? ` — ${section.episodeTitle}` : ''}`;
+
+  const cellBase = { fontSize: FS, padding: '3px 5px', border: '0.5px solid #bbb', verticalAlign: 'top', wordBreak: 'break-all' };
+  const thStyle  = { ...cellBase, fontWeight: 700, background: '#ececec' };
+
+  return (
+    <div
+      style={{
+        width: A4_L_W_PX, height: A4_L_H_PX,
+        background: '#fff', color: '#000',
+        transformOrigin: 'top left',
+        transform: `scale(${scale})`,
+        boxShadow: '0 2px 12px rgba(0,0,0,0.25)',
+        overflow: 'hidden', flexShrink: 0,
+        padding: '20px 22px', boxSizing: 'border-box',
+      }}
+    >
+      <div style={{ fontSize: FS + 1, fontWeight: 700, textAlign: 'center', marginBottom: 8 }}>{epTitle}</div>
+      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: FS }}>
+        <thead>
+          <tr>
+            {HEADERS.map((h, i) => (
+              <th key={h} style={{ ...thStyle, width: COL[i] }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {section.scenes.map((scene, i) => (
+            <tr key={scene.id} style={{ background: i % 2 === 1 ? '#f8f8f8' : '#fff' }}>
+              <td style={{ ...cellBase, fontWeight: 700 }}>{scene.sceneNum}</td>
+              <td style={cellBase}>{scene.location}</td>
+              <td style={cellBase}>{scene.subLocation}</td>
+              <td style={cellBase}>{scene.dayText}</td>
+              <td style={cellBase}>{scene.nightText}</td>
+              <td style={cellBase}>{(scene.characters || []).join(', ')}</td>
+              <td style={cellBase}>{scene.sceneListContent}</td>
+              <td style={cellBase}>{''}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 // ─── Token → DOM element ──────────────────────────────────────────────────────
 function TokenRow({ token, text: textProp, metrics, fontFamily, fontSize, lineHeight }) {
@@ -303,12 +355,16 @@ export default function PreviewRenderer({ appState, selections, columnWidth = 34
     [appState, selections, preset]
   );
 
-  // Build flat list of { section, tokens[], pageIdx, isCover }
+  // Build flat list of { section, tokens[], pageIdx, isCover, isScenelist }
   const pages = useMemo(() => {
     const result = [];
     for (const section of printModel.sections) {
       if (section.type === 'cover') {
         result.push({ section, isCover: true, pageIdx: 0 });
+        continue;
+      }
+      if (section.type === 'scenelist') {
+        result.push({ section, isScenelist: true, pageIdx: 0 });
         continue;
       }
       const tokens    = tokenizeSection(section, metrics);
@@ -333,10 +389,15 @@ export default function PreviewRenderer({ appState, selections, columnWidth = 34
     <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', gap: 24, alignItems: 'center', padding: '16px 0' }}>
       {pages.map((p, i) => {
         const sectionLabel = p.isCover ? '표지'
+          : p.isScenelist ? `${p.section.episodeNumber}회 씬리스트`
           : p.section.type === 'synopsis' ? '시놉시스'
           : p.section.type === 'episode'  ? `${p.section.episodeNumber}회 대본`
           : p.section.type === 'characters' ? '인물소개'
           : '';
+
+        const isLandscape = p.isScenelist;
+        const pageW = isLandscape ? A4_L_W_PX : A4_W_PX;
+        const pageH = isLandscape ? A4_L_H_PX : A4_H_PX;
 
         return (
           <div key={i}>
@@ -345,8 +406,10 @@ export default function PreviewRenderer({ appState, selections, columnWidth = 34
                 {sectionLabel}
               </div>
             )}
-            <div style={{ width: A4_W_PX * scale, height: A4_H_PX * scale, position: 'relative', overflow: 'hidden' }}>
-              {p.isCover ? (
+            <div style={{ width: pageW * scale, height: pageH * scale, position: 'relative', overflow: 'hidden' }}>
+              {p.isScenelist ? (
+                <SceneListPreview section={p.section} scale={scale} />
+              ) : p.isCover ? (
                 <CoverPage
                   section={p.section}
                   margins={margins}

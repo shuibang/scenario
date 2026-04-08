@@ -206,17 +206,42 @@ export function buildPrintModel(appState, selections, preset) {
           const charNames = (s.characterIds || [])
             .map(cid => { const c = projectChars.find(ch => ch.id === cid); return c ? (c.givenName || c.name) : null; })
             .filter(Boolean);
+
+          // structured 필드가 없으면 content(legacy) 문자열에서 파싱
+          let location = s.location?.trim() || '';
+          let subLocation = s.subLocation?.trim() || '';
+          let timeOfDay = s.timeOfDay?.trim() || '';
+          let specialSituation = s.specialSituation?.trim() || '';
+          if (!location && s.content) {
+            let rest = s.content.replace(/^S#\d+\.?\s*/, '').trim();
+            const spM = rest.match(/^([^)]+)\)\s*(.*)$/);
+            if (spM) { specialSituation = spM[1].trim(); rest = spM[2].trim(); }
+            const timeM = rest.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
+            if (timeM) { rest = timeM[1].trim(); timeOfDay = timeM[2].trim(); }
+            const subM = rest.match(/^(.+?)\s*-\s*(.+)$/);
+            if (subM) { location = subM[1].trim(); subLocation = subM[2].trim(); }
+            else location = rest;
+          }
+
+          // 낮 계열 / 밤 계열로 분리 — 원문 텍스트 그대로 표시
+          const DAY_WORDS   = ['낮', '아침', '오전', '오후', '저녁', 'D', 'day'];
+          const NIGHT_WORDS = ['밤', '새벽', 'N', 'night'];
+          const tdLow = timeOfDay.toLowerCase();
+          const isDayTime   = DAY_WORDS.some(w => tdLow.includes(w.toLowerCase()));
+          const isNightTime = NIGHT_WORDS.some(w => tdLow.includes(w.toLowerCase()));
+
           return {
-            id:              s.id,
-            sceneNum:        snBlock?.label || `S#${i + 1}.`,
-            content:         s.content         || '',
-            location:        s.location        || '',
-            subLocation:     s.subLocation     || '',
-            timeOfDay:       s.timeOfDay       || '',
-            specialSituation: s.specialSituation || '',
+            id:               s.id,
+            sceneNum:         snBlock?.label || `S#${i + 1}.`,
+            specialSituation,
+            location,
+            subLocation,
+            timeOfDay,
+            dayText:   isDayTime   ? timeOfDay : '',
+            nightText: isNightTime ? timeOfDay : '',
             sceneListContent: s.sceneListContent || '',
-            characters:      charNames,
-            tags:            s.tags || [],
+            characters:       charNames,
+            tags:             s.tags || [],
           };
         }),
       });

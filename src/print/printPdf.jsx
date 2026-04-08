@@ -315,40 +315,47 @@ function PdfPage({ tokens, pageNum, showPageNum, S }) {
 
 // ─── SceneList landscape table page ──────────────────────────────────────────
 function SceneListPage({ section, S }) {
-  const fs = S.page.fontSize ?? 11;
+  const fs = 10; // 씬리스트 전용 10pt
   const COL = {
-    num:   { width: '8%' },
-    head:  { width: '28%' },
-    desc:  { width: '30%' },
-    chars: { width: '20%' },
-    tags:  { width: '14%' },
+    num:    '6%',
+    loc:    '11%',
+    subloc: '10%',
+    day:    '6%',
+    night:  '6%',
+    chars:  '12%',
+    desc:   '38%',
+    note:   '11%',
   };
-  const cellStyle  = { fontSize: fs - 1, padding: '3pt 4pt', borderRight: '0.5pt solid #ccc' };
-  const headerCell = { ...cellStyle, fontWeight: 700, backgroundColor: '#f0f0f0' };
-  const rowStyle   = { flexDirection: 'row', borderBottom: '0.5pt solid #ddd' };
+  const cell    = { fontSize: fs, padding: '3pt 4pt', borderRight: '0.5pt solid #bbb' };
+  const hCell   = { ...cell, fontWeight: 700, backgroundColor: '#ececec' };
+  const rowBase = { flexDirection: 'row', borderBottom: '0.5pt solid #ddd' };
   const epTitle = `${section.episodeNumber}회 씬리스트${section.episodeTitle ? ` — ${section.episodeTitle}` : ''}`;
 
   return (
-    <Page size="A4" orientation="landscape" style={S.page}>
-      <Text style={{ fontSize: fs + 1, fontWeight: 700, textAlign: 'center', marginBottom: 8 }}>{epTitle}</Text>
-      <View style={{ flexDirection: 'row', borderBottom: '1pt solid #999', borderTop: '1pt solid #999', backgroundColor: '#f0f0f0' }}>
-        <Text style={{ ...headerCell, width: COL.num.width }}>씬번호</Text>
-        <Text style={{ ...headerCell, width: COL.head.width }}>씬헤딩</Text>
-        <Text style={{ ...headerCell, width: COL.desc.width }}>내용</Text>
-        <Text style={{ ...headerCell, width: COL.chars.width }}>등장인물</Text>
-        <Text style={{ ...headerCell, width: COL.tags.width, borderRight: 'none' }}>태그</Text>
+    <Page size="A4" orientation="landscape" style={{ ...S.page, fontSize: fs }}>
+      <Text style={{ fontSize: fs + 1, fontWeight: 700, textAlign: 'center', marginBottom: 6 }}>{epTitle}</Text>
+      <View fixed style={{ flexDirection: 'row', borderTop: '1pt solid #888', borderBottom: '1pt solid #888', backgroundColor: '#ececec' }}>
+        <Text style={{ ...hCell, width: COL.num }}>씬번호</Text>
+        <Text style={{ ...hCell, width: COL.loc }}>장소</Text>
+        <Text style={{ ...hCell, width: COL.subloc }}>세부장소</Text>
+        <Text style={{ ...hCell, width: COL.day }}>낮</Text>
+        <Text style={{ ...hCell, width: COL.night }}>밤</Text>
+        <Text style={{ ...hCell, width: COL.chars }}>등장인물</Text>
+        <Text style={{ ...hCell, width: COL.desc }}>내용 요약</Text>
+        <Text style={{ ...hCell, width: COL.note, borderRight: 'none' }}>비고</Text>
       </View>
       {section.scenes.map((scene, i) => {
-        const loc  = [scene.specialSituation ? scene.specialSituation + ')' : '', scene.location, scene.subLocation].filter(Boolean).join(' ');
-        const head = [loc, scene.timeOfDay ? `(${scene.timeOfDay})` : ''].filter(Boolean).join(' ');
-        const bg   = i % 2 === 1 ? '#fafafa' : '#fff';
+        const bg = i % 2 === 1 ? '#f8f8f8' : '#fff';
         return (
-          <View key={scene.id} style={{ ...rowStyle, backgroundColor: bg }}>
-            <Text style={{ ...cellStyle, width: COL.num.width, fontWeight: 700 }}>{scene.sceneNum}</Text>
-            <Text style={{ ...cellStyle, width: COL.head.width }}>{head || scene.content}</Text>
-            <Text style={{ ...cellStyle, width: COL.desc.width }}>{scene.sceneListContent}</Text>
-            <Text style={{ ...cellStyle, width: COL.chars.width }}>{scene.characters?.join(', ') || ''}</Text>
-            <Text style={{ ...cellStyle, width: COL.tags.width, borderRight: 'none' }}>{scene.tags?.map(t => `#${t}`).join(' ') || ''}</Text>
+          <View key={scene.id} style={{ ...rowBase, backgroundColor: bg }} wrap={false}>
+            <Text style={{ ...cell, width: COL.num, fontWeight: 700 }}>{scene.sceneNum}</Text>
+            <Text style={{ ...cell, width: COL.loc }}>{scene.location}</Text>
+            <Text style={{ ...cell, width: COL.subloc }}>{scene.subLocation}</Text>
+            <Text style={{ ...cell, width: COL.day }}>{scene.dayText}</Text>
+            <Text style={{ ...cell, width: COL.night }}>{scene.nightText}</Text>
+            <Text style={{ ...cell, width: COL.chars }}>{scene.characters?.join(', ') || ''}</Text>
+            <Text style={{ ...cell, width: COL.desc }}>{scene.sceneListContent}</Text>
+            <Text style={{ ...cell, width: COL.note, borderRight: 'none' }}>{''}</Text>
           </View>
         );
       })}
