@@ -2963,42 +2963,41 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
 
       {/* Toolbar — 2행: 회차 정보 + 페이지수 + 저장됨 (항상 표시) */}
       <div className="px-4 py-1 flex items-center gap-2 text-xs shrink-0" style={{ borderBottom: '1px solid var(--c-border2)' }}>
+        {/* 왼쪽: 회차·제목·쪽수·저장됨 */}
         <span style={{ color: 'var(--c-text3)', flexShrink: 0 }}>{episode?.number}회 {episode?.title || ''}</span>
-        <span className="ml-auto flex items-center gap-3 flex-shrink-0">
-          {brokenSceneRefs.length > 0 && (
-            <button
-              onClick={() => { setReconnectIdx(0); setReconnectTarget(brokenSceneRefs[0]); }}
-              className="text-xs px-1.5 py-0.5 rounded"
-              style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', cursor: 'pointer' }}
-            >⚠ S# 참조 {brokenSceneRefs.length}개 끊김</button>
-          )}
-          <PageCounter blocks={blocks} stylePreset={stylePreset} scrollRef={editorScrollRef} />
-          <span style={{ color: 'var(--c-border3)' }}>● 저장됨</span>
-          {/* 집중 버튼 — 모바일 2행 */}
-          {isMobile && setFocusMode && (
-            <button
-              title="집중 작업 모드"
-              onMouseDown={e => {
-                e.preventDefault();
-                const entering = !focusMode;
-                setFocusMode(entering);
-                if (entering) {
-                  document.documentElement.requestFullscreen?.().catch(() => {});
-                } else if (document.fullscreenElement) {
-                  document.exitFullscreen?.().catch(() => {});
-                }
-              }}
-              style={{
-                flexShrink: 0, padding: '3px 8px', borderRadius: 6, fontSize: 11,
-                border: '1px solid var(--c-border3)', background: 'transparent',
-                color: 'var(--c-text5)', cursor: 'pointer',
-              }}
-            >집중</button>
-          )}
-        </span>
+        {brokenSceneRefs.length > 0 && (
+          <button
+            onClick={() => { setReconnectIdx(0); setReconnectTarget(brokenSceneRefs[0]); }}
+            className="text-xs px-1.5 py-0.5 rounded"
+            style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', cursor: 'pointer' }}
+          >⚠ S# 참조 {brokenSceneRefs.length}개 끊김</button>
+        )}
+        <PageCounter blocks={blocks} stylePreset={stylePreset} scrollRef={editorScrollRef} />
+        <span style={{ color: 'var(--c-border3)' }}>● 저장됨</span>
+        {/* 오른쪽: 집중 버튼 — 모바일 2행 */}
+        {isMobile && setFocusMode && (
+          <button
+            title="집중 작업 모드"
+            onMouseDown={e => {
+              e.preventDefault();
+              const entering = !focusMode;
+              setFocusMode(entering);
+              if (entering) {
+                document.documentElement.requestFullscreen?.().catch(() => {});
+              } else if (document.fullscreenElement) {
+                document.exitFullscreen?.().catch(() => {});
+              }
+            }}
+            style={{
+              marginLeft: 'auto', flexShrink: 0, padding: '3px 8px', borderRadius: 6, fontSize: 11,
+              border: '1px solid var(--c-border3)', background: 'transparent',
+              color: 'var(--c-text5)', cursor: 'pointer',
+            }}
+          >집중</button>
+        )}
       </div>
 
-            {/* Reconnect panel */}
+      {/* Reconnect panel */}
       {reconnectTarget && (
         <div className="px-6 py-3 shrink-0 flex items-start gap-3 relative" style={{ background: '#fffbeb', borderBottom: '1px solid #fde68a' }}>
           <div className="flex-1 min-w-0">
