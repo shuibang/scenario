@@ -274,7 +274,7 @@ function TimelineStrip({ scrollEl }) {
   );
 }
 
-function ScriptWithTimeline({ scrollToSceneId, onScrollHandled, keyboardUp, isMobile }) {
+function ScriptWithTimeline({ scrollToSceneId, onScrollHandled, keyboardUp, isMobile, focusMode, setFocusMode }) {
   const [scrollEl, setScrollEl] = useState(null);
   return (
     <div className="h-full flex flex-row min-h-0 overflow-hidden">
@@ -285,15 +285,17 @@ function ScriptWithTimeline({ scrollToSceneId, onScrollHandled, keyboardUp, isMo
           keyboardUp={keyboardUp}
           isMobile={isMobile}
           onScrollRefReady={(ref) => { setScrollEl(ref.current); }}
+          focusMode={focusMode}
+          setFocusMode={setFocusMode}
         />
       </div>
-      <TimelineStrip scrollEl={scrollEl} />
+      {!focusMode && <TimelineStrip scrollEl={scrollEl} />}
     </div>
   );
 }
 
 // ─── Center panel ─────────────────────────────────────────────────────────────
-function CenterPanel({ scrollToSceneId, onScrollHandled, keyboardUp, isMobile }) {
+function CenterPanel({ scrollToSceneId, onScrollHandled, keyboardUp, isMobile, focusMode, setFocusMode }) {
   const { state } = useApp();
   const { activeDoc, activeEpisodeId, activeProjectId, initialized } = state;
 
@@ -323,7 +325,7 @@ function CenterPanel({ scrollToSceneId, onScrollHandled, keyboardUp, isMobile })
   if (activeDoc === 'relationships') return <RelationshipsPage />;
   if (activeDoc === 'mypage') return <MyPage />;
   if (activeDoc === 'script' && activeEpisodeId) {
-    return <ScriptWithTimeline scrollToSceneId={scrollToSceneId} onScrollHandled={onScrollHandled} keyboardUp={keyboardUp} isMobile={isMobile} />;
+    return <ScriptWithTimeline scrollToSceneId={scrollToSceneId} onScrollHandled={onScrollHandled} keyboardUp={keyboardUp} isMobile={isMobile} focusMode={focusMode} setFocusMode={setFocusMode} />;
   }
   return (
     <div className="h-full flex items-center justify-center" style={{ background: 'var(--c-bg)' }}>
@@ -916,6 +918,16 @@ function Shell({ authUser, setAuthUser }) {
   const [leftCollapsed,  setLeftCollapsed]  = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
 
+  // ── Focus mode
+  const [focusMode, setFocusMode] = useState(false);
+  useEffect(() => {
+    if (focusMode && isMobile) {
+      document.documentElement.requestFullscreen?.().catch(() => {});
+    } else if (!focusMode && document.fullscreenElement) {
+      document.exitFullscreen?.().catch(() => {});
+    }
+  }, [focusMode, isMobile]);
+
   // 트리트먼트·씬리스트 페이지 전환 시 오른쪽 패널 자동 열기
   useEffect(() => {
     const { activeDoc } = state;
@@ -1180,32 +1192,32 @@ function Shell({ authUser, setAuthUser }) {
           paddingTop: 'env(safe-area-inset-top, 0px)',
         }}
       >
-        <MobileMenuBar
+        {!focusMode && <MobileMenuBar
           onSave={handleSave}
           onPrintPreview={() => { window.dispatchEvent(new CustomEvent('editor:flush')); setPrintPreviewOpen(true); }}
           onSnapshot={() => setSnapshotOpen(true)}
           WorkTimer={WorkTimer}
           authUser={authUser}
           onLogout={() => setAuthUser(null)}
-        />
-        <UpdateBanner />
+        />}
+        {!focusMode && <UpdateBanner />}
         <div data-tour-id="center-panel" className="flex-1 min-h-0"
           style={{ paddingLeft: 'env(safe-area-inset-left, 0px)', paddingRight: 'env(safe-area-inset-right, 0px)', display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0, position: 'relative' }}
         >
-          <CenterPanel scrollToSceneId={scrollToSceneId} onScrollHandled={() => setScrollToSceneId(null)} keyboardUp={keyboardUp} isMobile={isMobile} />
+          <CenterPanel scrollToSceneId={scrollToSceneId} onScrollHandled={() => setScrollToSceneId(null)} keyboardUp={keyboardUp} isMobile={isMobile} focusMode={focusMode} setFocusMode={setFocusMode} />
         </div>
         {/* 광고: 키보드 올라오거나 패널 열리면 숨김 */}
-        <div style={{ flexShrink: 0, height: (keyboardUp || mobileBottomOpen) ? 0 : 20, overflow: 'hidden', transition: 'height 0.2s ease' }}>
+        {!focusMode && <div style={{ flexShrink: 0, height: (keyboardUp || mobileBottomOpen) ? 0 : 20, overflow: 'hidden', transition: 'height 0.2s ease' }}>
           <AdBanner slot="mobile-bottom" mobileHide={false} height={20} />
-        </div>
-        <MobileBottomPanel
+        </div>}
+        {!focusMode && <MobileBottomPanel
           open={mobileBottomOpen}
           onToggle={() => setMobileBottomOpen(v => !v)}
           onClose={() => setMobileBottomOpen(false)}
           tab={mobileTab}
           onTabChange={setMobileTab}
           onScrollToScene={id => setScrollToSceneId(id)}
-        />
+        />}
         <MobileOnboardingTour />
         {modals}
       </div>
@@ -1216,12 +1228,12 @@ function Shell({ authUser, setAuthUser }) {
   if (isTablet) {
     return (
       <div className="w-screen flex flex-col overflow-hidden" style={{ background: 'var(--c-bg)', position: 'fixed', top: 0, right: 0, bottom: 0, left: 0 }}>
-        {menuBar}
-        <UpdateBanner />
+        {!focusMode && menuBar}
+        {!focusMode && <UpdateBanner />}
         <div className="flex flex-1 min-h-0">
-          <CollapseButton side="left" collapsed={leftCollapsed} onToggle={() => setLeftCollapsed(v => !v)} />
+          {!focusMode && <CollapseButton side="left" collapsed={leftCollapsed} onToggle={() => setLeftCollapsed(v => !v)} />}
 
-          {!leftCollapsed && (
+          {!focusMode && !leftCollapsed && (
             <>
               <div data-tour-id="left-panel" style={{ width: panelWidths.left, flexShrink: 0, overflow: 'hidden' }}>
                 <LeftPanel />
@@ -1231,10 +1243,10 @@ function Shell({ authUser, setAuthUser }) {
           )}
 
           <div data-tour-id="center-panel" className="flex-1 min-w-0 overflow-hidden" style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
-            <CenterPanel scrollToSceneId={scrollToSceneId} onScrollHandled={() => setScrollToSceneId(null)} />
+            <CenterPanel scrollToSceneId={scrollToSceneId} onScrollHandled={() => setScrollToSceneId(null)} focusMode={focusMode} setFocusMode={setFocusMode} />
           </div>
 
-          {!rightCollapsed && (
+          {!focusMode && !rightCollapsed && (
             <>
               <DragHandle onDrag={updateRightWidth} />
               <div data-tour-id="right-panel" style={{ width: panelWidths.right, flexShrink: 0, overflow: 'clip' }}>
@@ -1243,16 +1255,16 @@ function Shell({ authUser, setAuthUser }) {
             </>
           )}
 
-          <CollapseButton side="right" collapsed={rightCollapsed} onToggle={() => setRightCollapsed(v => !v)} />
+          {!focusMode && <CollapseButton side="right" collapsed={rightCollapsed} onToggle={() => setRightCollapsed(v => !v)} />}
         </div>
 
-        <AdBanner
+        {!focusMode && <AdBanner
           slot="bottom-fixed"
           mobileHide={false}
           height={48}
           className="no-print"
           style={{ margin: '0 8px 6px', borderRadius: 6 }}
-        />
+        />}
 
         {modals}
       </div>
@@ -1265,26 +1277,28 @@ function Shell({ authUser, setAuthUser }) {
       className="w-screen flex flex-col overflow-hidden"
       style={{ background: 'var(--c-bg)', position: 'fixed', top: 0, right: 0, bottom: 0, left: 0 }}
     >
-      {menuBar}
-      <UpdateBanner />
+      {!focusMode && menuBar}
+      {!focusMode && <UpdateBanner />}
 
       <div className="flex flex-1 min-h-0">
-        <div data-tour-id="left-panel" style={{ width: panelWidths.left, flexShrink: 0, overflow: 'hidden' }}>
+        {!focusMode && <div data-tour-id="left-panel" style={{ width: panelWidths.left, flexShrink: 0, overflow: 'hidden' }}>
           <LeftPanel />
-        </div>
+        </div>}
 
-        <DragHandle onDrag={updateLeftWidth} isLeft />
+        {!focusMode && <DragHandle onDrag={updateLeftWidth} isLeft />}
 
         <div data-tour-id="center-panel" className="flex-1 min-w-0 overflow-hidden" style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
           <CenterPanel
             scrollToSceneId={scrollToSceneId}
             onScrollHandled={() => setScrollToSceneId(null)}
+            focusMode={focusMode}
+            setFocusMode={setFocusMode}
           />
         </div>
 
-        <CollapseButton side="right" collapsed={rightCollapsed} onToggle={() => setRightCollapsed(v => !v)} />
+        {!focusMode && <CollapseButton side="right" collapsed={rightCollapsed} onToggle={() => setRightCollapsed(v => !v)} />}
 
-        {!rightCollapsed && (
+        {!focusMode && !rightCollapsed && (
           <>
             <DragHandle onDrag={updateRightWidth} />
             <div data-tour-id="right-panel" style={{ width: panelWidths.right, flexShrink: 0, overflow: 'clip' }}>
@@ -1294,13 +1308,13 @@ function Shell({ authUser, setAuthUser }) {
         )}
       </div>
 
-      <AdBanner
+      {!focusMode && <AdBanner
         slot="bottom-fixed"
         mobileHide={false}
         height={48}
         className="no-print"
         style={{ margin: '0 8px 6px', borderRadius: 6 }}
-      />
+      />}
 
       {modals}
     </div>

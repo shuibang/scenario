@@ -1748,7 +1748,7 @@ const EditorSurface = forwardRef(function EditorSurface({
 });
 
 // ─── ScriptEditor (main) ──────────────────────────────────────────────────────
-export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboardUp, isMobile, onScrollRefReady }) {
+export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboardUp, isMobile, onScrollRefReady, focusMode, setFocusMode }) {
   const { state, dispatch } = useApp();
   const {
     activeEpisodeId, activeProjectId, scriptBlocks,
@@ -2777,6 +2777,16 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
 
   // 키보드 감지: App.jsx의 keyboardUp prop 사용 (제거됨)
 
+  // 집중 모드 — ESC로 종료
+  useEffect(() => {
+    if (!focusMode) return;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); setFocusMode(false); }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [focusMode, setFocusMode]);
+
   // 커서 자동스크롤 — 커서가 뷰 밖으로 나갈 때만 스크롤 (smooth 제거로 흔들림 방지)
   useEffect(() => {
     let raf = null;
@@ -2948,6 +2958,20 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
           )}
           <PageCounter blocks={blocks} stylePreset={stylePreset} scrollRef={editorScrollRef} />
           <span style={{ color: 'var(--c-border3)' }}>● 저장됨</span>
+          {setFocusMode && (
+            <button
+              title="집중 작업 모드 — 패널 숨기고 대본만 표시 (ESC로 종료)"
+              onMouseDown={e => { e.preventDefault(); setFocusMode(v => !v); }}
+              style={{
+                padding: '3px 8px', borderRadius: 6, fontSize: 11,
+                border: '1px solid var(--c-border3)',
+                background: 'transparent',
+                color: 'var(--c-text5)',
+                cursor: 'pointer',
+                letterSpacing: 0,
+              }}
+            >집중</button>
+          )}
         </span>
       </div>
 
@@ -3029,8 +3053,10 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
         }}
       >
         <div
-          className="max-w-2xl mx-auto"
           style={{
+            maxWidth: focusMode ? '56rem' : '42rem',
+            marginLeft: 'auto',
+            marginRight: 'auto',
             fontFamily: editorFontFamily,
             fontSize: editorFontSize,
             lineHeight: editorLineHeight,
@@ -3038,6 +3064,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
             paddingBottom: '2rem',
             paddingLeft: isMobile ? '1.5rem' : '3rem',
             paddingRight: '1.5rem',
+            transition: 'max-width 0.25s ease',
           }}
         >
           <EditorSurface
@@ -3494,6 +3521,52 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
           >태그</button>
         </div>
       )}
+
+      {/* 집중 모드 종료 버튼 — 화면 우상단 고정 */}
+      {focusMode && setFocusMode && (
+        <FocusModeExitBtn onExit={() => setFocusMode(false)} />
+      )}
+    </div>
+  );
+}
+
+// ─── FocusModeExitBtn ─────────────────────────────────────────────────────────
+function FocusModeExitBtn({ onExit }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        right: 0,
+        width: 80,
+        height: 48,
+        zIndex: 9999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+        paddingRight: 12,
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onTouchStart={() => setHovered(v => !v)}
+    >
+      <button
+        onClick={onExit}
+        title="집중 모드 종료 (ESC)"
+        style={{
+          padding: '4px 10px',
+          borderRadius: 8,
+          border: '1px solid var(--c-border3)',
+          background: 'var(--c-card)',
+          color: 'var(--c-text4)',
+          fontSize: 11,
+          cursor: 'pointer',
+          opacity: hovered ? 0.9 : 0.12,
+          transition: 'opacity 0.25s',
+          whiteSpace: 'nowrap',
+        }}
+      >✕ 종료</button>
     </div>
   );
 }
