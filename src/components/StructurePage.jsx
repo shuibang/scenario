@@ -410,6 +410,25 @@ function SceneBoardTab({ epId, scenes, scriptBlocks, characters, dispatch, onSel
   const [overIdx, setOverIdx] = useState(null);
   const [showDeleted, setShowDeleted] = useState(false);
 
+  // 컨테이너 너비 추적 → 반응형 그리드 컬럼
+  const containerRef = useRef(null);
+  const [containerWidth, setContainerWidth] = useState(300);
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => {
+      const w = entries[0]?.contentRect?.width ?? el.clientWidth;
+      setContainerWidth(w);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const gridCols =
+    containerWidth < 250 ? 'repeat(2, 1fr)'
+    : containerWidth < 500 ? 'repeat(3, 1fr)'
+    : containerWidth < 700 ? 'repeat(auto-fill, minmax(150px, 1fr))'
+    : 'repeat(auto-fill, minmax(180px, 1fr))';
+
   function handleDragStart(e, idx) {
     setDragIdx(idx);
     e.dataTransfer.effectAllowed = 'move';
@@ -493,11 +512,11 @@ function SceneBoardTab({ epId, scenes, scriptBlocks, characters, dispatch, onSel
   }
 
   return (
-    <div style={{ padding: 16 }}>
+    <div ref={containerRef} style={{ padding: 16 }}>
       {/* 활성 씬 그리드 */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+        gridTemplateColumns: gridCols,
         gap: 12,
       }}>
         {activeScenes.map((scene, idx) => (
@@ -540,7 +559,7 @@ function SceneBoardTab({ epId, scenes, scriptBlocks, characters, dispatch, onSel
           {showDeleted && (
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+              gridTemplateColumns: gridCols,
               gap: 8, marginTop: 8, opacity: 0.65,
             }}>
               {deletedScenes.map(scene => (
