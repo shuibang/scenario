@@ -2936,29 +2936,6 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
                 WebkitTapHighlightColor: 'transparent', marginLeft: 4,
               }}
             >태그</button>
-            {/* B/I/U 서식 버튼 — 모바일에서는 MobileMenuBar에 있으므로 숨김 */}
-            {!isMobile && <div style={{ borderLeft: '1px solid var(--c-border3)', paddingLeft: 6, marginLeft: 2, display: 'flex', gap: 2 }}>
-              {[
-                { format: 'bold',      label: 'B', style: { fontWeight: 700 },            title: '굵게 (Ctrl+B)' },
-                { format: 'italic',    label: 'I', style: { fontStyle: 'italic' },         title: '기울임 (Ctrl+I)' },
-                { format: 'underline', label: 'U', style: { textDecoration: 'underline' }, title: '밑줄 (Ctrl+U)' },
-              ].map(({ format, label, style, title }) => (
-                <button
-                  key={format}
-                  title={title}
-                  onMouseDown={e => { e.preventDefault(); applyFormat(format); }}
-                  style={{
-                    flexShrink: 0, width: BTN_W, textAlign: 'center',
-                    fontSize: 'clamp(10px, 2.8vw, 13px)',
-                    padding: '4px 0', borderRadius: 6,
-                    border: '1px solid var(--c-border3)',
-                    background: 'transparent', color: 'var(--c-text4)',
-                    cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
-                    ...style,
-                  }}
-                >{label}</button>
-              ))}
-            </div>}
           </div>
           {/* 집중 버튼 — 데스크톱/태블릿 1행 */}
           {!isMobile && setFocusMode && (
