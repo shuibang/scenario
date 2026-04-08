@@ -355,12 +355,39 @@ function EpisodeItem({ ep, isSingle, large }) {
   );
 }
 
+// ─── 작품 유형별 기본값 ────────────────────────────────────────────────────────
+const PROJECT_TYPE_PRESETS = {
+  single: { label: '단막',       desc: '70분 단편',        totalMins: 70,  climaxStart: 55, climaxEnd: 68 },
+  series: { label: '미니시리즈', desc: '회차별 60분',       totalMins: 60,  climaxStart: 48, climaxEnd: 58 },
+  movie:  { label: '영화',       desc: '장편 100분',        totalMins: 100, climaxStart: 78, climaxEnd: 95 },
+  custom: { label: '기타',       desc: '직접 입력',         totalMins: 90,  climaxStart: 70, climaxEnd: 85 },
+};
+
 // ─── New project type picker ───────────────────────────────────────────────────
 function NewProjectModal({ onCommit, onCancel }) {
   const [title, setTitle] = useState('');
-  const [projectType, setProjectType] = useState(null); // null | 'single' | 'series'
-  const [targetMinutes, setTargetMinutes] = useState(70);
+  const [projectType, setProjectType] = useState(null);
+  const [totalEpisodes, setTotalEpisodes] = useState(1);
+  const [totalMins, setTotalMins] = useState(90);
+  const [climaxStart, setClimaxStart] = useState(70);
+  const [climaxEnd, setClimaxEnd] = useState(85);
   const step = projectType === null ? 'type' : 'name';
+
+  const selectType = (type) => {
+    const preset = PROJECT_TYPE_PRESETS[type];
+    setProjectType(type);
+    setTotalMins(preset.totalMins);
+    setClimaxStart(preset.climaxStart);
+    setClimaxEnd(preset.climaxEnd);
+    setTotalEpisodes(type === 'series' ? 1 : 1);
+  };
+
+  const typeLabel = projectType ? PROJECT_TYPE_PRESETS[projectType]?.label : '';
+
+  const handleCommit = () => {
+    if (!title.trim()) return;
+    onCommit(title.trim(), projectType, totalEpisodes, { totalMins, climaxStart, climaxEnd });
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={onCancel}>
@@ -368,15 +395,12 @@ function NewProjectModal({ onCommit, onCancel }) {
         {step === 'type' ? (
           <>
             <div className="text-sm font-semibold" style={{ color: 'var(--c-text)' }}>작품 형식 선택</div>
-            <div className="flex gap-2">
-              {[
-                { type: 'single', label: '단막', desc: '회차 번호 없음' },
-                { type: 'series', label: '미니시리즈', desc: '회차 번호 표시' },
-              ].map(({ type, label, desc }) => (
+            <div className="grid grid-cols-2 gap-2">
+              {Object.entries(PROJECT_TYPE_PRESETS).map(([type, { label, desc }]) => (
                 <button
                   key={type}
-                  onClick={() => setProjectType(type)}
-                  className="flex-1 py-3 rounded text-center"
+                  onClick={() => selectType(type)}
+                  className="py-3 rounded text-center"
                   style={{ border: '1px solid var(--c-border3)', background: 'var(--c-input)', cursor: 'pointer' }}
                 >
                   <div className="text-sm font-medium" style={{ color: 'var(--c-text)' }}>{label}</div>
@@ -389,33 +413,51 @@ function NewProjectModal({ onCommit, onCancel }) {
         ) : (
           <>
             <div className="text-sm font-semibold" style={{ color: 'var(--c-text)' }}>새 작품</div>
-            <div className="text-xs" style={{ color: 'var(--c-text5)' }}>{projectType === 'single' ? '단막' : '미니시리즈'}</div>
+            <div className="text-xs" style={{ color: 'var(--c-text5)' }}>{typeLabel}</div>
             <input
               autoFocus
               value={title}
               onChange={e => setTitle(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && title.trim()) onCommit(title.trim(), projectType, targetMinutes);
-                if (e.key === 'Escape') onCancel();
-              }}
+              onKeyDown={e => { if (e.key === 'Enter') handleCommit(); if (e.key === 'Escape') onCancel(); }}
               placeholder="작품명 입력"
               className="w-full text-sm px-3 py-2 rounded outline-none"
               style={{ background: 'var(--c-input)', color: 'var(--c-text)', border: '1px solid var(--c-border3)' }}
             />
-            <div className="flex items-center gap-2">
-              <span className="text-xs shrink-0" style={{ color: 'var(--c-text5)' }}>목표 시간</span>
-              <input
-                type="number" min="30" max="180" step="5"
-                value={targetMinutes}
-                onChange={e => setTargetMinutes(Math.max(30, Math.min(180, Number(e.target.value))))}
-                className="text-xs px-2 py-1 rounded outline-none"
-                style={{ width: 56, background: 'var(--c-input)', color: 'var(--c-text)', border: '1px solid var(--c-border3)', textAlign: 'center' }}
-              />
-              <span className="text-xs" style={{ color: 'var(--c-text5)' }}>분</span>
-            </div>
+            {projectType === 'series' && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs shrink-0" style={{ color: 'var(--c-text5)' }}>몇 부작으로 시작할까요?</span>
+                <input
+                  type="number" min="1" max="200" step="1"
+                  value={totalEpisodes}
+                  onChange={e => setTotalEpisodes(Math.max(1, Math.min(200, Number(e.target.value))))}
+                  className="text-xs px-2 py-1 rounded outline-none"
+                  style={{ width: 56, background: 'var(--c-input)', color: 'var(--c-text)', border: '1px solid var(--c-border3)', textAlign: 'center' }}
+                />
+              </div>
+            )}
+            {projectType === 'custom' && (
+              <div className="flex flex-col gap-2">
+                {[
+                  { label: '총 분량(분)', val: totalMins, set: setTotalMins, min: 10, max: 300 },
+                  { label: '클라이막스 시작(분)', val: climaxStart, set: setClimaxStart, min: 1, max: 299 },
+                  { label: '클라이막스 끝(분)', val: climaxEnd, set: setClimaxEnd, min: 2, max: 300 },
+                ].map(({ label, val, set, min, max }) => (
+                  <div key={label} className="flex items-center gap-2">
+                    <span className="text-xs shrink-0" style={{ color: 'var(--c-text5)', width: 130 }}>{label}</span>
+                    <input
+                      type="number" min={min} max={max} step="1"
+                      value={val}
+                      onChange={e => set(Math.max(min, Math.min(max, Number(e.target.value))))}
+                      className="text-xs px-2 py-1 rounded outline-none"
+                      style={{ width: 56, background: 'var(--c-input)', color: 'var(--c-text)', border: '1px solid var(--c-border3)', textAlign: 'center' }}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="flex gap-2 justify-end">
               <button onClick={() => setProjectType(null)} className="text-xs px-3 py-1.5 rounded" style={{ color: 'var(--c-text5)', border: '1px solid var(--c-border3)', background: 'transparent', cursor: 'pointer' }}>이전</button>
-              <button onClick={() => { if (title.trim()) onCommit(title.trim(), projectType, targetMinutes); }} className="text-xs px-3 py-1.5 rounded" style={{ color: '#fff', background: 'var(--c-accent)', border: 'none', cursor: 'pointer' }}>만들기</button>
+              <button onClick={handleCommit} className="text-xs px-3 py-1.5 rounded" style={{ color: '#fff', background: 'var(--c-accent)', border: 'none', cursor: 'pointer' }}>만들기</button>
             </div>
           </>
         )}
@@ -429,10 +471,21 @@ export default function LeftPanel({ section = 'all' }) {
   const { projects } = state;
   const [addingProject, setAddingProject] = useState(false);
 
-  const handleAddProject = (title, projectType, targetMinutes = 70) => {
-    const p = { id: genId(), title, genre: '', status: 'draft', projectType, targetMinutes, createdAt: now(), updatedAt: now() };
+  const handleAddProject = (title, projectType, totalEpisodes = 1, climaxSettings = {}) => {
+    const { totalMins = 70, climaxStart = 55, climaxEnd = 68 } = climaxSettings;
+    const p = { id: genId(), title, genre: '', status: 'draft', projectType, totalEpisodes, totalMins, climaxStart, climaxEnd, createdAt: now(), updatedAt: now() };
     dispatch({ type: 'ADD_PROJECT', payload: p });
     dispatch({ type: 'SET_ACTIVE_PROJECT', id: p.id });
+
+    const count = projectType === 'series' ? (totalEpisodes || 1) : 1;
+    const episodes = Array.from({ length: count }, (_, i) => ({
+      id: genId(), projectId: p.id, number: i + 1,
+      title: '', majorEpisodes: '', summaryItems: [],
+      status: 'draft', createdAt: now(), updatedAt: now(),
+    }));
+    episodes.forEach(ep => dispatch({ type: 'ADD_EPISODE', payload: ep }));
+    dispatch({ type: 'SET_ACTIVE_EPISODE', id: episodes[0].id });
+
     setAddingProject(false);
   };
 

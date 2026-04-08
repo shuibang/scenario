@@ -280,11 +280,9 @@ function PageCounter({ blocks, stylePreset, scrollRef }) {
     const { charsPerLine, charsInSpeech, linesPerPage, fontSize, lineHeight } = m;
     const lineHpt = fontSize * lineHeight;
     let total = 0;
-    let prevType = null;
-    // ep_title 한 줄 (회차 제목) + blank
-    total += ((fontSize + 2) * lineHeight + 14) / lineHpt + 1;
+    // ep_title: TOKEN_HEIGHTS.ep_title = (fs+2)/fs (토크나이저와 동일)
+    total += (fontSize + 2) / fontSize;
     for (const b of blocks) {
-      if (prevType !== null && prevType !== b.type) total += 1; // 타입 변경 시 빈줄
       switch (b.type) {
         case 'scene_number':
           total += 1 + 12 / lineHpt;
@@ -307,7 +305,6 @@ function PageCounter({ blocks, stylePreset, scrollRef }) {
           total += lines * (1 + 1 / lineHpt);
         }
       }
-      prevType = b.type;
     }
     return Math.max(1, Math.ceil(total / linesPerPage));
   }, [blocks, stylePreset]);

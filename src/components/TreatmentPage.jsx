@@ -35,17 +35,44 @@ function migrateItems(raw) {
 // "대본으로 가져오기": 각 항목 → 씬번호 + 지문 블록 (원본 유지)
 export default function TreatmentPage() {
   const { state, dispatch } = useApp();
-  const { episodes, scriptBlocks, scenes, activeProjectId, activeEpisodeId } = state;
+  const { episodes, scriptBlocks, scenes, projects, activeProjectId, activeEpisodeId } = state;
+
+  const activeProject = projects?.find(p => p.id === activeProjectId);
+  const isSeries = activeProject?.projectType === 'series';
+  const totalEpisodes = activeProject?.totalEpisodes || 0;
 
   const projectEpisodes = episodes
     .filter(e => e.projectId === activeProjectId)
     .sort((a, b) => a.number - b.number);
 
+  // 미니시리즈: totalEpisodes 중 아직 생성 안 된 회차 번호 목록
+  const existingNums = new Set(projectEpisodes.map(e => e.number));
+  const missingNums = isSeries
+    ? Array.from({ length: totalEpisodes }, (_, i) => i + 1).filter(n => !existingNums.has(n))
+    : [];
+
   const [selectedEpId, setSelectedEpId] = useState(
     activeEpisodeId || projectEpisodes[0]?.id || null
   );
-  const epId   = selectedEpId || projectEpisodes[0]?.id;
+  const epId   = selectedEpId === 'all' ? null : (selectedEpId || projectEpisodes[0]?.id);
   const episode = episodes.find(e => e.id === epId);
+
+  const handleEpSelect = (val) => {
+    if (val === 'all') { setSelectedEpId('all'); return; }
+    if (val.startsWith('__new__')) {
+      const num = parseInt(val.replace('__new__', ''), 10);
+      const ep = {
+        id: genId(), projectId: activeProjectId, number: num,
+        title: '', majorEpisodes: '', summaryItems: [],
+        status: 'draft', createdAt: now(), updatedAt: now(),
+      };
+      dispatch({ type: 'ADD_EPISODE', payload: ep });
+      dispatch({ type: 'SET_ACTIVE_EPISODE', id: ep.id });
+      setSelectedEpId(ep.id);
+      return;
+    }
+    setSelectedEpId(val);
+  };
 
   const [items, setItems]       = useState([]);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -360,13 +387,17 @@ export default function TreatmentPage() {
           )}
         </div>
         <select
-          value={epId || ''}
-          onChange={e => setSelectedEpId(e.target.value)}
+          value={selectedEpId === 'all' ? 'all' : (epId || '')}
+          onChange={e => handleEpSelect(e.target.value)}
           className="text-xs rounded outline-none px-2 py-1"
           style={{ background: 'var(--c-input)', color: 'var(--c-text2)', border: '1px solid var(--c-border3)' }}
         >
+          <option value="all">전체</option>
           {projectEpisodes.map(ep => (
             <option key={ep.id} value={ep.id}>{ep.number}회 {ep.title || ''}</option>
+          ))}
+          {missingNums.map(n => (
+            <option key={`__new__${n}`} value={`__new__${n}`}>자동생성 : {n}회</option>
           ))}
         </select>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>

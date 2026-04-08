@@ -138,7 +138,6 @@ function TimelineStrip({ scrollEl }) {
   const activeEpisodeId = state.activeEpisodeId;
   const blocks = state.scriptBlocks.filter(b => b.episodeId === activeEpisodeId);
   const stylePreset = activeProject?.stylePreset || {};
-  const targetMinutes = activeProject?.targetMinutes || 70;
 
   // ScriptEditor의 PageCounter와 동일한 로직으로 총 페이지 수 계산
   const totalPages = useMemo(() => {
@@ -147,10 +146,9 @@ function TimelineStrip({ scrollEl }) {
     const { charsPerLine, charsInSpeech, linesPerPage, fontSize, lineHeight } = m;
     const lineHpt = fontSize * lineHeight;
     let total = 0;
-    let prevType = null;
-    total += ((fontSize + 2) * lineHeight + 14) / lineHpt + 1;
+    // ep_title: TOKEN_HEIGHTS.ep_title = (fs+2)/fs (토크나이저와 동일)
+    total += (fontSize + 2) / fontSize;
     for (const b of blocks) {
-      if (prevType !== null && prevType !== b.type) total += 1;
       switch (b.type) {
         case 'scene_number':
           total += 1 + 12 / lineHpt;
@@ -170,7 +168,6 @@ function TimelineStrip({ scrollEl }) {
           total += lines * (1 + 1 / lineHpt);
         }
       }
-      prevType = b.type;
     }
     return Math.max(1, Math.ceil(total / linesPerPage));
   }, [blocks, stylePreset]);
@@ -189,14 +186,14 @@ function TimelineStrip({ scrollEl }) {
     };
   }, [scrollEl]);
 
-  // 1분 = 1페이지, 초 단위 픽셀 계산
-  const pxPerPage = contentHeight > 0 ? contentHeight / totalPages : 0;
-  const pxPerSec  = pxPerPage / 60;
+  // 1장 = 2분 고정, 총 분 = totalPages * 2
+  const totalMins = totalPages * 2;
+  const pxPerSec = contentHeight > 0 ? contentHeight / (totalMins * 60) : 0;
 
   // 눈금 밀도 조절: 간격이 너무 좁으면 세밀한 눈금 생략
   const show1s = pxPerSec >= 3;
   const show5s = pxPerSec * 5 >= 3;
-  const totalSecs = Math.ceil(targetMinutes * 60);
+  const totalSecs = totalMins * 60;
 
   const ticks = useMemo(() => {
     if (!pxPerSec) return [];

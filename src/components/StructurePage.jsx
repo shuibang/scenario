@@ -1,6 +1,8 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useApp } from '../store/AppContext';
 import { getChipInlineStyle } from '../utils/emotionColor';
+import { getLayoutMetrics } from '../print/LineTokenizer';
+import { stripHtml } from '../utils/textFormat';
 
 // ─── Built-in guide sets ──────────────────────────────────────────────────────
 export const BUILTIN_GUIDES = [
@@ -166,37 +168,111 @@ function getTimelineColor(ratio) {
   return `rgb(${c.r},${c.g},${c.b})`;
 }
 
-// ─── ColorBar ─────────────────────────────────────────────────────────────────
-function ColorBar({ tab, scenes, scriptBlocks, characters, epId, selectedCharKey }) {
-  const BAR_H = 28;
+// ─── 씬별 시간 비율 계산 (0~1) ───────────────────────────────────────────────
+// 각 scene_number 블록이 전체 대본에서 몇 % 위치인지 반환
+function calcSceneTimePcts(epBlocks, stylePreset) {
+  if (!epBlocks.length) return new Map();
+  const m = getLayoutMetrics(stylePreset || {});
+  const { charsPerLine, charsInSpeech, fontSize, lineHeight } = m;
+  const lineHpt = fontSize * lineHeight;
 
-  // 씬보드: 밝은 배경 + 검정 씬구분선 + 감정 dots
+  // 블록마다 누적 라인 수 기록 (토크나이저와 동일 — 타입변경 공백 없음, ep_title=(fs+2)/fs)
+  const cumLines = []; // index → 누적 라인
+  let acc = (fontSize + 2) / fontSize; // ep_title: TOKEN_HEIGHTS.ep_title
+  for (const b of epBlocks) {
+    let lines = 0;
+    switch (b.type) {
+      case 'scene_number':
+        lines = 1 + 12 / lineHpt; break;
+      case 'action':
+        lines = Math.max(1, Math.ceil((stripHtml(b.content)?.length || 0) / (charsPerLine - 2))) * (1 + 1 / lineHpt); break;
+      case 'dialogue':
+        lines = Math.max(1, Math.ceil((stripHtml(b.content)?.length || 0) / charsInSpeech)) * (1 + 1 / lineHpt); break;
+      default:
+        lines = Math.max(1, Math.ceil((stripHtml(b.content)?.length || 0) / charsPerLine)) * (1 + 1 / lineHpt);
+    }
+    cumLines.push(acc); // 이 블록 시작 시점
+    acc += lines;
+  }
+  const totalLines = Math.max(acc, 1);
+
+  // scene_number 블록 id → 시간 비율(0~1)
+  const result = new Map();
+  epBlocks.forEach((b, i) => {
+    if (b.type === 'scene_number') result.set(b.id, cumLines[i] / totalLines);
+  });
+  return result;
+}
+
+// ─── ColorBar ─────────────────────────────────────────────────────────────────
+// 씬의 분(min) 위치 → 클라이막스 강도(0~1)
+function climaxIntensity(mins, totalMins, climaxStart, climaxEnd) {
+  const pct = mins / totalMins; // 0~1
+  const cs = climaxStart / totalMins;
+  const ce = climaxEnd / totalMins;
+  const rampLen = Math.max(cs, 0.15); // 클라이막스까지 서서히 밝아지는 구간
+  if (pct >= cs && pct <= ce) return 1;                          // 클라이막스 구간: 최대
+  if (pct < cs) return Math.max(0, pct / rampLen);              // 이전: 서서히 밝아짐
+  return Math.max(0, 1 - (pct - ce) / Math.max(1 - ce, 0.05)); // 이후: 서서히 어두워짐
+}
+
+// 강도(0~1) → 라벤더(연) ~ 인디고(짙) 색상
+function climaxColor(intensity) {
+  // 연: #c7d2fe(라벤더) → 짙: #1e2e81(네이비인디고)
+  const r = Math.round(199 - (199 - 30)  * intensity);
+  const g = Math.round(210 - (210 - 46)  * intensity);
+  const b = Math.round(254 - (254 - 129) * intensity);
+  return `rgb(${r},${g},${b})`;
+}
+
+function ColorBar({ tab, scenes, scriptBlocks, characters, epId, selectedCharKey, stylePreset, activeProject }) {
+  const BAR_H = 28;
+  const totalMins  = activeProject?.totalMins  ?? 70;
+  const climaxStart = activeProject?.climaxStart ?? 55;
+  const climaxEnd   = activeProject?.climaxEnd   ?? 68;
+
+  // 씬보드: 클라이막스 강도 기반 배경 + 씬구분선(타임라인 기준) + 감정 dots
   if (tab === '씬보드') {
     const epBlocks = scriptBlocks.filter(b => b.episodeId === epId);
-    const total = epBlocks.length || 1;
     const snBlocks = epBlocks.filter(b => b.type === 'scene_number');
+    const timePcts = calcSceneTimePcts(epBlocks, stylePreset);
+
+    // 씬 구간별 색상: 씬 중간 지점의 강도로 결정
+    const segColors = snBlocks.map((sn, i) => {
+      const startPct = timePcts.get(sn.id) ?? 0;
+      const nextSn = snBlocks[i + 1];
+      const endPct = nextSn ? (timePcts.get(nextSn.id) ?? 1) : 1;
+      const midMins = ((startPct + endPct) / 2) * totalMins;
+      return climaxColor(climaxIntensity(midMins, totalMins, climaxStart, climaxEnd));
+    });
 
     return (
-      <div style={{ height: BAR_H, position: 'relative', flexShrink: 0, overflow: 'hidden', background: 'linear-gradient(to right, #c7d2fe, #1e2e81 85%, #4338ca)' }}>
-        {snBlocks.map((sn) => {
-          const idx = epBlocks.indexOf(sn);
-          const pct = (idx / total) * 100;
-          const nextSn = snBlocks[snBlocks.indexOf(sn) + 1];
+      <div style={{ height: BAR_H, position: 'relative', flexShrink: 0, overflow: 'hidden', background: climaxColor(climaxIntensity(0, totalMins, climaxStart, climaxEnd)) }}>
+        {snBlocks.map((sn, i) => {
+          const pct = (timePcts.get(sn.id) ?? 0) * 100;
+          const nextSn = snBlocks[i + 1];
+          const nextPct = nextSn ? (timePcts.get(nextSn.id) ?? 1) * 100 : 100;
+          const snIdx = epBlocks.indexOf(sn);
           const end = nextSn ? epBlocks.indexOf(nextSn) : epBlocks.length;
-          const seg = epBlocks.slice(idx, end);
+          const seg = epBlocks.slice(snIdx, end);
           const emotionBlocks = seg.filter(b => b.emotionTag);
           return (
             <React.Fragment key={sn.id}>
+              {/* 씬 구간 배경색 (클라이막스 강도) */}
+              <div style={{
+                position: 'absolute', top: 0, bottom: 0,
+                left: `${pct}%`, width: `${nextPct - pct}%`,
+                background: segColors[i],
+              }} />
               {/* 씬 구분선 */}
               <div style={{
                 position: 'absolute', top: 0, bottom: 0,
                 left: `${pct}%`,
-                width: 1.5, background: 'rgba(255,255,255,0.7)',
+                width: 1.5, background: 'rgba(255,255,255,0.5)', zIndex: 1,
               }} />
-              {/* 감정 dots */}
-              {emotionBlocks.map((b) => {
-                const bIdx = epBlocks.indexOf(b);
-                const dotPct = (bIdx / total) * 100;
+              {/* 감정 dots — 씬 구간 내 균등 배치 */}
+              {emotionBlocks.map((b, ei) => {
+                const dotPct = pct + (nextPct - pct) * ((ei + 1) / (emotionBlocks.length + 1));
                 return (
                   <div
                     key={b.id}
@@ -207,7 +283,7 @@ function ColorBar({ tab, scenes, scriptBlocks, characters, epId, selectedCharKey
                       width: 6, height: 6, borderRadius: '50%',
                       background: b.emotionTag.color,
                       border: '1px solid rgba(255,255,255,0.8)',
-                      pointerEvents: 'none',
+                      pointerEvents: 'none', zIndex: 2,
                     }}
                   />
                 );
@@ -880,12 +956,31 @@ function CharacterTab({ epId, scenes, scriptBlocks, characters, onCharKeyChange 
 // ─── StructurePage ────────────────────────────────────────────────────────────
 export default function StructurePage() {
   const { state, dispatch } = useApp();
-  const { scenes, episodes, scriptBlocks, characters, activeProjectId, activeEpisodeId } = state;
+  const { scenes, episodes, scriptBlocks, characters, projects, activeProjectId, activeEpisodeId } = state;
+  const activeProject = projects?.find(p => p.id === activeProjectId);
+  const stylePreset = activeProject?.stylePreset || {};
 
   const TABS = ['씬보드', '지문', '인물'];
   const [activeTab, setActiveTab] = useState('씬보드');
   const [selectedSceneId, setSelectedSceneId] = useState(null);
   const [selectedCharKey, setSelectedCharKey] = useState(null);
+  const [climaxOpen, setClimaxOpen] = useState(false);
+  const [editTotalMins, setEditTotalMins] = useState(activeProject?.totalMins ?? 70);
+  const [editClimaxStart, setEditClimaxStart] = useState(activeProject?.climaxStart ?? 55);
+  const [editClimaxEnd, setEditClimaxEnd] = useState(activeProject?.climaxEnd ?? 68);
+
+  useEffect(() => {
+    if (activeProject) {
+      setEditTotalMins(activeProject.totalMins ?? 70);
+      setEditClimaxStart(activeProject.climaxStart ?? 55);
+      setEditClimaxEnd(activeProject.climaxEnd ?? 68);
+    }
+  }, [activeProjectId]); // eslint-disable-line
+
+  const saveClimaxSettings = () => {
+    dispatch({ type: 'UPDATE_PROJECT', payload: { id: activeProjectId, totalMins: editTotalMins, climaxStart: editClimaxStart, climaxEnd: editClimaxEnd } });
+    setClimaxOpen(false);
+  };
 
   const projectEpisodes = useMemo(() =>
     episodes.filter(e => e.projectId === activeProjectId).sort((a, b) => a.number - b.number),
@@ -918,10 +1013,12 @@ export default function StructurePage() {
           characters={characters}
           epId={epId}
           selectedCharKey={selectedCharKey}
+          stylePreset={stylePreset}
+          activeProject={activeProject}
         />
       )}
 
-      {/* 헤더: 회차 선택 + 탭 */}
+      {/* 헤더: 회차 선택 + 탭 + 클라이막스 설정 버튼 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderBottom: '1px solid var(--c-border)', flexShrink: 0 }}>
         <select
           value={epId || ''}
@@ -954,7 +1051,43 @@ export default function StructurePage() {
             </button>
           ))}
         </div>
+
+        {/* 클라이막스 설정 버튼 */}
+        <button
+          onClick={() => setClimaxOpen(o => !o)}
+          title="클라이막스 구간 설정"
+          style={{ fontSize: 14, background: 'none', border: 'none', cursor: 'pointer', color: climaxOpen ? 'var(--c-accent)' : 'var(--c-text5)', padding: '2px 4px' }}
+        >⚡</button>
       </div>
+
+      {/* 클라이막스 설정 패널 */}
+      {climaxOpen && (
+        <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--c-border)', background: 'var(--c-panel)', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', flexShrink: 0 }}>
+          {[
+            { label: '총 분량', val: editTotalMins, set: setEditTotalMins, min: 10, max: 300 },
+            { label: '클라이막스 시작', val: editClimaxStart, set: setEditClimaxStart, min: 1, max: editTotalMins - 1 },
+            { label: '클라이막스 끝', val: editClimaxEnd, set: setEditClimaxEnd, min: editClimaxStart + 1, max: editTotalMins },
+          ].map(({ label, val, set, min, max }) => (
+            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 11, color: 'var(--c-text5)', whiteSpace: 'nowrap' }}>{label}</span>
+              <input
+                type="range" min={min} max={max} step="1"
+                value={val}
+                onChange={e => set(Number(e.target.value))}
+                style={{ width: 80 }}
+              />
+              <input
+                type="number" min={min} max={max} step="1"
+                value={val}
+                onChange={e => set(Math.max(min, Math.min(max, Number(e.target.value))))}
+                style={{ width: 44, fontSize: 11, padding: '2px 4px', borderRadius: 4, background: 'var(--c-input)', color: 'var(--c-text)', border: '1px solid var(--c-border3)', textAlign: 'center', outline: 'none' }}
+              />
+              <span style={{ fontSize: 11, color: 'var(--c-text6)' }}>분</span>
+            </div>
+          ))}
+          <button onClick={saveClimaxSettings} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, background: 'var(--c-accent)', color: '#fff', border: 'none', cursor: 'pointer' }}>저장</button>
+        </div>
+      )}
 
       {/* 탭 콘텐츠 */}
       <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
