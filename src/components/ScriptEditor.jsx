@@ -2787,24 +2787,20 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [focusMode, setFocusMode]);
 
-  // 집중 모드 배율
+  // 집중 모드 배율 — CSS zoom 사용 (layout 자동 반영, transform:scale 재흐름 없음)
   const PAPER_PX = 680; // 인쇄 기준 용지 콘텐츠 너비(px)
   const [focusZoomPct, setFocusZoomPct] = useState(100); // 100 = 폭맞춤
-  const [scrollContainerW, setScrollContainerW] = useState(() => window.innerWidth);
+  const [viewportW, setViewportW] = useState(() => window.innerWidth);
   useEffect(() => {
-    const el = editorScrollRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(entries => {
-      setScrollContainerW(entries[0]?.contentRect?.width ?? el.clientWidth);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
+    const onResize = () => setViewportW(window.innerWidth);
+    window.addEventListener('resize', onResize, { passive: true });
+    return () => window.removeEventListener('resize', onResize);
   }, []);
   // focusMode 해제 시 배율 리셋
   useEffect(() => { if (!focusMode) setFocusZoomPct(100); }, [focusMode]);
-  // fitScale: 용지폭이 화면 너비에 꽉 차는 배율 (패딩 32px 여유)
-  const fitScale = scrollContainerW > 0 ? (scrollContainerW - 32) / PAPER_PX : 1;
-  const appliedScale = focusMode ? fitScale * (focusZoomPct / 100) : 1;
+  // fitScale: 용지폭이 뷰포트 너비에 꽉 차는 배율 (여백 32px)
+  const fitScale = (viewportW - 32) / PAPER_PX;
+  const appliedZoom = focusMode ? fitScale * (focusZoomPct / 100) : 1;
 
   // 커서 자동스크롤 — 커서가 뷰 밖으로 나갈 때만 스크롤 (smooth 제거로 흔들림 방지)
   useEffect(() => {
@@ -3084,7 +3080,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
       >
         <div
           style={focusMode ? {
-            // 집중 모드: 고정 용지폭 + scale 변환, transform-origin top-center
+            // 집중 모드: 고정 용지폭 + CSS zoom (layout 자동 반영, 렉 없음)
             width: PAPER_PX,
             marginLeft: 'auto',
             marginRight: 'auto',
@@ -3095,10 +3091,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
             paddingBottom: '2rem',
             paddingLeft: '3rem',
             paddingRight: '3rem',
-            transform: `scale(${appliedScale})`,
-            transformOrigin: 'top center',
-            // transform:scale은 layout에 영향 없으므로 여백을 scale만큼 늘려줌
-            marginBottom: `calc(${PAPER_PX}px * ${appliedScale - 1})`,
+            zoom: appliedZoom,
           } : {
             maxWidth: '42rem',
             marginLeft: 'auto',
@@ -3573,7 +3566,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
           <FocusZoomControl
             zoomPct={focusZoomPct}
             onChange={setFocusZoomPct}
-            fitScale={fitScale}
+            appliedZoom={appliedZoom}
           />
           <FocusModeExitBtn onExit={() => setFocusMode(false)} />
         </>
@@ -3621,9 +3614,9 @@ function FocusModeExitBtn({ onExit }) {
 }
 
 // ─── FocusZoomControl ─────────────────────────────────────────────────────────
-function FocusZoomControl({ zoomPct, onChange, fitScale }) {
+function FocusZoomControl({ zoomPct, onChange, appliedZoom }) {
   const [hovered, setHovered] = useState(false);
-  const displayPct = Math.round(fitScale * zoomPct);
+  const displayPct = Math.round(appliedZoom * 100);
 
   return (
     <div
