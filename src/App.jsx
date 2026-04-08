@@ -1200,32 +1200,36 @@ function Shell({ authUser, setAuthUser }) {
           paddingTop: 'env(safe-area-inset-top, 0px)',
         }}
       >
-        {!focusMode && <MobileMenuBar
-          onSave={handleSave}
-          onPrintPreview={() => { window.dispatchEvent(new CustomEvent('editor:flush')); setPrintPreviewOpen(true); }}
-          onSnapshot={() => setSnapshotOpen(true)}
-          WorkTimer={WorkTimer}
-          authUser={authUser}
-          onLogout={() => setAuthUser(null)}
-        />}
-        {!focusMode && <UpdateBanner />}
+        <div style={{ display: focusMode ? 'none' : 'contents' }}>
+          <MobileMenuBar
+            onSave={handleSave}
+            onPrintPreview={() => { window.dispatchEvent(new CustomEvent('editor:flush')); setPrintPreviewOpen(true); }}
+            onSnapshot={() => setSnapshotOpen(true)}
+            WorkTimer={WorkTimer}
+            authUser={authUser}
+            onLogout={() => setAuthUser(null)}
+          />
+          <UpdateBanner />
+        </div>
         <div data-tour-id="center-panel" className="flex-1 min-h-0"
           style={{ paddingLeft: 'env(safe-area-inset-left, 0px)', paddingRight: 'env(safe-area-inset-right, 0px)', display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0, position: 'relative' }}
         >
           <CenterPanel scrollToSceneId={scrollToSceneId} onScrollHandled={() => setScrollToSceneId(null)} keyboardUp={keyboardUp} isMobile={isMobile} focusMode={focusMode} setFocusMode={setFocusMode} />
         </div>
-        {/* 광고: 키보드 올라오거나 패널 열리면 숨김 */}
-        {!focusMode && <div style={{ flexShrink: 0, height: (keyboardUp || mobileBottomOpen) ? 0 : 20, overflow: 'hidden', transition: 'height 0.2s ease' }}>
-          <AdBanner slot="mobile-bottom" mobileHide={false} height={20} />
-        </div>}
-        {!focusMode && <MobileBottomPanel
-          open={mobileBottomOpen}
-          onToggle={() => setMobileBottomOpen(v => !v)}
-          onClose={() => setMobileBottomOpen(false)}
-          tab={mobileTab}
-          onTabChange={setMobileTab}
-          onScrollToScene={id => setScrollToSceneId(id)}
-        />}
+        {/* 광고 + 하단탭: 집중 모드에서 CSS로 숨김 (언마운트 방지) */}
+        <div style={{ display: focusMode ? 'none' : 'contents' }}>
+          <div style={{ flexShrink: 0, height: (keyboardUp || mobileBottomOpen) ? 0 : 20, overflow: 'hidden', transition: 'height 0.2s ease' }}>
+            <AdBanner slot="mobile-bottom" mobileHide={false} height={20} />
+          </div>
+          <MobileBottomPanel
+            open={mobileBottomOpen}
+            onToggle={() => setMobileBottomOpen(v => !v)}
+            onClose={() => setMobileBottomOpen(false)}
+            tab={mobileTab}
+            onTabChange={setMobileTab}
+            onScrollToScene={id => setScrollToSceneId(id)}
+          />
+        </div>
         <MobileOnboardingTour />
         {modals}
       </div>
@@ -1236,34 +1240,38 @@ function Shell({ authUser, setAuthUser }) {
   if (isTablet) {
     return (
       <div className="w-screen flex flex-col overflow-hidden" style={{ background: 'var(--c-bg)', position: 'fixed', top: 0, right: 0, bottom: 0, left: 0 }}>
-        {!focusMode && menuBar}
-        {!focusMode && <UpdateBanner />}
+        <div style={{ display: focusMode ? 'none' : 'contents' }}>
+          {menuBar}
+          <UpdateBanner />
+        </div>
         <div className="flex flex-1 min-h-0">
-          {!focusMode && <CollapseButton side="left" collapsed={leftCollapsed} onToggle={() => setLeftCollapsed(v => !v)} />}
-
-          {!focusMode && !leftCollapsed && (
-            <>
-              <div data-tour-id="left-panel" style={{ width: panelWidths.left, flexShrink: 0, overflow: 'hidden' }}>
-                <LeftPanel />
-              </div>
-              <DragHandle onDrag={updateLeftWidth} isLeft />
-            </>
-          )}
+          <div style={{ display: focusMode ? 'none' : 'contents' }}>
+            <CollapseButton side="left" collapsed={leftCollapsed} onToggle={() => setLeftCollapsed(v => !v)} />
+            {!leftCollapsed && (
+              <>
+                <div data-tour-id="left-panel" style={{ width: panelWidths.left, flexShrink: 0, overflow: 'hidden' }}>
+                  <LeftPanel />
+                </div>
+                <DragHandle onDrag={updateLeftWidth} isLeft />
+              </>
+            )}
+          </div>
 
           <div data-tour-id="center-panel" className="flex-1 min-w-0 overflow-hidden" style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
             <CenterPanel scrollToSceneId={scrollToSceneId} onScrollHandled={() => setScrollToSceneId(null)} focusMode={focusMode} setFocusMode={setFocusMode} />
           </div>
 
-          {!focusMode && !rightCollapsed && (
-            <>
-              <DragHandle onDrag={updateRightWidth} />
-              <div data-tour-id="right-panel" style={{ width: panelWidths.right, flexShrink: 0, overflow: 'clip' }}>
-                <RightPanel onScrollToScene={id => setScrollToSceneId(id)} />
-              </div>
-            </>
-          )}
-
-          {!focusMode && <CollapseButton side="right" collapsed={rightCollapsed} onToggle={() => setRightCollapsed(v => !v)} />}
+          <div style={{ display: focusMode ? 'none' : 'contents' }}>
+            <CollapseButton side="right" collapsed={rightCollapsed} onToggle={() => setRightCollapsed(v => !v)} />
+            {!rightCollapsed && (
+              <>
+                <DragHandle onDrag={updateRightWidth} />
+                <div data-tour-id="right-panel" style={{ width: panelWidths.right, flexShrink: 0, overflow: 'clip' }}>
+                  <RightPanel onScrollToScene={id => setScrollToSceneId(id)} />
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
         <div style={{ overflow: 'hidden', height: focusMode ? 0 : 'auto' }}>
@@ -1287,15 +1295,18 @@ function Shell({ authUser, setAuthUser }) {
       className="w-screen flex flex-col overflow-hidden"
       style={{ background: 'var(--c-bg)', position: 'fixed', top: 0, right: 0, bottom: 0, left: 0 }}
     >
-      {!focusMode && menuBar}
-      {!focusMode && <UpdateBanner />}
+      <div style={{ display: focusMode ? 'none' : 'contents' }}>
+        {menuBar}
+        <UpdateBanner />
+      </div>
 
       <div className="flex flex-1 min-h-0">
-        {!focusMode && <div data-tour-id="left-panel" style={{ width: panelWidths.left, flexShrink: 0, overflow: 'hidden' }}>
-          <LeftPanel />
-        </div>}
-
-        {!focusMode && <DragHandle onDrag={updateLeftWidth} isLeft />}
+        <div style={{ display: focusMode ? 'none' : 'contents' }}>
+          <div data-tour-id="left-panel" style={{ width: panelWidths.left, flexShrink: 0, overflow: 'hidden' }}>
+            <LeftPanel />
+          </div>
+          <DragHandle onDrag={updateLeftWidth} isLeft />
+        </div>
 
         <div data-tour-id="center-panel" className="flex-1 min-w-0 overflow-hidden" style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
           <CenterPanel
@@ -1306,16 +1317,17 @@ function Shell({ authUser, setAuthUser }) {
           />
         </div>
 
-        {!focusMode && <CollapseButton side="right" collapsed={rightCollapsed} onToggle={() => setRightCollapsed(v => !v)} />}
-
-        {!focusMode && !rightCollapsed && (
-          <>
-            <DragHandle onDrag={updateRightWidth} />
-            <div data-tour-id="right-panel" style={{ width: panelWidths.right, flexShrink: 0, overflow: 'clip' }}>
-              <RightPanel onScrollToScene={id => setScrollToSceneId(id)} />
-            </div>
-          </>
-        )}
+        <div style={{ display: focusMode ? 'none' : 'contents' }}>
+          <CollapseButton side="right" collapsed={rightCollapsed} onToggle={() => setRightCollapsed(v => !v)} />
+          {!rightCollapsed && (
+            <>
+              <DragHandle onDrag={updateRightWidth} />
+              <div data-tour-id="right-panel" style={{ width: panelWidths.right, flexShrink: 0, overflow: 'clip' }}>
+                <RightPanel onScrollToScene={id => setScrollToSceneId(id)} />
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       <div style={{ overflow: 'hidden', height: focusMode ? 0 : 'auto' }}>
