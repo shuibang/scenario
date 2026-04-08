@@ -124,9 +124,34 @@ export default function TreatmentPage() {
 
   // ─── Load items when episode changes ─────────────────────────────────────
   useEffect(() => {
+    if (selectedEpId === 'all') { setItems([]); return; }
     if (!episode) return;
     setItems(migrateItems(episode.summaryItems));
-  }, [epId, episode?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [epId, episode?.id, selectedEpId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 전체 보기: 모든 회차 항목을 회차별로 묶어서 표시 (빈 항목 1개는 항상 유지)
+  const allEpItems = useMemo(() => {
+    if (selectedEpId !== 'all') return null;
+    return projectEpisodes.map(ep => ({
+      ep,
+      items: migrateItems(ep.summaryItems).length
+        ? migrateItems(ep.summaryItems)
+        : [{ id: genId(), text: '', order: 0 }],
+    }));
+  }, [selectedEpId, projectEpisodes]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 전체 뷰 전용 저장 — 특정 epId 기준
+  const saveForEp = useCallback((targetEpId, newItems) => {
+    dispatch({ type: 'UPDATE_EPISODE', payload: { id: targetEpId, summaryItems: newItems } });
+  }, [dispatch]);
+
+  const updateItemForEp = useCallback((targetEpId, epItems, id, text) => {
+    saveForEp(targetEpId, epItems.map(it => it.id === id ? { ...it, text } : it));
+  }, [saveForEp]);
+
+  const addItemForEp = useCallback((targetEpId, epItems) => {
+    saveForEp(targetEpId, [...epItems, { id: genId(), text: '', order: epItems.length }], true);
+  }, [saveForEp]);
 
   // ─── Focus pending textarea after items change ────────────────────────────
   useEffect(() => {
@@ -442,8 +467,38 @@ export default function TreatmentPage() {
       <div className="flex-1 overflow-y-auto">
       <div style={{ padding: '10px 10px 40px' }}>
 
-        {/* Items */}
-        <div className="space-y-1.5">
+        {/* 전체 보기 */}
+        {allEpItems && allEpItems.map(({ ep, items: epItems }) => (
+          <div key={ep.id} style={{ marginBottom: 24 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text3)', marginBottom: 6, paddingBottom: 4, borderBottom: '1px solid var(--c-border2)' }}>
+              {ep.number}회 {ep.title || ''}
+            </div>
+            <div className="space-y-1.5">
+              {epItems.map((it, idx) => (
+                <div key={it.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                  <span style={{ fontSize: 11, color: 'var(--c-text6)', minWidth: 24, textAlign: 'right', marginTop: 6 }}>{idx + 1}.</span>
+                  <textarea
+                    value={it.text}
+                    rows={1}
+                    placeholder="줄거리 항목 입력"
+                    className="flex-1 text-xs resize-none rounded px-3 py-1.5 outline-none"
+                    style={{ background: 'var(--c-input)', color: 'var(--c-text)', border: '1px solid var(--c-border3)', lineHeight: 1.5, minHeight: '2em', overflow: 'hidden' }}
+                    ref={el => { if (el) autoResize(el); }}
+                    onChange={e => { autoResize(e.target); updateItemForEp(ep.id, epItems, it.id, e.target.value); }}
+                  />
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => addItemForEp(ep.id, epItems)}
+              className="mt-2 w-full py-1.5 rounded text-xs"
+              style={{ color: 'var(--c-text5)', border: '1px dashed var(--c-border3)', background: 'transparent', cursor: 'pointer' }}
+            >+ {ep.number}회 항목 추가</button>
+          </div>
+        ))}
+
+        {/* 단일 회차 Items */}
+        {!allEpItems && <div className="space-y-1.5">
           {items.map((it, idx) => (
             <div key={it.id} className="flex items-start gap-2">
               <div className="flex flex-col items-end shrink-0 mt-[7px] w-9">
@@ -518,15 +573,15 @@ export default function TreatmentPage() {
               </div>
             </div>
           ))}
-        </div>
+        </div>}
 
-        <button
+        {!allEpItems && <button
           onClick={addItem}
           className="mt-3 w-full py-2 rounded text-sm"
           style={{ color: 'var(--c-text4)', border: '1px dashed var(--c-border3)', background: 'transparent', cursor: 'pointer' }}
         >
           + 항목 추가
-        </button>
+        </button>}
 
 
       </div>
