@@ -2849,121 +2849,145 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
 
   return (
     <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, display: 'flex', flexDirection: 'column', background: 'var(--c-bg)' }}>
-      {/* Toolbar */}
-      <div className="px-6 py-2 flex items-center gap-2 text-xs shrink-0" style={{ borderBottom: '1px solid var(--c-border2)' }}>
-        <span style={{ color: 'var(--c-text3)' }}>{episode?.number}회 {episode?.title || ''}</span>
-        <div data-tour-id="scene-block-btns" className="flex gap-1 ml-2">
-          {!hasKeyboard && (<>
-          {BLOCK_TYPE_BTNS.map(({ type, label, title }) => {
-            const isPending = pendingBlockType === type;
-            const isActive  = !isPending && activeBlockType === type;
-            return (
-              <button
-                key={type}
-                title={isPending ? `${title} — 본문을 클릭하면 적용됩니다` : title}
-                onMouseDown={e => { e.preventDefault(); applyBlockType(type); }}
-                style={{
-                  flexShrink: 0, width: BTN_W, textAlign: 'center',
-                  fontSize: 'clamp(10px, 2.8vw, 13px)',
-                  padding: '4px 0', borderRadius: 6,
-                  border: `1px solid ${isPending || isActive ? 'var(--c-accent)' : 'var(--c-border3)'}`,
-                  background: isPending ? 'var(--c-accent)' : 'transparent',
-                  color: isPending ? '#fff' : isActive ? 'var(--c-accent)' : 'var(--c-text4)',
-                  fontWeight: isActive ? '600' : 'normal',
-                  cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
-                  transition: 'background 0.1s, color 0.1s, border-color 0.1s',
-                }}
-              >{label}</button>
-            );
-          })}
-          <button
-            ref={charCheckBtnRef}
-            title="등장 — 현재 씬 등장인물 추가 (Ctrl+Shift+4)"
-            onMouseDown={e => { e.preventDefault(); handleCharCheck(); }}
-            style={{
-              flexShrink: 0, width: BTN_W, textAlign: 'center',
-              fontSize: 'clamp(10px, 2.8vw, 13px)', color: 'var(--c-text4)',
-              padding: '4px 0', border: '1px solid var(--c-border3)',
-              borderRadius: 6, background: 'transparent', cursor: 'pointer',
-              WebkitTapHighlightColor: 'transparent', marginLeft: 4,
-            }}
-          >등장</button>
-          <button
-            title="연결 — 현재 위치에 다른 씬 참조 삽입 (Ctrl+Shift+5)"
-            onMouseDown={e => {
-              e.preventDefault();
-              setCharCheckPicker(null);
-              setCharPickerState(null);
-              setSymbolPickerCloseToken(t => t + 1);
-              const surface = document.querySelector('[data-editor-surface]');
-              const sel = window.getSelection();
-              let insertAfterId = null;
-              let anchorEl = null;
-              if (sel?.rangeCount && surface) {
-                let node = sel.getRangeAt(0).startContainer;
-                node = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
-                while (node && node !== surface) {
-                  if (node.dataset?.blockId) { anchorEl = node; insertAfterId = node.dataset.blockId; break; }
-                  node = node.parentElement;
+      {/* Toolbar — 1행: 블록 버튼 (키보드 올라오면 숨김) */}
+      {!hasKeyboard && (
+        <div className="px-3 py-1.5 flex items-center gap-1 text-xs shrink-0" style={{ borderBottom: '1px solid var(--c-border2)' }}>
+          <div data-tour-id="scene-block-btns" className="flex gap-1 flex-1 min-w-0 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+            {BLOCK_TYPE_BTNS.map(({ type, label, title }) => {
+              const isPending = pendingBlockType === type;
+              const isActive  = !isPending && activeBlockType === type;
+              return (
+                <button
+                  key={type}
+                  title={isPending ? `${title} — 본문을 클릭하면 적용됩니다` : title}
+                  onMouseDown={e => { e.preventDefault(); applyBlockType(type); }}
+                  style={{
+                    flexShrink: 0, width: BTN_W, textAlign: 'center',
+                    fontSize: 'clamp(10px, 2.8vw, 13px)',
+                    padding: '4px 0', borderRadius: 6,
+                    border: `1px solid ${isPending || isActive ? 'var(--c-accent)' : 'var(--c-border3)'}`,
+                    background: isPending ? 'var(--c-accent)' : 'transparent',
+                    color: isPending ? '#fff' : isActive ? 'var(--c-accent)' : 'var(--c-text4)',
+                    fontWeight: isActive ? '600' : 'normal',
+                    cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+                    transition: 'background 0.1s, color 0.1s, border-color 0.1s',
+                  }}
+                >{label}</button>
+              );
+            })}
+            <button
+              ref={charCheckBtnRef}
+              title="등장 — 현재 씬 등장인물 추가 (Ctrl+Shift+4)"
+              onMouseDown={e => { e.preventDefault(); handleCharCheck(); }}
+              style={{
+                flexShrink: 0, width: BTN_W, textAlign: 'center',
+                fontSize: 'clamp(10px, 2.8vw, 13px)', color: 'var(--c-text4)',
+                padding: '4px 0', border: '1px solid var(--c-border3)',
+                borderRadius: 6, background: 'transparent', cursor: 'pointer',
+                WebkitTapHighlightColor: 'transparent', marginLeft: 4,
+              }}
+            >등장</button>
+            <button
+              title="연결 — 현재 위치에 다른 씬 참조 삽입 (Ctrl+Shift+5)"
+              onMouseDown={e => {
+                e.preventDefault();
+                setCharCheckPicker(null);
+                setCharPickerState(null);
+                setSymbolPickerCloseToken(t => t + 1);
+                const surface = document.querySelector('[data-editor-surface]');
+                const sel = window.getSelection();
+                let insertAfterId = null;
+                let anchorEl = null;
+                if (sel?.rangeCount && surface) {
+                  let node = sel.getRangeAt(0).startContainer;
+                  node = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+                  while (node && node !== surface) {
+                    if (node.dataset?.blockId) { anchorEl = node; insertAfterId = node.dataset.blockId; break; }
+                    node = node.parentElement;
+                  }
                 }
-              }
-              const btn = e.currentTarget;
-              const rect = anchorEl?.getBoundingClientRect() || btn.getBoundingClientRect();
-              const savedRange = sel?.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
-              setSceneRefPicker({ top: rect.bottom + 4, left: rect.left, insertAfterId, savedRange, mobile: false });
-            }}
-            style={{
-              flexShrink: 0, width: BTN_W, textAlign: 'center',
-              fontSize: 'clamp(10px, 2.8vw, 13px)', color: 'var(--c-text4)',
-              padding: '4px 0', border: '1px solid var(--c-border3)',
-              borderRadius: 6, background: 'transparent', cursor: 'pointer',
-              WebkitTapHighlightColor: 'transparent', marginLeft: 4,
-            }}
-          >연결</button>
-          <SymbolPicker
-            closeToken={symbolPickerCloseToken}
-            onOpen={() => { setCharCheckPicker(null); setSceneRefPicker(null); setCharPickerState(null); setSlashPalette(null); }}
-            forceOpen={slashSymbolPos}
-            onForceClose={() => setSlashSymbolPos(null)}
-          />
-          <button
-            onMouseDown={e => { e.preventDefault(); openEmotionPickerOnCursor(); }}
-            title="감정태그 (Ctrl+Shift+6)"
-            style={{
-              flexShrink: 0, width: BTN_W, textAlign: 'center',
-              fontSize: 'clamp(10px, 2.8vw, 13px)', color: 'var(--c-text4)',
-              padding: '4px 0', border: '1px solid var(--c-border3)',
-              borderRadius: 6, background: 'transparent', cursor: 'pointer',
-              WebkitTapHighlightColor: 'transparent', marginLeft: 4,
-            }}
-          >태그</button>
-          {/* B/I/U 서식 버튼 — action/dialogue 블록에서 동작, 모바일에서는 MobileMenuBar에 있으므로 숨김 */}
-          {!isMobile && <div style={{ borderLeft: '1px solid var(--c-border3)', paddingLeft: 6, marginLeft: 2, display: 'flex', gap: 2 }}>
-            {[
-              { format: 'bold',      label: 'B', style: { fontWeight: 700 },                title: '굵게 (Ctrl+B)' },
-              { format: 'italic',    label: 'I', style: { fontStyle: 'italic' },             title: '기울임 (Ctrl+I)' },
-              { format: 'underline', label: 'U', style: { textDecoration: 'underline' },     title: '밑줄 (Ctrl+U)' },
-            ].map(({ format, label, style, title }) => (
-              <button
-                key={format}
-                title={title}
-                onMouseDown={e => { e.preventDefault(); applyFormat(format); }}
-                style={{
-                  flexShrink: 0, width: BTN_W, textAlign: 'center',
-                  fontSize: 'clamp(10px, 2.8vw, 13px)',
-                  padding: '4px 0', borderRadius: 6,
-                  border: '1px solid var(--c-border3)',
-                  background: 'transparent',
-                  color: 'var(--c-text4)',
-                  cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
-                  ...style,
-                }}
-              >{label}</button>
-            ))}
-          </div>}
-          </>)}
+                const btn = e.currentTarget;
+                const rect = anchorEl?.getBoundingClientRect() || btn.getBoundingClientRect();
+                const savedRange = sel?.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
+                setSceneRefPicker({ top: rect.bottom + 4, left: rect.left, insertAfterId, savedRange, mobile: false });
+              }}
+              style={{
+                flexShrink: 0, width: BTN_W, textAlign: 'center',
+                fontSize: 'clamp(10px, 2.8vw, 13px)', color: 'var(--c-text4)',
+                padding: '4px 0', border: '1px solid var(--c-border3)',
+                borderRadius: 6, background: 'transparent', cursor: 'pointer',
+                WebkitTapHighlightColor: 'transparent', marginLeft: 4,
+              }}
+            >연결</button>
+            <SymbolPicker
+              closeToken={symbolPickerCloseToken}
+              onOpen={() => { setCharCheckPicker(null); setSceneRefPicker(null); setCharPickerState(null); setSlashPalette(null); }}
+              forceOpen={slashSymbolPos}
+              onForceClose={() => setSlashSymbolPos(null)}
+            />
+            <button
+              onMouseDown={e => { e.preventDefault(); openEmotionPickerOnCursor(); }}
+              title="감정태그 (Ctrl+Shift+6)"
+              style={{
+                flexShrink: 0, width: BTN_W, textAlign: 'center',
+                fontSize: 'clamp(10px, 2.8vw, 13px)', color: 'var(--c-text4)',
+                padding: '4px 0', border: '1px solid var(--c-border3)',
+                borderRadius: 6, background: 'transparent', cursor: 'pointer',
+                WebkitTapHighlightColor: 'transparent', marginLeft: 4,
+              }}
+            >태그</button>
+            {/* B/I/U 서식 버튼 — 모바일에서는 MobileMenuBar에 있으므로 숨김 */}
+            {!isMobile && <div style={{ borderLeft: '1px solid var(--c-border3)', paddingLeft: 6, marginLeft: 2, display: 'flex', gap: 2 }}>
+              {[
+                { format: 'bold',      label: 'B', style: { fontWeight: 700 },            title: '굵게 (Ctrl+B)' },
+                { format: 'italic',    label: 'I', style: { fontStyle: 'italic' },         title: '기울임 (Ctrl+I)' },
+                { format: 'underline', label: 'U', style: { textDecoration: 'underline' }, title: '밑줄 (Ctrl+U)' },
+              ].map(({ format, label, style, title }) => (
+                <button
+                  key={format}
+                  title={title}
+                  onMouseDown={e => { e.preventDefault(); applyFormat(format); }}
+                  style={{
+                    flexShrink: 0, width: BTN_W, textAlign: 'center',
+                    fontSize: 'clamp(10px, 2.8vw, 13px)',
+                    padding: '4px 0', borderRadius: 6,
+                    border: '1px solid var(--c-border3)',
+                    background: 'transparent', color: 'var(--c-text4)',
+                    cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+                    ...style,
+                  }}
+                >{label}</button>
+              ))}
+            </div>}
+          </div>
+          {/* 집중 버튼 — 데스크톱/태블릿 1행 */}
+          {!isMobile && setFocusMode && (
+            <button
+              title="집중 작업 모드 — 패널 숨기고 대본만 표시 (ESC로 종료)"
+              onMouseDown={e => {
+                e.preventDefault();
+                const entering = !focusMode;
+                setFocusMode(entering);
+                if (entering) {
+                  document.documentElement.requestFullscreen?.().catch(() => {});
+                } else if (document.fullscreenElement) {
+                  document.exitFullscreen?.().catch(() => {});
+                }
+              }}
+              style={{
+                flexShrink: 0, padding: '3px 8px', borderRadius: 6, fontSize: 11,
+                border: '1px solid var(--c-border3)', background: 'transparent',
+                color: 'var(--c-text5)', cursor: 'pointer',
+              }}
+            >집중</button>
+          )}
         </div>
-        <span className="ml-auto flex items-center gap-3">
+      )}
+
+      {/* Toolbar — 2행: 회차 정보 + 페이지수 + 저장됨 (항상 표시) */}
+      <div className="px-4 py-1 flex items-center gap-2 text-xs shrink-0" style={{ borderBottom: '1px solid var(--c-border2)' }}>
+        <span style={{ color: 'var(--c-text3)', flexShrink: 0 }}>{episode?.number}회 {episode?.title || ''}</span>
+        <span className="ml-auto flex items-center gap-3 flex-shrink-0">
           {brokenSceneRefs.length > 0 && (
             <button
               onClick={() => { setReconnectIdx(0); setReconnectTarget(brokenSceneRefs[0]); }}
@@ -2973,14 +2997,14 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
           )}
           <PageCounter blocks={blocks} stylePreset={stylePreset} scrollRef={editorScrollRef} />
           <span style={{ color: 'var(--c-border3)' }}>● 저장됨</span>
-          {setFocusMode && (
+          {/* 집중 버튼 — 모바일 2행 */}
+          {isMobile && setFocusMode && (
             <button
-              title="집중 작업 모드 — 패널 숨기고 대본만 표시 (ESC로 종료)"
+              title="집중 작업 모드"
               onMouseDown={e => {
                 e.preventDefault();
                 const entering = !focusMode;
                 setFocusMode(entering);
-                // useEffect는 비동기라 제스처 컨텍스트가 끊김 — 여기서 직접 호출
                 if (entering) {
                   document.documentElement.requestFullscreen?.().catch(() => {});
                 } else if (document.fullscreenElement) {
@@ -2988,19 +3012,16 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
                 }
               }}
               style={{
-                padding: '3px 8px', borderRadius: 6, fontSize: 11,
-                border: '1px solid var(--c-border3)',
-                background: 'transparent',
-                color: 'var(--c-text5)',
-                cursor: 'pointer',
-                letterSpacing: 0,
+                flexShrink: 0, padding: '3px 8px', borderRadius: 6, fontSize: 11,
+                border: '1px solid var(--c-border3)', background: 'transparent',
+                color: 'var(--c-text5)', cursor: 'pointer',
               }}
             >집중</button>
           )}
         </span>
       </div>
 
-      {/* Reconnect panel */}
+            {/* Reconnect panel */}
       {reconnectTarget && (
         <div className="px-6 py-3 shrink-0 flex items-start gap-3 relative" style={{ background: '#fffbeb', borderBottom: '1px solid #fde68a' }}>
           <div className="flex-1 min-w-0">
