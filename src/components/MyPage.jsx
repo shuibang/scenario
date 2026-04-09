@@ -114,15 +114,16 @@ async function downloadLogPdf(logs, projects) {
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
-function buildLogShareUrl(logs, projects) {
+async function buildLogShareUrl(logs, projects) {
+  const { saveLogPayload } = await import('../utils/reviewShare');
   const payload = {
     type: 'log-export',
     exportedAt: Date.now(),
     projects: projects.map(p => ({ id: p.id, title: p.title })),
     logs,
   };
-  const encoded = encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(payload)))));
-  return `${window.location.origin}${window.location.pathname}#log=${encoded}`;
+  const id = await saveLogPayload(payload);
+  return `${window.location.origin}${window.location.pathname}#log=${id}`;
 }
 
 // ─── LogItem ─────────────────────────────────────────────────────────────────

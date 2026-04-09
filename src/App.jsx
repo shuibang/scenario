@@ -1,5 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import LandingPage from './components/LandingPage';
+import { logShareSchema } from './utils/urlSchemas';
+import { loadLogPayload, isShortReviewId as isUUID } from './utils/reviewShare';
 import { AppProvider, useApp } from './store/AppContext';
 import {
   FONTS,
@@ -1345,12 +1347,35 @@ function Shell({ authUser, setAuthUser }) {
 // ─── LogShareView — 읽기 전용 작업통계 ────────────────────────────────────────
 function LogShareView() {
   const hash = window.location.hash;
-  let data = null;
-  try {
-    data = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(hash.slice(5))))));
-  } catch { /* decode 실패 */ }
+  const [data, setData] = useState(null);
+  const [bad, setBad]   = useState(false);
 
-  if (!data || data.type !== 'log-export') {
+  useEffect(() => {
+    const val = hash.slice(5); // '#log=' 제거
+    // UUID 방식 (신규)
+    if (isUUID(val)) {
+      loadLogPayload(val)
+        .then(raw => { const parsed = logShareSchema.safeParse(raw); parsed.success ? setData(parsed.data) : setBad(true); })
+        .catch(() => setBad(true));
+    } else {
+      // 구형 Base64 폴백
+      try {
+        const raw = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(val)))));
+        const parsed = logShareSchema.safeParse(raw);
+        parsed.success ? setData(parsed.data) : setBad(true);
+      } catch { setBad(true); }
+    }
+  }, []);
+
+  if (!data && !bad) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: '#aaa', fontSize: 13 }}>
+        불러오는 중…
+      </div>
+    );
+  }
+
+  if (!data) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: 'sans-serif', color: '#888' }}>
         유효하지 않은 링크입니다.
@@ -1467,9 +1492,13 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
+  // public — 공유 링크 (인증 불필요, 의도적)
   if (window.location.hash.startsWith('#review=')) return <SharedReviewView />;
+  // public — 작업기록 공유 (인증 불필요, 의도적)
   if (window.location.hash.startsWith('#log='))    return <LogShareView />;
-  if (window.location.hash === '#preview-landing') return <LandingPreview />;
+  // dev-only — 랜딩 디자인 확인용, production에서 노출 차단
+  if (window.location.hash === '#preview-landing' && import.meta.env.DEV) return <LandingPreview />;
+  // public — 베타 설문 (인증 불필요, 의도적)
   if (window.location.hash === '#survey')          return <SurveyPage />;
 
   // 매 렌더마다 localStorage 직접 확인 + 모듈 플래그 — 어떤 state 리셋에도 안전

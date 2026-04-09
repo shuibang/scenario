@@ -48,3 +48,34 @@ export async function loadReviewPayload(id) {
 export function isShortReviewId(val) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(val);
 }
+
+/**
+ * 작업기록 payload를 Supabase에 저장하고 UUID를 반환합니다.
+ * 인증 불필요 — 작업기록 공유는 로그인 없이도 가능 (RLS: insert 허용)
+ * @param {object} payload
+ * @returns {Promise<string>} id
+ */
+export async function saveLogPayload(payload) {
+  if (!supabase) throw new Error('Supabase 환경변수가 설정되지 않았습니다.');
+  const id = genId();
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30일
+  const { error } = await supabase.from('review_links').insert({ id, payload, expires_at: expiresAt });
+  if (error) throw new Error(error.message);
+  return id;
+}
+
+/**
+ * UUID로 작업기록 payload를 불러옵니다.
+ * @param {string} id
+ * @returns {Promise<object>} payload
+ */
+export async function loadLogPayload(id) {
+  if (!supabase) throw new Error('Supabase 환경변수가 설정되지 않았습니다.');
+  const { data, error } = await supabase
+    .from('review_links')
+    .select('payload')
+    .eq('id', id)
+    .single();
+  if (error) throw new Error(error.message);
+  return data.payload;
+}
