@@ -1040,8 +1040,79 @@ function SceneRefDropdown({ query, scenes, onSelect, onClose }) {
   );
 }
 
+// ─── NextTypePickerOverlay ────────────────────────────────────────────────────
+// 대사 블록 다음 형식 선택 (씬번호 / 지문) — 방향키·Enter·Esc 지원
+const NEXT_TYPE_OPTIONS = [
+  { type: 'scene_number', label: '씬번호' },
+  { type: 'action',       label: '지문'   },
+  { type: 'dialogue',     label: '대사'   },
+];
+function NextTypePickerOverlay({ anchor, onSelect, onClose, excludeType }) {
+  const options = NEXT_TYPE_OPTIONS.filter(o => o.type !== excludeType);
+  const [idx, setIdx] = useState(0);
+  const ref = useRef(null);
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  // 마운트 시 팝업 자체에 포커스
+  useEffect(() => { ref.current?.focus(); }, []);
+
+  useEffect(() => {
+    const onMouse = (e) => { if (ref.current && !ref.current.contains(e.target)) onCloseRef.current(); };
+    const t = setTimeout(() => document.addEventListener('mousedown', onMouse), 0);
+    return () => { clearTimeout(t); document.removeEventListener('mousedown', onMouse); };
+  }, []);
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      setIdx(i => (i - 1 + options.length) % options.length);
+    } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      setIdx(i => (i + 1) % options.length);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      onSelectRef.current(options[idx].type);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      onCloseRef.current();
+    }
+  };
+
+  return createPortal(
+    <div
+      ref={ref}
+      tabIndex={-1}
+      onKeyDown={handleKeyDown}
+      style={{
+        position: 'fixed', top: anchor.top, left: anchor.left, zIndex: 9999,
+        display: 'flex', gap: 6, padding: '6px 8px', borderRadius: 8,
+        background: 'var(--c-tag)', border: '1px solid var(--c-border4)',
+        boxShadow: '0 4px 16px rgba(0,0,0,0.2)', outline: 'none',
+      }}
+    >
+      {options.map(({ type, label }, i) => (
+        <button
+          key={type}
+          onMouseDown={e => { e.preventDefault(); onSelect(type); }}
+          onMouseEnter={() => setIdx(i)}
+          style={{
+            padding: '4px 14px', borderRadius: 6, fontSize: 13, cursor: 'pointer',
+            border: `1px solid ${i === idx ? 'var(--c-accent)' : 'var(--c-border3)'}`,
+            background: i === idx ? 'var(--c-active)' : 'transparent',
+            color: 'var(--c-text)',
+          }}
+        >{label}</button>
+      ))}
+    </div>,
+    document.body
+  );
+}
+
 // ─── CharPickerOverlay ────────────────────────────────────────────────────────
-function CharPickerOverlay({ anchor, projectChars, onSelect, onClose, onAddNew, mobile = false }) {
+function CharPickerOverlay({ anchor, projectChars, onSelect, onClose, onAddNew, onSkip, mobile = false }) {
   const [query, setQuery] = useState('');
   const [activeIdx, setActiveIdx] = useState(-1);
   const inputRef = useRef(null);
@@ -1114,6 +1185,8 @@ function CharPickerOverlay({ anchor, projectChars, onSelect, onClose, onAddNew, 
               e.preventDefault();
               if (activeIdx >= 0 && filtered[activeIdx]) {
                 onSelect(filtered[activeIdx]);
+              } else if (onSkip) {
+                onSkip();
               } else {
                 onClose();
               }
@@ -1190,6 +1263,7 @@ const EditorSurface = forwardRef(function EditorSurface({
   slashOpenRef,    // ref: 팔레트 열림 여부
   onSlashKeyNav,   // (key) → ↑↓ 탐색
   onSlashSelectCurrent, // () → Tab으로 현재 항목 선택
+  onNextTypePick,  // ({ blockId, top, left }) → 대사 블록에서 다음 형식 선택 팝업
 }, ref) {
   const surfaceRef = useRef(null);
   const metaRef = useRef({});
@@ -1420,6 +1494,24 @@ const EditorSurface = forwardRef(function EditorSurface({
       }
       // doParse는 호출하지 않음 — 호출자(ScriptEditor)에서 setBlocks로 직접 처리
     },
+    insertBlockAfter(blockId, type) {
+      const el = surfaceRef.current;
+      if (!el) return;
+      const blockEl = el.querySelector(`[data-block-id="${blockId}"]`);
+      if (!blockEl) return;
+      const newEl = insertBlockAfterEl(el, blockEl, type, '');
+      setCaret(newEl, 0);
+      if (type === 'dialogue') onBadgeClick?.(newEl.dataset.blockId, newEl);
+      doParse();
+    },
+    focusBlock(blockId) {
+      const el = surfaceRef.current;
+      if (!el) return;
+      const blockEl = el.querySelector(`[data-block-id="${blockId}"]`);
+      if (!blockEl) return;
+      el.focus();
+      setCaret(blockEl, 0);
+    },
   }), [doParse, onBadgeClick, syncMeta, onBlocksChange]);
 
   // ── Input handler ─────────────────────────────────────────────────────────
@@ -1571,6 +1663,16 @@ const EditorSurface = forwardRef(function EditorSurface({
         document.execCommand('styleWithCSS', false, false);
         document.execCommand(cmdMap[e.key], false, null);
         doParse();
+      }
+      return;
+    }
+
+    // ── Ctrl+Enter: 다음 형식 선택 팝업
+    if (ctrl && e.key === 'Enter') {
+      e.preventDefault();
+      if (onNextTypePick) {
+        const rect = blockEl.getBoundingClientRect();
+        onNextTypePick({ blockId: blockEl.dataset.blockId, currentType: type, top: rect.bottom + 4, left: rect.left });
       }
       return;
     }
@@ -1769,6 +1871,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   const prevEpisodeIdRef = useRef(null);
   const [charPickerState, setCharPickerState] = useState(null); // { blockId, top, left, fromDialogue? }
   const [charPickerNoSel, setCharPickerNoSel] = useState(null); // { top, left } — 선택안함 표시
+  const [nextTypePicker, setNextTypePicker] = useState(null); // { blockId, top, left, onSelect } — 다음 형식 선택
   const [charSuggestState, setCharSuggestState] = useState(null); // { blockId, blockEl, charName }
   const [suggestEnabled, setSuggestEnabled] = useState(() => localStorage.getItem(CHAR_SUGGEST_KEY) !== 'off');
   const [pasteToast, setPasteToast] = useState(null);
@@ -1787,6 +1890,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   const slashPaletteRef = useRef(null);
   slashPaletteRef.current = slashPalette; // executeSlashAction 클로저에서 최신 query 접근용
   const hasKeyboard = !!keyboardUp; // App.jsx에서 내려온 키보드 감지값 사용
+  const [shortcutHintOpen, setShortcutHintOpen] = useState(true);
   const charCheckBtnRef = useRef(null);
   const editorScrollRef = useRef(null);
   useEffect(() => { if (onScrollRefReady) onScrollRefReady(editorScrollRef); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -3127,6 +3231,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
             slashOpenRef={slashOpenRef}
             onSlashKeyNav={handleSlashKeyNav}
             onSlashSelectCurrent={handleSlashSelectCurrent}
+            onNextTypePick={({ blockId, currentType, top, left }) => setNextTypePicker({ blockId, currentType, top, left, mode: 'create' })}
           />
           <div className="h-48" />
         </div>
@@ -3311,7 +3416,44 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
             }
             setCharPickerState(null);
           }}
+          onSkip={() => {
+            // 인물 미선택 Enter → 다음 형식 선택 팝업 (기존 새 블록의 타입 변경)
+            const { blockId, top, left } = charPickerState;
+            setCharPickerState(null);
+            requestAnimationFrame(() => {
+              setNextTypePicker({ blockId, top, left, mode: 'change' });
+            });
+          }}
         />
+      )}
+
+      {/* 다음 형식 선택 팝업 (Ctrl+Enter / 인물 미선택 Enter) */}
+      {nextTypePicker && createPortal(
+        <NextTypePickerOverlay
+          anchor={{ top: nextTypePicker.top, left: nextTypePicker.left }}
+          blockId={nextTypePicker.blockId}
+          excludeType={nextTypePicker.mode === 'create' ? nextTypePicker.currentType : undefined}
+          onSelect={(type) => {
+            const { blockId, mode } = nextTypePicker;
+            setNextTypePicker(null);
+            if (mode === 'create') {
+              // Ctrl+Enter: 현재 블록 다음에 새 블록 생성
+              surfaceApiRef.current?.insertBlockAfter(blockId, type);
+            } else {
+              // onSkip: 이미 생성된 새 블록의 타입 변경
+              requestAnimationFrame(() => {
+                surfaceApiRef.current?.focusBlock(blockId);
+                requestAnimationFrame(() => surfaceApiRef.current?.applyBlockType(type));
+              });
+            }
+          }}
+          onClose={() => {
+            const blockId = nextTypePicker.blockId;
+            setNextTypePicker(null);
+            requestAnimationFrame(() => surfaceApiRef.current?.focusBlock(blockId));
+          }}
+        />,
+        document.body
       )}
 
       {/* 선택안함 레이블 */}
@@ -3441,16 +3583,35 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
 
       {/* Shortcuts hint — 터치 기기(소프트 키보드)에서는 숨김 */}
       {!hasKeyboard && !('ontouchstart' in window) && (
-        <div className="px-6 py-2 flex gap-4 text-[11px] shrink-0 flex-wrap" style={{ borderTop: '1px solid var(--c-border)', color: 'var(--c-dim)' }}>
-          <span>Ctrl+Shift+1 씬번호</span>
-          <span>Ctrl+Shift+2 지문</span>
-          <span>Ctrl+Shift+3 대사</span>
-          <span>Ctrl+Shift+5 씬연결</span>
-          <span>Ctrl+B/I/U 굵게/기울임/밑줄</span>
-          <span>Ctrl+Z Undo</span>
-          <span>Enter 다음 블록</span>
-          <span>Shift+Enter 줄바꿈</span>
-          <span>Backspace (빈 블록) 삭제</span>
+        <div style={{ borderTop: '1px solid var(--c-border)', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+            <button
+              onMouseDown={e => { e.preventDefault(); setShortcutHintOpen(o => !o); }}
+              title={shortcutHintOpen ? '단축키 숨기기' : '단축키 보기'}
+              style={{
+                flexShrink: 0, padding: '4px 6px', background: 'transparent', border: 'none',
+                color: 'var(--c-dim)', cursor: 'pointer', fontSize: 9, lineHeight: 1,
+                transform: shortcutHintOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
+                transition: 'transform 0.15s',
+              }}
+            >▼</button>
+            {shortcutHintOpen && (
+              <div className="py-2 flex gap-4 text-[11px] flex-wrap" style={{ color: 'var(--c-dim)', paddingRight: 8 }}>
+                <span>Ctrl+Shift+1 씬번호</span>
+                <span>Ctrl+Shift+2 지문</span>
+                <span>Ctrl+Shift+3 대사</span>
+                <span>Ctrl+Shift+4 등장인물</span>
+                <span>Ctrl+Shift+5 씬연결</span>
+                <span>Ctrl+Shift+6 감정태그</span>
+                <span>Ctrl+S 저장</span>
+                <span>Ctrl+Z / Ctrl+Y Undo/Redo</span>
+                <span>Enter 다음 블록</span>
+                <span>Ctrl+Enter 형식 선택 후 새 블록</span>
+                <span>Shift+Enter 줄바꿈</span>
+                <span>Backspace 빈 블록 삭제</span>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
