@@ -404,10 +404,31 @@ function FontManagementSection() {
       setError('TTF, OTF, WOFF, WOFF2 파일만 지원합니다.');
       return;
     }
+    // 1차: file.size 즉각 검사 (10MB — CJK 폰트 고려)
+    if (file.size > 10 * 1024 * 1024) {
+      setError('폰트 파일은 10MB 이하만 업로드할 수 있습니다.');
+      return;
+    }
     setError('');
     setUploading(true);
     try {
       const buffer = await file.arrayBuffer();
+      // 2차: 실제 버퍼 크기 재확인 (file.size 조작 우회 방지)
+      if (buffer.byteLength > 10 * 1024 * 1024) {
+        setError('폰트 파일은 10MB 이하만 업로드할 수 있습니다.');
+        return;
+      }
+      // 3차: 매직바이트 검사 (확장자 우회 방지)
+      const magic = new Uint8Array(buffer.slice(0, 4));
+      const isTTF   = magic[0] === 0x00 && magic[1] === 0x01 && magic[2] === 0x00 && magic[3] === 0x00;
+      const isTTF2  = magic[0] === 0x74 && magic[1] === 0x72 && magic[2] === 0x75 && magic[3] === 0x65; // 'true'
+      const isOTF   = magic[0] === 0x4F && magic[1] === 0x54 && magic[2] === 0x54 && magic[3] === 0x4F; // 'OTTO'
+      const isWOFF  = magic[0] === 0x77 && magic[1] === 0x4F && magic[2] === 0x46 && magic[3] === 0x46; // 'wOFF'
+      const isWOFF2 = magic[0] === 0x77 && magic[1] === 0x4F && magic[2] === 0x46 && magic[3] === 0x32; // 'wOF2'
+      if (!isTTF && !isTTF2 && !isOTF && !isWOFF && !isWOFF2) {
+        setError('올바른 폰트 파일이 아닙니다. (TTF/OTF/WOFF/WOFF2)');
+        return;
+      }
       const id     = `custom_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
       const name   = file.name.replace(/\.[^.]+$/, '');
       await storeFont(id, name, buffer);
