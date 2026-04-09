@@ -5,6 +5,7 @@ import { CoverPreview } from './CoverEditor';
 import { charDisplayName } from './CharacterPanel';
 import { resolveSceneLabel, TIME_OF_DAY_OPTIONS } from '../utils/sceneResolver';
 import { stripHtml } from '../utils/textFormat';
+import { getChipInlineStyle } from '../utils/emotionColor';
 import { GuidePanel } from './StructurePage';
 import AdBanner from './AdBanner';
 
@@ -67,7 +68,7 @@ function TagEditor({ tags, onSave }) {
 }
 
 // ─── Scene Item ────────────────────────────────────────────────────────────────
-function SceneItem({ scene, sceneContent, isActive, onClick, onStatusChange, onTagsChange }) {
+function SceneItem({ scene, sceneContent, isActive, onClick, onStatusChange, onTagsChange, emotionTag }) {
   const [addingTag, setAddingTag] = useState(false);
   const [tagInput, setTagInput] = useState('');
   const tags = scene.tags || [];
@@ -110,6 +111,11 @@ function SceneItem({ scene, sceneContent, isActive, onClick, onStatusChange, onT
           </div>
           {/* Tags — one line, compact */}
           <div className="mt-0.5 flex flex-wrap items-center gap-1" onClick={e => e.stopPropagation()}>
+            {emotionTag && (
+              <span
+                style={{ ...getChipInlineStyle(emotionTag.color, emotionTag.intensity), fontSize: '10px', lineHeight: '1.4' }}
+              >{emotionTag.word}</span>
+            )}
             {tags.map(t => (
               <span
                 key={t}
@@ -506,6 +512,22 @@ export default function RightPanel({ onScrollToScene }) {
     return m;
   }, [epBlocksForOutline]);
 
+  const sceneFirstEmotionBySceneId = useMemo(() => {
+    const m = {};
+    const snBlocks = epBlocksForOutline.filter(b => b.type === 'scene_number');
+    snBlocks.forEach((sn, idx) => {
+      const next = snBlocks[idx + 1];
+      const start = epBlocksForOutline.indexOf(sn);
+      const end = next ? epBlocksForOutline.indexOf(next) : epBlocksForOutline.length;
+      const seg = epBlocksForOutline.slice(start + 1, end);
+      const withEmotion = seg.filter(b => b.emotionTag);
+      m[sn.sceneId] = withEmotion.length
+        ? withEmotion.reduce((a, b) => (b.updatedAt > a.updatedAt ? b : a)).emotionTag
+        : null;
+    });
+    return m;
+  }, [epBlocksForOutline]);
+
   const isScriptView = activeDoc === 'script' && activeEpisodeId;
   const isCharView = activeDoc === 'characters';
   // 표지: 체크리스트만 표시 (문맥 패널 없음)
@@ -660,6 +682,7 @@ export default function RightPanel({ onScrollToScene }) {
                   onClick={() => handleSceneClick(scene)}
                   onStatusChange={status => handleStatusChange(scene.id, status)}
                   onTagsChange={tags => handleTagsChange(scene.id, tags)}
+                  emotionTag={sceneFirstEmotionBySceneId[scene.id] || null}
                 />
               );
             })

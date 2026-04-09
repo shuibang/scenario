@@ -811,7 +811,7 @@ function UnifiedTagPicker({ position, currentStructureTags, onAddStructure, onAd
 
   const commit = (item) => {
     if (!item) return;
-    if (item.kind === 'emotion') { onAddEmotion(item.em); onClose(); }
+    if (item.kind === 'emotion') { onOpenFullPicker(item.em.word); onClose(); }
     else if (item.kind === 'structure') { onAddStructure(item.r.beat); onClose(); }
     else if (item.kind === 'custom') { onOpenFullPicker(q); onClose(); }
   };
@@ -867,7 +867,7 @@ function UnifiedTagPicker({ position, currentStructureTags, onAddStructure, onAd
                 const sel = isSelected('emotion', em.word);
                 return (
                   <div key={em.word}
-                    onMouseDown={e => { e.preventDefault(); onAddEmotion(em); onClose(); }}
+                    onMouseDown={e => { e.preventDefault(); onOpenFullPicker(em.word); onClose(); }}
                     onMouseEnter={() => setSelIdx(allItems.findIndex(i => i.kind === 'emotion' && i.em.word === em.word))}
                     style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', cursor: 'pointer', fontSize: 12, color: 'var(--c-text)', background: sel ? 'var(--c-active)' : 'transparent' }}
                   >
@@ -1304,6 +1304,7 @@ const EditorSurface = forwardRef(function EditorSurface({
 
   // ── Imperative API for parent ──────────────────────────────────────────────
   useImperativeHandle(ref, () => ({
+    parse() { doParse(); },
     applyBlockType(type) {
       const el = surfaceRef.current;
       if (!el) return false;
@@ -2338,6 +2339,8 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     if (blockEl && cmd.action !== 'sceneref' && cmd.action !== 'symbol') {
       if (cmd.action === 'unifiedtag') {
         removeSlashOnly(blockEl, targetEl);
+        // DOM 수정 직후 state 동기화 — useEffect([initialBlocks])가 /를 복원하지 않도록
+        surfaceApiRef.current?.parse();
       } else {
         clearBlockSlash(blockEl);
       }

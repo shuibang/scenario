@@ -12,11 +12,12 @@ import { getChipInlineStyle } from '../utils/emotionColor';
  *   existingTag?          — 수정 시 기존 태그 ({ word, color, intensity })
  */
 export default function EmotionTagPicker({ onSelect, onClose, initialWord = '', existingTag = null }) {
+  const _initRec = initialWord && !existingTag ? getRecommendedTag(initialWord) : null;
   const [step, setStep] = useState(existingTag ? 2 : (initialWord ? 2 : 1));
   const [query, setQuery] = useState(existingTag?.word ?? initialWord);
   const [selectedWord, setSelectedWord] = useState(existingTag?.word ?? (initialWord || ''));
-  const [selectedColor, setSelectedColor] = useState(existingTag?.color ?? '');
-  const [selectedIntensity, setSelectedIntensity] = useState(existingTag?.intensity ?? 3);
+  const [selectedColor, setSelectedColor] = useState(existingTag?.color ?? _initRec?.color ?? '');
+  const [selectedIntensity, setSelectedIntensity] = useState(existingTag?.intensity ?? _initRec?.score ?? 3);
   const searchRef = useRef(null);
   const colorContainerRef = useRef(null);
 
