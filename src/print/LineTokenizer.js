@@ -381,11 +381,6 @@ export function paginate(tokens, metrics, sectionType = '') {
   let used = 0;
 
   const totalH = tokens.reduce((s, t) => s + (t.height || 1), 0);
-  const theoreticalPages = totalH / linesPerPage;
-  console.log(
-    `[paginate] sectionType=${sectionType}  linesPerPage=${linesPerPage.toFixed(2)}  maxBlockH=${maxBlockH}` +
-    `  totalTokens=${tokens.length}  totalH=${totalH.toFixed(2)}  theoreticalPages=${theoreticalPages.toFixed(2)}`
-  );
 
   // 현재 페이지 끝에서 고아 토큰을 제거하고 반환 (새 페이지 첫머리로 이동)
   const rescueTrailer = () => {
@@ -446,29 +441,6 @@ export function paginate(tokens, metrics, sectionType = '') {
   if (page.length > 0) pages.push(page);
   const result = pages.length ? pages : [[]];
 
-  // ── 디버그 출력
-  result.forEach((pg, pi) => {
-    const usedH = pg.reduce((s, t) => s + (t.height || 1), 0);
-    const splitToks = pg.filter(t => t.isFirstOfBlock === false);
-    console.log(
-      `[paginate] page ${pi + 1}/${result.length}  tokens=${pg.length}  usedH=${usedH.toFixed(2)}/${linesPerPage.toFixed(2)}` +
-      (splitToks.length ? `  split=${splitToks.length}(${[...new Set(splitToks.map(t=>t.kind))].join(',')})` : '')
-    );
-    // 마지막 페이지가 절반 이하로 채워지면 경고
-    if (pi === result.length - 1 && usedH < linesPerPage * 0.5 && result.length > 1) {
-      console.warn(`[paginate] ⚠ 마지막 페이지가 ${(usedH/linesPerPage*100).toFixed(0)}%만 채워짐 (${usedH.toFixed(1)}/${linesPerPage.toFixed(1)})`);
-    }
-    // 모든 토큰 상세 출력 (마지막 페이지이거나 split이 있는 페이지)
-    if (splitToks.length || pi === result.length - 1) {
-      pg.forEach((t, ti) => {
-        const h = t.height || 1;
-        const isCont = t.isFirstOfBlock === false;
-        const flag = isCont ? '[CONT]' : '[FIRST]';
-        const extra = isCont ? '' : (t.blockLineCount > 1 ? ` blkLines=${t.blockLineCount}` : '');
-        console.log(`  [${ti}] ${flag} kind=${t.kind}  h=${h.toFixed(3)}${extra}  "${(t.text||'').slice(0,40)}"`);
-      });
-    }
-  });
 
   return result;
 }

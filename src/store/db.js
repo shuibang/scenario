@@ -117,8 +117,7 @@ export async function clearDramaStorage() {
   } catch {}
 }
 
-export const genId = () =>
-  Math.random().toString(36).slice(2, 9) + Date.now().toString(36);
+export const genId = () => crypto.randomUUID();
 
 export const now = () => Date.now();
 

@@ -428,21 +428,17 @@ function buildPdfDocument(printModel) {
 
 export async function exportPdf(appState, selections, { onStep = () => {} } = {}) {
   ensureFontsRegistered();
-  console.log('[printPdf] export start — selections:', selections);
   let printModel, doc, blob;
   try {
     onStep('직렬화');
     const preset = appState.stylePreset;
     printModel   = buildPrintModel(appState, selections, preset);
-    console.log('[printPdf] printModel built — sections:', printModel.sections.map(s => s.type));
 
     onStep('레이아웃');
     doc  = buildPdfDocument(printModel);
-    console.log('[printPdf] react-pdf Document built — rendering…');
 
     onStep('파일 생성');
     blob = await pdf(doc).toBlob();
-    console.log('[printPdf] blob size:', blob.size, 'bytes');
   } catch (err) {
     console.error('[printPdf] FAILED:', err?.message);
     console.error('[printPdf] stack:', err?.stack);
@@ -458,7 +454,6 @@ export async function exportPdf(appState, selections, { onStep = () => {} } = {}
     a.click();
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 5000);
-    console.log('[printPdf] download triggered:', a.download);
   } catch (err) {
     console.error('[printPdf] FAILED at download step:', err);
     throw new Error(`다운로드 실패: ${err.message}`);

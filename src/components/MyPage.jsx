@@ -970,6 +970,7 @@ function ErrorReportTab() {
   const [type, setType] = useState('bug');
   const [description, setDescription] = useState('');
   const [page, setPage] = useState('');
+  const [email, setEmail] = useState('');
   const [status, setStatus] = useState('idle'); // 'idle' | 'sending' | 'done' | 'error'
 
   const handleSubmit = async () => {
@@ -980,6 +981,7 @@ function ErrorReportTab() {
       type,
       description: description.trim(),
       page: page.trim() || null,
+      email: email.trim() || null,
     });
     setStatus(error ? 'error' : 'done');
   };
@@ -991,7 +993,7 @@ function ErrorReportTab() {
         <div className="text-sm font-medium" style={{ color: 'var(--c-text2)' }}>제출 완료!</div>
         <div className="text-xs text-center" style={{ color: 'var(--c-text5)' }}>소중한 피드백 감사합니다.<br />빠르게 검토하겠습니다.</div>
         <button
-          onClick={() => { setStatus('idle'); setDescription(''); setPage(''); setType('bug'); }}
+          onClick={() => { setStatus('idle'); setDescription(''); setPage(''); setType('bug'); setEmail(''); }}
           className="mt-2 text-xs px-4 py-1.5 rounded"
           style={{ border: '1px solid var(--c-border3)', color: 'var(--c-text4)', background: 'transparent', cursor: 'pointer' }}
         >
@@ -1056,6 +1058,22 @@ function ErrorReportTab() {
           placeholder="예: 대본 편집, 출력 미리보기, 인물 페이지 …"
           style={inputStyle}
         />
+      </div>
+
+      {/* 답변 이메일 */}
+      <div>
+        <span style={labelStyle}>답변 받을 이메일 (선택사항)</span>
+        <input
+          type="email"
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+          placeholder="example@email.com"
+          style={inputStyle}
+        />
+        <div style={{ marginTop: 6, fontSize: 11, color: 'var(--c-text6)', lineHeight: 1.6 }}>
+          입력하시면 해결 시 직접 연락드릴게요.<br />
+          입력하신 이메일은 오류 답변 목적으로만 사용되며 다른 용도로 활용되지 않아요.
+        </div>
       </div>
 
       {status === 'error' && (

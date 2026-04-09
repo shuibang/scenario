@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import DOMPurify from 'dompurify';
 import { useApp } from '../store/AppContext';
 import { genId, now } from '../store/db';
 
@@ -41,7 +42,7 @@ function RichField({ label, value, onChange, placeholder, readOnly }) {
     if (skipNextEffect.current) { skipNextEffect.current = false; return; }
     // Don't overwrite while user is actively editing
     if (document.activeElement === el) return;
-    el.innerHTML = value || '';
+    el.innerHTML = DOMPurify.sanitize(value || '', { ALLOWED_TAGS: ['b', 'i', 'u', 'br', 'strong', 'em'], ALLOWED_ATTR: [] });
   }, [value]);
 
   const handleInput = () => {

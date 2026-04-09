@@ -71,7 +71,6 @@ export default function PrintPreviewModal({ onClose }) {
     setExporting(true);
     const onStep = (label) => {
       setExportStep(label);
-      console.log(`[PrintPreviewModal] step: ${label}`);
     };
     try {
       if (format === 'pdf')         await exportPdf(state, sel, { onStep });

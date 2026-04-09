@@ -2,6 +2,9 @@ import React, { useState, useRef } from 'react';
 import { useApp } from '../store/AppContext';
 import { genId, now } from '../store/db';
 
+const IMAGE_MAX_BYTES = 5 * 1024 * 1024; // 5 MB — 1차: file.size
+const IMAGE_MAX_B64   = Math.ceil(IMAGE_MAX_BYTES * 4 / 3) + 100; // 2차: base64 결과 크기
+
 // ─── ResourceCard ──────────────────────────────────────────────────────────────
 function ResourceCard({ resource, onUpdate, onDelete }) {
   const [editingMemo, setEditingMemo] = useState(false);
@@ -19,8 +22,21 @@ function ResourceCard({ resource, onUpdate, onDelete }) {
   const handleImageChange = (e) => {
     const file = e.target.files?.[0];
     if (!file || !file.type.startsWith('image/')) return;
+    // 1차: file.size 즉각 검사
+    if (file.size > IMAGE_MAX_BYTES) {
+      alert('이미지 파일은 5MB 이하만 업로드할 수 있습니다.');
+      e.target.value = '';
+      return;
+    }
     const reader = new FileReader();
-    reader.onload = (ev) => onUpdate({ imageData: ev.target.result });
+    reader.onload = (ev) => {
+      // 2차: base64 결과 크기 재확인 (file.size 조작 우회 방지)
+      if (ev.target.result.length > IMAGE_MAX_B64) {
+        alert('이미지 파일이 너무 큽니다. (5MB 초과)');
+        return;
+      }
+      onUpdate({ imageData: ev.target.result });
+    };
     reader.readAsDataURL(file);
     e.target.value = '';
   };
@@ -114,8 +130,21 @@ function ResourceListRow({ resource, onUpdate, onDelete }) {
   const handleImageChange = (e) => {
     const file = e.target.files?.[0];
     if (!file || !file.type.startsWith('image/')) return;
+    // 1차: file.size 즉각 검사
+    if (file.size > IMAGE_MAX_BYTES) {
+      alert('이미지 파일은 5MB 이하만 업로드할 수 있습니다.');
+      e.target.value = '';
+      return;
+    }
     const reader = new FileReader();
-    reader.onload = (ev) => onUpdate({ imageData: ev.target.result });
+    reader.onload = (ev) => {
+      // 2차: base64 결과 크기 재확인 (file.size 조작 우회 방지)
+      if (ev.target.result.length > IMAGE_MAX_B64) {
+        alert('이미지 파일이 너무 큽니다. (5MB 초과)');
+        return;
+      }
+      onUpdate({ imageData: ev.target.result });
+    };
     reader.readAsDataURL(file);
     e.target.value = '';
   };
@@ -192,7 +221,10 @@ export default function ResourcePanel() {
   const { activeProjectId, resources } = state;
   const fileInputRef = useRef(null);
   const [viewMode, setViewMode] = useState(() => {
-    try { return localStorage.getItem('drama_resource_view') || 'grid'; } catch { return 'grid'; }
+    try {
+      const v = localStorage.getItem('drama_resource_view');
+      return v === 'list' ? 'list' : 'grid'; // 화이트리스트: 'grid' | 'list'
+    } catch { return 'grid'; }
   });
   const setView = (v) => {
     setViewMode(v);
@@ -205,10 +237,15 @@ export default function ResourcePanel() {
 
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files || []);
+    let skipped = 0;
     files.forEach(file => {
       if (!file.type.startsWith('image/')) return;
+      // 1차: file.size 즉각 검사
+      if (file.size > IMAGE_MAX_BYTES) { skipped++; return; }
       const reader = new FileReader();
       reader.onload = (ev) => {
+        // 2차: base64 결과 크기 재확인 (file.size 조작 우회 방지)
+        if (ev.target.result.length > IMAGE_MAX_B64) { skipped++; return; }
         const resource = {
           id: genId(),
           projectId: activeProjectId,
@@ -222,6 +259,7 @@ export default function ResourcePanel() {
       };
       reader.readAsDataURL(file);
     });
+    if (skipped > 0) alert(`${skipped}개 파일이 5MB를 초과하여 건너뛰었습니다.`);
     e.target.value = '';
   };
 

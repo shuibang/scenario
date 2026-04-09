@@ -3,6 +3,7 @@ import React, {
   forwardRef, useImperativeHandle,
 } from 'react';
 import { createPortal } from 'react-dom';
+import DOMPurify from 'dompurify';
 import { useApp } from '../store/AppContext';
 import { genId, now } from '../store/db';
 import { resolveSceneLabel, parseSceneContent } from '../utils/sceneResolver';
@@ -347,14 +348,16 @@ function esc(s) {
 }
 
 // ─── Inline HTML helpers (B/I/U 서식 저장용) ─────────────────────────────────
+const INLINE_PURIFY_CONFIG = { ALLOWED_TAGS: ['b', 'i', 'u'], ALLOWED_ATTR: [] };
 function sanitizeInlineHtml(html) {
   if (!html) return '';
-  return html
+  const normalized = html
     .replace(/<strong(\s[^>]*)?>/gi, '<b>').replace(/<\/strong>/gi, '</b>')
     .replace(/<em(\s[^>]*)?>/gi, '<i>').replace(/<\/em>/gi, '</i>')
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<(?!\/?(b|i|u)(\s[^>]*)?>)[^>]+>/gi, '')
     .replace(/\n$/, '');
+  return DOMPurify.sanitize(normalized, INLINE_PURIFY_CONFIG);
 }
 function stripHtml(html) {
   return (html || '').replace(/<[^>]+>/g, '');
@@ -363,9 +366,10 @@ function blockHtml(el) {
   if (!el) return '';
   return sanitizeInlineHtml(el.innerHTML);
 }
+const BLOCK_PURIFY_CONFIG = { ALLOWED_TAGS: ['b', 'i', 'u', 'br'], ALLOWED_ATTR: [] };
 function setBlockHtml(el, html) {
   if (!el) return;
-  el.innerHTML = html || '<br>';
+  el.innerHTML = html ? DOMPurify.sanitize(html, BLOCK_PURIFY_CONFIG) : '<br>';
 }
 
 // ─── Blocks → innerHTML ──────────────────────────────────────────────────────

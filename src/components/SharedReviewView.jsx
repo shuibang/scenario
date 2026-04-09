@@ -11,6 +11,7 @@
 import React, { useState, useEffect } from 'react';
 import PreviewRenderer from '../print/PreviewRenderer';
 import { loadReviewPayload, isShortReviewId } from '../utils/reviewShare';
+import { reviewLegacySchema } from '../utils/urlSchemas';
 
 const zBtnStyle = {
   background: '#fff', border: '1px solid #ddd', borderRadius: 6,
@@ -20,7 +21,8 @@ const zBtnStyle = {
 
 function decodeLegacy(hash) {
   try {
-    return JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(hash.slice(8))))));
+    const raw = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(hash.slice(8))))));
+    return reviewLegacySchema.parse(raw);
   } catch {
     return null;
   }

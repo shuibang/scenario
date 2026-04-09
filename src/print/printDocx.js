@@ -410,18 +410,15 @@ function buildDocxSections(printModel, dp, { hancom = false } = {}) {
  * onStep(label) is called at each stage for UI progress tracking.
  */
 export async function exportDocx(appState, selections, { onStep = () => {}, hancom = false } = {}) {
-  console.log('[printDocx] export start — selections:', selections);
   let printModel, sections, blob;
   try {
     onStep('직렬화');
     const preset  = appState.stylePreset;
     printModel    = buildPrintModel(appState, selections, preset);
-    console.log('[printDocx] printModel built — sections:', printModel.sections.map(s => s.type));
 
     onStep('레이아웃');
     const dp      = presetToDocxProps(preset);
     sections      = buildDocxSections(printModel, dp, { hancom });
-    console.log('[printDocx] docxSections built:', sections.length, 'sections');
 
     if (!sections.length) {
       const msg = '출력 대상이 없습니다. 최소 하나의 항목을 선택하세요.';
@@ -445,9 +442,7 @@ export async function exportDocx(appState, selections, { onStep = () => {}, hanc
       },
       sections,
     });
-    console.log('[printDocx] Document object built — packing…');
     blob = await Packer.toBlob(doc);
-    console.log('[printDocx] blob size:', blob.size, 'bytes');
   } catch (err) {
     console.error('[printDocx] FAILED at build/pack step:', err);
     throw err;
@@ -462,7 +457,6 @@ export async function exportDocx(appState, selections, { onStep = () => {}, hanc
     a.click();
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 5000);
-    console.log('[printDocx] download triggered:', a.download);
   } catch (err) {
     console.error('[printDocx] FAILED at download step:', err);
     throw new Error(`다운로드 실패: ${err.message}`);

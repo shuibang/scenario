@@ -2,6 +2,7 @@ import React, { createContext, useContext, useReducer, useEffect, useRef } from 
 import { getAll, setAll, getItem, setItem, DB_KEYS, genId, now, migrateFromLocalStorage } from './db';
 import { createSeedData } from '../data/seed';
 import { isTokenValid, saveToDrive, clearAccessToken } from './googleDrive';
+import { sharePayloadSchema } from '../utils/urlSchemas';
 
 // ─── Default style preset ────────────────────────────────────────────────────
 export const DEFAULT_STYLE_PRESET = {
@@ -388,15 +389,26 @@ export function AppProvider({ children }) {
         const hash = window.location.hash;
         if (hash.startsWith('#share=')) {
           try {
-            const decoded = JSON.parse(atob(decodeURIComponent(hash.slice(7))));
-            await Promise.all(
-              Object.entries(decoded)
-                .filter(([key]) => DB_KEYS[key])
-                .map(([key, data]) => setAll(DB_KEYS[key], data))
+            const raw = JSON.parse(atob(decodeURIComponent(hash.slice(7))));
+            const decoded = sharePayloadSchema.parse(raw);
+            // 비인증 상태에서 공유 URL이 로컬 DB를 덮어쓰는 것을 방지 — 명시적 동의 필요
+            const projectTitle = decoded.projects?.[0]?.title || '공유된 프로젝트';
+            const confirmed = window.confirm(
+              `"${projectTitle}" 데이터를 가져오시겠습니까?\n\n현재 저장된 데이터가 없는 경우에만 가져올 수 있습니다.`
             );
-            window.location.hash = '';
-            dispatch({ type: 'INIT', payload: decoded });
-            return;
+            if (!confirmed) {
+              window.location.hash = '';
+              // fallthrough to seed
+            } else {
+              await Promise.all(
+                Object.entries(decoded)
+                  .filter(([key]) => DB_KEYS[key])
+                  .map(([key, data]) => setAll(DB_KEYS[key], data))
+              );
+              window.location.hash = '';
+              dispatch({ type: 'INIT', payload: decoded });
+              return;
+            }
           } catch { /* fallthrough to seed */ }
         }
         const seed = createSeedData();

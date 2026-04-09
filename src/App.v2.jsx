@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { AppProvider, useApp } from './store/AppContext';
+import { logShareSchema } from './utils/urlSchemas';
 import {
   FONTS,
   FONT_STATUS,
@@ -962,10 +963,11 @@ function LogShareView() {
   const hash = window.location.hash;
   let data = null;
   try {
-    data = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(hash.slice(5))))));
-  } catch { /* decode 실패 */ }
+    const raw = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(hash.slice(5))))));
+    data = logShareSchema.parse(raw);
+  } catch { /* decode 실패 또는 스키마 불일치 */ }
 
-  if (!data || data.type !== 'log-export') {
+  if (!data) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: 'sans-serif', color: '#888' }}>
         유효하지 않은 링크입니다.
@@ -1031,12 +1033,10 @@ function LogShareView() {
 }
 
 export default function App() {
-  if (window.location.hash.startsWith('#review=')) {
-    return <SharedReviewView />;
-  }
-  if (window.location.hash.startsWith('#log=')) {
-    return <LogShareView />;
-  }
+  // public — 공유 링크 (인증 불필요, 의도적)
+  if (window.location.hash.startsWith('#review=')) return <SharedReviewView />;
+  // public — 작업기록 공유 (인증 불필요, 의도적)
+  if (window.location.hash.startsWith('#log='))    return <LogShareView />;
   return (
     <AppProvider>
       <Shell />
