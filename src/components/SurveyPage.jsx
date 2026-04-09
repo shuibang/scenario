@@ -2,7 +2,35 @@
  * SurveyPage — 대본 작업실 베타 테스트 설문
  * 접근: /#survey
  */
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { supabase } from '../store/supabaseClient';
+
+// 전역 overflow:hidden 해제 (설문 페이지는 일반 스크롤 페이지)
+function usePageScroll() {
+  useEffect(() => {
+    const root = document.getElementById('root');
+    const prev = {
+      htmlOverflow: document.documentElement.style.overflow,
+      htmlHeight:   document.documentElement.style.height,
+      bodyOverflow: document.body.style.overflow,
+      bodyHeight:   document.body.style.height,
+      rootOverflow: root ? root.style.overflow : '',
+      rootHeight:   root ? root.style.height   : '',
+    };
+    document.documentElement.style.overflow = 'auto';
+    document.documentElement.style.height   = 'auto';
+    document.body.style.overflow = 'auto';
+    document.body.style.height   = 'auto';
+    if (root) { root.style.overflow = 'auto'; root.style.height = 'auto'; }
+    return () => {
+      document.documentElement.style.overflow = prev.htmlOverflow;
+      document.documentElement.style.height   = prev.htmlHeight;
+      document.body.style.overflow = prev.bodyOverflow;
+      document.body.style.height   = prev.bodyHeight;
+      if (root) { root.style.overflow = prev.rootOverflow; root.style.height = prev.rootHeight; }
+    };
+  }, []);
+}
 
 // ─── 상수 ─────────────────────────────────────────────────────────────────────
 
@@ -246,6 +274,7 @@ function ProgressBar({ answers }) {
 // ─── 메인 컴포넌트 ────────────────────────────────────────────────────────────
 
 export default function SurveyPage() {
+  usePageScroll();
   const [answers, setAnswers] = useState({
     q1: '', q2: [], q3: [], q4: '', q5: '', q6: [],
     q7: 0, q8: '', q9: '', q9detail: '', q10: '', q10detail: '',
@@ -255,6 +284,8 @@ export default function SurveyPage() {
   });
   const [errors, setErrors] = useState({});
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
 
   const set = (key, val) => setAnswers(prev => ({ ...prev, [key]: val }));
 
@@ -282,7 +313,7 @@ export default function SurveyPage() {
     return e;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const errs = validate();
     if (Object.keys(errs).length > 0) {
@@ -291,9 +322,44 @@ export default function SurveyPage() {
       document.getElementById('q' + firstKey.slice(1))?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
-    console.log('[Survey] 응답:', answers);
-    setSubmitted(true);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      if (supabase) {
+        const { error } = await supabase.from('survey_responses').insert([{
+          q1: answers.q1,
+          q2: answers.q2,
+          q3: answers.q3,
+          q4: answers.q4,
+          q5: answers.q5,
+          q6: answers.q6,
+          q7: answers.q7,
+          q8: answers.q8,
+          q9: answers.q9,
+          q9detail: answers.q9detail,
+          q10: answers.q10,
+          q10detail: answers.q10detail,
+          q11: answers.q11,
+          q12: answers.q12,
+          q13: answers.q13,
+          q14: answers.q14,
+          qa: answers.qa,
+          qb: answers.qb,
+          qc: answers.qc,
+          qd: answers.qd,
+          q15: answers.q15,
+          q16: answers.q16,
+        }]);
+        if (error) throw error;
+      }
+      setSubmitted(true);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (err) {
+      console.error('[Survey] 제출 오류:', err);
+      setSubmitError('제출 중 오류가 발생했어요. 잠시 후 다시 시도해주세요.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const errStyle = { border: '1px solid var(--c-error) !important' };
@@ -774,18 +840,28 @@ export default function SurveyPage() {
             </div>
           )}
 
+          {submitError && (
+            <div style={{
+              background: '#2a0f0f', border: '1px solid var(--c-error)', borderRadius: 8,
+              padding: '12px 16px', marginBottom: 16, color: 'var(--c-error)', fontSize: 13,
+            }}>
+              {submitError}
+            </div>
+          )}
+
           <button
             type="submit"
+            disabled={submitting}
             style={{
               width: '100%', padding: '15px 0', borderRadius: 10, border: 'none',
-              background: 'var(--c-accent)', color: '#fff',
-              fontSize: 15, fontWeight: 700, cursor: 'pointer',
+              background: submitting ? 'var(--c-border2)' : 'var(--c-accent)', color: '#fff',
+              fontSize: 15, fontWeight: 700, cursor: submitting ? 'not-allowed' : 'pointer',
               transition: 'background 0.15s',
             }}
-            onMouseEnter={e => e.currentTarget.style.background = 'var(--c-accent-hover)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'var(--c-accent)'}
+            onMouseEnter={e => { if (!submitting) e.currentTarget.style.background = 'var(--c-accent-hover)'; }}
+            onMouseLeave={e => { if (!submitting) e.currentTarget.style.background = 'var(--c-accent)'; }}
           >
-            설문 제출하기
+            {submitting ? '제출 중...' : '설문 제출하기'}
           </button>
         </form>
       </div>
