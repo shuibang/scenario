@@ -8,7 +8,7 @@ const supabase = (import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPA
   : null;
 
 function genId() {
-  return Math.random().toString(36).slice(2, 10); // 8자리 영숫자
+  return crypto.randomUUID(); // 128비트 UUID — 추측 공격 방지
 }
 
 /**
@@ -18,6 +18,9 @@ function genId() {
  */
 export async function saveReviewPayload(payload) {
   if (!supabase) throw new Error('Supabase 환경변수가 설정되지 않았습니다.');
+  // 검토 링크 생성은 인증된 사용자만 가능 — 비인증 시 Supabase 스팸/남용 방지
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('검토 링크 생성은 로그인 후 이용할 수 있습니다.');
   const id = genId();
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7일
   const { error } = await supabase.from('review_links').insert({ id, payload, expires_at: expiresAt });
@@ -41,7 +44,7 @@ export async function loadReviewPayload(id) {
   return data.payload;
 }
 
-/** URL 해시값이 짧은 ID(Supabase 저장)인지 판단 */
+/** URL 해시값이 UUID(Supabase 저장)인지 판단 */
 export function isShortReviewId(val) {
-  return /^[a-z0-9]{8}$/.test(val);
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(val);
 }
