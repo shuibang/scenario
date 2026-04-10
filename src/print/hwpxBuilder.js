@@ -315,7 +315,8 @@ function secPrPara(margins, { resetPage = false, coverPage = false } = {}) {
     </hp:run>`;
   const pgW = A4_W;
   const pgH = A4_H;
-  const pgLandscape = 'NARROWLY';
+  // HWPX landscape 값: WIDELY=세로(portrait), NARROWLY=가로(landscape) — 직관과 반대
+  const pgLandscape = 'WIDELY';
   return `  <hp:p id="${pId}" paraPrIDRef="7" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">
     <hp:run charPrIDRef="0">
       <hp:secPr id="" textDirection="HORIZONTAL" spaceColumns="1134" tabStop="8000"
