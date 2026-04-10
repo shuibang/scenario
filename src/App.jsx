@@ -10,7 +10,7 @@ import {
   getFontPdfStatus,
   getFontByCssFamily,
 } from './print/FontRegistry';
-import { getItem, setItem, clearDramaStorage, isPublicPcMode, genId, now } from './store/db';
+import { getItem, setItem, setAll, DB_KEYS, clearDramaStorage, isPublicPcMode, genId, now } from './store/db';
 import { setAccessToken, clearAccessToken, loadFromDrive, isTokenValid, saveSnapshot } from './store/googleDrive';
 import { supabase, signInWithGoogle, supabaseSignOut, extractUserData, refreshDriveToken } from './store/supabaseClient';
 import LeftPanel from './components/LeftPanel';
@@ -370,7 +370,7 @@ function RealtimeClock() {
 }
 
 // ─── Work timer (active-time accumulator) ─────────────────────────────────────
-function WorkTimer({ projectId, documentId, onComplete }) {
+function WorkTimer({ projectId, documentId, onComplete, saveRef }) {
   const { state, dispatch } = useApp();
   const [elapsed, setElapsed] = useState(0);
   const elapsedRef  = useRef(0);           // always up-to-date for cleanup closure
@@ -378,9 +378,11 @@ function WorkTimer({ projectId, documentId, onComplete }) {
   const idleTimer   = useRef(null);
   const tickTimer   = useRef(null);
   const startedAt   = useRef(Date.now());
-  // Keep a ref to checklistItems so cleanup closure has current data
+  // Keep refs to avoid stale closures in event handlers
   const checklistRef = useRef(state.checklistItems);
+  const workLogsRef  = useRef(state.workTimeLogs);
   useEffect(() => { checklistRef.current = state.checklistItems; }, [state.checklistItems]);
+  useEffect(() => { workLogsRef.current  = state.workTimeLogs;   }, [state.workTimeLogs]);
 
   const buildSnapshot = () =>
     checklistRef.current
@@ -446,6 +448,43 @@ function WorkTimer({ projectId, documentId, onComplete }) {
     onComplete?.();
   };
 
+  // 자동 저장 (로그아웃·창 닫기): dispatch + IndexedDB 직접 쓰기
+  const autoSave = useCallback(() => {
+    if (elapsedRef.current <= 0 || !projectId) return;
+    const entry = {
+      projectId,
+      documentId: documentId || null,
+      startedAt: startedAt.current,
+      completedAt: Date.now(),
+      activeDurationSec: elapsedRef.current,
+      dateKey: new Date(startedAt.current).toISOString().slice(0, 10),
+      completedChecklistSnapshot: buildSnapshot(),
+    };
+    dispatch({ type: 'ADD_WORK_LOG', payload: entry });
+    // IndexedDB에 직접 기록 (페이지 언로드 시 state 업데이트가 persist되기 전에 닫힐 수 있으므로)
+    const updated = [...workLogsRef.current, entry];
+    setAll(DB_KEYS.workTimeLogs, updated).catch(() => {});
+    elapsedRef.current = 0;
+    startedAt.current = Date.now();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, documentId]);
+
+  // saveRef를 통해 부모(MenuBar 로그아웃 버튼 등)가 직접 호출 가능
+  useEffect(() => {
+    if (saveRef) saveRef.current = autoSave;
+  }, [saveRef, autoSave]);
+
+  // 창 닫기 / 탭 닫기 / 새로고침 시 자동 저장
+  useEffect(() => {
+    const handleUnload = () => autoSave();
+    window.addEventListener('pagehide', handleUnload);
+    window.addEventListener('beforeunload', handleUnload);
+    return () => {
+      window.removeEventListener('pagehide', handleUnload);
+      window.removeEventListener('beforeunload', handleUnload);
+    };
+  }, [autoSave]);
+
   return (
     <div data-tour-id="work-timer" className="flex items-center gap-1">
       <span className="text-xs tabular-nums" style={{ color: 'var(--c-text6)', letterSpacing: '0.05em' }} title="활동 시간 (30초 비활동 시 중단)">
@@ -509,6 +548,7 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
   const { saveStatus, saveErrorMsg, activeProjectId, stylePreset, undoStack, redoStack, savedAt } = state;
   const canUndo = undoStack?.length > 0 || !!activeProjectId;
   const [scriptCanRedo, setScriptCanRedo] = useState(false);
+  const timerSaveRef = useRef(null); // WorkTimer의 autoSave 연결
 
   // 자동 저장 상대 시각 ("방금 저장됨" / "N분 전")
   const [savedLabel, setSavedLabel] = useState('');
@@ -654,6 +694,7 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
                 >구글 드라이브 재연결이 필요해요</span>
               )}
               <button onClick={async () => {
+                  timerSaveRef.current?.();
                   if (isPublicPcMode()) clearDramaStorage();
                   await supabaseSignOut();
                   clearAccessToken();
@@ -693,7 +734,7 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
         {/* Right: clock + timer */}
         <div className="flex items-center gap-3" style={{ flex: 1, justifyContent: 'flex-end' }}>
           <RealtimeClock />
-          {activeProjectId && <WorkTimer key={activeProjectId} projectId={activeProjectId} documentId={state.activeEpisodeId || state.activeDoc} />}
+          {activeProjectId && <WorkTimer key={activeProjectId} projectId={activeProjectId} documentId={state.activeEpisodeId || state.activeDoc} saveRef={timerSaveRef} />}
         </div>
       </div>
 

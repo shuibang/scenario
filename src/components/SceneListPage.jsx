@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useApp } from '../store/AppContext';
 import { resolveSceneLabel, parseSceneContent, TIME_OF_DAY_OPTIONS } from '../utils/sceneResolver';
 import { now, genId } from '../store/db';
+import { getChipInlineStyle } from '../utils/emotionColor';
 
 // ─── CharacterMultiSelect ─────────────────────────────────────────────────────
 function CharacterMultiSelect({ characterIds = [], projectChars, autoDetectedStr, onChange }) {
@@ -136,7 +137,7 @@ function sceneHeaderText(scene) {
   return resolveSceneLabel({ ...scene, label: '' }).trim();
 }
 
-function SceneListRow({ scene, idx, blockLabel, autoCharacters, projectChars, onContentChange, onMetaChange, onCharsChange, onNavigate }) {
+function SceneListRow({ scene, idx, blockLabel, autoCharacters, projectChars, onContentChange, onMetaChange, onCharsChange, onNavigate, remarkMode, emotionTags }) {
   const [contentVal, setContentVal] = useState(scene.sceneListContent || '');
   const [headerVal, setHeaderVal] = useState(() => sceneHeaderText(scene));
 
@@ -241,10 +242,15 @@ function SceneListRow({ scene, idx, blockLabel, autoCharacters, projectChars, on
       {/* 비고(태그) */}
       <td className="px-3 py-1.5">
         <div className="flex flex-wrap gap-0.5">
-          {(scene.tags || []).map(t => (
+          {remarkMode !== 'emotion' && remarkMode !== 'empty' && (scene.tags || []).map(t => (
             <span key={t} className="text-[9px] px-1 rounded"
               style={{ background: 'var(--c-tag)', color: 'var(--c-accent2)' }}>
               #{t}
+            </span>
+          ))}
+          {remarkMode !== 'structure' && remarkMode !== 'empty' && (emotionTags || []).map((et, i) => (
+            <span key={i} style={getChipInlineStyle(et.color, et.intensity)}>
+              {et.word}
             </span>
           ))}
         </div>
@@ -342,6 +348,27 @@ export default function SceneListPage() {
     setTimeout(() => dispatch({ type: 'SET_SCROLL_TO_SCENE', id: scene.id }), 50);
   };
 
+  const [remarkMode, setRemarkMode] = useState('all'); // 'all' | 'structure' | 'emotion' | 'empty'
+
+  // 씬별 감정태그 계산 (블록에서 추출, 중복 단어 제거)
+  const sceneEmotionTags = useMemo(() => {
+    const result = {};
+    epScenes.forEach(scene => {
+      const snBlock = epBlocks.find(b => b.type === 'scene_number' && b.sceneId === scene.id);
+      if (!snBlock) { result[scene.id] = []; return; }
+      const snIdx = epBlocks.indexOf(snBlock);
+      const nextSn = epBlocks.find((b, i) => i > snIdx && b.type === 'scene_number');
+      const endIdx = nextSn ? epBlocks.indexOf(nextSn) : epBlocks.length;
+      const seg = epBlocks.slice(snIdx + 1, endIdx);
+      const seen = new Set();
+      result[scene.id] = seg
+        .filter(b => b.emotionTag?.color && b.emotionTag?.intensity)
+        .map(b => b.emotionTag)
+        .filter(t => { if (seen.has(t.word)) return false; seen.add(t.word); return true; });
+    });
+    return result;
+  }, [epScenes, epBlocks]);
+
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState('');
   const [helpOpen, setHelpOpen] = useState(false);
@@ -407,7 +434,12 @@ export default function SceneListPage() {
 
   if (!activeProjectId) return null;
 
-  const HEADERS = ['씬번호 / 장소', '내용', '등장인물', '비고'];
+  const REMARK_MODES = [
+    { key: 'all',       label: '모든태그' },
+    { key: 'structure', label: '구조태그' },
+    { key: 'emotion',   label: '감정태그' },
+    { key: 'empty',     label: '비우기'   },
+  ];
 
   return (
     <div className="flex-1 min-h-0 flex flex-col" style={{ background: 'var(--c-bg)' }}>
@@ -470,6 +502,24 @@ export default function SceneListPage() {
         </div>
       </div>
 
+      {/* 비고 표기 선택 */}
+      <div className="flex items-center gap-2 shrink-0" style={{ padding: '4px 10px', borderBottom: '1px solid var(--c-border)', background: 'var(--c-panel)' }}>
+        <span className="text-[10px]" style={{ color: 'var(--c-text6)' }}>* 비고 표기 선택 :</span>
+        {REMARK_MODES.map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setRemarkMode(key)}
+            style={{
+              fontSize: 10, padding: '1px 7px', borderRadius: 3, cursor: 'pointer',
+              border: remarkMode === key ? '1px solid var(--c-accent)' : '1px solid var(--c-border3)',
+              background: remarkMode === key ? 'var(--c-accent)' : 'transparent',
+              color: remarkMode === key ? '#fff' : 'var(--c-text5)',
+              fontWeight: remarkMode === key ? 600 : 400,
+            }}
+          >{label}</button>
+        ))}
+      </div>
+
       {/* Import confirmation bar */}
       {importing && (
         <div className="px-6 py-2 flex items-center gap-2 shrink-0" style={{ borderBottom: '1px solid var(--c-border2)', background: 'var(--c-active)' }}>
@@ -513,9 +563,10 @@ export default function SceneListPage() {
                 </colgroup>
                 <thead>
                   <tr style={{ background: 'var(--c-panel)', borderBottom: '2px solid var(--c-border2)', position: 'sticky', top: 0, zIndex: 1 }}>
-                    {HEADERS.map(h => (
+                    {['씬번호 / 장소', '내용', '등장인물'].map(h => (
                       <th key={h} className="px-3 py-2 text-left font-semibold text-xs" style={{ color: 'var(--c-text4)', whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
+                    <th className="px-3 py-2 text-left font-semibold text-xs" style={{ color: 'var(--c-text4)', whiteSpace: 'nowrap' }}>비고</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -529,6 +580,8 @@ export default function SceneListPage() {
                       onMetaChange={meta => handleMetaChange(scene.id, meta)}
                       onCharsChange={ids => handleCharsChange(scene.id, ids)}
                       onNavigate={() => { handleNavigate(scene); setFullscreen(false); }}
+                      remarkMode={remarkMode}
+                      emotionTags={sceneEmotionTags[scene.id] || []}
                     />
                   ))}
                 </tbody>
@@ -560,22 +613,17 @@ export default function SceneListPage() {
         ) : (
           <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%', minWidth: '480px' }}>
             <colgroup>
-              <col style={{ width: '25%' }} />   {/* 씬번호 + 장소 */}
-              <col style={{ width: '35%' }} />   {/* 내용 */}
-              <col style={{ width: '25%' }} />   {/* 등장인물 */}
-              <col style={{ width: '15%' }} />   {/* 비고 */}
+              <col style={{ width: '25%' }} />
+              <col style={{ width: '35%' }} />
+              <col style={{ width: '25%' }} />
+              <col style={{ width: '15%' }} />
             </colgroup>
             <thead>
               <tr style={{ background: 'var(--c-panel)', borderBottom: '2px solid var(--c-border2)', position: 'sticky', top: 0, zIndex: 1 }}>
-                {HEADERS.map(h => (
-                  <th
-                    key={h}
-                    className="px-3 py-2 text-left font-semibold text-xs"
-                    style={{ color: 'var(--c-text4)', whiteSpace: 'nowrap' }}
-                  >
-                    {h}
-                  </th>
+                {['씬번호 / 장소', '내용', '등장인물'].map(h => (
+                  <th key={h} className="px-3 py-2 text-left font-semibold text-xs" style={{ color: 'var(--c-text4)', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
+                <th className="px-3 py-2 text-left font-semibold text-xs" style={{ color: 'var(--c-text4)', whiteSpace: 'nowrap' }}>비고</th>
               </tr>
             </thead>
             <tbody>
@@ -591,6 +639,8 @@ export default function SceneListPage() {
                   onMetaChange={meta => handleMetaChange(scene.id, meta)}
                   onCharsChange={ids => handleCharsChange(scene.id, ids)}
                   onNavigate={() => handleNavigate(scene)}
+                  remarkMode={remarkMode}
+                  emotionTags={sceneEmotionTags[scene.id] || []}
                 />
               ))}
             </tbody>

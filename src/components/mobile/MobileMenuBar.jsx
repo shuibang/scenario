@@ -15,6 +15,7 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
   const menuRef = useRef(null);
   const [driveStatus, setDriveStatus] = useState('none');
   const syncingRef = useRef(false);
+  const timerSaveRef = useRef(null); // WorkTimer의 autoSave 연결
 
   // Drive 동기화 — Supabase provider_token 사용 (모바일은 자동 적용, 충돌 UI 없음)
   const runDriveSync = useCallback(async () => {
@@ -79,6 +80,7 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
   };
 
   const handleLogout = async () => {
+    timerSaveRef.current?.();
     if (isPublicPcMode()) { try { localStorage.clear(); } catch {} }
     await supabaseSignOut();
     clearAccessToken();
@@ -214,6 +216,7 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
               key={activeProjectId}
               projectId={activeProjectId}
               documentId={state.activeEpisodeId || state.activeDoc}
+              saveRef={timerSaveRef}
             />
           )}
         </div>
