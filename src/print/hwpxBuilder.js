@@ -198,7 +198,7 @@ function xmlHeader(fontName, fontSizePt, dialogueTabHwp) {
 
   // hc:intent (NOT hc:indent) is the correct HWPX element for first-line indent/outdent.
   // Negative hc:intent = 내어쓰기 (hanging indent): first line starts before hc:left.
-  const paraPr = (id, align, prevSp, nextSp, tabRef, leftMargin = 0, firstLineIndent = 0) => `      <hh:paraPr id="${id}" tabPrIDRef="${tabRef}" condense="0"
+  const paraPr = (id, align, prevSp, nextSp, tabRef, leftMargin = 0, firstLineIndent = 0, lineSpacingVal = 160) => `      <hh:paraPr id="${id}" tabPrIDRef="${tabRef}" condense="0"
           fontLineHeight="0" snapToGrid="1" suppressLineNumbers="0" checked="0">
         <hh:align horizontal="${align}" vertical="BASELINE"/>
         <hh:heading type="NONE" idRef="0" level="0"/>
@@ -212,7 +212,7 @@ function xmlHeader(fontName, fontSizePt, dialogueTabHwp) {
           <hc:prev value="${prevSp}" unit="HWPUNIT"/>
           <hc:next value="${nextSp}" unit="HWPUNIT"/>
         </hh:margin>
-        <hh:lineSpacing type="PERCENT" value="160" unit="HWPUNIT"/>
+        <hh:lineSpacing type="PERCENT" value="${lineSpacingVal}" unit="HWPUNIT"/>
         <hh:border borderFillIDRef="1" offsetLeft="0" offsetRight="0" offsetTop="0"
                    offsetBottom="0" connect="0" ignoreMargin="0"/>
       </hh:paraPr>`;
@@ -258,7 +258,7 @@ ${charPr(6, normalH,  '\n        <hh:underline type="BOTTOM" shape="SOLID" color
         <hh:tabItem pos="${dialogueTabHwp}" type="LEFT" leader="NONE" unit="HWPUNIT"/>
       </hh:tabPr>
     </hh:tabProperties>
-    <hh:paraProperties itemCnt="7">
+    <hh:paraProperties itemCnt="8">
 ${paraPr(0, 'JUSTIFY', 0,   0,   0)}
 ${paraPr(1, 'CENTER',  300, 100, 0)}
 ${paraPr(2, 'JUSTIFY', 0,   0,   0)}
@@ -266,6 +266,7 @@ ${paraPr(3, 'JUSTIFY', 0,   0,   1, 0, -dialogueTabHwp)}
 ${paraPr(4, 'JUSTIFY', 0,   0,   0, 2268)}
 ${paraPr(5, 'JUSTIFY', 0,   0,   0, dialogueTabHwp)}
 ${paraPr(6, 'RIGHT',   0,   0,   0)}
+${paraPr(7, 'JUSTIFY', 0,   0,   0, 0, 0, 1)}
     </hh:paraProperties>
     <hh:styles itemCnt="4">
       <hh:style id="0" type="PARA" name="바탕글" engName="Normal"
@@ -301,7 +302,7 @@ function secPrPara(margins, { resetPage = false, coverPage = false } = {}) {
       </hp:ctrl>
       <hp:t/>
     </hp:run>`;
-  return `  <hp:p id="${pId}" paraPrIDRef="0" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">
+  return `  <hp:p id="${pId}" paraPrIDRef="7" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">
     <hp:run charPrIDRef="0">
       <hp:secPr id="" textDirection="HORIZONTAL" spaceColumns="1134" tabStop="8000"
                 outlineShapeIDRef="1" memoShapeIDRef="0" textVerticalWidthHead="0" masterPageCnt="0">
