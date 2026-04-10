@@ -30,6 +30,16 @@ function stripHtml(html) {
   return (html || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ');
 }
 
+// <div> 줄바꿈 → <br> 로 정규화 (Chrome contenteditable은 엔터 시 <div> 사용)
+// DOMPurify 허용 목록에 div가 없어서 로드 시 div가 스트립되며 줄바꿈 소실되는 문제 방지
+function normalizeToBr(html) {
+  return (html || '')
+    .replace(/<div><br\s*\/?><\/div>/gi, '<br>')   // 빈 줄 (엔터 두번)
+    .replace(/<\/div><div>/gi, '<br>')              // 연속 div
+    .replace(/<div[^>]*>/gi, '<br>')                // div 열림
+    .replace(/<\/div>/gi, '');                      // div 닫힘 제거
+}
+
 // ─── RichField: contenteditable div
 function RichField({ label, value, onChange, placeholder, readOnly }) {
   const ref = useRef(null);
@@ -42,12 +52,15 @@ function RichField({ label, value, onChange, placeholder, readOnly }) {
     if (skipNextEffect.current) { skipNextEffect.current = false; return; }
     // Don't overwrite while user is actively editing
     if (document.activeElement === el) return;
-    el.innerHTML = DOMPurify.sanitize(value || '', { ALLOWED_TAGS: ['b', 'i', 'u', 'br', 'strong', 'em'], ALLOWED_ATTR: [] });
+    // div → br 정규화 후 sanitize: br은 ALLOWED_TAGS에 있어 줄바꿈이 보존됨
+    el.innerHTML = DOMPurify.sanitize(normalizeToBr(value), { ALLOWED_TAGS: ['b', 'i', 'u', 'br', 'strong', 'em'], ALLOWED_ATTR: [] });
   }, [value]);
 
   const handleInput = () => {
     skipNextEffect.current = true;
-    onChange(ref.current?.innerHTML ?? '');
+    // 저장 시도 div → br 정규화: 다음 로드에서도 줄바꿈 유지
+    const raw = ref.current?.innerHTML ?? '';
+    onChange(normalizeToBr(raw));
   };
 
   // Paste: strip formatting, keep plain text
