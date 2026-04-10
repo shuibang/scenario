@@ -35,11 +35,12 @@ const BUILTIN_GUIDES = [
 
 // Slash command palette items (간소화 — 자주 쓰는 것만)
 const SLASH_COMMANDS = [
-  { type: 'scene_number', action: 'block',      icon: 'S#',  label: '씬번호',  desc: '새 씬 시작' },
-  { type: 'action',       action: 'block',      icon: '지',  label: '지문',    desc: '행동/상황 묘사' },
-  { type: 'dialogue',     action: 'block',      icon: '대',  label: '대사',    desc: '인물 대사' },
-  { type: 'symbol',       action: 'symbol',     icon: '기',  label: '기타',    desc: '특수 기호 삽입' },
-  { type: 'tag',          action: 'unifiedtag', icon: '태그', label: '태그',   desc: '구조태그·감정태그 검색' },
+  { type: 'scene_number',  action: 'block',         icon: 'S#',  label: '씬번호',  desc: '새 씬 시작' },
+  { type: 'action',        action: 'block',         icon: '지',  label: '지문',    desc: '행동/상황 묘사' },
+  { type: 'dialogue',      action: 'block',         icon: '대',  label: '대사',    desc: '인물 대사' },
+  { type: 'parenthetical', action: 'parenthetical', icon: '( )', label: '괄호체',  desc: '행동 지시 괄호체' },
+  { type: 'symbol',        action: 'symbol',        icon: '기',  label: '기타',    desc: '특수 기호 삽입' },
+  { type: 'tag',           action: 'unifiedtag',    icon: '태그', label: '태그',   desc: '구조태그·감정태그 검색' },
 ];
 
 // ─── Symbol Picker ────────────────────────────────────────────────────────────
@@ -160,17 +161,48 @@ function SymbolPicker({ mobile = false, closeToken = 0, onOpen, forceOpen = null
 
   const insertSymbol = (sym) => {
     setDropPos(null);
+    onForceClose?.();
     const surface = document.querySelector('[data-editor-surface]');
     if (!surface) return;
+
+    // 슬래시 메뉴 경로: blockId가 있으면 커서 위치와 무관하게 해당 블록에 직접 삽입
+    // (surface.focus() 후 모바일에서 커서가 블록 밖으로 이동하는 문제 방지)
+    const targetBlockId = forceOpen?.blockId;
+    if (targetBlockId) {
+      const targetEl = surface.querySelector(`[data-block-id="${targetBlockId}"]`);
+      if (targetEl) {
+        const speechEl = targetEl.dataset.blockType === 'dialogue'
+          ? (targetEl.querySelector('.ce-speech') || targetEl) : targetEl;
+        speechEl.textContent = ''; // 혹시 남은 내용 정리
+        const textNode = document.createTextNode(sym);
+        speechEl.appendChild(textNode);
+        surface.focus();
+        try {
+          const r = document.createRange();
+          r.setStartAfter(textNode);
+          r.collapse(true);
+          window.getSelection()?.removeAllRanges();
+          window.getSelection()?.addRange(r);
+        } catch (_) {}
+        surface.dispatchEvent(new Event('input', { bubbles: true }));
+        return;
+      }
+    }
+
+    // 일반 경로 (버튼 직접 클릭): 현재 커서 위치에 삽입
     surface.focus();
     const sel = window.getSelection();
     if (!sel?.rangeCount) return;
     const range = sel.getRangeAt(0);
     range.deleteContents();
-    range.insertNode(document.createTextNode(sym));
-    range.collapse(false);
+    const textNode = document.createTextNode(sym);
+    range.insertNode(textNode);
+    cleanupBr(textNode.parentNode);
+    const r = document.createRange();
+    r.setStartAfter(textNode);
+    r.collapse(true);
     sel.removeAllRanges();
-    sel.addRange(range);
+    sel.addRange(r);
     surface.dispatchEvent(new Event('input', { bubbles: true }));
   };
 
@@ -455,6 +487,15 @@ function setBlockText(el, text) {
   el.innerText = text;
 }
 
+// ─── cleanupBr ────────────────────────────────────────────────────────────────
+// 텍스트가 있는 요소에서 직접 자식 <br>을 제거한다.
+// 빈 블록의 <br>은 커서 위치 확보용이므로 보존한다.
+// DOM 삽입 후 이 함수를 호출해 <br> 관련 줄바꿈 버그를 방지한다.
+function cleanupBr(el) {
+  if (!el || !el.textContent) return; // 텍스트 없으면 placeholder 보존
+  [...el.childNodes].forEach(n => { if (n.nodeName === 'BR') el.removeChild(n); });
+}
+
 function caretOff(range, blockEl) {
   if (!range || !blockEl) return 0;
   if (!blockEl.contains(range.startContainer) && blockEl !== range.startContainer) return 0;
@@ -619,6 +660,11 @@ function parseSurface(surface, metaRef, epId, projId) {
 // ─── CharSuggestionPanel ──────────────────────────────────────────────────────
 // ─── SlashPalette ─────────────────────────────────────────────────────────────
 function SlashPalette({ commands, position, selectedIdx, onSelect, onClose }) {
+  const itemRefs = useRef([]);
+  useEffect(() => {
+    itemRefs.current[selectedIdx]?.scrollIntoView({ block: 'nearest' });
+  }, [selectedIdx]);
+
   if (!commands.length) return null;
   return createPortal(
     <>
@@ -627,13 +673,16 @@ function SlashPalette({ commands, position, selectedIdx, onSelect, onClose }) {
         position: 'fixed', top: position.y, left: position.x,
         zIndex: 200, background: 'var(--c-panel)',
         border: '1px solid var(--c-border)', borderRadius: 8,
-        boxShadow: '0 4px 20px rgba(0,0,0,0.2)', minWidth: 190, overflow: 'hidden',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.2)', minWidth: 190,
+        maxHeight: position.maxH ? `${Math.floor(position.maxH)}px` : 260,
+        overflowY: 'auto',
       }}>
         {commands.map((cmd, idx) => {
           const sel = idx === selectedIdx;
           return (
             <div
               key={cmd.type}
+              ref={el => { itemRefs.current[idx] = el; }}
               onMouseDown={e => { e.preventDefault(); onSelect(cmd.type); }}
               style={{
                 display: 'flex', alignItems: 'center', gap: 10,
@@ -1517,6 +1566,22 @@ const EditorSurface = forwardRef(function EditorSurface({
   // ── Input handler ─────────────────────────────────────────────────────────
   const handleInput = useCallback(() => {
     if (composingRef.current) return;
+
+    // DOM 삽입 후 남은 <br> placeholder 정규화 (모든 블록 타입)
+    {
+      const selPre = window.getSelection();
+      const elPre = surfaceRef.current;
+      if (selPre?.rangeCount && elPre) {
+        const bElPre = findBlockEl(selPre.getRangeAt(0).startContainer, elPre);
+        if (bElPre) {
+          const target = bElPre.dataset.blockType === 'dialogue'
+            ? (bElPre.querySelector('.ce-speech') || bElPre)
+            : bElPre;
+          cleanupBr(target);
+        }
+      }
+    }
+
     doParse();
 
     const sel = window.getSelection();
@@ -1527,11 +1592,10 @@ const EditorSurface = forwardRef(function EditorSurface({
     // Slash palette: 커서 앞에 '/'가 있으면 감지 (내용 있는 블록도 지원)
     if (blockEl) {
       const bType = blockEl.dataset.blockType;
-      const textNode = bType === 'dialogue'
-        ? (blockEl.querySelector('.ce-speech') || blockEl)
-        : blockEl;
+      const speechEl = bType === 'dialogue' ? blockEl.querySelector('.ce-speech') : null;
+      const textNode = speechEl || blockEl;
       const rawText = bType === 'dialogue'
-        ? (blockEl.querySelector('.ce-speech')?.innerText || '').replace(/\n$/, '')
+        ? (speechEl ? speechEl.innerText.replace(/\n$/, '') : blockText(blockEl))
         : blockText(blockEl);
       // 커서 위치 확인 — '/'가 바로 앞에 있는지
       const range2 = sel?.rangeCount ? sel.getRangeAt(0) : null;
@@ -2364,11 +2428,22 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   // ── Slash palette handlers
   const handleSlashInput = useCallback(({ blockEl, query }) => {
     const rect = blockEl.getBoundingClientRect();
-    const vvH = window.visualViewport?.height ?? window.innerHeight;
-    const paletteH = 280;
-    const spaceBelow = vvH - rect.bottom;
-    const y = spaceBelow >= paletteH ? rect.bottom + 4 : Math.max(4, rect.top - paletteH - 4);
-    setSlashPalette({ blockEl, query, x: rect.left, y, selectedIdx: 0 });
+    const vv = window.visualViewport;
+    const vvH = vv?.height ?? window.innerHeight;
+    const vvW = vv?.width ?? window.innerWidth;
+    const MIN_H = 120;
+    const spaceBelow = vvH - rect.bottom - 8;
+    const spaceAbove = rect.top - 8;
+    let y, maxH;
+    if (spaceBelow >= MIN_H) {
+      y = rect.bottom + 4;
+      maxH = spaceBelow;
+    } else {
+      maxH = Math.max(MIN_H, spaceAbove);
+      y = Math.max(4, rect.top - maxH - 4);
+    }
+    const x = Math.min(rect.left, vvW - 204);
+    setSlashPalette({ blockEl, query, x, y, maxH, selectedIdx: 0 });
   }, []);
 
   const handleSlashClose = useCallback(() => setSlashPalette(null), []);
@@ -2428,13 +2503,11 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     // 전체 삭제 (block 타입 변경 시)
     const clearBlockSlash = (el) => {
       if (!el) return;
-      const target = isDialogue ? (el.querySelector('.ce-speech') || el) : el;
-      if (isDialogue) {
-        const speech = el.querySelector('.ce-speech');
-        if (speech) speech.textContent = '';
-      } else {
-        el.textContent = '';
-      }
+      const speech = isDialogue ? el.querySelector('.ce-speech') : null;
+      const target = speech || el; // .ce-speech 없는 대사 블록도 el로 폴백
+      // speech span이 있으면 speech만, 없으면(대사 포함) el 전체 삭제
+      (speech || el).textContent = '';
+      cleanupBr(target); // 삭제 후 남은 <br> placeholder 제거
       try {
         const r = document.createRange();
         r.setStart(target, 0);
@@ -2444,14 +2517,9 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
       } catch (_) {}
     };
 
-    if (blockEl && cmd.action !== 'sceneref' && cmd.action !== 'symbol') {
-      if (cmd.action === 'unifiedtag') {
-        removeSlashOnly(blockEl, targetEl);
-        // DOM 수정 직후 state 동기화 — useEffect([initialBlocks])가 /를 복원하지 않도록
-        surfaceApiRef.current?.parse();
-      } else {
-        clearBlockSlash(blockEl);
-      }
+    if (blockEl && cmd.action !== 'sceneref' && cmd.action !== 'symbol'
+        && cmd.action !== 'unifiedtag' && cmd.action !== 'parenthetical') {
+      clearBlockSlash(blockEl);
     }
 
     if (cmd.action === 'block') {
@@ -2473,9 +2541,13 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
       // 기타: 블록 텍스트 지우고 기타 피커 열기
       if (blockEl) clearBlockSlash(blockEl);
       const rect3 = blockEl?.getBoundingClientRect() || { bottom: 120, left: 200 };
-      requestAnimationFrame(() => setSlashSymbolPos({ top: rect3.bottom + 4, left: rect3.left }));
+      const blockId3 = blockEl?.dataset.blockId;
+      requestAnimationFrame(() => setSlashSymbolPos({ top: rect3.bottom + 4, left: rect3.left, blockId: blockId3 }));
     } else if (cmd.action === 'unifiedtag') {
       // 통합 태그: 구조태그 + 감정태그 한 번에
+      removeSlashOnly(blockEl, targetEl);
+      cleanupBr(targetEl);
+      surfaceApiRef.current?.parse();
       const blockId = blockEl?.dataset.blockId;
       const sceneId = getCurrentSceneIdRef.current?.();
       const rect2 = blockEl?.getBoundingClientRect() || { bottom: 120, left: 200 };
@@ -2484,31 +2556,44 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
           setSlashUnifiedTag({ blockId, sceneId, top: rect2.bottom + 4, left: rect2.left });
         });
       }
+    } else if (cmd.action === 'parenthetical') {
+      // /쿼리 제거 후 () 삽입, 커서를 괄호 안으로
+      removeSlashOnly(blockEl, targetEl);
+      requestAnimationFrame(() => {
+        const sel = window.getSelection();
+        if (!sel || !sel.rangeCount) return;
+        const range = sel.getRangeAt(0);
+        const parenNode = document.createTextNode('()');
+        range.insertNode(parenNode);
+        const r = document.createRange();
+        r.setStart(parenNode, 1); // ( 와 ) 사이
+        r.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(r);
+        surfaceApiRef.current?.parse();
+      });
     }
   }, [applyBlockType, hasKeyboard]);
 
   const handleSlashSelectType = useCallback((cmdType) => {
-    setSlashPalette(prev => {
-      if (!prev) return null;
-      const cmd = SLASH_COMMANDS.find(c => c.type === cmdType);
-      if (cmd) executeSlashAction(cmd, prev.blockEl);
-      return null;
-    });
+    const current = slashPaletteRef.current;
+    setSlashPalette(null);
+    if (!current) return;
+    const cmd = SLASH_COMMANDS.find(c => c.type === cmdType);
+    if (cmd) executeSlashAction(cmd, current.blockEl);
   }, [executeSlashAction]);
 
   const handleSlashSelectCurrent = useCallback(() => {
-    setSlashPalette(prev => {
-      if (!prev) return null;
-      const filtered = SLASH_COMMANDS.filter(cmd => {
-        if (!prev.query) return true;
-        return cmd.label.includes(prev.query) || cmd.type.includes(prev.query) || cmd.desc.includes(prev.query);
-      });
-      const item = filtered[prev.selectedIdx ?? 0];
-      if (!item) return null;
-      executeSlashAction(item, prev.blockEl);
-      return null;
+    const current = slashPaletteRef.current;
+    setSlashPalette(null);
+    if (!current) return;
+    const filtered = SLASH_COMMANDS.filter(cmd => {
+      if (!current.query) return true;
+      return cmd.label.includes(current.query) || cmd.type.includes(current.query) || cmd.desc.includes(current.query);
     });
-  }, [executeSlashAction, isMobile]);
+    const item = filtered[current.selectedIdx ?? 0];
+    if (item) executeSlashAction(item, current.blockEl);
+  }, [executeSlashAction]);
 
   // ── flushSave: 즉시 저장 (자동저장 타이머 무시)
   const flushSave = useCallback(() => {
