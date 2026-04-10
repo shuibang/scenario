@@ -14,7 +14,7 @@ import {
   AlignmentType, TabStopType,
   convertMillimetersToTwip,
   Footer, PageNumber,
-  SectionType, LineRuleType, NumberFormat,
+  SectionType, LineRuleType, NumberFormat, PageOrientation,
   Table, TableRow, TableCell, WidthType, BorderStyle,
 } from 'docx';
 import { buildPrintModel } from './PrintModel';
@@ -366,7 +366,7 @@ function buildDocxSections(printModel, dp, { hancom = false } = {}) {
         properties: {
           type: SectionType.NEXT_PAGE,
           page: {
-            size: { width: convertMillimetersToTwip(210), height: convertMillimetersToTwip(297), orientation: 'landscape' },
+            size: { orientation: PageOrientation.LANDSCAPE },
             margin: { top: convertMillimetersToTwip(20), right: convertMillimetersToTwip(20), bottom: convertMillimetersToTwip(20), left: convertMillimetersToTwip(20) },
           },
         },
