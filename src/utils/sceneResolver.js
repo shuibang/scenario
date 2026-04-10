@@ -74,21 +74,30 @@ export function parseSceneContent(content) {
     rest = spMatch[2].trim();
   }
 
-  // Extract time of day: "장소 (시간대)"
-  const timeMatch = rest.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
-  if (timeMatch) {
-    const candidateTime = timeMatch[2].trim();
-    if (TIME_OF_DAY_OPTIONS.includes(candidateTime) || candidateTime.length <= 4) {
-      rest = timeMatch[1].trim();
-      timeOfDay = candidateTime;
+  // "-" 기준으로 장소/세부장소 분리, "(" 기준으로 시간대 분리
+  // 형식: "장소[ - 세부장소] [(시간대)]"
+  // 세부장소 = '-' 와 '(' 사이의 모든 텍스트
+  const dashIdx = rest.indexOf('-');
+  if (dashIdx !== -1) {
+    const locationPart = rest.slice(0, dashIdx).trim();
+    const afterDash    = rest.slice(dashIdx + 1).trim();
+    const parenIdx     = afterDash.indexOf('(');
+    if (parenIdx !== -1) {
+      subLocation = afterDash.slice(0, parenIdx).trim();
+      const closeIdx = afterDash.lastIndexOf(')');
+      timeOfDay = closeIdx > parenIdx ? afterDash.slice(parenIdx + 1, closeIdx).trim() : '';
+    } else {
+      subLocation = afterDash;
     }
-  }
-
-  // Extract sub-location: "장소 - 세부장소"
-  const subMatch = rest.match(/^(.+?)\s*-\s*(.+)$/);
-  if (subMatch) {
-    rest = subMatch[1].trim();
-    subLocation = subMatch[2].trim();
+    rest = locationPart;
+  } else {
+    // '-' 없음: 장소 뒤 '(시간대)' 만 추출
+    const parenIdx = rest.indexOf('(');
+    if (parenIdx !== -1) {
+      const closeIdx = rest.lastIndexOf(')');
+      timeOfDay = closeIdx > parenIdx ? rest.slice(parenIdx + 1, closeIdx).trim() : '';
+      rest = rest.slice(0, parenIdx).trim();
+    }
   }
 
   return { specialSituation, location: rest, subLocation, timeOfDay };
