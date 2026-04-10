@@ -176,7 +176,9 @@ function SymbolPicker({ mobile = false, closeToken = 0, onOpen, forceOpen = null
         speechEl.textContent = ''; // 혹시 남은 내용 정리
         const textNode = document.createTextNode(sym);
         speechEl.appendChild(textNode);
+        cleanupBr(speechEl); // 삽입 직후 <br> 제거
         surface.focus();
+        cleanupBr(speechEl); // focus 후 브라우저가 추가할 수 있는 <br> 재정리
         try {
           const r = document.createRange();
           r.setStartAfter(textNode);
@@ -1644,6 +1646,9 @@ const EditorSurface = forwardRef(function EditorSurface({
     // ── ArrowUp/Down: 빈 블록 건너뜀 방지
     // 브라우저는 <br>만 있는 빈 블록을 수직 탐색에서 건너뛰므로 직접 처리.
     if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !e.shiftKey && !ctrl) {
+      // 슬래시 팔레트가 열려있으면 빈 블록 탐색 건너뜀 → 팔레트 핸들러로 위임
+      if (slashOpenRef?.current) { /* fall through to slash palette handler below */ }
+      else {
       const isUp = e.key === 'ArrowUp';
       const caretRect  = range.getBoundingClientRect();
       const blockRect  = blockEl.getBoundingClientRect();
@@ -1675,6 +1680,7 @@ const EditorSurface = forwardRef(function EditorSurface({
           }
         }
       }
+      } // end else (slashOpenRef not open)
     }
 
     // ── Slash palette keyboard handling
