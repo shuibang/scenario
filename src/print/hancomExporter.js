@@ -14,7 +14,6 @@
  */
 
 import { exportDocx } from './printDocx';
-import { getFontById } from './FontRegistry';
 import { buildHwpx } from './hwpxBuilder';
 
 /**
@@ -22,14 +21,7 @@ import { buildHwpx } from './hwpxBuilder';
  * Currently outputs .docx that HWP 2014+ and Hancom Office can open cleanly.
  */
 export async function exportHancom(appState, selections, { onStep = () => {} } = {}) {
-  const hancomState = {
-    ...appState,
-    stylePreset: {
-      ...(appState.stylePreset || {}),
-    },
-  };
-
-  return exportDocx(hancomState, selections, { onStep, hancom: true });
+  return exportDocx(appState, selections, { onStep, hancom: true });
 }
 
 /**

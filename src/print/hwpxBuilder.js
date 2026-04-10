@@ -253,9 +253,9 @@ ${charPr(4, normalH,  '\n        <hh:bold/>')}
 ${charPr(5, normalH,  '\n        <hh:italic/>')}
 ${charPr(6, normalH,  '\n        <hh:underline type="BOTTOM" shape="SOLID" color="#000000"/>')}
     </hh:charProperties>
-    <hh:tabProperties itemCnt="1">
-      <hh:tabPr id="0" autoTabLeft="0" autoTabRight="0">
-        <hh:tabItem pos="${halfGap}" type="LEFT" leader="NONE" unit="HWPUNIT"/>
+    <hh:tabProperties itemCnt="2">
+      <hh:tabPr id="0" autoTabLeft="0" autoTabRight="0"/>
+      <hh:tabPr id="1" autoTabLeft="0" autoTabRight="0">
         <hh:tabItem pos="${dialogueTabHwp}" type="LEFT" leader="NONE" unit="HWPUNIT"/>
       </hh:tabPr>
     </hh:tabProperties>
@@ -263,7 +263,7 @@ ${charPr(6, normalH,  '\n        <hh:underline type="BOTTOM" shape="SOLID" color
 ${paraPr(0, 'JUSTIFY', 0,   0,   0)}
 ${paraPr(1, 'CENTER',  300, 100, 0)}
 ${paraPr(2, 'JUSTIFY', 200, 0,   0)}
-${paraPr(3, 'JUSTIFY', 0,   0,   0, dialogueTabHwp, -dialogueTabHwp)}
+${paraPr(3, 'JUSTIFY', 0,   0,   1, 0, -dialogueTabHwp)}
 ${paraPr(4, 'JUSTIFY', 0,   0,   0, 2268)}
 ${paraPr(5, 'JUSTIFY', 0,   0,   0, dialogueTabHwp)}
 ${paraPr(6, 'RIGHT',   0,   0,   0)}
@@ -287,13 +287,21 @@ ${paraPr(6, 'RIGHT',   0,   0,   0)}
 // ─── secPr control paragraph ────────────────────────────────────────────────
 // resetPage=true: 이 구역부터 쪽번호 1로 리셋 (시놉시스/회차 첫 페이지)
 // resetPage=false: 연속 쪽번호 (표지 등)
-function secPrPara(margins, { resetPage = false } = {}) {
+// coverPage=true: 쪽번호 ctrl 자체를 생략 (표지 전용)
+function secPrPara(margins, { resetPage = false, coverPage = false } = {}) {
   const pId  = _pid++;
   const mTop = mmToHwp(margins.top);
   const mBot = mmToHwp(margins.bottom);
   const mLR  = mmToHwp(margins.left);
   // page="1" → 이 구역 첫 쪽을 1로 강제 / page="0" → 이전 구역에서 연속
   const pageNum = resetPage ? '1' : '0';
+  const pageNumRun = coverPage ? '' : `
+    <hp:run charPrIDRef="0">
+      <hp:ctrl>
+        <hp:pageNum pos="BOTTOM_CENTER" formatType="DIGIT" sideChar="-"/>
+      </hp:ctrl>
+      <hp:t/>
+    </hp:run>`;
   return `  <hp:p id="${pId}" paraPrIDRef="0" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">
     <hp:run charPrIDRef="0">
       <hp:secPr id="" textDirection="HORIZONTAL" spaceColumns="1134" tabStop="8000"
@@ -335,13 +343,7 @@ function secPrPara(margins, { resetPage = false } = {}) {
       <hp:ctrl>
         <hp:colPr id="" type="NEWSPAPER" layout="LEFT" colCount="1" sameSz="1" sameGap="0"/>
       </hp:ctrl>
-    </hp:run>
-    <hp:run charPrIDRef="0">
-      <hp:ctrl>
-        <hp:pageNum pos="BOTTOM_CENTER" formatType="DIGIT" sideChar="-"/>
-      </hp:ctrl>
-      <hp:t/>
-    </hp:run>
+    </hp:run>${pageNumRun}
     <hp:linesegarray>
       <hp:lineseg textpos="0" vertpos="0" vertsize="1100" textheight="1100" baseline="935"
                   spacing="660" horzpos="0" horzsize="42520" flags="393216"/>
@@ -371,8 +373,8 @@ function xmlSection(printModel, margins) {
   let firstSection = true;
   for (const sec of printModel.sections) {
     if (!firstSection) {
-      // 새 구역 시작 → secPrPara로 쪽번호 1부터 리셋
-      paras.push(secPrPara(margins, { resetPage: sec.type !== 'cover' }));
+      // 새 구역 시작 → secPrPara로 쪽번호 1부터 리셋 (표지는 쪽번호 없음)
+      paras.push(secPrPara(margins, { resetPage: sec.type !== 'cover', coverPage: sec.type === 'cover' }));
     }
     firstSection = false;
 
@@ -397,7 +399,9 @@ function xmlSection(printModel, margins) {
         if (sec.story)  {
           head('줄거리');
           empty();
-          sec.story.split('\n').forEach(line => normal(line));
+          sec.story.split('\n').forEach(line => {
+            if (line.trim()) normal(line);
+          });
           empty();
         }
         if (sec.characters?.length) {
@@ -413,13 +417,11 @@ function xmlSection(printModel, margins) {
         break;
       }
       case 'episode': {
-        empty();
         head(`${sec.episodeNumber}회${sec.episodeTitle ? ' ' + sec.episodeTitle : ''}`);
-        empty();
         let prevBlock = null;
         for (const block of sec.blocks) {
-          // Add blank line only on type changes (same-type blocks flow without gaps)
-          if (prevBlock !== null && prevBlock.type !== block.type) empty();
+          // Add blank line only on type changes, but not after scene_number
+          if (prevBlock !== null && prevBlock.type !== block.type && prevBlock.type !== 'scene_number') empty();
           switch (block.type) {
             case 'scene_number':
               head(`${block.label || ''} ${block.content || ''}`.trim());
@@ -479,7 +481,7 @@ function xmlSection(printModel, margins) {
         xmlns:ooxmlchart="urn:schemas-microsoft-com:office:office"
         xmlns:hwpunitchar="http://www.hancom.co.kr/hwpml/2016/HwpUnitChar"
         xmlns:epub="http://www.idpf.org/2007/ops">
-${secPrPara(margins)}
+${secPrPara(margins, { coverPage: printModel.sections[0]?.type === 'cover' })}
 ${paras.join('\n')}
 </hs:sec>`;
 }
