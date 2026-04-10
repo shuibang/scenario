@@ -371,8 +371,11 @@ function buildDocxSections(printModel, dp, { hancom = false } = {}) {
           type: SectionType.NEXT_PAGE,
           page: {
             size: {
-              width: convertMillimetersToTwip(297),
-              height: convertMillimetersToTwip(210),
+              // docxjs swaps width↔height internally when orientation=LANDSCAPE:
+              //   w:w = passed height, w:h = passed width
+              // To get w:w=16838(297mm) w:h=11906(210mm), pass portrait dimensions.
+              width: convertMillimetersToTwip(210),
+              height: convertMillimetersToTwip(297),
               orientation: PageOrientation.LANDSCAPE,
             },
             margin: slMargin,

@@ -317,7 +317,8 @@ function secPrPara(margins, { resetPage = false, coverPage = false, landscape = 
   // 가로 방향: width/height 교체, landscape="HORIZONTAL"
   const pgW = landscape ? A4_H : A4_W;
   const pgH = landscape ? A4_W : A4_H;
-  const pgLandscape = landscape ? 'HORIZONTAL' : 'NARROWLY';
+  // HWPX landscape enum: NARROWLY=세로(portrait), WIDELY=가로(landscape)
+  const pgLandscape = landscape ? 'WIDELY' : 'NARROWLY';
   return `  <hp:p id="${pId}" paraPrIDRef="7" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">
     <hp:run charPrIDRef="0">
       <hp:secPr id="" textDirection="HORIZONTAL" spaceColumns="1134" tabStop="8000"
