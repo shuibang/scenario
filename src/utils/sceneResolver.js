@@ -67,7 +67,8 @@ export function parseSceneContent(content) {
   let subLocation = '';
 
   // Extract special situation: "특수상황) ..."
-  const spMatch = rest.match(/^([^)]+)\)\s*(.*)$/);
+  // [^()] : "(" 또는 ")" 미포함 → "바닷가 (낮)" 같은 일반 장소+시간 표기를 특수상황으로 오파싱 방지
+  const spMatch = rest.match(/^([^()]+)\)\s*(.*)$/);
   if (spMatch) {
     specialSituation = spMatch[1].trim();
     rest = spMatch[2].trim();

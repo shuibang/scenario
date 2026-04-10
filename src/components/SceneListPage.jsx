@@ -3,7 +3,7 @@ import { useApp } from '../store/AppContext';
 import { resolveSceneLabel, parseSceneContent, TIME_OF_DAY_OPTIONS } from '../utils/sceneResolver';
 import { now, genId } from '../store/db';
 import { getChipInlineStyle } from '../utils/emotionColor';
-import { exportScenelistXlsx, exportScenelistDocx } from '../print/scenelistExport';
+import { exportScenelistXlsx } from '../print/scenelistExport';
 
 // ─── CharacterMultiSelect ─────────────────────────────────────────────────────
 function CharacterMultiSelect({ characterIds = [], projectChars, autoDetectedStr, onChange }) {
@@ -375,16 +375,12 @@ export default function SceneListPage() {
 
   const currentEp = useMemo(() => projectEpisodes.find(e => e.id === epId), [projectEpisodes, epId]);
 
-  const handleDownload = async (fmt) => {
+  const handleDownload = async () => {
     if (!currentEp || !epScenes.length) return;
     setDownloading(true);
     setDlMsg('');
     try {
-      if (fmt === 'xlsx') {
-        await exportScenelistXlsx(currentEp, epScenes, projectChars);
-      } else {
-        await exportScenelistDocx(currentEp, epScenes, projectChars, state.stylePreset);
-      }
+      await exportScenelistXlsx(currentEp, epScenes, projectChars);
     } catch (e) {
       console.error('[scenelistExport]', e);
       setDlMsg('오류 발생');
@@ -516,17 +512,11 @@ export default function SceneListPage() {
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           {(importMsg || dlMsg) && <span className="text-xs" style={{ color: 'var(--c-accent2)' }}>{importMsg || dlMsg}</span>}
           <button
-            onClick={() => handleDownload('xlsx')}
+            onClick={handleDownload}
             disabled={downloading || !epScenes.length}
             title="엑셀(XLSX)로 다운로드"
             style={{ padding: '3px 10px', borderRadius: 4, fontSize: 11, background: 'transparent', color: 'var(--c-text3)', border: '1px solid var(--c-border3)', cursor: downloading ? 'default' : 'pointer', opacity: downloading ? 0.5 : 1 }}
           >XLSX</button>
-          <button
-            onClick={() => handleDownload('docx')}
-            disabled={downloading || !epScenes.length}
-            title="워드(DOCX)로 다운로드"
-            style={{ padding: '3px 10px', borderRadius: 4, fontSize: 11, background: 'transparent', color: 'var(--c-text3)', border: '1px solid var(--c-border3)', cursor: downloading ? 'default' : 'pointer', opacity: downloading ? 0.5 : 1 }}
-          >DOCX</button>
           <button
             onClick={() => setImporting(true)}
             style={{ padding: '3px 10px', borderRadius: 4, fontSize: 11, background: 'transparent', color: 'var(--c-text3)', border: '1px solid var(--c-border3)', cursor: 'pointer' }}
