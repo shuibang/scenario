@@ -343,10 +343,6 @@ function secPrPara(margins, { resetPage = false, coverPage = false } = {}) {
         <hp:colPr id="" type="NEWSPAPER" layout="LEFT" colCount="1" sameSz="1" sameGap="0"/>
       </hp:ctrl>
     </hp:run>${pageNumRun}
-    <hp:linesegarray>
-      <hp:lineseg textpos="0" vertpos="0" vertsize="1100" textheight="1100" baseline="935"
-                  spacing="660" horzpos="0" horzsize="42520" flags="393216"/>
-    </hp:linesegarray>
   </hp:p>`;
 }
 
@@ -417,10 +413,14 @@ function xmlSection(printModel, margins) {
       }
       case 'episode': {
         head(`${sec.episodeNumber}회${sec.episodeTitle ? ' ' + sec.episodeTitle : ''}`);
+        const CONTENT_TYPES = new Set(['action', 'dialogue', 'parenthetical']);
         let prevBlock = null;
         for (const block of sec.blocks) {
-          // Add blank line only on type changes, but not after scene_number
-          if (prevBlock !== null && prevBlock.type !== block.type && prevBlock.type !== 'scene_number') empty();
+          if (prevBlock !== null && prevBlock.type !== block.type
+              && prevBlock.type !== 'scene_number'
+              && !(CONTENT_TYPES.has(prevBlock.type) && CONTENT_TYPES.has(block.type))) {
+            empty();
+          }
           switch (block.type) {
             case 'scene_number':
               head(`${block.label || ''} ${block.content || ''}`.trim());
