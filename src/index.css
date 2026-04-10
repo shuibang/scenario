@@ -8,19 +8,19 @@
 :root {
   /* ── Backgrounds */
   --c-bg:      #1a1a1a;
-  --c-panel:   #171717;
+  --c-panel:   #1e1e30;
   --c-header:  #111111;
   --c-input:   #242424;
-  --c-hover:   #242424;
-  --c-active:  #2a2a4a;
-  --c-tag:     #2a2a3a;
+  --c-hover:   #2a2a3e;
+  --c-active:  #4848b8;
+  --c-tag:     #2e2e4a;
   --c-card:    #1e1e1e;
 
   /* ── Borders */
-  --c-border:  #252525;
-  --c-border2: #2a2a2a;
-  --c-border3: #333333;
-  --c-border4: #3a3a4a;
+  --c-border:  #2e2e42;
+  --c-border2: #323248;
+  --c-border3: #3a3a52;
+  --c-border4: #5252a0;
 
   /* ── Text */
   --c-text:    #e0e0e0;
@@ -50,9 +50,9 @@
   --c-panel:   #ffffff;
   --c-header:  #f0f0f0;
   --c-input:   #eeeeee;
-  --c-hover:   #ebebeb;
-  --c-active:  #ede9fe;
-  --c-tag:     #e8e4ff;
+  --c-hover:   #ddd8fb;
+  --c-active:  #c4b5fd;
+  --c-tag:     #edeaff;
   --c-card:    #f5f5f5;
 
   /* ── Borders */
