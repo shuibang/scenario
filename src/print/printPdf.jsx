@@ -60,30 +60,27 @@ function makeStyles(preset, metrics) {
       fontSize:      fs,
       lineHeight:    lh,
       color:         '#000',
-      // mm 문자열로 지정 → react-pdf가 내부 단위 변환 직접 담당 (수치 오차 방지)
-      paddingTop:    `${margins.top}mm`,
-      paddingRight:  `${margins.right}mm`,
-      paddingBottom: `${margins.bottom}mm`,
-      paddingLeft:   `${margins.left}mm`,
+      paddingTop:    margins.top    * MM_TO_PT,
+      paddingRight:  margins.right  * MM_TO_PT,
+      paddingBottom: margins.bottom * MM_TO_PT,
+      paddingLeft:   margins.left   * MM_TO_PT,
     },
-    // ── cover
+    // ── cover (absolute % 사용 — CoverPage 전용)
     coverWrap:        { flex: 1, position: 'relative' },
     coverTitleGroup:  { position: 'absolute', top: '28%', left: 0, right: 0, alignItems: 'center' },
     coverFieldsGroup: { position: 'absolute', top: '70%', left: 0, right: 0, alignItems: 'center' },
     coverTitle:       { fontSize: fs + 11, fontWeight: 700, marginBottom: fs * lh, textAlign: 'center' },
     coverSubtitle:    { fontSize: fs + 5,  fontWeight: 400, marginBottom: 4, textAlign: 'center', color: '#555' },
     coverField:       { fontSize: fs,      marginBottom: 3, textAlign: 'center' },
-    // ── page number (fixed footer — no absolute positioning)
-    pageNumWrap: {
-      position: 'absolute',
-      bottom: 15 * MM_TO_PT,
-      left: 0,
-      right: 0,
-    },
+    // ── page number: position:absolute + fixed Text (react-pdf 공식 패턴)
     pageNum: {
+      position:  'absolute',
+      bottom:    15 * MM_TO_PT,
+      left:      0,
+      right:     0,
       textAlign: 'center',
-      fontSize: Math.max(fs - 2, 7),
-      color: '#555',
+      fontSize:  Math.max(fs - 2, 7),
+      color:     '#555',
     },
     // ── synopsis / characters
     heading:  { fontWeight: 700, marginBottom: 2 },
@@ -92,13 +89,12 @@ function makeStyles(preset, metrics) {
     // ── episode
     epTitle:     { fontSize: fs + 2, fontWeight: 700, textAlign: 'center' },
     scene:       { fontWeight: 700, marginTop: 10, marginBottom: 2 },
-    // action/paren: View wrapper에 width 명시 → 페이지 경계에서 flex 재계산 방지
-    actionWrap:  { width: contentWpt, paddingLeft: '8mm', marginBottom: 1 },
+    actionWrap:  { paddingLeft: 8 * MM_TO_PT, marginBottom: 1 },
     action:      { textAlign: 'justify' },
-    dialogueRow: { width: contentWpt, flexDirection: 'row', marginBottom: 1 },
+    dialogueRow: { flexDirection: 'row', marginBottom: 1 },
     charCell:    { width: dialogueGapPt, fontWeight: 700, flexShrink: 0 },
-    speechCell:  { width: contentWpt - dialogueGapPt, textAlign: 'justify' },
-    parenWrap:   { width: contentWpt, paddingLeft: dialogueGapPt, marginBottom: 1 },
+    speechCell:  { flex: 1, textAlign: 'justify' },
+    parenWrap:   { paddingLeft: dialogueGapPt, marginBottom: 1 },
     paren:       { fontSize: fs - 1, color: '#444' },
     transition:  { textAlign: 'right', marginVertical: 4 },
     blank:       { marginBottom: fs * lh },
@@ -210,9 +206,7 @@ function SectionPage({ tokens, S }) {
   const blockTokens = tokens.filter(tok => tok.isFirstOfBlock !== false);
   return (
     <Page size="A4" style={S.page}>
-      <View style={S.pageNumWrap} fixed>
-        <Text style={S.pageNum} render={({ pageNumber }) => `- ${pageNumber} -`} />
-      </View>
+      <Text style={S.pageNum} fixed render={({ pageNumber }) => `- ${pageNumber} -`} />
       {blockTokens.map((token, i) => (
         <TokenEl
           key={i}
