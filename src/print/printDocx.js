@@ -366,7 +366,7 @@ function buildDocxSections(printModel, dp, { hancom = false } = {}) {
         properties: {
           type: SectionType.NEXT_PAGE,
           page: {
-            size: { width: convertMillimetersToTwip(297), height: convertMillimetersToTwip(210), orientation: 'landscape' },
+            size: { width: convertMillimetersToTwip(210), height: convertMillimetersToTwip(297), orientation: 'landscape' },
             margin: { top: convertMillimetersToTwip(20), right: convertMillimetersToTwip(20), bottom: convertMillimetersToTwip(20), left: convertMillimetersToTwip(20) },
           },
         },

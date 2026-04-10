@@ -381,7 +381,8 @@ function scenelistTable(scenes, margins) {
     const pId = _pid++;
     const cid = bold ? 3 : 0;
     const plain = esc(String(text ?? ''));
-    return `          <hp:td name="" header="0" hasMargin="0" protect="0" editable="0" dirty="0" borderFillIDRef="2">
+    return `          <hp:td name="" header="0" hasMargin="0" protect="0" editable="0" dirty="0"
+                    rowMerged="0" colMerged="0" borderFillIDRef="2">
             <hp:cellAddr colAddr="${colIdx}" rowAddr="${rowIdx}"/>
             <hp:cellSpan colSpan="1" rowSpan="1"/>
             <hp:cellSz width="${COL_W[colIdx]}" height="${ROW_H}"/>
@@ -392,30 +393,34 @@ function scenelistTable(scenes, margins) {
           </hp:td>`;
   };
 
-  const headerRow = `        <hp:tr height="${ROW_H}">
-${HEADERS.map((h, i) => makeCell(h, i, 0, true)).join('\n')}
+  // hp:tr 필수 속성: header, hasRepeat, pageBreak, breakLatinWord, breakNonLatinWord
+  const tr = (rowIdx, cells) =>
+    `        <hp:tr height="${ROW_H}" header="0" hasRepeat="0" pageBreak="NAUTO"
+                breakLatinWord="KEEP_WORD" breakNonLatinWord="KEEP_WORD">
+${cells.join('\n')}
         </hp:tr>`;
+
+  const headerRow = tr(0, HEADERS.map((h, i) => makeCell(h, i, 0, true)));
 
   const dataRows = scenes.map((scene, ri) => {
     const cells = [
       scene.sceneNum,
-      scene.location       || '',
-      scene.subLocation    || '',
-      scene.dayText        || '',
-      scene.nightText      || '',
+      scene.location         || '',
+      scene.subLocation      || '',
+      scene.dayText          || '',
+      scene.nightText        || '',
       (scene.characters || []).join(', '),
       scene.sceneListContent || '',
       '',
     ].map((txt, ci) => makeCell(txt, ci, ri + 1, false));
-    return `        <hp:tr height="${ROW_H}">
-${cells.join('\n')}
-        </hp:tr>`;
+    return tr(ri + 1, cells);
   });
 
   const totalH = ROW_H * (1 + scenes.length);
   const tblId  = _tid++;
   const pId    = _pid++;
 
+  // hp:t/ 은 ctrl 뒤에 반드시 있어야 함 (pageNum ctrl과 동일한 패턴)
   return `  <hp:p id="${pId}" paraPrIDRef="0" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">
     <hp:run charPrIDRef="0">
       <hp:ctrl>
@@ -428,6 +433,7 @@ ${headerRow}
 ${dataRows.join('\n')}
         </hp:tbl>
       </hp:ctrl>
+      <hp:t/>
     </hp:run>
   </hp:p>`;
 }
