@@ -26,8 +26,6 @@ export async function exportHancom(appState, selections, { onStep = () => {} } =
     ...appState,
     stylePreset: {
       ...(appState.stylePreset || {}),
-      fontFamily: getFontById('hcr-batang').cssFamily,
-      dialogueGap: '9em',
     },
   };
 

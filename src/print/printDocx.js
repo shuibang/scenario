@@ -268,7 +268,7 @@ function buildDocxSections(printModel, dp, { hancom = false } = {}) {
 
       let prevBlock = null;
       for (const block of section.blocks) {
-        if (prevBlock !== null && prevBlock.type !== block.type) paras.push(blankPara(dp));
+        if (prevBlock !== null && prevBlock.type !== block.type && prevBlock.type !== 'scene_number') paras.push(blankPara(dp));
         switch (block.type) {
           case 'scene_number':
             paras.push(para(`${block.label} ${block.content}`.trim(), dp, { bold: true, noJustify: true }));
