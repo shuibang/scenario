@@ -360,14 +360,18 @@ function buildDocxSections(printModel, dp, { hancom = false } = {}) {
         width: { size: totalW, type: WidthType.DXA },
         rows: [headerRow, ...dataRows],
       }));
+      // OOXML: 테이블이 마지막 요소이면 섹션 속성이 table cell에 삽입돼 landscape 무시됨
+      // 빈 단락을 테이블 뒤에 추가해 섹션 break를 단락에 붙임
+      paras.push(blankPara(dp));
 
       // 씬리스트는 가로 용지 섹션으로 별도 push
+      const slMargin = { top: convertMillimetersToTwip(20), right: convertMillimetersToTwip(20), bottom: convertMillimetersToTwip(20), left: convertMillimetersToTwip(20) };
       docxSections.push({
         properties: {
           type: SectionType.NEXT_PAGE,
           page: {
             size: { orientation: PageOrientation.LANDSCAPE },
-            margin: { top: convertMillimetersToTwip(20), right: convertMillimetersToTwip(20), bottom: convertMillimetersToTwip(20), left: convertMillimetersToTwip(20) },
+            margin: slMargin,
           },
         },
         footers: { default: pageNumFooter(dp) },
