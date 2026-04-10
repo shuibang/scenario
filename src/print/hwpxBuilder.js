@@ -33,7 +33,8 @@ function mmToHwp(mm) { return Math.round(mm * MM_TO_HWP); }
 // ─── Sequential ID counter (reset per document) ─────────────────────────────
 // HWPML: hp:p and all its children (pPr, run, pEnd) must each have a unique id.
 let _pid = 0;
-function resetIds() { _pid = 0; }
+let _tid = 0;
+function resetIds() { _pid = 0; _tid = 0; }
 
 /**
  * HTML → 여러 hp:run 배열 (볼드/이탤릭/밑줄 인라인 서식 지원)
@@ -218,6 +219,7 @@ function xmlHeader(fontName, fontSizePt, dialogueTabHwp) {
       </hh:paraPr>`;
 
   // borderFill id starts at 1 (matching real HWPX files); attribute formats match real files.
+  // id=1: 텍스트 문단용 (테두리 없음), id=2: 테이블 셀용 (실선 테두리)
   const borderFill = (id) => `      <hh:borderFill id="${id}" threeD="0" shadow="0" centerLine="NONE" breakCellSeparateLine="0">
         <hh:slash type="NONE" Crooked="0" isCounter="0"/>
         <hh:backSlash type="NONE" Crooked="0" isCounter="0"/>
@@ -225,6 +227,15 @@ function xmlHeader(fontName, fontSizePt, dialogueTabHwp) {
         <hh:rightBorder  type="NONE" width="0.1 mm" color="#000000"/>
         <hh:topBorder    type="NONE" width="0.1 mm" color="#000000"/>
         <hh:bottomBorder type="NONE" width="0.1 mm" color="#000000"/>
+        <hh:diagonal     type="NONE" width="0.1 mm" color="#000000"/>
+      </hh:borderFill>`;
+  const borderFillTable = (id) => `      <hh:borderFill id="${id}" threeD="0" shadow="0" centerLine="NONE" breakCellSeparateLine="0">
+        <hh:slash type="NONE" Crooked="0" isCounter="0"/>
+        <hh:backSlash type="NONE" Crooked="0" isCounter="0"/>
+        <hh:leftBorder   type="SOLID" width="0.12 mm" color="#999999"/>
+        <hh:rightBorder  type="SOLID" width="0.12 mm" color="#999999"/>
+        <hh:topBorder    type="SOLID" width="0.12 mm" color="#999999"/>
+        <hh:bottomBorder type="SOLID" width="0.12 mm" color="#999999"/>
         <hh:diagonal     type="NONE" width="0.1 mm" color="#000000"/>
       </hh:borderFill>`;
 
@@ -240,8 +251,9 @@ ${fontLangs.map(lang => `      <hh:fontface lang="${lang}" fontCnt="1">
         <hh:font id="0" face="${esc(fontName)}" type="TTF" isEmbedded="0"/>
       </hh:fontface>`).join('\n')}
     </hh:fontfaces>
-    <hh:borderFills itemCnt="1">
+    <hh:borderFills itemCnt="2">
 ${borderFill(1)}
+${borderFillTable(2)}
     </hh:borderFills>
     <hh:charProperties itemCnt="7">
 ${charPr(0, normalH,  '')}
@@ -288,7 +300,7 @@ ${paraPr(7, 'JUSTIFY', 0,   0,   0, 0, 0, 1)}
 // resetPage=true: 이 구역부터 쪽번호 1로 리셋 (시놉시스/회차 첫 페이지)
 // resetPage=false: 연속 쪽번호 (표지 등)
 // coverPage=true: 쪽번호 ctrl 자체를 생략 (표지 전용)
-function secPrPara(margins, { resetPage = false, coverPage = false } = {}) {
+function secPrPara(margins, { resetPage = false, coverPage = false, landscape = false } = {}) {
   const pId  = _pid++;
   const mTop = mmToHwp(margins.top);
   const mBot = mmToHwp(margins.bottom);
@@ -302,6 +314,10 @@ function secPrPara(margins, { resetPage = false, coverPage = false } = {}) {
       </hp:ctrl>
       <hp:t/>
     </hp:run>`;
+  // 가로 방향: width/height 교체, landscape="HORIZONTAL"
+  const pgW = landscape ? A4_H : A4_W;
+  const pgH = landscape ? A4_W : A4_H;
+  const pgLandscape = landscape ? 'HORIZONTAL' : 'WIDELY';
   return `  <hp:p id="${pId}" paraPrIDRef="7" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">
     <hp:run charPrIDRef="0">
       <hp:secPr id="" textDirection="HORIZONTAL" spaceColumns="1134" tabStop="8000"
@@ -312,7 +328,7 @@ function secPrPara(margins, { resetPage = false, coverPage = false } = {}) {
                        border="SHOW_ALL" fill="SHOW_ALL" hideFirstPageNum="0"
                        hideFirstEmptyLine="0" showLineNumber="0"/>
         <hp:lineNumberShape restartType="0" countBy="0" distance="0" startNumber="0"/>
-        <hp:pagePr landscape="WIDELY" width="${A4_W}" height="${A4_H}" gutterType="LEFT_ONLY">
+        <hp:pagePr landscape="${pgLandscape}" width="${pgW}" height="${pgH}" gutterType="LEFT_ONLY">
           <hp:margin header="0" footer="0" gutter="0"
                      left="${mLR}" right="${mLR}" top="${mTop}" bottom="${mBot}"/>
         </hp:pagePr>
@@ -347,6 +363,75 @@ function secPrPara(margins, { resetPage = false, coverPage = false } = {}) {
   </hp:p>`;
 }
 
+// ─── Scenelist table (landscape A4) ─────────────────────────────────────────
+function scenelistTable(scenes, margins) {
+  // 가로 A4 사용 폭: 297mm - left - right 여백
+  const usableMm  = 297 - margins.left - margins.right;
+  const usableHwp = mmToHwp(usableMm);
+
+  const COL_PCT = [6, 11, 10, 6, 6, 12, 38, 11];
+  const COL_W   = COL_PCT.map(p => Math.round(usableHwp * p / 100));
+  // 마지막 컬럼 너비 보정 (반올림 오차)
+  COL_W[7] = usableHwp - COL_W.slice(0, 7).reduce((a, b) => a + b, 0);
+
+  const HEADERS   = ['씬번호', '장소', '세부장소', '낮', '밤', '등장인물', '내용 요약', '비고'];
+  const ROW_H     = mmToHwp(8);  // 기본 행 높이 8mm
+
+  const makeCell = (text, colIdx, rowIdx, bold = false) => {
+    const pId = _pid++;
+    const cid = bold ? 3 : 0;
+    const plain = esc(String(text ?? ''));
+    return `          <hp:td name="" header="0" hasMargin="0" protect="0" editable="0" dirty="0" borderFillIDRef="2">
+            <hp:cellAddr colAddr="${colIdx}" rowAddr="${rowIdx}"/>
+            <hp:cellSpan colSpan="1" rowSpan="1"/>
+            <hp:cellSz width="${COL_W[colIdx]}" height="${ROW_H}"/>
+            <hp:cellMargin left="360" right="360" top="141" bottom="141"/>
+            <hp:p id="${pId}" paraPrIDRef="0" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">
+              <hp:run charPrIDRef="${cid}"><hp:t xml:space="preserve">${plain}</hp:t></hp:run>
+            </hp:p>
+          </hp:td>`;
+  };
+
+  const headerRow = `        <hp:tr height="${ROW_H}">
+${HEADERS.map((h, i) => makeCell(h, i, 0, true)).join('\n')}
+        </hp:tr>`;
+
+  const dataRows = scenes.map((scene, ri) => {
+    const cells = [
+      scene.sceneNum,
+      scene.location       || '',
+      scene.subLocation    || '',
+      scene.dayText        || '',
+      scene.nightText      || '',
+      (scene.characters || []).join(', '),
+      scene.sceneListContent || '',
+      '',
+    ].map((txt, ci) => makeCell(txt, ci, ri + 1, false));
+    return `        <hp:tr height="${ROW_H}">
+${cells.join('\n')}
+        </hp:tr>`;
+  });
+
+  const totalH = ROW_H * (1 + scenes.length);
+  const tblId  = _tid++;
+  const pId    = _pid++;
+
+  return `  <hp:p id="${pId}" paraPrIDRef="0" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">
+    <hp:run charPrIDRef="0">
+      <hp:ctrl>
+        <hp:tbl id="${tblId}" zOrder="0" numberingType="NONE" textWrap="SQUARE" textFlow="BOTH_SIDES"
+                treatAsChar="1" affectLSpacing="0" floatAtAttrOn="0" vertRelTo="PARA" horzRelTo="PARA"
+                vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"
+                width="${usableHwp}" height="${totalH}" protect="0" cellSpacing="0"
+                borderFillIDRef="2" hasCaption="0">
+${headerRow}
+${dataRows.join('\n')}
+        </hp:tbl>
+      </hp:ctrl>
+    </hp:run>
+  </hp:p>`;
+}
+
 // ─── Section (body) XML ──────────────────────────────────────────────────────
 function xmlSection(printModel, margins) {
   resetIds();
@@ -369,8 +454,12 @@ function xmlSection(printModel, margins) {
   let firstSection = true;
   for (const sec of printModel.sections) {
     if (!firstSection) {
-      // 새 구역 시작 → secPrPara로 쪽번호 1부터 리셋 (표지는 쪽번호 없음)
-      paras.push(secPrPara(margins, { resetPage: sec.type !== 'cover', coverPage: sec.type === 'cover' }));
+      // 새 구역 시작 → secPrPara로 쪽번호 1부터 리셋 (표지는 쪽번호 없음, 씬리스트는 가로 방향)
+      paras.push(secPrPara(margins, {
+        resetPage: sec.type !== 'cover',
+        coverPage: sec.type === 'cover',
+        landscape: sec.type === 'scenelist',
+      }));
     }
     firstSection = false;
 
@@ -401,7 +490,7 @@ function xmlSection(printModel, margins) {
           empty();
         }
         if (sec.characters?.length) {
-          head('인물설정');
+          head('등장인물');
           empty();
           for (const c of sec.characters) {
             const meta = [c.gender, c.age, c.job, roleLabel[c.role] || c.role].filter(Boolean).join(' · ');
@@ -449,7 +538,7 @@ function xmlSection(printModel, margins) {
         break;
       }
       case 'characters': {
-        head('인물 설정');
+        head('등장인물');
         empty();
         for (const c of sec.characters) {
           const meta = [c.gender, c.age, c.job].filter(Boolean).join(' · ');
@@ -458,6 +547,18 @@ function xmlSection(printModel, margins) {
           if (c.description) normal(c.description);
           empty();
         }
+        break;
+      }
+      case 'scenelist': {
+        // 씬리스트는 가로 방향 페이지 + 테이블로 렌더링
+        // secPrPara가 이미 위에서 push됐으므로 landscape 처리는 secPrPara 호출 시 처리
+        const epTitle = `${sec.episodeNumber}회 씬리스트${sec.episodeTitle ? ` — ${sec.episodeTitle}` : ''}`;
+        paras.push(para(epTitle, { cid: 2, parid: 1, sid: 2 }));
+        empty();
+        if (sec.scenes?.length) {
+          paras.push(scenelistTable(sec.scenes, margins));
+        }
+        empty();
         break;
       }
     }

@@ -377,7 +377,7 @@ function buildDocxSections(printModel, dp, { hancom = false } = {}) {
     }
 
     else if (section.type === 'characters') {
-      paras.push(para('인물소개', dp, { bold: true }));
+      paras.push(para('등장인물', dp, { bold: true }));
       paras.push(blankPara(dp));
       section.characters.forEach(c => {
         paras.push(para(c.name, dp, { bold: true }));

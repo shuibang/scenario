@@ -232,7 +232,7 @@ export function buildPrintModel(appState, selections, preset) {
 
           return {
             id:               s.id,
-            sceneNum:         snBlock?.label || `S#${i + 1}.`,
+            sceneNum:         `S#${i + 1}.`,
             specialSituation,
             location,
             subLocation,
