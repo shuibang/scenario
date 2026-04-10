@@ -1,4 +1,12 @@
 {
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [{ "type": "host", "value": "scenario-876h.vercel.app" }],
+      "destination": "https://daejak.kr/$1",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     { "source": "/", "destination": "/landing.html" },
     { "source": "/app", "destination": "/index.html" },
