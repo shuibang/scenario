@@ -496,7 +496,7 @@ export async function buildHwpx(appState, selections) {
   const fontSize  = preset.fontSize   || 11;
   // dialogueGap: em → pt → HWP units (1pt = 100 HWP units)
   const dialogueEm     = parseFloat(preset.dialogueGap || '7');
-  const dialogueTabHwp = Math.round(dialogueEm * fontSize * 100);
+  const dialogueTabHwp = Math.round(dialogueEm * fontSize * 200);
 
   const margins      = preset.pageMargins ?? { top: 35, right: 30, bottom: 30, left: 30 };
   const printModel   = buildPrintModel(appState, selections, preset);
