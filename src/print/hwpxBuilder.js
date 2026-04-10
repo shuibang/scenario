@@ -317,7 +317,7 @@ function secPrPara(margins, { resetPage = false, coverPage = false, landscape = 
   // 가로 방향: width/height 교체, landscape="HORIZONTAL"
   const pgW = landscape ? A4_H : A4_W;
   const pgH = landscape ? A4_W : A4_H;
-  const pgLandscape = landscape ? 'HORIZONTAL' : 'WIDELY';
+  const pgLandscape = landscape ? 'HORIZONTAL' : 'NARROWLY';
   return `  <hp:p id="${pId}" paraPrIDRef="7" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">
     <hp:run charPrIDRef="0">
       <hp:secPr id="" textDirection="HORIZONTAL" spaceColumns="1134" tabStop="8000"
@@ -346,14 +346,14 @@ function secPrPara(margins, { resetPage = false, coverPage = false, landscape = 
           <hp:numbering type="CONTINUOUS" newNum="1"/>
           <hp:placement place="END_OF_DOCUMENT" beneathText="0"/>
         </hp:endNotePr>
-        <hp:pageBorderFill type="BOTH" borderFillIDRef="0" textBorder="PAPER" headerInside="0" footerInside="0" fillArea="PAPER">
-          <hp:offset left="0" right="0" top="0" bottom="0"/>
+        <hp:pageBorderFill type="BOTH" borderFillIDRef="1" textBorder="PAPER" headerInside="0" footerInside="0" fillArea="PAPER">
+          <hp:offset left="1417" right="1417" top="1417" bottom="1417"/>
         </hp:pageBorderFill>
-        <hp:pageBorderFill type="EVEN" borderFillIDRef="0" textBorder="PAPER" headerInside="0" footerInside="0" fillArea="PAPER">
-          <hp:offset left="0" right="0" top="0" bottom="0"/>
+        <hp:pageBorderFill type="EVEN" borderFillIDRef="1" textBorder="PAPER" headerInside="0" footerInside="0" fillArea="PAPER">
+          <hp:offset left="1417" right="1417" top="1417" bottom="1417"/>
         </hp:pageBorderFill>
-        <hp:pageBorderFill type="ODD" borderFillIDRef="0" textBorder="PAPER" headerInside="0" footerInside="0" fillArea="PAPER">
-          <hp:offset left="0" right="0" top="0" bottom="0"/>
+        <hp:pageBorderFill type="ODD" borderFillIDRef="1" textBorder="PAPER" headerInside="0" footerInside="0" fillArea="PAPER">
+          <hp:offset left="1417" right="1417" top="1417" bottom="1417"/>
         </hp:pageBorderFill>
       </hp:secPr>
       <hp:ctrl>

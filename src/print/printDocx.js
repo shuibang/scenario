@@ -370,8 +370,13 @@ function buildDocxSections(printModel, dp, { hancom = false } = {}) {
         properties: {
           type: SectionType.NEXT_PAGE,
           page: {
-            size: { orientation: PageOrientation.LANDSCAPE },
+            size: {
+              width: convertMillimetersToTwip(297),
+              height: convertMillimetersToTwip(210),
+              orientation: PageOrientation.LANDSCAPE,
+            },
             margin: slMargin,
+            pageNumbers: { start: 1, formatType: NumberFormat.DECIMAL },
           },
         },
         footers: { default: pageNumFooter(dp) },
