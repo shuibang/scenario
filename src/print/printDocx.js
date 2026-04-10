@@ -264,7 +264,6 @@ function buildDocxSections(printModel, dp, { hancom = false } = {}) {
     else if (section.type === 'episode') {
       const epTitle = `${section.episodeNumber}회 ${section.episodeTitle}`.trim();
       paras.push(para(epTitle, dp, { bold: true, center: true }));
-      if (!hancom) paras.push(blankPara(dp)); // 회차표기 뒤 빈줄 (한글은 생략)
 
       let prevBlock = null;
       for (const block of section.blocks) {
