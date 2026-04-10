@@ -349,6 +349,10 @@ textarea {
 .ce-block[data-block-type="dialogue"]:hover::before {
   color: var(--c-accent);
 }
+/* 인물 배지는 ::before로 표시 — inline 흐름에서는 숨김 (speech 영역 밀림 방지) */
+.ce-char-badge {
+  display: none;
+}
 
 /* Scene ref — 씬연결 블록 */
 .ce-block[data-block-type="scene_ref"] {

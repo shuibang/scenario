@@ -134,14 +134,15 @@ function SymbolPicker({ mobile = false, closeToken = 0, onOpen, forceOpen = null
         setActiveIdx(i => (i - 3 + allSymbols.length) % allSymbols.length);
       } else if (e.key === 'Enter' && activeIdx >= 0) {
         e.preventDefault();
+        e.stopPropagation(); // 에디터 Enter(줄바꿈) 차단 — capture 단계에서 실행됨
         insertSymbol(allSymbols[activeIdx]);
       } else if (e.key === 'Escape') {
         e.preventDefault();
         setDropPos(null);
       }
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey, true); // capture: React 이벤트 위임보다 먼저 실행
+    return () => window.removeEventListener('keydown', onKey, true);
   }, [open, activeIdx, allSymbols]);
 
   const addCustomSym = () => {
@@ -173,22 +174,35 @@ function SymbolPicker({ mobile = false, closeToken = 0, onOpen, forceOpen = null
       if (targetEl) {
         const speechEl = targetEl.dataset.blockType === 'dialogue'
           ? (targetEl.querySelector('.ce-speech') || targetEl) : targetEl;
-        speechEl.textContent = ''; // 혹시 남은 내용 정리
-        const textNode = document.createTextNode(sym);
-        speechEl.appendChild(textNode);
-        cleanupBr(speechEl); // 삽입 직후 <br> 제거
         surface.focus();
-        cleanupBr(speechEl); // focus 후 브라우저가 추가할 수 있는 <br> 재정리
-        try {
+        if (targetEl.dataset.blockType === 'dialogue' && speechEl !== targetEl) {
+          // 대사 블록: textContent 직접 설정 (ce-char-badge 인접 span에서 range 삽입 시 위치 오류 방지)
+          speechEl.textContent = sym;
+          cleanupBr(speechEl);
+          const textNode = speechEl.firstChild;
+          if (textNode) {
+            try {
+              const r = document.createRange();
+              r.setStart(textNode, textNode.length);
+              r.collapse(true);
+              window.getSelection()?.removeAllRanges();
+              window.getSelection()?.addRange(r);
+            } catch (_) {}
+          }
+          surface.dispatchEvent(new Event('input', { bubbles: true }));
+        } else {
+          // 지문 등 다른 블록: execCommand 방식
           const r = document.createRange();
-          r.setStartAfter(textNode);
-          r.collapse(true);
-          window.getSelection()?.removeAllRanges();
-          window.getSelection()?.addRange(r);
-        } catch (_) {}
-        surface.dispatchEvent(new Event('input', { bubbles: true }));
+          r.selectNodeContents(speechEl);
+          const sel = window.getSelection();
+          sel?.removeAllRanges();
+          sel?.addRange(r);
+          document.execCommand('insertText', false, sym);
+          cleanupBr(speechEl);
+        }
         return;
       }
+      return;
     }
 
     // 일반 경로 (버튼 직접 클릭): 현재 커서 위치에 삽입
@@ -1315,6 +1329,7 @@ const EditorSurface = forwardRef(function EditorSurface({
   onSlashKeyNav,   // (key) → ↑↓ 탐색
   onSlashSelectCurrent, // () → Tab으로 현재 항목 선택
   onNextTypePick,  // ({ blockId, top, left }) → 대사 블록에서 다음 형식 선택 팝업
+  onCloseSceneRef, // () → 타이핑 시 씬연결 피커 자동 닫기
 }, ref) {
   const surfaceRef = useRef(null);
   const metaRef = useRef({});
@@ -1568,6 +1583,9 @@ const EditorSurface = forwardRef(function EditorSurface({
   // ── Input handler ─────────────────────────────────────────────────────────
   const handleInput = useCallback(() => {
     if (composingRef.current) return;
+
+    // 씬연결 피커가 열려있으면 타이핑 시 자동 닫기
+    onCloseSceneRef?.();
 
     // DOM 삽입 후 남은 <br> placeholder 정규화 (모든 블록 타입)
     {
@@ -2717,6 +2735,23 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     setSlashUnifiedTag({ blockId, sceneId, top: rect.bottom + 4, left: rect.left });
   }, []);
 
+  // ── 기타 피커 열기 (버튼/단축키 공통) ─────────────────────────────────────
+  const openSymbolPickerOnCursor = useCallback(() => {
+    const surface = document.querySelector('[data-editor-surface]');
+    const sel = window.getSelection();
+    let rect = { bottom: 120, left: 200 };
+    if (sel?.rangeCount && surface) {
+      let node = sel.getRangeAt(0).startContainer;
+      node = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+      while (node && node !== surface) {
+        if (node.dataset?.blockId) { rect = node.getBoundingClientRect(); break; }
+        node = node.parentElement;
+      }
+    }
+    // blockId 없이 열면 insertSymbol은 일반 경로(커서 위치 삽입) 사용
+    setSlashSymbolPos({ top: rect.bottom + 4, left: rect.left });
+  }, []);
+
   // ── Ctrl+Shift+1/2/3/4 단축키 + 상단바 저장 버튼 이벤트
   useEffect(() => {
     const blockTypeMap = { 'Digit1': 'scene_number', 'Digit2': 'action', 'Digit3': 'dialogue' };
@@ -2730,6 +2765,9 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
         e.preventDefault();
         handleCharCheckRef.current?.();
       } else if (e.code === 'Digit6') {
+        e.preventDefault();
+        openSymbolPickerOnCursor();
+      } else if (e.code === 'Digit7') {
         e.preventDefault();
         openEmotionPickerOnCursor();
       } else if (e.code === 'Digit5') {
@@ -2765,7 +2803,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
       window.removeEventListener('script:undo', onUndo);
       window.removeEventListener('script:redo', onRedo);
     };
-  }, [flushSave, applyBlockType, handleUndo, handleRedo, openEmotionPickerOnCursor]);
+  }, [flushSave, applyBlockType, handleUndo, handleRedo, openEmotionPickerOnCursor, openSymbolPickerOnCursor]);
 
   // ── getCurrentSceneId: find the scene_number block's sceneId before the cursor ─
   const getCurrentSceneId = useCallback(() => {
@@ -3126,7 +3164,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
             />
             <button
               onMouseDown={e => { e.preventDefault(); openEmotionPickerOnCursor(); }}
-              title="감정태그 (Ctrl+Shift+6)"
+              title="태그 (Ctrl+Shift+7)"
               style={{
                 flexShrink: 0, width: BTN_W, textAlign: 'center',
                 fontSize: 'clamp(10px, 2.8vw, 13px)', color: 'var(--c-text4)',
@@ -3323,6 +3361,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
             onSlashKeyNav={handleSlashKeyNav}
             onSlashSelectCurrent={handleSlashSelectCurrent}
             onNextTypePick={({ blockId, currentType, top, left }) => setNextTypePicker({ blockId, currentType, top, left, mode: 'create' })}
+            onCloseSceneRef={() => { if (sceneRefPickerRef.current) setSceneRefPicker(null); }}
           />
           <div className="h-48" />
         </div>
@@ -3693,7 +3732,8 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
                 <span>Ctrl+Shift+3 대사</span>
                 <span>Ctrl+Shift+4 등장인물</span>
                 <span>Ctrl+Shift+5 씬연결</span>
-                <span>Ctrl+Shift+6 감정태그</span>
+                <span>Ctrl+Shift+6 기타</span>
+                <span>Ctrl+Shift+7 태그</span>
                 <span>Ctrl+S 저장</span>
                 <span>Ctrl+Z / Ctrl+Y Undo/Redo</span>
                 <span>Enter 다음 블록</span>
