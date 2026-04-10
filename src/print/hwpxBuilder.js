@@ -405,15 +405,21 @@ function xmlSection(printModel, margins) {
         break;
       }
       case 'synopsis': {
+        // 멀티라인 텍스트 필드 → 줄별 단락, 빈 줄 보존
+        const multiLine = (text) => {
+          if (!text) return;
+          text.split('\n').forEach(line => {
+            if (line.trim()) normal(line);
+            else empty();
+          });
+        };
         if (sec.genre)  { head('장르');    empty(); normal(sec.genre);  empty(); }
-        if (sec.theme)  { head('주제');    empty(); normal(sec.theme);  empty(); }
-        if (sec.intent) { head('기획의도'); empty(); normal(sec.intent); empty(); }
+        if (sec.theme)  { head('주제');    empty(); multiLine(sec.theme);  empty(); }
+        if (sec.intent) { head('기획의도'); empty(); multiLine(sec.intent); empty(); }
         if (sec.story)  {
           head('줄거리');
           empty();
-          sec.story.split('\n').forEach(line => {
-            if (line.trim()) normal(line);
-          });
+          multiLine(sec.story);
           empty();
         }
         if (sec.characters?.length) {
@@ -422,7 +428,7 @@ function xmlSection(printModel, margins) {
           for (const c of sec.characters) {
             const meta = [c.gender, c.age, c.job, roleLabel[c.role] || c.role].filter(Boolean).join(' · ');
             normal(`${c.name}${meta ? '  (' + meta + ')' : ''}`);
-            if (c.description) normal(c.description);
+            if (c.description) multiLine(c.description);
           }
           empty();
         }
