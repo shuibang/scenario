@@ -161,7 +161,7 @@ export function tokenizeSection(section, metrics) {
     addSection('주제',     section.theme);
     addSection('기획의도', section.intent);
     if (section.characters.length) {
-      tokens.push(T('heading', '인물설정', { bold: true }));
+      tokens.push(T('heading', '등장인물', { bold: true }));
       tokens.push(B()); // 인물설정 뒤 줄바꿈 (addSection과 동일하게)
       section.characters.forEach(c => {
         const agePart = [c.gender, c.age].filter(Boolean).join(' / ');
@@ -332,7 +332,7 @@ export function tokenizeSection(section, metrics) {
 
   // ── Characters reference
   if (section.type === 'characters') {
-    tokens.push(T('heading', '인물소개', { bold: true }));
+    tokens.push(T('heading', '등장인물', { bold: true }));
     tokens.push(B());
     section.characters.forEach(c => {
       tokens.push(T('char_name', c.name, { bold: true }));

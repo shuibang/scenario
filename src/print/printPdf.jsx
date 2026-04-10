@@ -11,6 +11,7 @@ import React from 'react';
 import {
   Document, Page, View, Text, Font, StyleSheet, pdf,
 } from '@react-pdf/renderer';
+import { PDFDocument } from 'pdf-lib';
 import { getLayoutMetrics, tokenizeSection } from './LineTokenizer';
 import { buildPrintModel }  from './PrintModel';
 import { FONTS, resolveFont } from './FontRegistry';
@@ -72,10 +73,11 @@ function makeStyles(preset, metrics) {
     coverTitle:       { fontSize: fs + 11, fontWeight: 700, marginBottom: fs * lh, textAlign: 'center' },
     coverSubtitle:    { fontSize: fs + 5,  fontWeight: 400, marginBottom: 4, textAlign: 'center', color: '#555' },
     coverField:       { fontSize: fs,      marginBottom: 3, textAlign: 'center' },
-    // ── page number: position:absolute + fixed Text (react-pdf 공식 패턴)
+    // ── page number: position:absolute + top 사용 (bottom은 yoga가 컨테이너 높이 필요 → YGUndefined)
+    // A4 = 297mm, 하단에서 15mm 위치에 배치
     pageNum: {
       position:  'absolute',
-      bottom:    15 * MM_TO_PT,
+      top:       (297 - 15) * MM_TO_PT - Math.max(fs - 2, 7) - 2,
       left:      0,
       right:     0,
       textAlign: 'center',
@@ -172,7 +174,7 @@ function TokenEl({ token, text, S }) {
       );
     case 'dialogue':
       return (
-        <View style={S.dialogueRow}>
+        <View style={S.dialogueRow} wrap={false}>
           <Text style={S.charCell}>{token.charName || ''}</Text>
           <Text style={S.speechCell}>{content}</Text>
         </View>
@@ -206,7 +208,6 @@ function SectionPage({ tokens, S }) {
   const blockTokens = tokens.filter(tok => tok.isFirstOfBlock !== false);
   return (
     <Page size="A4" style={S.page}>
-      <Text style={S.pageNum} fixed render={({ pageNumber }) => `- ${pageNumber} -`} />
       {blockTokens.map((token, i) => (
         <TokenEl
           key={i}
@@ -215,6 +216,7 @@ function SectionPage({ tokens, S }) {
           S={S}
         />
       ))}
+      <Text style={S.pageNum} fixed render={({ pageNumber }) => `- ${pageNumber} -`} />
     </Page>
   );
 }
@@ -293,52 +295,119 @@ function CoverPage({ section, S }) {
   );
 }
 
-// ─── Build react-pdf Document from PrintModel ─────────────────────────────────
-function buildPdfDocument(printModel) {
+// ─── Build grouped Documents (cover / front-matter / per-episode) ─────────────
+// 표지: 쪽번호 없음 / 시놉·인물 등: 1부터 / 각 회차: 1부터 재시작
+// synopsis/treatment → 하나의 그룹 / characters/biography → 별도 그룹 (각각 1부터 시작)
+const SYNOPSIS_TYPES   = new Set(['synopsis', 'treatment']);
+const CHARACTER_TYPES  = new Set(['characters', 'biography']);
+
+function buildPdfGroups(printModel) {
   const { sections, preset } = printModel;
   const metrics = getLayoutMetrics(preset);
   const S       = makeStyles(preset, metrics);
-  const pages   = [];
+
+  const docs   = []; // react-pdf Document elements
+  let curPages = null; // 현재 누적 중인 페이지 배열
+
+  const flush = () => {
+    if (curPages?.length) {
+      docs.push(<Document key={docs.length}>{curPages}</Document>);
+    }
+    curPages = null;
+  };
 
   for (const section of sections) {
+    // ── 표지: 독립 Document (쪽번호 없는 CoverPage)
     if (section.type === 'cover') {
-      pages.push(<CoverPage key="cover" section={section} S={S} />);
-      continue;
-    }
-    if (section.type === 'scenelist') {
-      pages.push(<SceneListPage key={`scenelist-${section.episodeId}`} section={section} S={S} />);
+      flush();
+      docs.push(
+        <Document key="cover">
+          <CoverPage section={section} S={S} />
+        </Document>
+      );
       continue;
     }
 
-    const tokens = tokenizeSection(section, metrics);
-    if (!tokens.length) continue; // 내용 없는 섹션은 빈 페이지 생성 방지
-    pages.push(
-      <SectionPage
-        key={`${section.type}-${section.episodeId || section.type}`}
-        tokens={tokens}
-        S={S}
-      />
-    );
+    // ── 회차 대본: 새 Document 시작 (쪽번호 1부터 재시작)
+    if (section.type === 'episode') {
+      flush();
+      curPages = [];
+      const tokens = tokenizeSection(section, metrics);
+      if (tokens.length) {
+        curPages.push(
+          <SectionPage key={`ep-${section.episodeId}`} tokens={tokens} S={S} />
+        );
+      }
+      continue;
+    }
+
+    // ── 씬리스트: 현재 회차 그룹에 포함
+    if (section.type === 'scenelist') {
+      if (!curPages) curPages = [];
+      curPages.push(
+        <SceneListPage key={`scenelist-${section.episodeId}`} section={section} S={S} />
+      );
+      continue;
+    }
+
+    // ── 인물소개·인물이력서: 별도 Document (characters 진입 시 flush → 새 그룹)
+    if (CHARACTER_TYPES.has(section.type)) {
+      if (section.type === 'characters') flush(); // 새 그룹 시작
+      if (!curPages) curPages = [];
+      const tokens = tokenizeSection(section, metrics);
+      if (tokens.length) {
+        curPages.push(
+          <SectionPage key={section.type} tokens={tokens} S={S} />
+        );
+      }
+      continue;
+    }
+
+    // ── 시놉·트리트먼트: 하나의 front-matter Document로 묶음
+    if (SYNOPSIS_TYPES.has(section.type)) {
+      if (!curPages) curPages = [];
+      const tokens = tokenizeSection(section, metrics);
+      if (tokens.length) {
+        curPages.push(
+          <SectionPage key={section.type} tokens={tokens} S={S} />
+        );
+      }
+    }
   }
 
-  return <Document>{pages}</Document>;
+  flush();
+  return docs;
+}
+
+// ─── Merge multiple PDF blobs with pdf-lib ────────────────────────────────────
+async function mergePdfBlobs(blobs) {
+  const merged = await PDFDocument.create();
+  for (const blob of blobs) {
+    const bytes  = await blob.arrayBuffer();
+    const srcDoc = await PDFDocument.load(bytes);
+    const copied = await merged.copyPages(srcDoc, srcDoc.getPageIndices());
+    copied.forEach(p => merged.addPage(p));
+  }
+  const bytes = await merged.save();
+  return new Blob([bytes], { type: 'application/pdf' });
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export async function exportPdf(appState, selections, { onStep = () => {} } = {}) {
   ensureFontsRegistered();
-  let printModel, doc, blob;
+  let printModel, blob;
   try {
     onStep('직렬화');
     const preset = appState.stylePreset;
     printModel   = buildPrintModel(appState, selections, preset);
 
     onStep('레이아웃');
-    doc  = buildPdfDocument(printModel);
+    const docs   = buildPdfGroups(printModel);
 
     onStep('파일 생성');
-    blob = await pdf(doc).toBlob();
+    const blobs  = await Promise.all(docs.map(doc => pdf(doc).toBlob()));
+    blob = blobs.length === 1 ? blobs[0] : await mergePdfBlobs(blobs);
   } catch (err) {
     console.error('[printPdf] FAILED:', err?.message);
     console.error('[printPdf] stack:', err?.stack);
@@ -364,6 +433,7 @@ export async function getPdfBlob(appState, selections) {
   ensureFontsRegistered();
   const preset     = appState.stylePreset;
   const printModel = buildPrintModel(appState, selections, preset);
-  const doc        = buildPdfDocument(printModel);
-  return pdf(doc).toBlob();
+  const docs       = buildPdfGroups(printModel);
+  const blobs      = await Promise.all(docs.map(doc => pdf(doc).toBlob()));
+  return blobs.length === 1 ? blobs[0] : mergePdfBlobs(blobs);
 }
