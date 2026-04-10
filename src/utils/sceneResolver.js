@@ -74,30 +74,18 @@ export function parseSceneContent(content) {
     rest = spMatch[2].trim();
   }
 
-  // "-" 기준으로 장소/세부장소 분리, "(" 기준으로 시간대 분리
-  // 형식: "장소[ - 세부장소] [(시간대)]"
-  // 세부장소 = '-' 와 '(' 사이의 모든 텍스트
+  // 괄호 안 전체 → 시간대 (낮-밤, 낮/밤 등 포함)
+  // '-' 는 괄호 이전 텍스트에서만 장소/세부장소 구분자로 사용
+  const parenOpen  = rest.indexOf('(');
+  const parenClose = rest.lastIndexOf(')');
+  if (parenOpen !== -1 && parenClose > parenOpen) {
+    timeOfDay = rest.slice(parenOpen + 1, parenClose).trim();
+    rest      = rest.slice(0, parenOpen).trim();
+  }
   const dashIdx = rest.indexOf('-');
   if (dashIdx !== -1) {
-    const locationPart = rest.slice(0, dashIdx).trim();
-    const afterDash    = rest.slice(dashIdx + 1).trim();
-    const parenIdx     = afterDash.indexOf('(');
-    if (parenIdx !== -1) {
-      subLocation = afterDash.slice(0, parenIdx).trim();
-      const closeIdx = afterDash.lastIndexOf(')');
-      timeOfDay = closeIdx > parenIdx ? afterDash.slice(parenIdx + 1, closeIdx).trim() : '';
-    } else {
-      subLocation = afterDash;
-    }
-    rest = locationPart;
-  } else {
-    // '-' 없음: 장소 뒤 '(시간대)' 만 추출
-    const parenIdx = rest.indexOf('(');
-    if (parenIdx !== -1) {
-      const closeIdx = rest.lastIndexOf(')');
-      timeOfDay = closeIdx > parenIdx ? rest.slice(parenIdx + 1, closeIdx).trim() : '';
-      rest = rest.slice(0, parenIdx).trim();
-    }
+    subLocation = rest.slice(dashIdx + 1).trim();
+    rest        = rest.slice(0, dashIdx).trim();
   }
 
   return { specialSituation, location: rest, subLocation, timeOfDay };
