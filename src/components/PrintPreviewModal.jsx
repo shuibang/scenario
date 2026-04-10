@@ -210,6 +210,11 @@ export default function PrintPreviewModal({ onClose }) {
           </Section>
 
           {/* Format hints */}
+          {(format === 'docx' || format === 'hancom') && (
+            <p className="text-[10px] mb-3" style={{ color: 'var(--c-text5)', lineHeight: 1.5 }}>
+              미설치된 글꼴이 있는 경우 기기에 따라 다른 글꼴로 출력될 수 있습니다.
+            </p>
+          )}
           {format === 'hancom' && (
             <p className="text-[10px] mb-3" style={{ color: 'var(--c-text5)', lineHeight: 1.5 }}>
               함초롱바탕 글꼴로 출력됩니다. HWP 2014+ 및 한컴오피스에서 열 수 있습니다.

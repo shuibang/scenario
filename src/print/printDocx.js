@@ -267,7 +267,12 @@ function buildDocxSections(printModel, dp, { hancom = false } = {}) {
 
       let prevBlock = null;
       for (const block of section.blocks) {
-        if (prevBlock !== null && prevBlock.type !== block.type && prevBlock.type !== 'scene_number') paras.push(blankPara(dp));
+        const CONTENT_TYPES = new Set(['action', 'dialogue', 'parenthetical']);
+        if (prevBlock !== null && prevBlock.type !== block.type
+            && prevBlock.type !== 'scene_number'
+            && !(CONTENT_TYPES.has(prevBlock.type) && CONTENT_TYPES.has(block.type))) {
+          paras.push(blankPara(dp));
+        }
         switch (block.type) {
           case 'scene_number':
             paras.push(para(`${block.label} ${block.content}`.trim(), dp, { bold: true, noJustify: true }));
