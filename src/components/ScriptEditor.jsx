@@ -255,6 +255,7 @@ function SymbolPicker({ mobile = false, closeToken = 0, onOpen, forceOpen = null
       {open && createPortal(
         <div
           ref={dropRef}
+          onPointerDown={e => { e.preventDefault(); e.stopPropagation(); }} // 포털 전체: 에디터 커서 이동 차단 + 모바일 터치 지원
           style={{
             position: 'fixed',
             top: dropPos.top,
@@ -268,7 +269,7 @@ function SymbolPicker({ mobile = false, closeToken = 0, onOpen, forceOpen = null
           <div style={{ padding: '4px 12px 6px', fontSize: 10, fontWeight: 600, color: 'var(--c-text5)', borderBottom: '1px solid var(--c-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span>기타 삽입</span>
             <button
-              onMouseDown={e => { e.preventDefault(); setEditMode(v => !v); }}
+              onPointerDown={e => { e.preventDefault(); e.stopPropagation(); setEditMode(v => !v); }}
               style={{ fontSize: 9, padding: '1px 6px', borderRadius: 4, border: '1px solid var(--c-border3)', background: editMode ? 'var(--c-accent)' : 'transparent', color: editMode ? '#fff' : 'var(--c-text5)', cursor: 'pointer' }}
             >편집</button>
           </div>
@@ -278,6 +279,7 @@ function SymbolPicker({ mobile = false, closeToken = 0, onOpen, forceOpen = null
               return (
                 <div
                   key={sym}
+                  onPointerDown={e => { if (!editMode) { e.preventDefault(); e.stopPropagation(); insertSymbol(sym); } }}
                   onMouseEnter={() => !editMode && setActiveIdx(i)}
                   onMouseLeave={() => setActiveIdx(-1)}
                   style={{
@@ -288,10 +290,10 @@ function SymbolPicker({ mobile = false, closeToken = 0, onOpen, forceOpen = null
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   }}
                 >
-                  <span onMouseDown={e => { if (!editMode) { e.preventDefault(); insertSymbol(sym); } }}>{sym}</span>
+                  <span>{sym}</span>
                   {editMode && isCustom && (
                     <button
-                      onMouseDown={e => { e.preventDefault(); removeCustomSym(sym); }}
+                      onPointerDown={e => { e.preventDefault(); e.stopPropagation(); removeCustomSym(sym); }}
                       style={{ fontSize: 10, color: '#f87171', background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}
                     >×</button>
                   )}
@@ -309,7 +311,7 @@ function SymbolPicker({ mobile = false, closeToken = 0, onOpen, forceOpen = null
                 style={{ flex: 1, fontSize: 11, padding: '3px 6px', borderRadius: 4, border: '1px solid var(--c-border3)', background: 'var(--c-input)', color: 'var(--c-text)', outline: 'none' }}
               />
               <button
-                onMouseDown={e => { e.preventDefault(); addCustomSym(); }}
+                onPointerDown={e => { e.preventDefault(); e.stopPropagation(); addCustomSym(); }}
                 style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: 'var(--c-accent)', color: '#fff', border: 'none', cursor: 'pointer' }}
               >추가</button>
             </div>
