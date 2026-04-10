@@ -263,7 +263,7 @@ ${charPr(6, normalH,  '\n        <hh:underline type="BOTTOM" shape="SOLID" color
 ${paraPr(0, 'JUSTIFY', 0,   0,   0)}
 ${paraPr(1, 'CENTER',  300, 100, 0)}
 ${paraPr(2, 'JUSTIFY', 200, 0,   0)}
-${paraPr(3, 'JUSTIFY', 0,   0,   0)}
+${paraPr(3, 'JUSTIFY', 0,   0,   0, dialogueTabHwp, -dialogueTabHwp)}
 ${paraPr(4, 'JUSTIFY', 0,   0,   0, 2268)}
 ${paraPr(5, 'JUSTIFY', 0,   0,   0, dialogueTabHwp)}
 ${paraPr(6, 'RIGHT',   0,   0,   0)}

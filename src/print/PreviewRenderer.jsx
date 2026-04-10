@@ -227,7 +227,7 @@ function A4Page({ tokens, pageNum, showPageNum, margins, metrics, fontFamily, fo
           right:  mmToXpx(right),
           bottom: mmToYpx(bottom),
           left:   mmToXpx(left),
-          overflow: 'hidden',
+          overflow: 'visible',
         }}
       >
         {renderList.map((item, i) => (
