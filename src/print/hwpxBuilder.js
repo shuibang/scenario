@@ -113,7 +113,7 @@ function dialoguePara(charName, content) {
   const speechRuns = htmlToRuns(content || '', 0);
   return `  <hp:p id="${pId}" paraPrIDRef="3" styleIDRef="3" pageBreak="0" columnBreak="0" merged="0">
     <hp:run charPrIDRef="3">
-      <hp:t xml:space="preserve">${esc(stripHtml(charName || ''))}<hp:tab leader="0" type="1"/><hp:tab leader="0" type="1"/></hp:t>
+      <hp:t xml:space="preserve">${esc(stripHtml(charName || ''))}<hp:tab leader="0" type="1"/></hp:t>
     </hp:run>
 ${speechRuns}
   </hp:p>`;
@@ -182,7 +182,6 @@ function xmlHeader(fontName, fontSizePt, dialogueTabHwp) {
   const normalH  = Math.round(fontSizePt * 100);
   const titleH   = Math.round(fontSizePt * 140);
   const headingH = Math.round(fontSizePt * 110);
-  const halfGap  = Math.round(dialogueTabHwp / 2);
 
   const fontLangs = ['HANGUL','LATIN','HANJA','JAPANESE','OTHER','SYMBOL','USER'];
 
@@ -262,7 +261,7 @@ ${charPr(6, normalH,  '\n        <hh:underline type="BOTTOM" shape="SOLID" color
     <hh:paraProperties itemCnt="7">
 ${paraPr(0, 'JUSTIFY', 0,   0,   0)}
 ${paraPr(1, 'CENTER',  300, 100, 0)}
-${paraPr(2, 'JUSTIFY', 200, 0,   0)}
+${paraPr(2, 'JUSTIFY', 0,   0,   0)}
 ${paraPr(3, 'JUSTIFY', 0,   0,   1, 0, -dialogueTabHwp)}
 ${paraPr(4, 'JUSTIFY', 0,   0,   0, 2268)}
 ${paraPr(5, 'JUSTIFY', 0,   0,   0, dialogueTabHwp)}
