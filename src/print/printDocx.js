@@ -14,8 +14,7 @@ import {
   AlignmentType, TabStopType,
   convertMillimetersToTwip,
   Footer, PageNumber,
-  SectionType, LineRuleType, NumberFormat, PageOrientation,
-  Table, TableRow, TableCell, WidthType, BorderStyle,
+  SectionType, LineRuleType, NumberFormat,
 } from 'docx';
 import { buildPrintModel } from './PrintModel';
 import { resolveFont } from './FontRegistry';
@@ -298,94 +297,6 @@ function buildDocxSections(printModel, dp, { hancom = false } = {}) {
         }
         prevBlock = block;
       }
-    }
-
-    else if (section.type === 'scenelist') {
-      const SL_FS = 10 * PT_TO_HALF_PT; // 10pt in half-points
-      const epTitle = `${section.episodeNumber}회 씬리스트${section.episodeTitle ? ` — ${section.episodeTitle}` : ''}`;
-      paras.push(new Paragraph({
-        children: [new TextRun({ text: epTitle, bold: true, font: { name: dp.fontFamily }, size: SL_FS + 2 })],
-        alignment: AlignmentType.CENTER,
-        spacing: { before: 0, after: 120 },
-      }));
-
-      // 컬럼 너비 (가로 A4: 297mm - 여백 40mm = 257mm → twip)
-      const totalW = convertMillimetersToTwip(257);
-      const COL_W = {
-        num:    Math.round(totalW * 0.06),
-        loc:    Math.round(totalW * 0.11),
-        subloc: Math.round(totalW * 0.10),
-        day:    Math.round(totalW * 0.06),
-        night:  Math.round(totalW * 0.06),
-        chars:  Math.round(totalW * 0.12),
-        desc:   Math.round(totalW * 0.38),
-        note:   Math.round(totalW * 0.11),
-      };
-      const HEADERS = ['씬번호', '장소', '세부장소', '낮', '밤', '등장인물', '내용 요약', '비고'];
-      const WIDTHS  = Object.values(COL_W);
-      const cellBorder = {
-        top:    { style: BorderStyle.SINGLE, size: 4, color: '999999' },
-        bottom: { style: BorderStyle.SINGLE, size: 4, color: '999999' },
-        left:   { style: BorderStyle.SINGLE, size: 4, color: '999999' },
-        right:  { style: BorderStyle.SINGLE, size: 4, color: '999999' },
-      };
-      const makeCell = (text, w, bold = false, shade = false) => new TableCell({
-        width: { size: w, type: WidthType.DXA },
-        shading: shade ? { fill: 'ECECEC' } : undefined,
-        borders: cellBorder,
-        children: [new Paragraph({
-          children: [new TextRun({ text: String(text ?? ''), bold, font: { name: dp.fontFamily }, size: SL_FS })],
-          spacing: { before: 30, after: 30 },
-        })],
-      });
-
-      const headerRow = new TableRow({
-        tableHeader: true,
-        children: HEADERS.map((h, i) => makeCell(h, WIDTHS[i], true, true)),
-      });
-      const dataRows = section.scenes.map(scene => new TableRow({
-        children: [
-          makeCell(scene.sceneNum,                         WIDTHS[0], true),
-          makeCell(scene.location,                         WIDTHS[1]),
-          makeCell(scene.subLocation,                      WIDTHS[2]),
-          makeCell(scene.dayText   || '',                  WIDTHS[3]),
-          makeCell(scene.nightText || '',                  WIDTHS[4]),
-          makeCell((scene.characters || []).join(', '),    WIDTHS[5]),
-          makeCell(scene.sceneListContent,                 WIDTHS[6]),
-          makeCell('',                                     WIDTHS[7]),
-        ],
-      }));
-
-      paras.push(new Table({
-        width: { size: totalW, type: WidthType.DXA },
-        rows: [headerRow, ...dataRows],
-      }));
-      // OOXML: 테이블이 마지막 요소이면 섹션 속성이 table cell에 삽입돼 landscape 무시됨
-      // 빈 단락을 테이블 뒤에 추가해 섹션 break를 단락에 붙임
-      paras.push(blankPara(dp));
-
-      // 씬리스트는 가로 용지 섹션으로 별도 push
-      const slMargin = { top: convertMillimetersToTwip(20), right: convertMillimetersToTwip(20), bottom: convertMillimetersToTwip(20), left: convertMillimetersToTwip(20) };
-      docxSections.push({
-        properties: {
-          type: SectionType.NEXT_PAGE,
-          page: {
-            size: {
-              // docxjs swaps width↔height internally when orientation=LANDSCAPE:
-              //   w:w = passed height, w:h = passed width
-              // To get w:w=16838(297mm) w:h=11906(210mm), pass portrait dimensions.
-              width: convertMillimetersToTwip(210),
-              height: convertMillimetersToTwip(297),
-              orientation: PageOrientation.LANDSCAPE,
-            },
-            margin: slMargin,
-            pageNumbers: { start: 1, formatType: NumberFormat.DECIMAL },
-          },
-        },
-        footers: { default: pageNumFooter(dp) },
-        children: paras,
-      });
-      continue; // 아래 공통 sectionDef push 스킵
     }
 
     else if (section.type === 'characters') {

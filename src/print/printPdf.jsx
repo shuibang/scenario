@@ -221,56 +221,6 @@ function SectionPage({ tokens, S }) {
   );
 }
 
-// ─── SceneList landscape table page ──────────────────────────────────────────
-function SceneListPage({ section, S }) {
-  const fs = 10; // 씬리스트 전용 10pt
-  const COL = {
-    num:    '6%',
-    loc:    '11%',
-    subloc: '10%',
-    day:    '6%',
-    night:  '6%',
-    chars:  '12%',
-    desc:   '38%',
-    note:   '11%',
-  };
-  const cell    = { fontSize: fs, padding: '3pt 4pt', borderRight: '0.5pt solid #bbb' };
-  const hCell   = { ...cell, fontWeight: 700, backgroundColor: '#ececec' };
-  const rowBase = { flexDirection: 'row', borderBottom: '0.5pt solid #ddd' };
-  const epTitle = `${section.episodeNumber}회 씬리스트${section.episodeTitle ? ` — ${section.episodeTitle}` : ''}`;
-
-  return (
-    <Page size="A4" orientation="landscape" style={{ ...S.page, fontSize: fs }}>
-      <Text style={{ fontSize: fs + 1, fontWeight: 700, textAlign: 'center', marginBottom: 6 }}>{epTitle}</Text>
-      <View fixed style={{ flexDirection: 'row', borderTop: '1pt solid #888', borderBottom: '1pt solid #888', backgroundColor: '#ececec' }}>
-        <Text style={{ ...hCell, width: COL.num }}>씬번호</Text>
-        <Text style={{ ...hCell, width: COL.loc }}>장소</Text>
-        <Text style={{ ...hCell, width: COL.subloc }}>세부장소</Text>
-        <Text style={{ ...hCell, width: COL.day }}>낮</Text>
-        <Text style={{ ...hCell, width: COL.night }}>밤</Text>
-        <Text style={{ ...hCell, width: COL.chars }}>등장인물</Text>
-        <Text style={{ ...hCell, width: COL.desc }}>내용 요약</Text>
-        <Text style={{ ...hCell, width: COL.note, borderRight: 'none' }}>비고</Text>
-      </View>
-      {section.scenes.map((scene, i) => {
-        const bg = i % 2 === 1 ? '#f8f8f8' : '#fff';
-        return (
-          <View key={scene.id} style={{ ...rowBase, backgroundColor: bg }} wrap={false}>
-            <Text style={{ ...cell, width: COL.num, fontWeight: 700 }}>{scene.sceneNum}</Text>
-            <Text style={{ ...cell, width: COL.loc }}>{scene.location}</Text>
-            <Text style={{ ...cell, width: COL.subloc }}>{scene.subLocation}</Text>
-            <Text style={{ ...cell, width: COL.day }}>{scene.dayText}</Text>
-            <Text style={{ ...cell, width: COL.night }}>{scene.nightText}</Text>
-            <Text style={{ ...cell, width: COL.chars }}>{scene.characters?.join(', ') || ''}</Text>
-            <Text style={{ ...cell, width: COL.desc }}>{scene.sceneListContent}</Text>
-            <Text style={{ ...cell, width: COL.note, borderRight: 'none' }}>{''}</Text>
-          </View>
-        );
-      })}
-    </Page>
-  );
-}
-
 // ─── Cover page ───────────────────────────────────────────────────────────────
 function CoverPage({ section, S }) {
   const subtitleField   = section.fields.find(f => f.label === '부제목' || f.id === 'subtitle');
@@ -338,15 +288,6 @@ function buildPdfGroups(printModel) {
           <SectionPage key={`ep-${section.episodeId}`} tokens={tokens} S={S} />
         );
       }
-      continue;
-    }
-
-    // ── 씬리스트: 현재 회차 그룹에 포함
-    if (section.type === 'scenelist') {
-      if (!curPages) curPages = [];
-      curPages.push(
-        <SceneListPage key={`scenelist-${section.episodeId}`} section={section} S={S} />
-      );
       continue;
     }
 

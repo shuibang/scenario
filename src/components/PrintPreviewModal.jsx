@@ -33,7 +33,7 @@ export default function PrintPreviewModal({ onClose }) {
   const [sel, setSel] = useState(() => {
     const episodesMap = {};
     allEpisodes.forEach(ep => { episodesMap[ep.id] = true; });
-    return { cover: true, synopsis: true, episodes: episodesMap, chars: true, biography: false, treatment: false, scenelist: false };
+    return { cover: true, synopsis: true, episodes: episodesMap, chars: true, biography: false, treatment: false };
   });
 
   const [format, setFormat]       = useState('pdf');
@@ -163,7 +163,6 @@ export default function PrintPreviewModal({ onClose }) {
             <Checkbox label="인물소개"   checked={sel.chars}      onChange={() => toggle('chars')} indent />
             <Checkbox label="인물이력서" checked={sel.biography}  onChange={() => toggle('biography')} indent />
             <Checkbox label="트리트먼트" checked={sel.treatment}  onChange={() => toggle('treatment')} indent />
-            <Checkbox label="씬리스트"   checked={sel.scenelist}  onChange={() => toggle('scenelist')} indent />
             <Checkbox label="인물관계도" checked={false}          onChange={() => {}} indent disabled />
             <Checkbox label="자료수집"   checked={false}          onChange={() => {}} indent disabled />
           </Section>

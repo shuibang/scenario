@@ -33,8 +33,7 @@ function mmToHwp(mm) { return Math.round(mm * MM_TO_HWP); }
 // ─── Sequential ID counter (reset per document) ─────────────────────────────
 // HWPML: hp:p and all its children (pPr, run, pEnd) must each have a unique id.
 let _pid = 0;
-let _tid = 0;
-function resetIds() { _pid = 0; _tid = 0; }
+function resetIds() { _pid = 0; }
 
 /**
  * HTML → 여러 hp:run 배열 (볼드/이탤릭/밑줄 인라인 서식 지원)
@@ -300,7 +299,7 @@ ${paraPr(7, 'JUSTIFY', 0,   0,   0, 0, 0, 1)}
 // resetPage=true: 이 구역부터 쪽번호 1로 리셋 (시놉시스/회차 첫 페이지)
 // resetPage=false: 연속 쪽번호 (표지 등)
 // coverPage=true: 쪽번호 ctrl 자체를 생략 (표지 전용)
-function secPrPara(margins, { resetPage = false, coverPage = false, landscape = false } = {}) {
+function secPrPara(margins, { resetPage = false, coverPage = false } = {}) {
   const pId  = _pid++;
   const mTop = mmToHwp(margins.top);
   const mBot = mmToHwp(margins.bottom);
@@ -314,11 +313,9 @@ function secPrPara(margins, { resetPage = false, coverPage = false, landscape = 
       </hp:ctrl>
       <hp:t/>
     </hp:run>`;
-  // 가로 방향: width/height 교체, landscape="HORIZONTAL"
-  const pgW = landscape ? A4_H : A4_W;
-  const pgH = landscape ? A4_W : A4_H;
-  // HWPX landscape enum: NARROWLY=세로(portrait), WIDELY=가로(landscape)
-  const pgLandscape = landscape ? 'WIDELY' : 'NARROWLY';
+  const pgW = A4_W;
+  const pgH = A4_H;
+  const pgLandscape = 'NARROWLY';
   return `  <hp:p id="${pId}" paraPrIDRef="7" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">
     <hp:run charPrIDRef="0">
       <hp:secPr id="" textDirection="HORIZONTAL" spaceColumns="1134" tabStop="8000"
@@ -364,81 +361,6 @@ function secPrPara(margins, { resetPage = false, coverPage = false, landscape = 
   </hp:p>`;
 }
 
-// ─── Scenelist table (landscape A4) ─────────────────────────────────────────
-function scenelistTable(scenes, margins) {
-  // 가로 A4 사용 폭: 297mm - left - right 여백
-  const usableMm  = 297 - margins.left - margins.right;
-  const usableHwp = mmToHwp(usableMm);
-
-  const COL_PCT = [6, 11, 10, 6, 6, 12, 38, 11];
-  const COL_W   = COL_PCT.map(p => Math.round(usableHwp * p / 100));
-  // 마지막 컬럼 너비 보정 (반올림 오차)
-  COL_W[7] = usableHwp - COL_W.slice(0, 7).reduce((a, b) => a + b, 0);
-
-  const HEADERS   = ['씬번호', '장소', '세부장소', '낮', '밤', '등장인물', '내용 요약', '비고'];
-  const ROW_H     = mmToHwp(8);  // 기본 행 높이 8mm
-
-  const makeCell = (text, colIdx, rowIdx, bold = false) => {
-    const pId = _pid++;
-    const cid = bold ? 3 : 0;
-    const plain = esc(String(text ?? ''));
-    return `          <hp:td name="" header="0" hasMargin="0" protect="0" editable="0" dirty="0"
-                    rowMerged="0" colMerged="0" borderFillIDRef="2">
-            <hp:cellAddr colAddr="${colIdx}" rowAddr="${rowIdx}"/>
-            <hp:cellSpan colSpan="1" rowSpan="1"/>
-            <hp:cellSz width="${COL_W[colIdx]}" height="${ROW_H}"/>
-            <hp:cellMargin left="360" right="360" top="141" bottom="141"/>
-            <hp:p id="${pId}" paraPrIDRef="0" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">
-              <hp:run charPrIDRef="${cid}"><hp:t xml:space="preserve">${plain}</hp:t></hp:run>
-            </hp:p>
-          </hp:td>`;
-  };
-
-  // hp:tr 필수 속성: header, hasRepeat, pageBreak, breakLatinWord, breakNonLatinWord
-  const tr = (rowIdx, cells) =>
-    `        <hp:tr height="${ROW_H}" header="0" hasRepeat="0" pageBreak="NAUTO"
-                breakLatinWord="KEEP_WORD" breakNonLatinWord="KEEP_WORD">
-${cells.join('\n')}
-        </hp:tr>`;
-
-  const headerRow = tr(0, HEADERS.map((h, i) => makeCell(h, i, 0, true)));
-
-  const dataRows = scenes.map((scene, ri) => {
-    const cells = [
-      scene.sceneNum,
-      scene.location         || '',
-      scene.subLocation      || '',
-      scene.dayText          || '',
-      scene.nightText        || '',
-      (scene.characters || []).join(', '),
-      scene.sceneListContent || '',
-      '',
-    ].map((txt, ci) => makeCell(txt, ci, ri + 1, false));
-    return tr(ri + 1, cells);
-  });
-
-  const totalH = ROW_H * (1 + scenes.length);
-  const tblId  = _tid++;
-  const pId    = _pid++;
-
-  // hp:t/ 은 ctrl 뒤에 반드시 있어야 함 (pageNum ctrl과 동일한 패턴)
-  return `  <hp:p id="${pId}" paraPrIDRef="0" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">
-    <hp:run charPrIDRef="0">
-      <hp:ctrl>
-        <hp:tbl id="${tblId}" zOrder="0" numberingType="NONE" textWrap="SQUARE" textFlow="BOTH_SIDES"
-                treatAsChar="1" affectLSpacing="0" floatAtAttrOn="0" vertRelTo="PARA" horzRelTo="PARA"
-                vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"
-                width="${usableHwp}" height="${totalH}" protect="0" cellSpacing="0"
-                borderFillIDRef="2" hasCaption="0">
-${headerRow}
-${dataRows.join('\n')}
-        </hp:tbl>
-      </hp:ctrl>
-      <hp:t/>
-    </hp:run>
-  </hp:p>`;
-}
-
 // ─── Section (body) XML ──────────────────────────────────────────────────────
 function xmlSection(printModel, margins) {
   resetIds();
@@ -461,11 +383,9 @@ function xmlSection(printModel, margins) {
   let firstSection = true;
   for (const sec of printModel.sections) {
     if (!firstSection) {
-      // 새 구역 시작 → secPrPara로 쪽번호 1부터 리셋 (표지는 쪽번호 없음, 씬리스트는 가로 방향)
       paras.push(secPrPara(margins, {
         resetPage: sec.type !== 'cover',
         coverPage: sec.type === 'cover',
-        landscape: sec.type === 'scenelist',
       }));
     }
     firstSection = false;
@@ -554,18 +474,6 @@ function xmlSection(printModel, margins) {
           if (c.description) normal(c.description);
           empty();
         }
-        break;
-      }
-      case 'scenelist': {
-        // 씬리스트는 가로 방향 페이지 + 테이블로 렌더링
-        // secPrPara가 이미 위에서 push됐으므로 landscape 처리는 secPrPara 호출 시 처리
-        const epTitle = `${sec.episodeNumber}회 씬리스트${sec.episodeTitle ? ` — ${sec.episodeTitle}` : ''}`;
-        paras.push(para(epTitle, { cid: 2, parid: 1, sid: 2 }));
-        empty();
-        if (sec.scenes?.length) {
-          paras.push(scenelistTable(sec.scenes, margins));
-        }
-        empty();
         break;
       }
     }
