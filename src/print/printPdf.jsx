@@ -11,7 +11,7 @@ import React from 'react';
 import {
   Document, Page, View, Text, Font, StyleSheet, pdf,
 } from '@react-pdf/renderer';
-import { getLayoutMetrics, tokenizeSection, paginate } from './LineTokenizer';
+import { getLayoutMetrics, tokenizeSection } from './LineTokenizer';
 import { buildPrintModel }  from './PrintModel';
 import { FONTS, resolveFont } from './FontRegistry';
 
@@ -198,117 +198,28 @@ function TokenEl({ token, text, S }) {
   }
 }
 
-// ─── Split-block line renderer ────────────────────────────────────────────────
-// continuation / split 블록은 이미 pre-wrap된 줄들.
-// \n으로 합쳐 단일 <Text>에 넣으면 textkit이 각 줄을 독립 단락으로 처리해
-// justify가 오동작하므로, 줄마다 별도 <Text>로 렌더링한다.
-function SplitLines({ kind, lines, token, S }) {
-  const plain = (t) => t.replace(/<[^>]+>/g, '');
-  switch (kind) {
-    case 'action':
-      return (
-        <View style={S.actionWrap}>
-          {lines.map((ln, i) => (
-            <Text key={i} style={{ ...S.action, textAlign: 'left' }}>{plain(ln)}</Text>
-          ))}
-        </View>
-      );
-    case 'dialogue':
-      return (
-        <>
-          {lines.map((ln, i) => (
-            <View key={i} style={S.dialogueRow}>
-              <Text style={S.charCell}>{i === 0 ? (token.charName || '') : ''}</Text>
-              <Text style={{ ...S.speechCell, textAlign: 'left' }}>{plain(ln)}</Text>
-            </View>
-          ))}
-        </>
-      );
-    case 'parenthetical':
-      return (
-        <View style={S.parenWrap}>
-          {lines.map((ln, i) => (
-            <Text key={i} style={{ ...S.paren, textAlign: 'left' }}>{plain(ln)}</Text>
-          ))}
-        </View>
-      );
-    case 'body':
-    default:
-      return (
-        <>
-          {lines.map((ln, i) => (
-            <Text key={i} style={{ ...S.body, textAlign: 'left' }}>{htmlToPdfChildren(ln)}</Text>
-          ))}
-        </>
-      );
-  }
-}
-
-// ─── A single PDF page ────────────────────────────────────────────────────────
-function PdfPage({ tokens, pageNum, showPageNum, S }) {
-  // renderList 구성:
-  //   isSplit=false → 블록 전체가 이 페이지에 있음 → TokenEl (blockText 원문, react-pdf가 wrap)
-  //   isSplit=true  → 블록이 페이지를 걸침 → SplitLines (pre-wrap된 줄 개별 렌더, justify 오동작 방지)
-  const renderList = [];
-  let i = 0;
-  while (i < tokens.length) {
-    const tok = tokens[i];
-
-    // 페이지 중간에서 시작하는 continuation (직전 페이지에서 블록이 잘린 경우)
-    if (tok.isFirstOfBlock === false) {
-      const lines = [tok.text];
-      i++;
-      while (i < tokens.length && tokens[i].isFirstOfBlock === false && tokens[i].kind === tok.kind) {
-        lines.push(tokens[i].text);
-        i++;
-      }
-      renderList.push({ kind: tok.kind, lines, token: tok, isSplit: true });
-      continue;
-    }
-
-    // 단일 줄 블록
-    if (!tok.blockLineCount || tok.blockLineCount <= 1) {
-      renderList.push({ kind: tok.kind, text: tok.rawHtml ?? tok.blockText ?? tok.text, token: tok, isSplit: false });
-      i++;
-      continue;
-    }
-
-    // 다중 줄 블록: 현재 페이지에 모두 있는지 확인
-    let onPage = 0;
-    for (let j = i + 1; j < tokens.length; j++) {
-      const t = tokens[j];
-      if (t.isFirstOfBlock === false && t.kind === tok.kind) onPage++;
-      else break;
-    }
-    const fullyOnPage = onPage >= tok.blockLineCount - 1;
-
-    if (fullyOnPage) {
-      // 블록 전체가 이 페이지 → blockText 원문으로 react-pdf가 직접 wrap (justify 정상)
-      renderList.push({ kind: tok.kind, text: tok.rawHtml ?? tok.blockText ?? tok.text, token: tok, isSplit: false });
-      i++;
-      while (i < tokens.length && tokens[i].isFirstOfBlock === false && tokens[i].kind === tok.kind) i++;
-    } else {
-      // 블록이 다음 페이지로 이어짐 → 이 페이지 줄들을 pre-wrap 개별 렌더
-      const lines = [tok.text];
-      i++;
-      while (i < tokens.length && tokens[i].isFirstOfBlock === false && tokens[i].kind === tok.kind) {
-        lines.push(tokens[i].text);
-        i++;
-      }
-      renderList.push({ kind: tok.kind, lines, token: tok, isSplit: true });
-    }
-  }
-
+// ─── A PDF section page (react-pdf handles pagination automatically) ──────────
+// paginate()를 사용하지 않고 전체 토큰을 react-pdf에 넘겨 자동 페이지 분할.
+// 각 블록의 첫 토큰(isFirstOfBlock !== false)만 사용하고 blockText 원문을 전달해
+// react-pdf가 실제 폰트 메트릭스로 정확하게 줄바꿈/페이지 분할을 처리.
+// 쪽번호는 fixed + render prop으로 모든 페이지에 자동 표시.
+function SectionPage({ tokens, S }) {
+  const blockTokens = tokens.filter(tok => tok.isFirstOfBlock !== false);
   return (
     <Page size="A4" style={S.page}>
-      {renderList.map((item, i) =>
-        item.isSplit
-          ? <SplitLines key={i} kind={item.kind} lines={item.lines} token={item.token} S={S} />
-          : <TokenEl key={i} token={item.token} text={item.text} S={S} />
-      )}
-      {showPageNum && (
-        <Text style={S.pageNum}>- {pageNum} -</Text>
-      )}
+      <Text
+        style={S.pageNum}
+        fixed
+        render={({ pageNumber }) => `- ${pageNumber} -`}
+      />
+      {blockTokens.map((token, i) => (
+        <TokenEl
+          key={i}
+          token={token}
+          text={token.rawHtml ?? token.blockText ?? token.text}
+          S={S}
+        />
+      ))}
     </Page>
   );
 }
@@ -404,21 +315,15 @@ function buildPdfDocument(printModel) {
       continue;
     }
 
-    const tokens    = tokenizeSection(section, metrics);
+    const tokens = tokenizeSection(section, metrics);
     if (!tokens.length) continue; // 내용 없는 섹션은 빈 페이지 생성 방지
-    const paginated = paginate(tokens, metrics, section.type);
-
-    paginated.forEach((pageTokens, pageIdx) => {
-      pages.push(
-        <PdfPage
-          key={`${section.type}-${section.episodeId || pageIdx}-${pageIdx}`}
-          tokens={pageTokens}
-          pageNum={pageIdx + 1}
-          showPageNum={true}
-          S={S}
-        />
-      );
-    });
+    pages.push(
+      <SectionPage
+        key={`${section.type}-${section.episodeId || section.type}`}
+        tokens={tokens}
+        S={S}
+      />
+    );
   }
 
   return <Document>{pages}</Document>;
