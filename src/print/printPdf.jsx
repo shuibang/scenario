@@ -73,13 +73,16 @@ function makeStyles(preset, metrics) {
     coverTitle:       { fontSize: fs + 11, fontWeight: 700, marginBottom: fs * lh, textAlign: 'center' },
     coverSubtitle:    { fontSize: fs + 5,  fontWeight: 400, marginBottom: 4, textAlign: 'center', color: '#555' },
     coverField:       { fontSize: fs,      marginBottom: 3, textAlign: 'center' },
-    // ── page number
-    pageNum: {
+    // ── page number (fixed footer — no absolute positioning)
+    pageNumWrap: {
       position: 'absolute',
-      bottom:   '15mm',
-      left: 0, right: 0,
+      bottom: 15 * MM_TO_PT,
+      left: 0,
+      right: 0,
+    },
+    pageNum: {
       textAlign: 'center',
-      fontSize: fs - 2,
+      fontSize: Math.max(fs - 2, 7),
       color: '#555',
     },
     // ── synopsis / characters
@@ -207,11 +210,9 @@ function SectionPage({ tokens, S }) {
   const blockTokens = tokens.filter(tok => tok.isFirstOfBlock !== false);
   return (
     <Page size="A4" style={S.page}>
-      <Text
-        style={S.pageNum}
-        fixed
-        render={({ pageNumber }) => `- ${pageNumber} -`}
-      />
+      <View style={S.pageNumWrap} fixed>
+        <Text style={S.pageNum} render={({ pageNumber }) => `- ${pageNumber} -`} />
+      </View>
       {blockTokens.map((token, i) => (
         <TokenEl
           key={i}
