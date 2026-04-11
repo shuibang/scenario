@@ -859,6 +859,24 @@ export default function SurveyPage() {
             </div>
           )}
 
+          <p style={{
+            fontSize: 12, color: '#888', textAlign: 'center',
+            lineHeight: 1.7, marginBottom: 16,
+          }}>
+            응답하신 내용은 안전한 데이터베이스에 암호화되어 저장되며, 서비스 개선 목적으로만 활용됩니다.{' '}
+            이메일을 남기신 경우 오류 답변 및 베타 테스터 안내 외의 용도로는 사용되지 않습니다.
+            <br /><br />
+            개인정보 관련 문의:{' '}
+            <a href="mailto:daejak.official@gmail.com" style={{ color: '#888', textDecoration: 'underline' }}>
+              daejak.official@gmail.com
+            </a>
+            {'  '}
+            스레드:{' '}
+            <a href="https://www.threads.net/@edam_essay" target="_blank" rel="noopener noreferrer" style={{ color: '#888', textDecoration: 'underline' }}>
+              @edam_essay
+            </a>
+          </p>
+
           <button
             type="submit"
             disabled={submitting}

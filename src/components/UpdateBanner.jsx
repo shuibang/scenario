@@ -9,6 +9,12 @@ import React, { useState } from 'react';
 // 별도 소식 (공지 탭) — 새 항목은 맨 앞에 추가
 export const ANNOUNCEMENTS = [
   {
+    id: 'ann-20260411-domain',
+    date: '2026-04-11',
+    title: '🔴 서비스 주소 변경 안내',
+    content: `베타 서비스 주소가 변경됩니다.\n\n기존 주소: scenario-876h.vercel.app\n새 주소: daejak.kr\n\n기존 주소로 작업하신 분들은\n이동 전에 꼭 백업해주세요!\n\n백업 방법:\n1. 기존 주소 접속\n2. 상단 백업/복원 버튼 클릭\n3. 백업 파일 다운로드\n4. daejak.kr 접속\n5. 백업/복원 → 복원으로 불러오기\n\n불편을 드려서 죄송해요.\n새 주소에서 더 안정적인 서비스로\n찾아뵐게요 🎬\n\n문의: daejak.official@gmail.com`,
+  },
+  {
     id: 'ann-20260406-beta',
     date: '2026-04-06',
     title: '📢 대본 작업실 베타 테스트 안내',

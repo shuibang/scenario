@@ -54,6 +54,7 @@ function SymbolPicker({ mobile = false, closeToken = 0, onOpen, forceOpen = null
   const ref = useRef(null);
   const btnRef = useRef(null);
   const dropRef = useRef(null);
+  const savedRangeRef = useRef(null); // 버튼 탭 시 커서 위치 저장 (모바일 키보드 닫힘으로 selection 소실 방지)
   const customSymbols = state.stylePreset?.customSymbols || [];
   // customSymbols가 비어있으면 DEFAULT_SYMBOLS를 초기 목록으로 사용
   const allSymbols = customSymbols.length > 0 ? customSymbols : [...DEFAULT_SYMBOLS];
@@ -231,6 +232,14 @@ function SymbolPicker({ mobile = false, closeToken = 0, onOpen, forceOpen = null
     // 일반 경로 (버튼 직접 클릭): 현재 커서 위치에 삽입
     surface.focus();
     const sel = window.getSelection();
+    // 모바일에서 키보드 닫힘으로 selection이 사라진 경우 저장해둔 range로 복원
+    if (!sel?.rangeCount && savedRangeRef.current) {
+      try {
+        sel?.removeAllRanges();
+        sel?.addRange(savedRangeRef.current);
+      } catch (_) {}
+    }
+    savedRangeRef.current = null;
     if (!sel?.rangeCount) return;
     const range = sel.getRangeAt(0);
     range.deleteContents();
@@ -251,6 +260,11 @@ function SymbolPicker({ mobile = false, closeToken = 0, onOpen, forceOpen = null
         ref={btnRef}
         onMouseDown={e => {
           e.preventDefault();
+          // 드롭다운 열기 전 커서 위치 저장 (모바일: 버튼 탭 시 키보드 닫혀 selection 소실)
+          if (!open) {
+            const sel = window.getSelection();
+            savedRangeRef.current = sel?.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
+          }
           if (open) {
             setDropPos(null);
           } else {
@@ -278,7 +292,7 @@ function SymbolPicker({ mobile = false, closeToken = 0, onOpen, forceOpen = null
       {open && createPortal(
         <div
           ref={dropRef}
-          onPointerDown={e => { if (e.target.closest('button, input')) return; e.preventDefault(); e.stopPropagation(); }} // 포털 전체: 에디터 커서 이동 차단 (버튼·input은 제외)
+          onPointerDown={e => { if (e.target.closest('button, input, [data-sym-item]')) return; e.preventDefault(); e.stopPropagation(); }} // 포털 전체: 에디터 커서 이동 차단 (버튼·input·단축어 아이템 제외)
           style={{
             position: 'fixed',
             top: dropPos.top,
@@ -287,6 +301,7 @@ function SymbolPicker({ mobile = false, closeToken = 0, onOpen, forceOpen = null
             background: 'var(--c-tag)', border: '1px solid var(--c-border4)',
             borderRadius: '0.5rem', overflow: 'hidden',
             minWidth: '180px', maxWidth: '280px', boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+            touchAction: 'manipulation', // 모바일 탭 지연(300ms) 제거
           }}
         >
           <div style={{ padding: '4px 12px 6px', fontSize: 10, fontWeight: 600, color: 'var(--c-text5)', borderBottom: '1px solid var(--c-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -308,7 +323,8 @@ function SymbolPicker({ mobile = false, closeToken = 0, onOpen, forceOpen = null
             {allSymbols.map((sym, i) => (
               <div
                 key={sym + i}
-                onPointerDown={e => { if (!editMode) { e.preventDefault(); e.stopPropagation(); insertSymbol(sym); } }}
+                data-sym-item="1"
+                onClick={e => { if (!editMode) { e.preventDefault(); e.stopPropagation(); insertSymbol(sym); } }}
                 onMouseEnter={() => !editMode && setActiveIdx(i)}
                 onMouseLeave={() => setActiveIdx(-1)}
                 style={{
