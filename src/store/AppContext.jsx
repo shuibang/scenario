@@ -3,6 +3,7 @@ import { getAll, setAll, getItem, setItem, DB_KEYS, genId, now, migrateFromLocal
 import { createSeedData } from '../data/seed';
 import { isTokenValid, saveToDrive, clearAccessToken } from './googleDrive';
 import { sharePayloadSchema } from '../utils/urlSchemas';
+import { parsePath, syncUrl } from '../utils/urlSync';
 
 // ─── Default style preset ────────────────────────────────────────────────────
 export const DEFAULT_STYLE_PRESET = {
@@ -384,6 +385,27 @@ export function AppProvider({ children }) {
         });
         const savedPreset = getItem(DB_KEYS.stylePresets);
         if (savedPreset) dispatch({ type: 'SET_STYLE_PRESET', payload: savedPreset });
+
+        // URL에서 마지막 위치 복원
+        const urlState = parsePath(window.location.pathname);
+        if (urlState) {
+          const { activeDoc, activeProjectId, activeEpisodeId } = urlState;
+          const projectExists = projects.some(p => p.id === activeProjectId);
+          const epExists = activeEpisodeId
+            ? migratedEpisodes.some(e => e.id === activeEpisodeId && e.projectId === activeProjectId)
+            : true;
+          if (projectExists && epExists) {
+            if (activeDoc === 'mypage') {
+              dispatch({ type: 'SET_ACTIVE_DOC', payload: 'mypage' });
+            } else if (activeDoc === 'script' && activeEpisodeId) {
+              dispatch({ type: 'SET_ACTIVE_PROJECT', id: activeProjectId });
+              dispatch({ type: 'SET_ACTIVE_EPISODE', id: activeEpisodeId });
+            } else if (activeDoc && activeProjectId) {
+              dispatch({ type: 'SET_ACTIVE_PROJECT', id: activeProjectId });
+              dispatch({ type: 'SET_ACTIVE_DOC', payload: activeDoc });
+            }
+          }
+        }
       } else {
         // Check for shared data in URL
         const hash = window.location.hash;
@@ -492,6 +514,16 @@ export function AppProvider({ children }) {
       dispatch({ type: 'SET_ACTIVE_PROJECT', id: state.projects[0].id });
     }
   }, [state.initialized, state.activeProjectId, state.projects]);
+
+  // 상태 변경마다 URL 동기화
+  useEffect(() => {
+    if (!state.initialized) return;
+    syncUrl({
+      activeDoc: state.activeDoc,
+      activeProjectId: state.activeProjectId,
+      activeEpisodeId: state.activeEpisodeId,
+    });
+  }, [state.initialized, state.activeDoc, state.activeProjectId, state.activeEpisodeId]);
 
   // Drive에서 불러올 때 사용 — skipSavedAt 플래그 자동 설정
   const loadFromDriveData = (drivePayload) => {

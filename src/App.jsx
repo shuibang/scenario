@@ -1075,6 +1075,26 @@ function Shell({ authUser, setAuthUser }) {
   const [saveToastMsg, setSaveToastMsg] = useState('저장되었습니다');
   const saveToastTimer = useRef(null);
 
+  // ── 새 버전 감지 폴링
+  const [newVersionReady, setNewVersionReady] = useState(false);
+  const [updatingVersion, setUpdatingVersion] = useState(false);
+  useEffect(() => {
+    let dismissed = false;
+    const currentVersion = import.meta.env.VITE_BUILD_VERSION ?? 'dev';
+    const check = async () => {
+      try {
+        const res = await fetch('/version.json?t=' + Date.now(), { cache: 'no-store' });
+        if (!res.ok) return;
+        const { version } = await res.json();
+        if (version !== 'dev' && currentVersion !== 'dev' && version !== currentVersion && !dismissed) {
+          setNewVersionReady(true);
+        }
+      } catch { /* 무시 */ }
+    };
+    const id = setInterval(check, 5 * 60 * 1000); // 5분마다
+    return () => clearInterval(id);
+  }, []);
+
   // 10분마다 자동저장 스냅샷
   useEffect(() => {
     const AUTO_INTERVAL = 10 * 60 * 1000;
@@ -1220,6 +1240,45 @@ function Shell({ authUser, setAuthUser }) {
           maxWidth: 360, textAlign: 'center',
         }}>
           {saveToastMsg}
+        </div>
+      )}
+      {newVersionReady && !updatingVersion && (
+        <div style={{
+          position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 10000,
+          background: 'var(--c-card)', borderTop: '1px solid var(--c-border4)',
+          padding: '14px 20px', boxShadow: '0 -4px 20px rgba(0,0,0,0.18)',
+          display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center',
+        }}>
+          <p style={{ fontSize: 13, color: 'var(--c-text2)', textAlign: 'center', lineHeight: 1.6, margin: 0 }}>
+            새 버전이 있어요. 지금 업데이트하면<br />편집 중인 내용은 자동저장 후 새로고침돼요.
+          </p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => setNewVersionReady(false)}
+              style={{ fontSize: 13, padding: '6px 16px', borderRadius: 8, border: '1px solid var(--c-border3)', background: 'transparent', color: 'var(--c-text4)', cursor: 'pointer' }}
+            >나중에</button>
+            <button
+              onClick={async () => {
+                setUpdatingVersion(true);
+                // 1. 자동저장 먼저
+                window.dispatchEvent(new Event('script:requestSave'));
+                await new Promise(r => setTimeout(r, 600));
+                // 2. IndexedDB flush 대기
+                await new Promise(r => setTimeout(r, 400));
+                window.location.reload();
+              }}
+              style={{ fontSize: 13, padding: '6px 20px', borderRadius: 8, border: 'none', background: 'var(--c-accent)', color: '#fff', cursor: 'pointer', fontWeight: 600 }}
+            >업데이트</button>
+          </div>
+        </div>
+      )}
+      {updatingVersion && (
+        <div style={{
+          position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 10000,
+          background: 'var(--c-card)', borderTop: '1px solid var(--c-border4)',
+          padding: '16px 20px', textAlign: 'center', fontSize: 13, color: 'var(--c-text4)',
+        }}>
+          저장 중… 잠시만 기다려주세요
         </div>
       )}
     </>
