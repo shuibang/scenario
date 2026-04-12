@@ -1195,7 +1195,7 @@ function Shell({ authUser, setAuthUser }) {
   );
   const modals = (
     <>
-      {printPreviewOpen && <PrintPreviewModal onClose={() => setPrintPreviewOpen(false)} />}
+      {printPreviewOpen && <PrintPreviewModal onClose={() => { console.trace('[Modal] setPrintPreviewOpen(false) 호출'); setPrintPreviewOpen(false); }} />}
       {syncConflict && (
         <SyncConflictModal
           localSavedAt={syncConflict.localSavedAt}

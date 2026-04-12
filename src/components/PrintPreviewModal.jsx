@@ -46,6 +46,14 @@ export default function PrintPreviewModal({ onClose }) {
   const [exportStep, setExportStep] = useState('');  // '직렬화' | '레이아웃' | '파일 생성' | '다운로드'
   const [error, setError]         = useState(null);
 
+  // 열리는 순간의 클릭 이벤트가 백드롭에 전달되는 것을 막기 위해
+  // 마운트 후 150ms 동안 백드롭 클릭을 무시한다.
+  const backdropReady = useRef(false);
+  useEffect(() => {
+    const t = setTimeout(() => { backdropReady.current = true; }, 150);
+    return () => clearTimeout(t);
+  }, []);
+
   // ─── Font availability (async, loaded on mount)
   const [fontAvailability, setFontAvailability] = useState(null);
   useEffect(() => {
@@ -112,7 +120,16 @@ export default function PrintPreviewModal({ onClose }) {
     }
   }, [state, sel]);
 
-  const handleBackdrop = e => { if (e.target === e.currentTarget) onClose(); };
+  const handleBackdrop = e => {
+    if (!backdropReady.current) {
+      console.log('[Modal] backdropReady 아직 false — 클릭 무시 (열리는 순간 이벤트 차단)');
+      return;
+    }
+    if (e.target === e.currentTarget) {
+      console.log('[Modal] 백드롭 클릭으로 onClose 호출');
+      onClose();
+    }
+  };
 
   return (
     <div
