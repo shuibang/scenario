@@ -1017,6 +1017,23 @@ function ErrorReportTab() {
         <div className="text-xs" style={{ color: 'var(--c-text5)' }}>불편한 점이나 개선 아이디어를 알려주세요.</div>
       </div>
 
+      {/* 설문 바로가기 */}
+      <button
+        onClick={() => { window.location.href = '/#survey'; }}
+        style={{
+          width: '100%', padding: '13px 16px', borderRadius: 10,
+          border: '1px solid var(--c-border3)', background: 'var(--c-input)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          cursor: 'pointer', textAlign: 'left',
+        }}
+      >
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--c-text2)' }}>📋 베타 테스트 설문 참여하기</div>
+          <div style={{ fontSize: 11, color: 'var(--c-text5)', marginTop: 3 }}>앱 전반에 대한 피드백을 남겨주세요</div>
+        </div>
+        <span style={{ fontSize: 14, color: 'var(--c-text6)' }}>›</span>
+      </button>
+
       {/* 유형 */}
       <div>
         <span style={labelStyle}>유형</span>

@@ -57,11 +57,11 @@ const Q11_OPTIONS = [
 const Q16_FREE_GROUPS = [
   {
     label: '기본 기능',
-    items: ['대본 편집 (씬번호/지문/대사/단축키)', '씬번호 자동 연동', '자동저장'],
+    items: ['대본 편집 (씬번호/지문/대사/단축키)', '씬번호 자동 연동', '자동저장', '시놉시스 편집', '트리트먼트 작성'],
   },
   {
     label: '작업 보조',
-    items: ['시놉시스 편집', '인물 관리 (인물 현황)', '트리트먼트 작성', '씬리스트 자동 생성', '자료수집 페이지'],
+    items: ['인물 관리 (인물 현황)', '씬리스트 자동 생성', '자료수집 페이지'],
   },
   {
     label: '출력 / 공유',
@@ -306,7 +306,7 @@ export default function SurveyPage() {
     q16: [], q17: '', q18: '', q19: '', q20Email: '',
   });
   const [errors, setErrors]       = useState({});
-  const [submitted, setSubmitted] = useState(false);
+  const [submitted, setSubmitted] = useState(() => !!localStorage.getItem('survey_submitted'));
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
 
@@ -373,6 +373,7 @@ export default function SurveyPage() {
         }]);
         if (error) throw error;
       }
+      localStorage.setItem('survey_submitted', '1');
       setSubmitted(true);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
@@ -398,6 +399,9 @@ export default function SurveyPage() {
           <p style={{ color: 'var(--c-text3)', fontSize: 15, lineHeight: 1.8 }}>
             더 좋은 툴로 돌아올게요 🎬<br />
             여러분의 의견이 대본 작업실을 만들어갑니다.
+          </p>
+          <p style={{ marginTop: 16, fontSize: 12, color: 'var(--c-text5)' }}>
+            이미 제출하신 설문입니다.
           </p>
         </div>
       </div>
