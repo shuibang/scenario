@@ -8,8 +8,9 @@
  *   데스크톱: 좌(미리보기) + 우(피드백 280px) — 접기/펼치기 가능
  *   모바일:   상(미리보기) + 하(피드백 고정바) — 접기/펼치기 가능
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import PreviewRenderer from '../print/PreviewRenderer';
+import { exportPdf } from '../print/pdfViaServer';
 import { loadReviewPayload, isShortReviewId } from '../utils/reviewShare';
 import { reviewLegacySchema } from '../utils/urlSchemas';
 
@@ -52,6 +53,35 @@ export default function SharedReviewView() {
   const zoomIn  = () => setZoom(z => Math.min(z + 0.1, 2.0));
   const zoomOut = () => setZoom(z => Math.max(z - 0.1, 0.3));
   const zoomReset = () => setZoom(1.0);
+
+  const [pdfExporting, setPdfExporting] = useState(false);
+  const [pdfStep,      setPdfStep]      = useState('');
+  const handlePdfDownload = useCallback(async () => {
+    if (!data) return;
+    setPdfExporting(true);
+    setPdfStep('');
+    const appState = {
+      projects:     data.projects     || [],
+      episodes:     data.episodes     || [],
+      characters:   data.characters   || [],
+      scenes:       data.scenes       || [],
+      scriptBlocks: data.scriptBlocks || [],
+      coverDocs:    data.coverDocs    || [],
+      synopsisDocs: data.synopsisDocs || [],
+      activeProjectId: data.activeProjectId,
+      stylePreset:  data.stylePreset  || {},
+      initialized:  true,
+    };
+    const selections = data.selections || { cover: true, synopsis: true, episodes: {}, chars: true };
+    try {
+      await exportPdf(appState, selections, { onStep: setPdfStep });
+    } catch (err) {
+      alert(`PDF 다운로드 실패: ${err.message}`);
+    } finally {
+      setPdfExporting(false);
+      setPdfStep('');
+    }
+  }, [data]);
 
   useEffect(() => {
     const val = window.location.hash.slice(8); // '#review=' 제거
@@ -107,10 +137,23 @@ export default function SharedReviewView() {
 
   // ── 줌 컨트롤 바 ──────────────────────────────────────────────────────────
   const zoomBar = (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '6px 0', userSelect: 'none' }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '6px 0', userSelect: 'none', flexWrap: 'wrap' }}>
       <button onClick={zoomOut} style={zBtnStyle}>−</button>
       <button onClick={zoomReset} style={{ ...zBtnStyle, minWidth: 48, fontSize: 11 }}>{Math.round(zoom * 100)}%</button>
       <button onClick={zoomIn}  style={zBtnStyle}>+</button>
+      <button
+        onClick={handlePdfDownload}
+        disabled={pdfExporting}
+        style={{
+          ...zBtnStyle,
+          background: '#5a5af5', color: '#fff', border: 'none',
+          padding: '3px 12px', fontSize: 12, fontWeight: 600,
+          opacity: pdfExporting ? 0.6 : 1,
+          cursor: pdfExporting ? 'default' : 'pointer',
+        }}
+      >
+        {pdfExporting ? `${pdfStep || 'PDF'} 중…` : 'PDF 다운로드'}
+      </button>
     </div>
   );
 

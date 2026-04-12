@@ -11,9 +11,6 @@ import {
   getFontWarnings,
   getEffectivePdfFontName,
   getFontByCssFamily,
-  FONT_STATUS,
-  getFontPdfStatus,
-  getFontById,
 } from '../print/FontRegistry';
 
 
