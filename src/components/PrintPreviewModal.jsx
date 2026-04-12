@@ -151,13 +151,18 @@ export default function PrintPreviewModal({ onClose }) {
       <div
         className="flex rounded-xl shadow-2xl"
         style={{
-          display:    'flex',          /* Tailwind 미적용 환경 대비 inline 명시 */
+          display:       'flex',
           flexDirection: 'row',
-          width:      'min(960px, 95vw)',
-          height:     'min(88vh, 760px)',
-          background: 'var(--c-panel)',
-          border:     '1px solid var(--c-border)',
-          overflow:   'clip',
+          alignItems:    'stretch',    /* 자식이 모달 높이 전체를 채우도록 명시 */
+          width:         '95vw',       /* min(960px, 95vw) 대체 — min() 함수 미지원 대비 */
+          maxWidth:      '960px',
+          height:        '88vh',       /* min(88vh, 760px) 대체 */
+          maxHeight:     '760px',
+          background:    'var(--c-panel)',
+          border:        '1px solid var(--c-border)',
+          overflow:      'hidden',     /* clip → hidden (브라우저 호환성) */
+          borderRadius:  '0.75rem',
+          boxShadow:     '0 25px 50px -12px rgba(0,0,0,0.4)',
         }}
         onClick={e => e.stopPropagation()}
       >
@@ -165,15 +170,18 @@ export default function PrintPreviewModal({ onClose }) {
         <div
           className="w-64 shrink-0 flex flex-col overflow-y-auto"
           style={{
-            display:    'flex',        /* inline 명시 */
+            display:       'flex',
             flexDirection: 'column',
-            flexShrink: 0,
-            width:      '256px',       /* w-64 대체 */
-            minWidth:   '256px',
-            borderRight: '1px solid var(--c-border)',
-            padding: '1.25rem',
+            flexShrink:    0,
+            width:         '256px',
+            minWidth:      '256px',
+            maxHeight:     '100%',     /* 부모 높이 초과 방지 — overflowY:auto 정상 작동 보장 */
+            borderRight:   '1px solid var(--c-border)',
+            padding:       '1.25rem',
+            overflowY:     'auto',
+            overflowX:     'hidden',
             WebkitOverflowScrolling: 'touch',
-            overflowY: 'auto',
+            boxSizing:     'border-box',
           }}
         >
           {/* Header */}
@@ -310,7 +318,7 @@ export default function PrintPreviewModal({ onClose }) {
         {/* ── Right: Preview ──────────────────────────────────────────────────── */}
         <div
           className="flex-1 overflow-y-auto"
-          style={{ flex: 1, overflowY: 'auto', background: '#d8d8d8' }}
+          style={{ flex: 1, minWidth: 0, overflowY: 'auto', maxHeight: '100%', background: '#d8d8d8' }}
         >
           <PreviewRenderer
             appState={previewState}
