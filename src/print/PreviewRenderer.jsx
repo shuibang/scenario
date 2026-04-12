@@ -327,7 +327,9 @@ function CoverPage({ section, margins, fontFamily, fontSize, lineHeight, scale }
  *   columnWidth — available width for preview (default 340)
  */
 export default function PreviewRenderer({ appState, selections, columnWidth = 340 }) {
-  const preset  = appState?.stylePreset || {};
+  // stylePreset이 undefined일 때 매 렌더마다 새 {} 생성을 막기 위해 useMemo 사용.
+  // 새 객체가 생기면 metrics → useEffect가 매 렌더마다 재실행되어 pages가 영원히 null이 됨.
+  const preset  = useMemo(() => appState?.stylePreset || {}, [appState?.stylePreset]);
   const metrics = useMemo(() => getLayoutMetrics(preset), [preset]);
 
   const { cssStack: fontFamily } = resolveFont(preset, 'preview');
@@ -357,7 +359,15 @@ export default function PreviewRenderer({ appState, selections, columnWidth = 34
     let cancelled = false;
     setPages(null);
 
-    const printModel = buildPrintModel(appState, selections, preset);
+    let printModel;
+    try {
+      printModel = buildPrintModel(appState, selections, preset);
+    } catch (err) {
+      console.error('[PreviewRenderer] buildPrintModel 실패:', err);
+      setPages([]);
+      return;
+    }
+
     const sections = printModel.sections;
     const result = [];
     let idx = 0;
@@ -368,18 +378,22 @@ export default function PreviewRenderer({ appState, selections, columnWidth = 34
         setPages(result);
         return;
       }
-      const section = sections[idx++];
-      if (section.type === 'cover') {
-        result.push({ section, isCover: true, pageIdx: 0 });
-      } else if (section.type === 'scenelist') {
-        result.push({ section, isScenelist: true, pageIdx: 0 });
-      } else {
-        const tokens = tokenizeSection(section, metrics);
-        if (tokens.length) {
-          paginate(tokens, metrics, section.type).forEach((pageTokens, pageIdx) => {
-            result.push({ section, tokens: pageTokens, isCover: false, pageIdx });
-          });
+      try {
+        const section = sections[idx++];
+        if (section.type === 'cover') {
+          result.push({ section, isCover: true, pageIdx: 0 });
+        } else if (section.type === 'scenelist') {
+          result.push({ section, isScenelist: true, pageIdx: 0 });
+        } else {
+          const tokens = tokenizeSection(section, metrics);
+          if (tokens.length) {
+            paginate(tokens, metrics, section.type).forEach((pageTokens, pageIdx) => {
+              result.push({ section, tokens: pageTokens, isCover: false, pageIdx });
+            });
+          }
         }
+      } catch (err) {
+        console.error('[PreviewRenderer] 섹션 처리 실패:', err);
       }
       requestAnimationFrame(tick);
     };

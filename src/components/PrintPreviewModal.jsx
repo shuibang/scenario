@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useApp } from '../store/AppContext';
 import AdBanner from './AdBanner';
 import { exportPdf }              from '../print/printPdf';
@@ -20,6 +20,12 @@ export default function PrintPreviewModal({ onClose }) {
   const {
     episodes, activeProjectId, stylePreset,
   } = state;
+
+  // 모달이 열린 시점의 state를 스냅샷으로 고정.
+  // 백그라운드 자동저장·Supabase 동기화로 state ref가 바뀌어도
+  // 미리보기가 계속 재시작되지 않게 한다.
+  const stateSnapshotRef = useRef(state);
+  const previewState = stateSnapshotRef.current;
 
   const allEpisodes = useMemo(
     () => episodes.filter(e => e.projectId === activeProjectId).sort((a, b) => a.number - b.number),
@@ -267,7 +273,7 @@ export default function PrintPreviewModal({ onClose }) {
           style={{ background: '#d8d8d8' }}
         >
           <PreviewRenderer
-            appState={state}
+            appState={previewState}
             selections={sel}
             columnWidth={340}
           />
