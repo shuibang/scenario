@@ -21,7 +21,8 @@
       "Bash(curl -s \"https://raw.githubusercontent.com/neolord0/hwpxlib/main/src/main/java/kr/dogfoot/hwpxlib/writer/header_xml/reflist/tabpr/TabPrWriter.java\")",
       "WebFetch(domain:api.github.com)",
       "Bash(curl -s \"https://raw.githubusercontent.com/airmang/python-hwpx/master/src/hwpx/document.py\")",
-      "Bash(curl -s \"https://api.github.com/repos/airmang/python-hwpx/contents/src/hwpx\")"
+      "Bash(curl -s \"https://api.github.com/repos/airmang/python-hwpx/contents/src/hwpx\")",
+      "Bash(curl -s https://scenario-876h.vercel.app/landing.html)"
     ]
   }
 }
