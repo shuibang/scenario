@@ -1,11 +1,7 @@
 /**
  * reviewShare — 검토 링크 저장/불러오기 (Supabase review_links 테이블)
  */
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = (import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY)
-  ? createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY)
-  : null;
+import { supabase } from '../store/supabaseClient';
 
 function genId() {
   return crypto.randomUUID(); // 128비트 UUID — 추측 공격 방지

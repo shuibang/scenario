@@ -80,11 +80,7 @@ export function loadFontMeta() {
 }
 
 export function saveFontMeta(list) {
-  try {
-    localStorage.setItem(META_KEY, JSON.stringify(list));
-  } catch (e) {
-    console.error('[fontStorage] 메타 저장 실패:', e);
-  }
+  localStorage.setItem(META_KEY, JSON.stringify(list));
 }
 
 // ─── Blob URL cache (session-scoped, for Font.register and preview) ───────────

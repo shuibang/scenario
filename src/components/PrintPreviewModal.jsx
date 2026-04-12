@@ -121,14 +121,8 @@ export default function PrintPreviewModal({ onClose }) {
   }, [state, sel]);
 
   const handleBackdrop = e => {
-    if (!backdropReady.current) {
-      console.log('[Modal] backdropReady 아직 false — 클릭 무시 (열리는 순간 이벤트 차단)');
-      return;
-    }
-    if (e.target === e.currentTarget) {
-      console.log('[Modal] 백드롭 클릭으로 onClose 호출');
-      onClose();
-    }
+    if (!backdropReady.current) return;
+    if (e.target === e.currentTarget) onClose();
   };
 
   return (

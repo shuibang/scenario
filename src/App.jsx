@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import LandingPage from './components/LandingPage';
 import { logShareSchema } from './utils/urlSchemas';
+import { getTimelineColor } from './utils/color';
 import { loadLogPayload, isShortReviewId as isUUID } from './utils/reviewShare';
 import { AppProvider, useApp } from './store/AppContext';
 import {
@@ -109,27 +110,6 @@ function DragHandle({ onDrag, isLeft }) {
 
 // ─── Timeline Strip ───────────────────────────────────────────────────────────
 
-function getTimelineColor(ratio) {
-  // 0→0.85: 연한 라벤더(#c7d2fe) → 짙은 남색(#1e1b4b)
-  // 0.85→1: 짙은 남색 → 살짝 옅은 인디고(#4338ca)
-  const lerp = (a, b, t) => Math.round(a + (b - a) * t);
-  const lerpColor = (c1, c2, t) => ({
-    r: lerp(c1[0], c2[0], t),
-    g: lerp(c1[1], c2[1], t),
-    b: lerp(c1[2], c2[2], t),
-  });
-  const light  = [199, 210, 254]; // #c7d2fe indigo-200
-  const dark   = [30,  46, 129];  // #1e2e81
-  const mid    = [67,  56, 202];  // #4338ca indigo-700
-  let c;
-  if (ratio <= 0.85) {
-    c = lerpColor(light, dark, ratio / 0.85);
-  } else {
-    c = lerpColor(dark, mid, (ratio - 0.85) / 0.15);
-  }
-  return `rgb(${c.r},${c.g},${c.b})`;
-}
-
 // 마커가 콘텐츠와 함께 스크롤되는 타임라인
 function TimelineStrip({ scrollEl }) {
   const { state } = useApp();
@@ -171,7 +151,8 @@ function TimelineStrip({ scrollEl }) {
         }
       }
     }
-    return Math.max(1, Math.ceil(total / linesPerPage));
+    // float 그대로 유지 — Math.ceil 제거로 비례 분량 계산
+    return Math.max(0.1, total / linesPerPage);
   }, [blocks, stylePreset]);
 
   useEffect(() => {
@@ -188,14 +169,14 @@ function TimelineStrip({ scrollEl }) {
     };
   }, [scrollEl]);
 
-  // 1장 = 2분 고정, 총 분 = totalPages * 2
+  // 1장 = 2분 고정, float 유지 → 0.5페이지 = 1.0분
   const totalMins = totalPages * 2;
   const pxPerSec = contentHeight > 0 ? contentHeight / (totalMins * 60) : 0;
 
   // 눈금 밀도 조절: 간격이 너무 좁으면 세밀한 눈금 생략
   const show1s = pxPerSec >= 3;
   const show5s = pxPerSec * 5 >= 3;
-  const totalSecs = totalMins * 60;
+  const totalSecs = Math.ceil(totalMins * 60);
 
   const ticks = useMemo(() => {
     if (!pxPerSec) return [];
@@ -267,6 +248,17 @@ function TimelineStrip({ scrollEl }) {
               </div>
             );
           })}
+        </div>
+
+        {/* 총 분량 레이블 — 하단 고정 */}
+        <div style={{
+          position: 'absolute', bottom: 4, left: 0, right: 0, zIndex: 2,
+          display: 'flex', justifyContent: 'center', pointerEvents: 'none',
+        }}>
+          <span style={{
+            fontSize: 8, color: 'var(--c-text3)', opacity: 0.8,
+            writingMode: 'vertical-rl', whiteSpace: 'nowrap', userSelect: 'none',
+          }}>{totalMins.toFixed(1)}분</span>
         </div>
       </div>
     </div>

@@ -1,9 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = (import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY)
-  ? createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY)
-  : null;
+import { supabase } from '../store/supabaseClient';
 import { QRCodeSVG } from 'qrcode.react';
 import { useApp } from '../store/AppContext';
 import QnATab from './QnATab';
@@ -452,9 +448,13 @@ function FontManagementSection() {
   };
 
   const handleSetDefault = (id) => {
-    const updated = loadFontMeta().map(f => ({ ...f, isDefault: f.id === id }));
-    saveFontMeta(updated);
-    setFonts(updated);
+    try {
+      const updated = loadFontMeta().map(f => ({ ...f, isDefault: f.id === id }));
+      saveFontMeta(updated);
+      setFonts(updated);
+    } catch (err) {
+      setError(`기본 폰트 설정 실패: ${err.message}`);
+    }
   };
 
   const handleDelete = async (id) => {

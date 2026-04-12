@@ -70,7 +70,6 @@ export async function exportPdf(appState, selections, { onStep = () => {} } = {}
   const baseUrl  = window.location.origin;
 
   const endpoint = `${SERVER_URL}/pdf`;
-  console.log('[pdfViaServer] fetch 요청 시작 →', endpoint, { filename, baseUrl });
 
   onStep('PDF 변환');
   try {
@@ -80,13 +79,11 @@ export async function exportPdf(appState, selections, { onStep = () => {} } = {}
       body:    JSON.stringify({ html, baseUrl, filename }),
       signal:  AbortSignal.timeout(30_000), // 30초 타임아웃
     });
-    console.log('[pdfViaServer] 응답 상태:', res.status, res.ok ? 'OK' : 'FAIL');
     if (!res.ok) {
       const { error } = await res.json().catch(() => ({}));
       throw new Error(error || `서버 오류 (${res.status})`);
     }
     const blob = await res.blob();
-    console.log('[pdfViaServer] PDF blob 수신 완료, size:', blob.size, 'bytes');
 
     onStep('다운로드');
     const url = URL.createObjectURL(blob);

@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useApp } from '../store/AppContext';
 import { getChipInlineStyle } from '../utils/emotionColor';
+import { getTimelineColor } from '../utils/color';
 import { getLayoutMetrics } from '../print/LineTokenizer';
 import { stripHtml } from '../utils/textFormat';
 
@@ -149,23 +150,6 @@ function EmotionChip({ emotionTag }) {
   if (!emotionTag) return null;
   const style = getChipInlineStyle(emotionTag.color, emotionTag.intensity);
   return <span style={style}>{emotionTag.word}</span>;
-}
-
-// ─── getTimelineColor (라벤더→남색→인디고) ────────────────────────────────────
-function getTimelineColor(ratio) {
-  const lerp = (a, b, t) => Math.round(a + (b - a) * t);
-  const lerpColor = (c1, c2, t) => ({
-    r: lerp(c1[0], c2[0], t),
-    g: lerp(c1[1], c2[1], t),
-    b: lerp(c1[2], c2[2], t),
-  });
-  const light = [199, 210, 254];
-  const dark  = [30,  46, 129];
-  const mid   = [67,  56, 202];
-  const c = ratio <= 0.85
-    ? lerpColor(light, dark, ratio / 0.85)
-    : lerpColor(dark, mid, (ratio - 0.85) / 0.15);
-  return `rgb(${c.r},${c.g},${c.b})`;
 }
 
 // ─── 씬별 시간 비율 계산 (0~1) ───────────────────────────────────────────────
