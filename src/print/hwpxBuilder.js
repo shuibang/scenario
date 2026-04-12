@@ -177,7 +177,7 @@ function xmlContentHpf(title) {
 </opf:package>`;
 }
 
-function xmlHeader(fontName, fontSizePt, dialogueTabHwp) {
+function xmlHeader(fontName, fallbackFontName, fontSizePt, dialogueTabHwp) {
   // HWPX height unit = 1/100 pt
   const normalH  = Math.round(fontSizePt * 100);
   const titleH   = Math.round(fontSizePt * 140);
@@ -238,6 +238,12 @@ function xmlHeader(fontName, fontSizePt, dialogueTabHwp) {
         <hh:diagonal     type="NONE" width="0.1 mm" color="#000000"/>
       </hh:borderFill>`;
 
+  // 폴백 폰트가 있으면 fontCnt="2"로 두 번째 항목 추가
+  const fontCnt    = fallbackFontName ? '2' : '1';
+  const fallbackEl = fallbackFontName
+    ? `\n        <hh:font id="1" face="${esc(fallbackFontName)}" type="TTF" isEmbedded="0"/>`
+    : '';
+
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <hh:head xmlns:hh="http://www.hancom.co.kr/hwpml/2011/head"
          xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph"
@@ -246,8 +252,8 @@ function xmlHeader(fontName, fontSizePt, dialogueTabHwp) {
   <hh:beginNum page="1" footnote="1" endnote="1" pic="1" tbl="1" equation="1"/>
   <hh:refList>
     <hh:fontfaces itemCnt="7">
-${fontLangs.map(lang => `      <hh:fontface lang="${lang}" fontCnt="1">
-        <hh:font id="0" face="${esc(fontName)}" type="TTF" isEmbedded="0"/>
+${fontLangs.map(lang => `      <hh:fontface lang="${lang}" fontCnt="${fontCnt}">
+        <hh:font id="0" face="${esc(fontName)}" type="TTF" isEmbedded="0"/>${fallbackEl}
       </hh:fontface>`).join('\n')}
     </hh:fontfaces>
     <hh:borderFills itemCnt="2">
@@ -514,10 +520,27 @@ ${paras.join('\n')}
  * buildHwpx(appState, selections) → Promise<Blob>
  * Returns a Blob with MIME type application/hwp+zip.
  */
+// CSS 폰트 패밀리명 → HWP가 인식하는 실제 폰트 face 이름 매핑
+// (HWP는 TTF 내부 name 테이블의 영문 패밀리명을 기준으로 인식)
+const CSS_TO_HWPX_FONT = {
+  '함초롱바탕':    'HCRBatang',
+  'HCR Batang':   'HCRBatang',
+  'HCRBatang':    'HCRBatang',
+  '함초롱돋움':    'HCRDotum',
+  'HCR Dotum':    'HCRDotum',
+  '맑은 고딕':     '맑은 고딕',
+  'Malgun Gothic': '맑은 고딕',
+};
+
+function toHwpxFontName(cssFontFamily) {
+  return CSS_TO_HWPX_FONT[cssFontFamily] ?? cssFontFamily ?? 'HCRBatang';
+}
+
 export async function buildHwpx(appState, selections) {
-  const preset    = appState.stylePreset || {};
-  const fontName  = preset.fontFamily || '함초롱바탕';
-  const fontSize  = preset.fontSize   || 11;
+  const preset          = appState.stylePreset || {};
+  const fontName        = toHwpxFontName(preset.fontFamily);
+  const fallbackFont    = '맑은 고딕';  // HWP 미설치 환경 폴백
+  const fontSize        = preset.fontSize || 11;
   // dialogueGap: em → pt → HWP units (1pt = 100 HWP units)
   const dialogueEm     = parseFloat(preset.dialogueGap || '7');
   const dialogueTabHwp = Math.round(dialogueEm * fontSize * 200);
@@ -535,7 +558,7 @@ export async function buildHwpx(appState, selections) {
   zip.file('META-INF/manifest.xml',   xmlManifest());
   zip.file('META-INF/container.xml',  xmlContainer());
   zip.file('Contents/content.hpf',    xmlContentHpf(projectTitle));
-  zip.file('Contents/header.xml',     xmlHeader(fontName, fontSize, dialogueTabHwp));
+  zip.file('Contents/header.xml',     xmlHeader(fontName, fallbackFont, fontSize, dialogueTabHwp));
   zip.file('Contents/section0.xml',   xmlSection(printModel, margins));
 
   return zip.generateAsync({ type: 'blob', mimeType: 'application/hwp+zip' });
