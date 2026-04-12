@@ -183,7 +183,7 @@ export default function PrintPreviewModal({ onClose }) {
           {/* Format */}
           <Section title="출력 형식">
             <p className="text-[10px] mb-2" style={{ color: 'var(--c-text5)', lineHeight: 1.5 }}>
-              💡 베타 기준 <strong>워드(DOCX)</strong>가 가장 완성도 높게 구현되어 있습니다.
+              💡 PDF 출력이 멈추거나 오래 걸리는 경우 <strong>한글·워드</strong> 출력을 이용해 주세요. (정식 출시 후 개선 예정)
             </p>
             {[
               { value: 'pdf',    label: 'PDF (인쇄)' },
