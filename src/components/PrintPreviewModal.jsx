@@ -123,6 +123,8 @@ export default function PrintPreviewModal({ onClose }) {
       <div
         className="flex rounded-xl shadow-2xl"
         style={{
+          display:    'flex',          /* Tailwind 미적용 환경 대비 inline 명시 */
+          flexDirection: 'row',
           width:      'min(960px, 95vw)',
           height:     'min(88vh, 760px)',
           background: 'var(--c-panel)',
@@ -134,7 +136,17 @@ export default function PrintPreviewModal({ onClose }) {
         {/* ── Left: Options ──────────────────────────────────────────────────── */}
         <div
           className="w-64 shrink-0 flex flex-col overflow-y-auto"
-          style={{ borderRight: '1px solid var(--c-border)', padding: '1.25rem', WebkitOverflowScrolling: 'touch' }}
+          style={{
+            display:    'flex',        /* inline 명시 */
+            flexDirection: 'column',
+            flexShrink: 0,
+            width:      '256px',       /* w-64 대체 */
+            minWidth:   '256px',
+            borderRight: '1px solid var(--c-border)',
+            padding: '1.25rem',
+            WebkitOverflowScrolling: 'touch',
+            overflowY: 'auto',
+          }}
         >
           {/* Header */}
           <div className="flex items-center justify-between mb-4">
@@ -270,7 +282,7 @@ export default function PrintPreviewModal({ onClose }) {
         {/* ── Right: Preview ──────────────────────────────────────────────────── */}
         <div
           className="flex-1 overflow-y-auto"
-          style={{ background: '#d8d8d8' }}
+          style={{ flex: 1, overflowY: 'auto', background: '#d8d8d8' }}
         >
           <PreviewRenderer
             appState={previewState}
