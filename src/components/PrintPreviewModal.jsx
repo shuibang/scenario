@@ -153,14 +153,13 @@ export default function PrintPreviewModal({ onClose }) {
         style={{
           display:       'flex',
           flexDirection: 'row',
-          alignItems:    'stretch',    /* 자식이 모달 높이 전체를 채우도록 명시 */
-          width:         '95vw',       /* min(960px, 95vw) 대체 — min() 함수 미지원 대비 */
+          width:         '95vw',
           maxWidth:      '960px',
-          height:        '88vh',       /* min(88vh, 760px) 대체 */
+          height:        '88vh',
           maxHeight:     '760px',
           background:    'var(--c-panel)',
           border:        '1px solid var(--c-border)',
-          overflow:      'hidden',     /* clip → hidden (브라우저 호환성) */
+          overflow:      'hidden',
           borderRadius:  '0.75rem',
           boxShadow:     '0 25px 50px -12px rgba(0,0,0,0.4)',
         }}
@@ -170,18 +169,23 @@ export default function PrintPreviewModal({ onClose }) {
         <div
           className="w-64 shrink-0 flex flex-col overflow-y-auto"
           style={{
-            display:       'flex',
-            flexDirection: 'column',
-            flexShrink:    0,
+            /* 너비: flex-row가 폴백되는 환경 대비 flex 단축속성으로 강제 고정 */
+            flex:          '0 0 256px',
             width:         '256px',
             minWidth:      '256px',
-            maxHeight:     '100%',     /* 부모 높이 초과 방지 — overflowY:auto 정상 작동 보장 */
-            borderRight:   '1px solid var(--c-border)',
-            padding:       '1.25rem',
+            maxWidth:      '256px',
+            /* 높이: alignItems:stretch가 PreviewRenderer 높이(57658px)를 따라가는 것을 막기 위해
+               모달과 동일한 값을 직접 명시 — overflowY:auto가 이 범위 안에서 스크롤 처리 */
+            height:        '88vh',
+            maxHeight:     '760px',
+            display:       'flex',
+            flexDirection: 'column',
             overflowY:     'auto',
             overflowX:     'hidden',
-            WebkitOverflowScrolling: 'touch',
+            borderRight:   '1px solid var(--c-border)',
+            padding:       '1.25rem',
             boxSizing:     'border-box',
+            WebkitOverflowScrolling: 'touch',
           }}
         >
           {/* Header */}
@@ -318,7 +322,14 @@ export default function PrintPreviewModal({ onClose }) {
         {/* ── Right: Preview ──────────────────────────────────────────────────── */}
         <div
           className="flex-1 overflow-y-auto"
-          style={{ flex: 1, minWidth: 0, overflowY: 'auto', maxHeight: '100%', background: '#d8d8d8' }}
+          style={{
+            flex:      '1 1 0',
+            minWidth:  0,
+            height:    '88vh',
+            maxHeight: '760px',
+            overflowY: 'auto',
+            background: '#d8d8d8',
+          }}
         >
           <PreviewRenderer
             appState={previewState}
