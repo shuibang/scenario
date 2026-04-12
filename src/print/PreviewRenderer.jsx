@@ -355,26 +355,45 @@ export default function PreviewRenderer({ appState, selections, columnWidth = 34
   // null = 계산 중, [] = 선택 없음, [...] = 완료
   const [pages, setPages] = useState(null);
 
+  // ── 진단 로그 (배포 후 확인용 — 문제 해결 시 제거) ──────────────────────────
+  console.log('[Preview] render — pages:', pages, '| preset:', preset, '| metrics:', metrics);
+
   useEffect(() => {
     let cancelled = false;
     setPages(null);
+
+    console.log('[Preview] effect 시작 — appState keys:', Object.keys(appState || {}));
+    console.log('[Preview] selections:', JSON.stringify(selections));
+    console.log('[Preview] preset in effect:', preset);
 
     let printModel;
     try {
       printModel = buildPrintModel(appState, selections, preset);
     } catch (err) {
-      console.error('[PreviewRenderer] buildPrintModel 실패:', err);
+      console.error('[Preview] buildPrintModel 실패:', err);
       setPages([]);
       return;
     }
 
     const sections = printModel.sections;
+    console.log('[Preview] sections 수:', sections.length, '| types:', sections.map(s => s.type));
+
+    if (sections.length === 0) {
+      console.warn('[Preview] sections가 비어있음 → pages = []로 종료');
+      setPages([]);
+      return;
+    }
+
     const result = [];
     let idx = 0;
 
     const tick = () => {
-      if (cancelled) return;
+      if (cancelled) {
+        console.log('[Preview] tick 취소됨 (idx=' + idx + ')');
+        return;
+      }
       if (idx >= sections.length) {
+        console.log('[Preview] setPages 호출 — result.length:', result.length);
         setPages(result);
         return;
       }
@@ -393,7 +412,7 @@ export default function PreviewRenderer({ appState, selections, columnWidth = 34
           }
         }
       } catch (err) {
-        console.error('[PreviewRenderer] 섹션 처리 실패:', err);
+        console.error('[Preview] 섹션 처리 실패 (idx=' + (idx - 1) + '):', err);
       }
       requestAnimationFrame(tick);
     };
