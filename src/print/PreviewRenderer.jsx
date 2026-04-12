@@ -350,32 +350,59 @@ export default function PreviewRenderer({ appState, selections, columnWidth = 34
   }, []);
   const scale = measuredWidth / A4_W_PX;
 
-  const printModel = useMemo(
-    () => buildPrintModel(appState, selections, preset),
-    [appState, selections, preset]
-  );
+  // null = 계산 중, [] = 선택 없음, [...] = 완료
+  const [pages, setPages] = useState(null);
 
-  // Build flat list of { section, tokens[], pageIdx, isCover, isScenelist }
-  const pages = useMemo(() => {
+  useEffect(() => {
+    let cancelled = false;
+    setPages(null);
+
+    const printModel = buildPrintModel(appState, selections, preset);
+    const sections = printModel.sections;
     const result = [];
-    for (const section of printModel.sections) {
+    let idx = 0;
+
+    const tick = () => {
+      if (cancelled) return;
+      if (idx >= sections.length) {
+        setPages(result);
+        return;
+      }
+      const section = sections[idx++];
       if (section.type === 'cover') {
         result.push({ section, isCover: true, pageIdx: 0 });
-        continue;
-      }
-      if (section.type === 'scenelist') {
+      } else if (section.type === 'scenelist') {
         result.push({ section, isScenelist: true, pageIdx: 0 });
-        continue;
+      } else {
+        const tokens = tokenizeSection(section, metrics);
+        if (tokens.length) {
+          paginate(tokens, metrics, section.type).forEach((pageTokens, pageIdx) => {
+            result.push({ section, tokens: pageTokens, isCover: false, pageIdx });
+          });
+        }
       }
-      const tokens    = tokenizeSection(section, metrics);
-      if (!tokens.length) continue; // 내용 없는 섹션은 빈 페이지 생성 방지
-      const paginated = paginate(tokens, metrics, section.type);
-      paginated.forEach((pageTokens, pageIdx) => {
-        result.push({ section, tokens: pageTokens, isCover: false, pageIdx });
-      });
-    }
-    return result;
-  }, [printModel, metrics]);
+      requestAnimationFrame(tick);
+    };
+
+    requestAnimationFrame(tick);
+    return () => { cancelled = true; };
+  }, [appState, selections, preset, metrics]);
+
+  if (pages === null) {
+    return (
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, color: '#999', fontSize: 13 }}>
+        <div style={{
+          width: 28, height: 28,
+          border: '3px solid #ccc',
+          borderTopColor: '#666',
+          borderRadius: '50%',
+          animation: 'spin 0.7s linear infinite',
+        }} />
+        <span>미리보기 생성 중…</span>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
 
   if (!pages.length) {
     return (
