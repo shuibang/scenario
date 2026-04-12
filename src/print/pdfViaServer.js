@@ -15,8 +15,6 @@ import { buildPrintModel } from './PrintModel';
 
 const SERVER_URL = (import.meta.env?.VITE_PDF_SERVER_URL || 'http://localhost:3001').replace(/\/$/, '');
 
-console.log('[pdfViaServer] PDF 서버 URL:', SERVER_URL);
-
 // ─── Hidden iframe 인쇄 ───────────────────────────────────────────────────────
 // 팝업 없이 현재 페이지에서 인쇄 다이얼로그 실행.
 // iframe은 현재 origin 내에 삽입되므로 폰트 등 상대 경로 리소스 정상 로드.
