@@ -958,6 +958,57 @@ function SupportCard() {
   );
 }
 
+// ─── SceneFormatCard ──────────────────────────────────────────────────────────
+const SCENE_FORMAT_EXAMPLES = [
+  { label: '기본형',       example: 'S#1. 카페 내부, 낮' },
+  { label: '점 구분자',    example: 'S#1. 카페 내부. 낮' },
+  { label: '슬래시 구분자', example: 'S#1/ 카페 내부/ 낮' },
+  { label: '대시 구분자',  example: 'S#1 - 카페 내부 - 낮' },
+  { label: '괄호 시간대',  example: 'S#1. 카페 내부 (낮)' },
+  { label: '특수상황',     example: 'S#1. 회상) 카페 내부 - 세부장소 (낮)' },
+  { label: '시간대 연결',  example: 'S#1, 카페 내부, 낮~밤' },
+  { label: 'D/N 표기',    example: 'S#1. 카페 내부 - 세부장소, D->N' },
+];
+
+function SceneFormatCard({ onReportClick }) {
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--c-text3)', marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid var(--c-border)' }}>
+        씬번호 인식 형식
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--c-text5)', marginBottom: 12 }}>
+        아래 형식들은 모두 자동으로 인식됩니다. 구분자로 <code style={{ background: 'var(--c-input)', padding: '1px 4px', borderRadius: 3 }}>. / , -</code> 를 사용할 수 있고,
+        시간대는 괄호 없이도 인식됩니다.
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 90, overflowY: 'auto', paddingRight: 4 }}>
+        {SCENE_FORMAT_EXAMPLES.map(({ label, example }) => (
+          <div key={label} style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexShrink: 0 }}>
+            <span style={{ fontSize: 10, color: 'var(--c-text6)', minWidth: 76, flexShrink: 0 }}>{label}</span>
+            <code style={{
+              fontSize: 12, color: 'var(--c-text2)', background: 'var(--c-input)',
+              padding: '2px 8px', borderRadius: 4, fontFamily: 'monospace', letterSpacing: '0.02em',
+            }}>{example}</code>
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: 6, fontSize: 10, color: 'var(--c-text6)' }}>
+        시간대 키워드: 낮 / 밤 / 아침 / 오전 / 오후 / 저녁 / 새벽 / 점심 / D / N
+        &nbsp;— 두 값을 <code style={{ background: 'var(--c-input)', padding: '1px 3px', borderRadius: 3 }}>~</code> 또는 <code style={{ background: 'var(--c-input)', padding: '1px 3px', borderRadius: 3 }}>-&gt;</code> 로 연결 가능 (예: 낮~밤, D-&gt;N)
+      </div>
+      <button
+        onClick={onReportClick}
+        style={{
+          marginTop: 16, width: '100%', padding: '10px 14px', borderRadius: 8,
+          border: '1px dashed var(--c-border3)', background: 'transparent',
+          fontSize: 12, color: 'var(--c-text4)', cursor: 'pointer', textAlign: 'center',
+        }}
+      >
+        인식 안 되는 형식 제보하기 →
+      </button>
+    </div>
+  );
+}
+
 // ─── ErrorReportTab ───────────────────────────────────────────────────────────
 const ERROR_TYPES = [
   { id: 'bug',     label: '🐞 버그',       desc: '기능이 작동하지 않아요' },
@@ -972,6 +1023,7 @@ function ErrorReportTab() {
   const [page, setPage] = useState('');
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState('idle'); // 'idle' | 'sending' | 'done' | 'error'
+  const formRef = useRef(null);
 
   const handleSubmit = async () => {
     if (!description.trim()) return;
@@ -1012,7 +1064,10 @@ function ErrorReportTab() {
 
   return (
     <div className="flex flex-col gap-6" style={{ maxWidth: 480 }}>
-      <div>
+      {/* 씬번호 인식 형식 안내 */}
+      <SceneFormatCard onReportClick={() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })} />
+
+      <div ref={formRef}>
         <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--c-text3)', marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid var(--c-border)' }}>오류 제출</div>
         <div className="text-xs" style={{ color: 'var(--c-text5)' }}>불편한 점이나 개선 아이디어를 알려주세요.</div>
       </div>
