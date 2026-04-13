@@ -399,6 +399,7 @@ export default function LandingPage({ onStart, onLogin }) {
       <header style={{ position: 'sticky', top: 0, zIndex: 100, background: 'var(--c-header)', borderBottom: '1px solid var(--c-border)', padding: '0 24px', height: 52, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--c-accent)', letterSpacing: '0.05em' }}>대본 작업실</span>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => { window.location.hash = '#director'; }} style={{ ...headerBtnStyle, color: 'var(--c-accent2)', borderColor: 'var(--c-accent2)' }}>연출 작업실</button>
           <button onClick={() => setLoginOpen(true)} style={headerBtnStyle}>로그인</button>
           <button onClick={onStart} style={{ ...headerBtnStyle, background: 'var(--c-accent)', color: '#fff', border: 'none' }}>바로 시작하기</button>
         </div>
@@ -419,6 +420,14 @@ export default function LandingPage({ onStart, onLogin }) {
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
           <button onClick={onStart} style={heroPrimaryBtn}>로그인 없이 시작하기 →</button>
           <button onClick={() => setLoginOpen(true)} style={heroSecondaryBtn}>구글 로그인 (자동저장)</button>
+        </div>
+        <div style={{ marginTop: 16 }}>
+          <button
+            onClick={() => { window.location.hash = '#director'; }}
+            style={{ fontSize: 12, color: 'var(--c-accent2)', background: 'none', border: '1px solid var(--c-accent2)', borderRadius: 6, padding: '6px 16px', cursor: 'pointer', opacity: 0.85 }}
+          >
+            🎬 감독이신가요? 연출 작업실 입장 →
+          </button>
         </div>
         <p style={{ fontSize: 11, color: 'var(--c-text6)', marginTop: 12 }}>로그인 없이도 이 기기에 자동저장 — 구글 로그인 시 어디서든 이어서 작업</p>
       </section>

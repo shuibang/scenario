@@ -204,6 +204,50 @@ export async function deleteSnapshot(id) {
   ]);
 }
 
+// ── 감독 전용: 대본 저장 / 불러오기 ────────────────────────────────────────
+
+/**
+ * 감독 드라이브에 대본 데이터를 새 파일로 저장
+ * @param {string} title  - 작품 제목 (파일명에 포함)
+ * @param {object} data   - 대본 전체 데이터 스냅샷
+ * @returns {string} Drive file id
+ */
+export async function saveDirectorScript(title, data) {
+  if (!isTokenValid()) throw new Error('DRIVE_AUTH_REQUIRED');
+
+  const safeTitle = title.replace(/[/\\?%*:|"<>]/g, '_').slice(0, 40);
+  const fileName  = `director_script_${Date.now()}_${safeTitle}.json`;
+  const content   = JSON.stringify({ title, data, savedAt: new Date().toISOString() });
+
+  const form = new FormData();
+  form.append('metadata', new Blob([JSON.stringify({ name: fileName, parents: ['appDataFolder'] })], { type: 'application/json' }));
+  form.append('file',     new Blob([content], { type: 'application/json' }));
+
+  const res = await fetch(`${UPLOAD_API}/files?uploadType=multipart&fields=id`, {
+    method:  'POST',
+    headers: { Authorization: `Bearer ${_accessToken}` },
+    body:    form,
+  });
+  if (!res.ok) throw new Error(`Drive 저장 실패: ${res.status}`);
+  const json = await res.json();
+  return json.id;
+}
+
+/**
+ * 감독 드라이브에서 대본 데이터 불러오기
+ * @param {string} fileId - Drive file id
+ * @returns {object} { title, data, savedAt }
+ */
+export async function loadDirectorScript(fileId) {
+  if (!isTokenValid()) throw new Error('DRIVE_AUTH_REQUIRED');
+
+  const res = await fetch(`${DRIVE_API}/files/${fileId}?alt=media`, {
+    headers: { Authorization: `Bearer ${_accessToken}` },
+  });
+  if (!res.ok) throw new Error(`Drive 불러오기 실패: ${res.status}`);
+  return await res.json();
+}
+
 // ── Drive에서 불러오기 ──────────────────────────────────────────────────────
 export async function loadFromDrive() {
   if (!isTokenValid()) throw new Error('DRIVE_AUTH_REQUIRED');

@@ -202,6 +202,18 @@ function ProjectItem({ project, section = 'all' }) {
                 onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'scenelist' })}
                 indent={2}
               />
+              <NavItem
+                label="스토리보드"
+                active={activeDoc === 'storyboard'}
+                onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'storyboard' })}
+                indent={2}
+              />
+              <NavItem
+                label="연출노트"
+                active={activeDoc === 'director_notes'}
+                onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'director_notes' })}
+                indent={2}
+              />
             </div>
           </>}
         </div>
