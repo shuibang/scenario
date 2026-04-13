@@ -1601,7 +1601,7 @@ export default function App() {
   }, []);
 
   // 연출 작업실 — 감독 전용 독립 페이지
-  if (window.location.hash === '#director')         return <DirectorApp />;
+  if (window.location.hash === '#director')         return <DirectorApp authUser={authUser} />;
 
   // public — 감독 전송 링크 (인증 불필요, 의도적)
   if (window.location.hash.startsWith('#delivery=')) return <DirectorDeliveryView />;
