@@ -25,6 +25,7 @@ import PrintPreviewModal from './components/PrintPreviewModal';
 import StructurePage from './components/StructurePage';
 import SceneListPage from './components/SceneListPage';
 import StoryboardPage from './components/StoryboardPage';
+import DirectorNotesPage from './components/DirectorNotesPage';
 import DirectorApp from './components/director/DirectorApp';
 import TreatmentPage from './components/TreatmentPage';
 import BiographyPage from './components/BiographyPage';
@@ -33,6 +34,7 @@ import MyPage from './components/MyPage';
 import OnboardingTour from './components/OnboardingTour';
 import MobileOnboardingTour from './components/mobile/MobileOnboardingTour';
 import SharedReviewView from './components/SharedReviewView';
+import DirectorDeliveryView from './components/DirectorDeliveryView';
 import SurveyPage from './components/SurveyPage';
 import AdBanner from './components/AdBanner';
 // ─── v2: extracted mobile components ──────────────────────────────────────────
@@ -314,6 +316,7 @@ function CenterPanel({ scrollToSceneId, onScrollHandled, keyboardUp, isMobile, f
   if (activeDoc === 'structure') return <StructurePage />;
   if (activeDoc === 'scenelist') return <SceneListPage />;
   if (activeDoc === 'storyboard') return <StoryboardPage />;
+  if (activeDoc === 'director_notes') return <DirectorNotesPage />;
   if (activeDoc === 'treatment') return <TreatmentPage />;
   if (activeDoc === 'biography') return <BiographyPage />;
   if (activeDoc === 'relationships') return <RelationshipsPage />;
@@ -1600,6 +1603,8 @@ export default function App() {
   // 연출 작업실 — 감독 전용 독립 페이지
   if (window.location.hash === '#director')         return <DirectorApp />;
 
+  // public — 감독 전송 링크 (인증 불필요, 의도적)
+  if (window.location.hash.startsWith('#delivery=')) return <DirectorDeliveryView />;
   // public — 공유 링크 (인증 불필요, 의도적)
   if (window.location.hash.startsWith('#review=')) return <SharedReviewView />;
   // public — 작업기록 공유 (인증 불필요, 의도적)

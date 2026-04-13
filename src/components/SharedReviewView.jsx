@@ -13,6 +13,8 @@ import PreviewRenderer from '../print/PreviewRenderer';
 import { exportPdf } from '../print/pdfViaServer';
 import { loadReviewPayload, isShortReviewId } from '../utils/reviewShare';
 import { reviewLegacySchema } from '../utils/urlSchemas';
+import { supabase, signInWithGoogle } from '../store/supabaseClient';
+import { setAccessToken, saveDirectorScript } from '../store/googleDrive';
 
 const zBtnStyle = {
   background: '#fff', border: '1px solid #ddd', borderRadius: 6,
@@ -53,6 +55,51 @@ export default function SharedReviewView() {
   const zoomIn  = () => setZoom(z => Math.min(z + 0.1, 2.0));
   const zoomOut = () => setZoom(z => Math.max(z - 0.1, 0.3));
   const zoomReset = () => setZoom(1.0);
+
+  const [importing,    setImporting]    = useState(false);
+  const [importToast,  setImportToast]  = useState(''); // '' | '가져오는 중…' | '완료!' | 오류메시지
+
+  const handleImport = useCallback(async () => {
+    if (!data) return;
+    setImporting(true);
+    setImportToast('가져오는 중…');
+    try {
+      // 1) 로그인 확인
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        // 미로그인 → Google 로그인 리디렉트 (현재 hash 유지)
+        await signInWithGoogle();
+        return;
+      }
+
+      // 2) Drive 토큰 세팅
+      if (session.provider_token) {
+        setAccessToken(session.provider_token, 3600);
+      } else {
+        throw new Error('Drive 권한이 없습니다. 다시 로그인해주세요.');
+      }
+
+      // 3) 대본 데이터 Drive에 저장
+      const title = data.projects?.[0]?.title || '공유 대본';
+      const driveFileId = await saveDirectorScript(title, data);
+
+      // 4) shared_scripts 테이블에 메타 저장
+      const { error } = await supabase.from('shared_scripts').insert({
+        director_id:   session.user.id,
+        title,
+        drive_file_id: driveFileId,
+        source_url:    window.location.href,
+      });
+      if (error) throw new Error(`저장 실패: ${error.message}`);
+
+      // 5) 완료 → 연출 작업실로 이동
+      setImportToast('완료! 연출 작업실로 이동합니다 ✓');
+      setTimeout(() => { window.location.hash = '#director'; }, 1200);
+    } catch (err) {
+      setImportToast(`오류: ${err.message}`);
+      setTimeout(() => { setImportToast(''); setImporting(false); }, 3000);
+    }
+  }, [data]);
 
   const [pdfExporting, setPdfExporting] = useState(false);
   const [pdfStep,      setPdfStep]      = useState('');
@@ -134,6 +181,38 @@ export default function SharedReviewView() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  // ── 상단 공통 바 (제목 + 가져오기 버튼) ──────────────────────────────────
+  const topBar = (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4, flexWrap: 'wrap', gap: 8 }}>
+      <div style={{ fontSize: 13, color: '#555', fontWeight: 600 }}>
+        {projectTitle} — 검토 요청
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {importToast && (
+          <span style={{
+            fontSize: 12, color: importToast.startsWith('오류') ? '#c0392b' : importToast.startsWith('완료') ? '#27ae60' : '#555',
+            fontWeight: 500,
+          }}>
+            {importToast}
+          </span>
+        )}
+        <button
+          onClick={handleImport}
+          disabled={importing}
+          style={{
+            padding: '5px 12px', borderRadius: 6, border: 'none',
+            background: importing ? '#999' : '#e8b84b',
+            color: '#1a1a1a', fontSize: 12, fontWeight: 700,
+            cursor: importing ? 'default' : 'pointer',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          🎬 연출 작업실로 가져오기
+        </button>
+      </div>
+    </div>
+  );
 
   // ── 줌 컨트롤 바 ──────────────────────────────────────────────────────────
   const zoomBar = (
@@ -238,9 +317,7 @@ export default function SharedReviewView() {
           paddingBottom: panelOpen ? PANEL_H + 52 : 52,
           transition: 'padding-bottom 0.25s ease',
         }}>
-          <div style={{ textAlign: 'center', marginBottom: '4px', fontSize: '13px', color: '#555', fontWeight: 600 }}>
-            {projectTitle} — 검토 요청
-          </div>
+          {topBar}
           {zoomBar}
           <PreviewRenderer appState={appState} selections={selections} columnWidth={mobileColW} />
         </div>
@@ -280,9 +357,7 @@ export default function SharedReviewView() {
 
       {/* 미리보기 */}
       <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', padding: '16px' }}>
-        <div style={{ textAlign: 'center', marginBottom: '4px', fontSize: '13px', color: '#555', fontWeight: 600 }}>
-          {projectTitle} — 검토 요청
-        </div>
+        {topBar}
         {zoomBar}
         <PreviewRenderer appState={appState} selections={selections} columnWidth={desktopColW} />
       </div>

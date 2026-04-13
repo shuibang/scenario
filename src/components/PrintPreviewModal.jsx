@@ -112,9 +112,9 @@ export default function PrintPreviewModal({ onClose }) {
       }
       setShareMsg('링크 복사됨 (7일 후 만료)');
       setTimeout(() => setShareMsg(''), 3000);
-    } catch {
-      setShareMsg('링크 생성 실패');
-      setTimeout(() => setShareMsg(''), 3000);
+    } catch (err) {
+      setShareMsg(`링크 생성 실패: ${err.message}`);
+      setTimeout(() => setShareMsg(''), 5000);
     } finally {
       setSharing(false);
     }
