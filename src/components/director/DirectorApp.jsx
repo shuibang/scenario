@@ -1,17 +1,17 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../../store/supabaseClient';
+import { supabase, extractUserData } from '../../store/supabaseClient';
 import DirectorLogin from './DirectorLogin';
 import DirectorDashboard from './DirectorDashboard';
 
 // ─── 연출 작업실 루트 ─────────────────────────────────────────────────────────
-// 로그인 상태에 따라 DirectorLogin 또는 DirectorDashboard를 렌더
-export default function DirectorApp() {
+// authUser: 대본 작업실에서 이미 로그인된 유저 정보 (있으면 바로 대시보드 진입)
+export default function DirectorApp({ authUser }) {
   const [session, setSession] = useState(undefined); // undefined = 로딩 중
 
   useEffect(() => {
     if (!supabase) { setSession(null); return; }
 
-    // 초기 세션 확인
+    // 이미 로그인된 세션 확인 (대본 작업실과 공유)
     supabase.auth.getSession().then(({ data }) => {
       setSession(data?.session ?? null);
     }).catch(() => setSession(null));
@@ -26,7 +26,14 @@ export default function DirectorApp() {
 
   const handleBack = () => { window.location.hash = ''; };
 
-  // 로딩 중
+  // 대본 작업실에서 이미 로그인된 경우 → 세션 로딩 전이라도 바로 대시보드
+  // (authUser가 있으면 Supabase 세션도 살아있음이 보장됨)
+  if (authUser && session === undefined) {
+    const fallbackSession = { user: { id: authUser.id, email: authUser.email, user_metadata: { full_name: authUser.name, avatar_url: authUser.picture } } };
+    return <DirectorDashboard session={fallbackSession} onBack={handleBack} />;
+  }
+
+  // 세션 로딩 중
   if (session === undefined) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--c-bg)' }}>
