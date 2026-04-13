@@ -205,9 +205,12 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
         </div>
 
         {/* Center: brand */}
-        <span style={{ fontSize: 'clamp(13px, 4vw, 17px)', fontWeight: 700, color: 'var(--c-accent)', letterSpacing: '0.05em' }}>
+        <button
+          onClick={() => { window.location.hash = '#landing'; }}
+          style={{ fontSize: 'clamp(13px, 4vw, 17px)', fontWeight: 700, color: 'var(--c-accent)', letterSpacing: '0.05em', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+        >
           대본 작업실
-        </span>
+        </button>
 
         {/* Right: work timer */}
         <div data-tour-id="mobile-timer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
