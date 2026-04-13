@@ -6,7 +6,7 @@ import { createPortal } from 'react-dom';
 import DOMPurify from 'dompurify';
 import { useApp } from '../store/AppContext';
 import { genId, now } from '../store/db';
-import { resolveSceneLabel, parseSceneContent } from '../utils/sceneResolver';
+import { resolveSceneLabel, parseSceneContent, SCENE_PREFIX_STRIP_RE } from '../utils/sceneResolver';
 import { resolveFont } from '../print/FontRegistry';
 import { getLayoutMetrics } from '../print/LineTokenizer';
 import EmotionTagPicker from './EmotionTagPicker';
@@ -480,7 +480,7 @@ function setBlockHtml(el, html) {
 // For scene_number: strip the "S#n." prefix — label shown via CSS ::before
 // For dialogue: strip charName prefix from content (old format had name embedded in content)
 function blockDisplayContent(b) {
-  if (b.type === 'scene_number') return (b.content || '').replace(/^S#\d+\.?\s*/, '');
+  if (b.type === 'scene_number') return (b.content || '').replace(SCENE_PREFIX_STRIP_RE, '');
   if (b.type === 'dialogue') {
     const name = b.characterName || b.charName || '';
     const content = b.content || '';
@@ -645,7 +645,7 @@ function changeBlockTypeEl(blockEl, newType) {
   blockEl.dataset.blockType = newType;
   blockEl.className = `ce-block ce-${newType}`;
   // Strip existing S# prefix when converting to scene_number to avoid double-labeling
-  const displayText = newType === 'scene_number' ? text.replace(/^S#\d+\.?\s*/i, '') : text;
+  const displayText = newType === 'scene_number' ? text.replace(SCENE_PREFIX_STRIP_RE, '') : text;
   if (newType === 'dialogue') {
     blockEl.innerText = displayText;
     blockEl.dataset.charName = ''; blockEl.dataset.charId = '';
@@ -691,7 +691,7 @@ function parseSurface(surface, metaRef, epId, projId) {
       // content에 label prefix가 있으면 제거 후 resolveSceneLabel 호출
       const cleanContent = (parsed.location || parsed.specialSituation)
         ? undefined // structured → resolveSceneLabel이 알아서 조합
-        : rawText.replace(/^S#\d+\.?\s*/, '');
+        : rawText.replace(SCENE_PREFIX_STRIP_RE, '');
       const contentForResolve = cleanContent !== undefined
         ? { label, location: '', subLocation: '', timeOfDay: '', specialSituation: '', content: cleanContent }
         : { label, ...parsed };
