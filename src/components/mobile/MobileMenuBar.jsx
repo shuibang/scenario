@@ -207,7 +207,7 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
         {/* Center: brand */}
         <button
           onClick={() => { window.location.hash = '#landing'; }}
-          style={{ fontSize: 'clamp(13px, 4vw, 17px)', fontWeight: 700, color: 'var(--c-accent)', letterSpacing: '0.05em', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+          style={{ fontSize: 'clamp(13px, 4vw, 17px)', fontWeight: 700, color: 'var(--c-accent)', letterSpacing: '0.05em', background: 'none', border: 'none', cursor: 'pointer', padding: 0, userSelect: 'none' }}
         >
           대본 작업실
         </button>

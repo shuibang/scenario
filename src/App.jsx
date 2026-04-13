@@ -723,8 +723,8 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
         {/* Center: brand */}
         <button
           onClick={() => { window.location.hash = '#landing'; }}
-          className="text-xs font-bold tracking-wider"
-          style={{ color: 'var(--c-accent)', flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+          className="text-xs font-bold tracking-wider cursor-pointer"
+          style={{ color: 'var(--c-accent)', flexShrink: 0, background: 'none', border: 'none', padding: 0, userSelect: 'none' }}
         >
           대본 작업실
         </button>
@@ -1566,6 +1566,13 @@ export default function App() {
     catch { return null; }
   });
   const [, forceUpdate] = useState(0);
+
+  // 해시 변경 시 리렌더 — #director, #review 등 해시 라우트가 즉시 반응
+  useEffect(() => {
+    const onHash = () => forceUpdate(n => n + 1);
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
 
   // Supabase 세션 복원 + 상태 변화 구독
   useEffect(() => {
