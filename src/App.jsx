@@ -24,6 +24,8 @@ import ResourcePanel from './components/ResourcePanel';
 import PrintPreviewModal from './components/PrintPreviewModal';
 import StructurePage from './components/StructurePage';
 import SceneListPage from './components/SceneListPage';
+import StoryboardPage from './components/StoryboardPage';
+import DirectorApp from './components/director/DirectorApp';
 import TreatmentPage from './components/TreatmentPage';
 import BiographyPage from './components/BiographyPage';
 import RelationshipsPage from './components/RelationshipsPage';
@@ -311,6 +313,7 @@ function CenterPanel({ scrollToSceneId, onScrollHandled, keyboardUp, isMobile, f
   if (activeDoc === 'resources') return <ResourcePanel />;
   if (activeDoc === 'structure') return <StructurePage />;
   if (activeDoc === 'scenelist') return <SceneListPage />;
+  if (activeDoc === 'storyboard') return <StoryboardPage />;
   if (activeDoc === 'treatment') return <TreatmentPage />;
   if (activeDoc === 'biography') return <BiographyPage />;
   if (activeDoc === 'relationships') return <RelationshipsPage />;
@@ -718,10 +721,13 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
         </div>
 
         {/* Center: brand */}
-        <span className="text-xs font-bold tracking-wider"
-          style={{ color: 'var(--c-accent)', flexShrink: 0 }}>
+        <button
+          onClick={() => { window.location.hash = '#landing'; }}
+          className="text-xs font-bold tracking-wider"
+          style={{ color: 'var(--c-accent)', flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+        >
           대본 작업실
-        </span>
+        </button>
 
         {/* Right: clock + timer */}
         <div className="flex items-center gap-3" style={{ flex: 1, justifyContent: 'flex-end' }}>
@@ -1584,6 +1590,9 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
+  // 연출 작업실 — 감독 전용 독립 페이지
+  if (window.location.hash === '#director')         return <DirectorApp />;
+
   // public — 공유 링크 (인증 불필요, 의도적)
   if (window.location.hash.startsWith('#review=')) return <SharedReviewView />;
   // public — 작업기록 공유 (인증 불필요, 의도적)
@@ -1592,6 +1601,21 @@ export default function App() {
   if (window.location.hash === '#preview-landing' && import.meta.env.DEV) return <LandingPreview />;
   // public — 베타 설문 (인증 불필요, 의도적)
   if (window.location.hash === '#survey')          return <SurveyPage />;
+  // 헤더 '대본 작업실' 클릭 시 랜딩 페이지로
+  if (window.location.hash === '#landing') return (
+    <LandingPage
+      onStart={() => { window.location.hash = ''; forceUpdate(n => n + 1); }}
+      onLogin={(userData) => {
+        if (userData) {
+          try { localStorage.setItem('drama_auth_user', JSON.stringify(userData)); } catch {}
+          _shellEverRendered = true;
+          setAuthUser(userData);
+        }
+        window.location.hash = '';
+        forceUpdate(n => n + 1);
+      }}
+    />
+  );
 
   // 매 렌더마다 localStorage 직접 확인 + 모듈 플래그 — 어떤 state 리셋에도 안전
   const lsAuth    = (() => { try { return !!localStorage.getItem('drama_auth_user'); } catch { return false; } })();
