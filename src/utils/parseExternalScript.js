@@ -13,15 +13,25 @@ export async function extractTextFromDocx(file) {
   return result.value || '';
 }
 
-/** HWPX → 텍스트 (JSZip + XML 파싱) */
+/** HWPX → 텍스트 (JSZip)
+ *  1순위: Preview/PrvText.txt (HWPX가 항상 생성하는 평문 미리보기)
+ *  2순위: Contents/section*.xml 에서 hp:t 태그 추출 (폴백)
+ */
 export async function extractTextFromHwpx(file) {
   const JSZip = (await import('jszip')).default;
   const arrayBuffer = await file.arrayBuffer();
   const zip = await JSZip.loadAsync(arrayBuffer);
 
-  // HWPX 구조: Contents/section*.xml 에 단락 데이터가 있음
+  // ── 1순위: PrvText.txt ──────────────────────────────────────────────────────
+  const prvFile = zip.files['Preview/PrvText.txt'];
+  if (prvFile) {
+    const text = await prvFile.async('string');
+    if (text && text.trim().length > 5) return text;
+  }
+
+  // ── 2순위: section XML에서 hp:t 태그 추출 ──────────────────────────────────
   const sectionFiles = Object.keys(zip.files).filter(
-    name => /^Contents\/[Ss]ection\d*\.xml$/i.test(name)
+    name => /^Contents\/[Ss]ection\d+\.xml$/i.test(name)
   );
   if (sectionFiles.length === 0) {
     throw new Error('HWPX 파일 구조를 인식할 수 없습니다. 파일이 손상됐거나 지원하지 않는 형식입니다.');
@@ -30,14 +40,6 @@ export async function extractTextFromHwpx(file) {
   const lines = [];
   for (const fname of sectionFiles.sort()) {
     const xml = await zip.files[fname].async('string');
-    // <hp:t> 태그 안의 텍스트 추출
-    const matches = xml.matchAll(/<hp:t[^>]*>([^<]*)<\/hp:t>/g);
-    const paraTexts = [];
-    for (const m of matches) {
-      paraTexts.push(m[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"'));
-    }
-    // <hp:p> 단락 단위로 줄바꿈 (단락 끝 위치를 xml에서 찾아 구분)
-    // 간단하게: </hp:p> 기준으로 분리
     const paras = xml.split('</hp:p>');
     for (const para of paras) {
       const ts = [...para.matchAll(/<hp:t[^>]*>([^<]*)<\/hp:t>/g)].map(m =>
@@ -53,10 +55,18 @@ export async function extractTextFromHwpx(file) {
 /** PDF → 텍스트 (pdfjs-dist) */
 export async function extractTextFromPdf(file) {
   const pdfjsLib = await import('pdfjs-dist');
-  // 워커 경로 설정 (CDN 사용해 번들 크기 절약)
+  // Vite: new URL()으로 번들된 worker 경로 자동 해결 (v4+ 는 .mjs)
   if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-      `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+    try {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+        'pdfjs-dist/build/pdf.worker.min.mjs',
+        import.meta.url
+      ).href;
+    } catch {
+      // 폴백: unpkg CDN (버전 고정)
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+    }
   }
 
   const arrayBuffer = await file.arrayBuffer();
