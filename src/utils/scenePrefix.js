@@ -9,6 +9,7 @@ export const SCENE_PREFIX_OPTIONS = [
   { value: '씬 ',      label: '씬  (한국어 표기)',       example: '씬1.'  },
   { value: 'Scene #',  label: 'Scene # (영어 표기)',     example: 'Scene #1.' },
   { value: '#',        label: '# (기호만)',              example: '#1.'   },
+  { value: 'num',      label: '숫자만',                  example: '1.'    },
 ];
 
 const LS_KEY = 'drama_scene_prefix';
@@ -58,5 +59,6 @@ export function buildSceneLabel(seq) {
   if (prefix === '씬 ')     return `씬${seq}.`;
   if (prefix === 'Scene #') return `Scene #${seq}.`;
   if (prefix === '#')       return `#${seq}.`;
+  if (prefix === 'num')     return `${seq}.`;
   return `S#${seq}.`; // 기본값 S#
 }

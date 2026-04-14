@@ -35,7 +35,7 @@
  * S#n / 씬n / Scene #n / #n 네 가지 형식 모두 인식 (소급 호환 포함).
  */
 export const SCENE_PREFIX_STRIP_RE =
-  /^(?:Scene\s*#|S#|씬\s*|#)\d+[-.,/]?\s*/i;
+  /^(?:(?:Scene\s*#|S#|씬\s*|#)\d+|\d+)[-.,/]?\s*/i;
 
 /** 시간대 선택지 (드롭다운·파싱 공용) */
 export const TIME_OF_DAY_OPTIONS = ['낮', '밤', '아침', '오전', '오후', '저녁', '새벽', '점심', 'D', 'N'];
