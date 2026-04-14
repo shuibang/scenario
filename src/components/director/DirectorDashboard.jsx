@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, createContext, useContext, Component } from 'react';
+import { useState, useEffect, useRef, createContext, useContext, Component, memo } from 'react';
 import { supabaseSignOut, extractUserData, supabase, signInWithGoogle } from '../../store/supabaseClient';
 import { setAccessToken, isTokenValid, loadDirectorScript, deleteFileById } from '../../store/googleDrive';
 import DirectorScriptViewer from './DirectorScriptViewer';
@@ -7,6 +7,26 @@ import { parseFullScript, buildPanelsFromScenes, detectScenes } from '../../util
 
 // OAuth 리디렉트 시 현재 hash 보존 → App.jsx onAuthStateChange에서 복원
 const RETURN_HASH_KEY = 'drama_pending_return_hash';
+
+// AppContext 없이 독립적으로 동작하는 광고 배너
+const DirectorAdBanner = memo(function DirectorAdBanner({ height = 20 }) {
+  const ref = useRef(null);
+  const pushed = useRef(false);
+  useEffect(() => {
+    if (pushed.current || !ref.current) return;
+    try { (window.adsbygoogle = window.adsbygoogle || []).push({}); pushed.current = true; } catch {}
+  }, []);
+  return (
+    <div ref={ref} style={{ height, overflow: 'hidden' }}>
+      <ins className="adsbygoogle"
+        style={{ display: 'block', width: '100%', height }}
+        data-ad-client="ca-pub-5479563960989185"
+        data-ad-slot="2569066048"
+        data-ad-format="autorelaxed"
+      />
+    </div>
+  );
+});
 
 // ─── Error Boundary — 뷰어 render crash 시 검정화면 방지 ──────────────────────
 class ViewerErrorBoundary extends Component {
@@ -64,11 +84,379 @@ const D_LIGHT = {
 const ThemeCtx = createContext(D_DARK);
 const useD = () => useContext(ThemeCtx);
 
+// ─── 모바일 레이아웃 상수 (대본 작업실 MobileBottomPanel 동일 기준) ──────────────
+const M_TAB_H    = 64;   // 탭바 고정 높이 (px)
+const M_OPEN_H   = 320;  // 열렸을 때 전체 높이 (px)
+const M_CONT_H   = M_OPEN_H - M_TAB_H; // 콘텐츠 영역 = 244px
+const M_AD_W     = '25%';
+const M_LIST_W   = '75%';
+const NOTE_COLORS_M = ['#fdf6e3', '#fef08a', '#86efac', '#93c5fd', '#f9a8d4'];
+
+// ─── 연출 작업실 모바일 전용 레이아웃 ─────────────────────────────────────────
+function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, handleLogout, loggingOut }) {
+  const [tab,        setTab]        = useState(isGuest ? 'storyboard' : 'projects');
+  const [panelOpen,  setPanelOpen]  = useState(false);
+
+  // 키보드 감지 (App.jsx 동일 패턴 — 소프트 키보드 올라오면 레이아웃 조정)
+  const [vvHeight,    setVvHeight]    = useState(() => window.visualViewport?.height ?? window.innerHeight);
+  const [vvOffsetTop, setVvOffsetTop] = useState(0);
+  useEffect(() => {
+    if (!window.visualViewport) return;
+    const handler = () => { setVvHeight(window.visualViewport.height); setVvOffsetTop(window.visualViewport.offsetTop); };
+    window.visualViewport.addEventListener('resize', handler, { passive: true });
+    window.visualViewport.addEventListener('scroll', handler, { passive: true });
+    return () => { window.visualViewport.removeEventListener('resize', handler); window.visualViewport.removeEventListener('scroll', handler); };
+  }, []);
+  const keyboardUp = (window.innerHeight - vvHeight - vvOffsetTop) > 100;
+
+  // 공통: 작품 목록 (projects + notes + storyboard 탭 공유)
+  const [scripts,    setScripts]    = useState(null);
+
+  // 작품 탭 state
+  const [projSelected,  setProjSelected]  = useState(null);
+  const [projViewing,   setProjViewing]   = useState(null);  // { appState, selections }
+  const [projLoading,   setProjLoading]   = useState(false);
+
+  // 연출 탭 state
+  const [noteScript,  setNoteScript]  = useState(null);
+  const [notes,       setNotes]       = useState([]);
+  const [adding,      setAdding]      = useState(false);
+  const [newText,     setNewText]     = useState('');
+  const [newColor,    setNewColor]    = useState(NOTE_COLORS_M[0]);
+  const addRef = useRef(null);
+
+  // 스토리보드 탭 state
+  const [boardScript, setBoardScript] = useState(isGuest ? DEMO_SCRIPT : null);
+
+  // ── 데이터 로드 ────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (isGuest) { setScripts([]); return; }
+    if (!supabase) { setScripts([]); return; }
+    supabase.from('shared_scripts').select('id, title, imported_at, drive_file_id')
+      .order('imported_at', { ascending: false })
+      .then(({ data }) => setScripts(data || []));
+  }, []);
+
+  useEffect(() => {
+    if (!noteScript) { setNotes([]); return; }
+    try {
+      const map = JSON.parse(localStorage.getItem(`director_private_notes_${noteScript.id}`) || '{}');
+      setNotes(Object.values(map).sort((a, b) => (a._localId || '').localeCompare(b._localId || '')));
+    } catch { setNotes([]); }
+  }, [noteScript?.id]);
+
+  useEffect(() => { if (adding) setTimeout(() => addRef.current?.focus(), 50); }, [adding]);
+
+  // ── 작품 탭: 대본 로드 ─────────────────────────────────────────────────────
+  const loadProjScript = async (script) => {
+    if (projSelected?.id === script.id) { setPanelOpen(false); return; }
+    setProjSelected(script); setProjViewing(null); setProjLoading(true); setPanelOpen(false);
+    try {
+      if (!isTokenValid()) {
+        const { data: { session: s } } = await supabase.auth.getSession();
+        if (s?.provider_token) setAccessToken(s.provider_token, 3600);
+      }
+      const saved = await loadDirectorScript(script.drive_file_id);
+      const data  = saved?.data ?? saved;
+      setProjViewing({
+        appState: { projects: data.projects||[], episodes: data.episodes||[], characters: data.characters||[], scenes: data.scenes||[], scriptBlocks: data.scriptBlocks||[], coverDocs: data.coverDocs||[], synopsisDocs: data.synopsisDocs||[], activeProjectId: data.activeProjectId, stylePreset: data.stylePreset||{}, initialized: true },
+        selections: data.selections || { cover: true, synopsis: true, episodes: {}, chars: true },
+      });
+    } catch (e) {
+      setProjViewing({ error: e.message });
+    } finally { setProjLoading(false); }
+  };
+
+  // ── 연출 탭: 노트 저장/삭제 ────────────────────────────────────────────────
+  const noteKey = () => `director_private_notes_${noteScript?.id}`;
+  const loadNoteMap = () => { try { return JSON.parse(localStorage.getItem(noteKey()) || '{}'); } catch { return {}; } };
+  const saveNoteMap = (map) => {
+    localStorage.setItem(noteKey(), JSON.stringify(map));
+    setNotes(Object.values(map).sort((a, b) => (a._localId || '').localeCompare(b._localId || '')));
+  };
+  const handleAddNote = () => {
+    if (!newText.trim()) { setAdding(false); return; }
+    const map = loadNoteMap();
+    const blockId = `standalone_${Date.now()}`;
+    map[blockId] = { _localId: String(Date.now()), block_id: blockId, content: newText.trim(), color: newColor };
+    saveNoteMap(map);
+    setNewText(''); setNewColor(NOTE_COLORS_M[0]); setAdding(false);
+  };
+  const handleDeleteNote = (localId) => {
+    const map = loadNoteMap();
+    const entry = Object.values(map).find(n => n._localId === localId);
+    if (!entry) return;
+    delete map[entry.block_id];
+    saveNoteMap(map);
+  };
+  const getNoteCount = (scriptId) => {
+    try { return Object.keys(JSON.parse(localStorage.getItem(`director_private_notes_${scriptId}`) || '{}')).length; } catch { return 0; }
+  };
+
+  // ── 탭 항목 ───────────────────────────────────────────────────────────────
+  const TABS = [
+    { id: 'projects',   icon: '📄', label: '작품' },
+    { id: 'notes',      icon: '📝', label: '연출' },
+    { id: 'storyboard', icon: '🎞',  label: '보드' },
+  ];
+
+  // ── 바텀 패널: 탭별 목록 콘텐츠 ────────────────────────────────────────────
+  const listContent = (() => {
+    if (tab === 'projects') return (
+      <div style={{ padding: '6px 0' }}>
+        {scripts === null && <div style={{ padding: '16px', fontSize: 12, color: D.text3 }}>불러오는 중…</div>}
+        {scripts?.length === 0 && <div style={{ padding: '16px', fontSize: 12, color: D.text3, textAlign: 'center' }}>가져온 작품이 없습니다</div>}
+        {scripts?.map(s => (
+          <div key={s.id} onClick={() => loadProjScript(s)}
+            style={{ padding: '10px 14px', borderLeft: projSelected?.id === s.id ? `2px solid ${D.accent}` : '2px solid transparent', background: projSelected?.id === s.id ? D.active : 'transparent', cursor: 'pointer' }}>
+            <div style={{ fontSize: 13, fontWeight: projSelected?.id === s.id ? 600 : 400, color: projSelected?.id === s.id ? D.accent : D.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</div>
+          </div>
+        ))}
+      </div>
+    );
+
+    if (tab === 'notes') return (
+      <div style={{ padding: '6px 0' }}>
+        {scripts === null && <div style={{ padding: '16px', fontSize: 12, color: D.text3 }}>불러오는 중…</div>}
+        {scripts?.length === 0 && <div style={{ padding: '16px', fontSize: 12, color: D.text3, textAlign: 'center' }}>가져온 작품이 없습니다</div>}
+        {scripts?.map(s => {
+          const cnt = getNoteCount(s.id);
+          const active = noteScript?.id === s.id;
+          return (
+            <div key={s.id} onClick={() => { setNoteScript(s); setAdding(false); setPanelOpen(false); }}
+              style={{ padding: '10px 14px', borderLeft: active ? `2px solid ${D.accent}` : '2px solid transparent', background: active ? D.active : 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: active ? 600 : 400, color: active ? D.accent : D.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</div>
+                <div style={{ fontSize: 10, color: D.text3 }}>메모 {cnt}개</div>
+              </div>
+              {cnt > 0 && <div style={{ flexShrink: 0, width: 18, height: 18, borderRadius: '50%', background: '#93c5fd', color: '#1a1a2e', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{cnt > 9 ? '9+' : cnt}</div>}
+            </div>
+          );
+        })}
+      </div>
+    );
+
+    if (tab === 'storyboard') return (
+      <div style={{ padding: '8px 0' }}>
+        <div style={{ padding: '4px 14px 10px' }}>
+          <button
+            onClick={() => { window.dispatchEvent(new CustomEvent('director:uploadOpen')); setPanelOpen(false); }}
+            style={{ width: '100%', padding: '8px 12px', borderRadius: 7, border: `1px solid ${D.accent}`, background: 'transparent', color: D.accent, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+            + 텍스트로 만들기
+          </button>
+        </div>
+        {(() => {
+          const localScripts = loadLocalScripts();
+          const allScripts = [...localScripts, ...(scripts || [])];
+          return allScripts.length === 0
+            ? <div style={{ padding: '8px 14px', fontSize: 12, color: D.text3, textAlign: 'center' }}>작품이 없습니다</div>
+            : allScripts.map(s => (
+              <div key={s.id} onClick={() => { setBoardScript(s); setPanelOpen(false); }}
+                style={{ padding: '9px 14px', borderLeft: boardScript?.id === s.id ? `2px solid ${D.accent}` : '2px solid transparent', background: boardScript?.id === s.id ? D.active : 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 10, color: D.text3, flexShrink: 0 }}>{s._isLocal ? '📁' : '☁'}</span>
+                <span style={{ fontSize: 13, fontWeight: boardScript?.id === s.id ? 600 : 400, color: boardScript?.id === s.id ? D.accent : D.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{s.title}</span>
+              </div>
+            ));
+        })()}
+      </div>
+    );
+    return null;
+  })();
+
+  // ── 메인 콘텐츠 영역 ────────────────────────────────────────────────────────
+  const mainContent = (() => {
+    if (tab === 'projects') {
+      if (!projSelected) return (
+        <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, color: D.text3 }}>
+          <div style={{ fontSize: 32, opacity: 0.3 }}>📄</div>
+          <div style={{ fontSize: 13 }}>아래 탭에서 작품을 선택하세요</div>
+        </div>
+      );
+      if (projLoading) return (
+        <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: D.text3, fontSize: 13 }}>대본 불러오는 중…</div>
+      );
+      if (projViewing?.error) return (
+        <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#e05c5c', fontSize: 13, padding: 16, textAlign: 'center' }}>{projViewing.error}</div>
+      );
+      if (projViewing) return (
+        <div style={{ height: '100%', overflow: 'auto', background: '#d8d8d8' }}>
+          <ViewerErrorBoundary>
+            <DirectorScriptViewer appState={projViewing.appState} selections={projViewing.selections} readOnly />
+          </ViewerErrorBoundary>
+        </div>
+      );
+      return null;
+    }
+
+    if (tab === 'notes') {
+      if (!noteScript) return (
+        <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, color: D.text3 }}>
+          <div style={{ fontSize: 32, opacity: 0.3 }}>📋</div>
+          <div style={{ fontSize: 13 }}>아래 탭에서 작품을 선택하세요</div>
+        </div>
+      );
+      return (
+        <div style={{ height: '100%', overflowY: 'auto', padding: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, gap: 8 }}>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: D.text }}>{noteScript.title}</div>
+              <div style={{ fontSize: 11, color: D.text3 }}>📋 연출노트 {notes.length}개</div>
+            </div>
+            {!adding && (
+              <button onClick={() => setAdding(true)} style={{ padding: '6px 14px', borderRadius: 7, border: 'none', background: D.accent, color: '#1a1a1a', fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>+ 새 노트</button>
+            )}
+          </div>
+          {adding && (
+            <div style={{ background: newColor, borderRadius: 10, padding: 14, marginBottom: 16, boxShadow: '2px 4px 16px rgba(0,0,0,0.18)', borderTop: '3px solid #93c5fd' }}>
+              <textarea ref={addRef} value={newText} onChange={e => setNewText(e.target.value)} placeholder="연출노트 내용을 입력하세요…" rows={4}
+                style={{ width: '100%', boxSizing: 'border-box', border: 'none', background: 'transparent', fontSize: 13, color: '#111', lineHeight: 1.7, resize: 'vertical', outline: 'none', fontFamily: 'inherit' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                {NOTE_COLORS_M.map(c => (
+                  <button key={c} onClick={() => setNewColor(c)} style={{ width: 20, height: 20, borderRadius: '50%', background: c, border: 'none', cursor: 'pointer', outline: newColor === c ? '2px solid #333' : 'none', outlineOffset: 2 }} />
+                ))}
+                <div style={{ flex: 1 }} />
+                <button onClick={() => { setAdding(false); setNewText(''); }} style={{ fontSize: 12, color: '#555', background: 'none', border: 'none', cursor: 'pointer' }}>취소</button>
+                <button onClick={handleAddNote} disabled={!newText.trim()} style={{ padding: '5px 14px', borderRadius: 6, border: 'none', background: newText.trim() ? D.accent : '#999', color: newText.trim() ? '#1a1a1a' : '#eee', fontSize: 12, fontWeight: 700, cursor: newText.trim() ? 'pointer' : 'default' }}>저장</button>
+              </div>
+            </div>
+          )}
+          {notes.length === 0 && !adding && (
+            <div style={{ textAlign: 'center', padding: '40px 0', color: D.text3 }}>
+              <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.3 }}>📋</div>
+              <div style={{ fontSize: 13 }}>연출노트가 없습니다</div>
+            </div>
+          )}
+          {notes.map((n, i) => (
+            <div key={n._localId || i} style={{ background: n.color || '#fef08a', borderRadius: 10, padding: '12px 14px', marginBottom: 12, boxShadow: '1px 2px 8px rgba(0,0,0,0.1)', position: 'relative' }}>
+              <div style={{ fontSize: 13, color: '#111', lineHeight: 1.7, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{n.content}</div>
+              <button onClick={() => handleDeleteNote(n._localId)} style={{ position: 'absolute', top: 8, right: 8, background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: 14, lineHeight: 1 }}>×</button>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    if (tab === 'storyboard') {
+      return (
+        <StoryboardPanel
+          key={boardScript?.id || '__none'}
+          isGuest={isGuest}
+          isMobile={true}
+          mobilePreSelected={boardScript}
+        />
+      );
+    }
+
+    return null;
+  })();
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top:    keyboardUp ? vvOffsetTop : 0,
+      left: 0, right: 0,
+      bottom: keyboardUp ? 'auto' : 0,
+      height: keyboardUp ? vvHeight : undefined,
+      overflow: 'hidden', display: 'flex', flexDirection: 'column',
+      background: D.bg, color: D.text, fontFamily: "'Pretendard','Apple SD Gothic Neo',sans-serif",
+    }}>
+
+      {/* 상단 헤더 */}
+      <header style={{
+        height: 'clamp(44px, 12vw, 52px)', flexShrink: 0,
+        display: 'flex', alignItems: 'center',
+        paddingLeft: 'max(12px, env(safe-area-inset-left, 12px))',
+        paddingRight: 'max(14px, env(safe-area-inset-right, 14px))',
+        gap: 8, borderBottom: `1px solid ${D.border}`, background: D.sidebar,
+      }}>
+        <button onClick={onBack} style={{ fontSize: 18, color: D.text3, background: 'none', border: 'none', cursor: 'pointer', padding: '0 4px', lineHeight: 1 }}>←</button>
+        <div style={{ fontSize: 'clamp(13px, 4vw, 16px)', fontWeight: 700, color: D.accent, letterSpacing: '0.03em', flex: 1 }}>🎬 연출 작업실</div>
+        {isGuest ? (
+          <button onClick={loginWithReturnHash} style={{ fontSize: 12, color: D.accent, background: 'none', border: `1px solid ${D.accent}`, borderRadius: 4, padding: '4px 10px', cursor: 'pointer' }}>로그인</button>
+        ) : (
+          <button onClick={handleLogout} disabled={loggingOut} style={{ fontSize: 12, color: D.text3, background: 'none', border: `1px solid ${D.border}`, borderRadius: 4, padding: '4px 10px', cursor: 'pointer' }}>{loggingOut ? '…' : '로그아웃'}</button>
+        )}
+      </header>
+
+      {/* 메인 콘텐츠 */}
+      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+        {mainContent}
+      </div>
+
+      {/* 하단 패널 (대본 작업실 MobileBottomPanel 동일 구조) */}
+      <div style={{
+        flexShrink: 0,
+        borderTop: `1px solid ${D.border}`,
+        background: D.panel,
+        display: 'flex', flexDirection: 'column',
+        height: `calc(${panelOpen ? M_OPEN_H : M_TAB_H}px + env(safe-area-inset-bottom, 0px))`,
+        maxHeight: `calc(${panelOpen ? M_OPEN_H : M_TAB_H}px + env(safe-area-inset-bottom, 0px))`,
+        minHeight: `calc(${panelOpen ? M_OPEN_H : M_TAB_H}px + env(safe-area-inset-bottom, 0px))`,
+        transition: 'height 0.25s ease, max-height 0.25s ease, min-height 0.25s ease',
+        overflow: 'hidden',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+      }}>
+        {/* 탭바 */}
+        <div style={{ height: M_TAB_H, minHeight: M_TAB_H, flexShrink: 0, display: 'flex', alignItems: 'stretch', borderBottom: panelOpen ? `1px solid ${D.border}` : 'none', userSelect: 'none' }}>
+          {TABS.map(({ id, icon, label }) => {
+            const active = tab === id && panelOpen;
+            return (
+              <button key={id}
+                onClick={() => { if (tab === id) { setPanelOpen(v => !v); } else { setTab(id); setPanelOpen(true); } }}
+                style={{
+                  flex: 1,
+                  background: active ? D.active : 'none',
+                  border: 'none', borderRight: `1px solid ${D.border}`,
+                  cursor: 'pointer',
+                  color: active ? D.accent : D.text3,
+                  display: 'flex', flexDirection: 'column',
+                  alignItems: 'center', justifyContent: 'center', gap: 4,
+                  WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation',
+                }}
+              >
+                <span style={{ fontSize: 20, lineHeight: 1 }}>{icon}</span>
+                <span style={{ fontSize: 11, fontWeight: active ? 600 : 400 }}>{label}</span>
+              </button>
+            );
+          })}
+          <button onClick={() => setPanelOpen(v => !v)}
+            style={{ background: 'none', border: 'none', borderLeft: `1px solid ${D.border}`, color: D.text3, fontSize: 16, padding: '0 14px', cursor: 'pointer', flexShrink: 0, WebkitTapHighlightColor: 'transparent' }}>
+            {panelOpen ? '▾' : '▴'}
+          </button>
+        </div>
+
+        {/* 패널 콘텐츠 */}
+        {panelOpen && (
+          <div style={{ position: 'relative', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+            {/* 광고 */}
+            <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: M_AD_W, borderRight: `1px solid ${D.border}`, overflow: 'hidden', background: D.sidebar }}>
+              <DirectorAdBanner height={M_CONT_H} />
+            </div>
+            {/* 목록 */}
+            <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: M_LIST_W, overflowY: 'auto', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}>
+              {listContent}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── 감독 대시보드 ────────────────────────────────────────────────────────────
 export default function DirectorDashboard({ session, onBack, isGuest = false }) {
   const user = extractUserData(session);
   const [activeMenu, setActiveMenu] = useState(isGuest ? 'storyboard' : 'projects');
   const [loggingOut, setLoggingOut] = useState(false);
+  const [windowWidth, setWindowWidth] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const onResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', onResize, { passive: true });
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  const isMobile = windowWidth < 768;
+  const isTablet = windowWidth >= 768 && windowWidth < 1280;
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isDark, setIsDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
 
   useEffect(() => {
@@ -85,50 +473,54 @@ export default function DirectorDashboard({ session, onBack, isGuest = false }) 
     await supabaseSignOut();
   };
 
+  const NAV_ITEMS = [
+    { id: 'projects',   icon: '📄', label: '작품 목록' },
+    { id: 'notes',      icon: '📝', label: '연출노트' },
+    { id: 'storyboard', icon: '🎞', label: '스토리보드' },
+  ];
+
+  /* ── 모바일 레이아웃 ──────────────────────────────────────────────────── */
+  if (isMobile) {
+    return (
+      <ThemeCtx.Provider value={D}>
+        <DirectorMobileView
+          session={session}
+          onBack={onBack}
+          isGuest={isGuest}
+          D={D}
+          loginWithReturnHash={loginWithReturnHash}
+          handleLogout={handleLogout}
+          loggingOut={loggingOut}
+        />
+        {isGuest && <GuestGuide onLogin={loginWithReturnHash} />}
+      </ThemeCtx.Provider>
+    );
+  }
+
+  /* ── 데스크톱 레이아웃 ──────────────────────────────────────────────── */
   return (
     <ThemeCtx.Provider value={D}>
     <div style={{ height: '100vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', background: D.bg, color: D.text, fontFamily: "'Pretendard', 'Apple SD Gothic Neo', sans-serif" }}>
 
       {/* 상단 헤더 */}
       <header style={{
-        height: 56,
-        flexShrink: 0,
-        display: 'flex',
-        alignItems: 'center',
-        padding: '0 24px',
-        gap: 16,
-        borderBottom: `1px solid ${D.border}`,
-        background: D.sidebar,
+        height: 56, flexShrink: 0,
+        display: 'flex', alignItems: 'center', padding: '0 24px', gap: 16,
+        borderBottom: `1px solid ${D.border}`, background: D.sidebar,
       }}>
-        {/* 로고 영역 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginRight: 8 }}>
-          <div style={{
-            width: 28, height: 28, borderRadius: 6,
-            background: D.accent,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 14,
-          }}>🎬</div>
-          <span style={{ fontWeight: 700, fontSize: 15, color: D.text, letterSpacing: '-0.02em' }}>연출 작업실</span>
-          <span style={{
-            fontSize: 9, fontWeight: 600, color: D.sidebar,
-            background: D.accent, borderRadius: 3,
-            padding: '2px 5px', letterSpacing: '0.05em',
-          }}>DIRECTOR</span>
-        </div>
-
-        <div style={{ width: 1, height: 20, background: D.border }} />
-
+        {/* 사이드바 토글 */}
         <button
-          onClick={onBack}
-          style={{
-            fontSize: 12, color: D.text3,
-            background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-            display: 'flex', alignItems: 'center', gap: 4,
-          }}
-        >
-          ← 대본 작업실로
-        </button>
-
+          onClick={() => setSidebarCollapsed(v => !v)}
+          title={sidebarCollapsed ? '메뉴 열기' : '메뉴 닫기'}
+          style={{ background: 'none', border: 'none', color: D.text3, fontSize: 16, cursor: 'pointer', padding: '4px 6px', lineHeight: 1, borderRadius: 4, flexShrink: 0 }}
+        >{sidebarCollapsed ? '☰' : '✕'}</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginRight: 8 }}>
+          <div style={{ width: 28, height: 28, borderRadius: 6, background: D.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>🎬</div>
+          <span style={{ fontWeight: 700, fontSize: 15, color: D.text, letterSpacing: '-0.02em' }}>연출 작업실</span>
+          <span style={{ fontSize: 9, fontWeight: 600, color: D.sidebar, background: D.accent, borderRadius: 3, padding: '2px 5px', letterSpacing: '0.05em' }}>DIRECTOR</span>
+        </div>
+        <div style={{ width: 1, height: 20, background: D.border }} />
+        <button onClick={onBack} style={{ fontSize: 12, color: D.text3, background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 4 }}>← 대본 작업실로</button>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {user?.avatar
@@ -141,24 +533,9 @@ export default function DirectorDashboard({ session, onBack, isGuest = false }) 
             </div>
           </div>
           {isGuest ? (
-            <button
-              onClick={loginWithReturnHash}
-              style={{
-                fontSize: 11, color: D.accent,
-                background: 'none', border: `1px solid ${D.accent}`,
-                borderRadius: 4, padding: '4px 10px', cursor: 'pointer',
-              }}
-            >Google로 로그인</button>
+            <button onClick={loginWithReturnHash} style={{ fontSize: 11, color: D.accent, background: 'none', border: `1px solid ${D.accent}`, borderRadius: 4, padding: '4px 10px', cursor: 'pointer' }}>Google로 로그인</button>
           ) : (
-            <button
-              onClick={handleLogout}
-              disabled={loggingOut}
-              style={{
-                fontSize: 11, color: D.text3,
-                background: 'none', border: `1px solid ${D.border}`,
-                borderRadius: 4, padding: '4px 10px', cursor: 'pointer',
-              }}
-            >{loggingOut ? '…' : '로그아웃'}</button>
+            <button onClick={handleLogout} disabled={loggingOut} style={{ fontSize: 11, color: D.text3, background: 'none', border: `1px solid ${D.border}`, borderRadius: 4, padding: '4px 10px', cursor: 'pointer' }}>{loggingOut ? '…' : '로그아웃'}</button>
           )}
         </div>
       </header>
@@ -166,28 +543,26 @@ export default function DirectorDashboard({ session, onBack, isGuest = false }) 
       {/* 본문 */}
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
 
-        {/* 좌측 사이드바 */}
+        {/* 사이드바 */}
         <aside style={{
-          width: 220,
+          width: sidebarCollapsed ? 0 : 220,
           flexShrink: 0,
           background: D.sidebar,
-          borderRight: `1px solid ${D.border}`,
-          display: 'flex',
-          flexDirection: 'column',
-          padding: '20px 0',
-          gap: 2,
+          borderRight: sidebarCollapsed ? 'none' : `1px solid ${D.border}`,
+          display: 'flex', flexDirection: 'column',
+          overflow: 'hidden',
+          transition: 'width 0.22s cubic-bezier(0.4,0,0.2,1)',
         }}>
-          <SideSection label="작품" />
-          <SideItem icon="📄" label="작품 목록" active={activeMenu === 'projects'} onClick={() => setActiveMenu('projects')} />
-
-          <div style={{ margin: '12px 0 0', height: 1, background: D.border, mx: 12 }} />
-
-          <SideSection label="연출" />
-          <SideItem icon="📝" label="연출노트"   active={activeMenu === 'notes'}      onClick={() => setActiveMenu('notes')} />
-          <SideItem icon="🎞" label="스토리보드" active={activeMenu === 'storyboard'} onClick={() => setActiveMenu('storyboard')} />
+          <div style={{ width: 220, padding: '20px 0', display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <SideSection label="작품" />
+            <SideItem icon="📄" label="작품 목록" active={activeMenu === 'projects'} onClick={() => setActiveMenu('projects')} />
+            <div style={{ margin: '12px 0 0', height: 1, background: D.border }} />
+            <SideSection label="연출" />
+            <SideItem icon="📝" label="연출노트"   active={activeMenu === 'notes'}      onClick={() => setActiveMenu('notes')} />
+            <SideItem icon="🎞" label="스토리보드" active={activeMenu === 'storyboard'} onClick={() => setActiveMenu('storyboard')} />
+          </div>
         </aside>
 
-        {/* 우측 콘텐츠 */}
         <main style={{ flex: 1, display: 'flex', minHeight: 0, background: D.bg, overflow: 'hidden' }}>
           {activeMenu === 'projects'   && <ProjectsPanel session={session} isGuest={isGuest} />}
           {activeMenu === 'notes'      && <NotesPanel />}
@@ -236,6 +611,52 @@ function SideItem({ icon, label, active, onClick }) {
       <span style={{ fontSize: 14 }}>{icon}</span>
       {label}
     </div>
+  );
+}
+
+// ─── 모바일 하단 시트 ─────────────────────────────────────────────────────────
+function BottomSheet({ open, onClose, title, children }) {
+  const D = useD();
+  return (
+    <>
+      {/* 백드롭 */}
+      <div
+        onClick={onClose}
+        style={{
+          position: 'fixed', inset: 0, zIndex: 300,
+          background: 'rgba(0,0,0,0.5)',
+          opacity: open ? 1 : 0,
+          pointerEvents: open ? 'auto' : 'none',
+          transition: 'opacity 0.22s',
+        }}
+      />
+      {/* 시트 */}
+      <div style={{
+        position: 'fixed', left: 0, right: 0, bottom: 56, zIndex: 301,
+        background: D.panel,
+        borderRadius: '16px 16px 0 0',
+        border: `1px solid ${D.border}`,
+        borderBottom: 'none',
+        maxHeight: '70vh',
+        display: 'flex', flexDirection: 'column',
+        transform: open ? 'translateY(0)' : 'translateY(105%)',
+        transition: 'transform 0.25s cubic-bezier(0.32,0.72,0,1)',
+        overflow: 'hidden',
+      }}>
+        {/* 핸들 + 제목 */}
+        <div style={{ flexShrink: 0, padding: '10px 16px 8px', borderBottom: `1px solid ${D.border}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: D.border, margin: 'auto' }} />
+        </div>
+        <div style={{ flexShrink: 0, padding: '8px 16px 6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: D.text3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{title}</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: D.text3, fontSize: 18, cursor: 'pointer', lineHeight: 1, padding: 0 }}>×</button>
+        </div>
+        {/* 내용 */}
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          {children}
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -304,13 +725,15 @@ function DriveReconnectCard({ D, message }) {
   );
 }
 
-function ProjectsPanel({ session, isGuest }) {
+function ProjectsPanel({ session, isGuest, isMobile = false }) {
   const D = useD();
-  const [scripts,  setScripts]  = useState(null);
-  const [error,    setError]    = useState('');
-  const [selected, setSelected] = useState(null);
-  const [viewing,  setViewing]  = useState(null);
-  const [loading,  setLoading]  = useState(false);
+  const [scripts,       setScripts]       = useState(null);
+  const [error,         setError]         = useState('');
+  const [selected,      setSelected]      = useState(null);
+  const [viewing,       setViewing]       = useState(null);
+  const [loading,       setLoading]       = useState(false);
+  const [sheetOpen,     setSheetOpen]     = useState(false);
+  const [subCollapsed,  setSubCollapsed]  = useState(false);
 
   // Drive 토큰 유효성 사전 확인 (로그인은 됐지만 Drive 권한 만료 상태)
   const driveDisconnected = !isGuest && session && !session.provider_token && !isTokenValid();
@@ -429,64 +852,73 @@ function ProjectsPanel({ session, isGuest }) {
         </div>
       )}
 
-      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+      {/* 작품 목록 (공통 JSX) */}
+      {(() => {
+        const scriptListContent = (
+          <div style={{ padding: '8px 0' }}>
+            {error && <div style={{ padding: '12px 16px', fontSize: 12, color: '#e05c5c' }}>오류: {error}</div>}
+            {scripts === null && <div style={{ padding: '12px 16px', fontSize: 12, color: D.text3 }}>불러오는 중…</div>}
+            {scripts?.length === 0 && !error && (
+              <div style={{ padding: '24px 16px', textAlign: 'center' }}>
+                <div style={{ fontSize: 24, marginBottom: 8, opacity: 0.4 }}>📄</div>
+                <div style={{ fontSize: 11, color: D.text3, lineHeight: 1.6 }}>가져온 작품이 없습니다.<br />검토 링크에서 가져오기를<br />눌러주세요.</div>
+              </div>
+            )}
+            {scripts?.map(s => (
+              <ScriptListItem key={s.id} script={s} active={selected?.id === s.id}
+                onClick={() => { handleSelect(s); setSheetOpen(false); }}
+                onDelete={handleDeleteScript} />
+            ))}
+          </div>
+        );
 
-      {/* 좌: 작품 목록 패널 */}
-      <div style={{
-        width: 260, flexShrink: 0,
-        borderRight: `1px solid ${D.border}`,
-        background: D.panel,
-        display: 'flex', flexDirection: 'column',
-        overflow: 'hidden',
-      }}>
-        <div style={{ padding: '16px 16px 10px', borderBottom: `1px solid ${D.border}` }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: D.text3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>작품 목록</div>
-        </div>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
-          {error && <div style={{ padding: '12px 16px', fontSize: 12, color: '#e05c5c' }}>오류: {error}</div>}
-          {scripts === null && <div style={{ padding: '12px 16px', fontSize: 12, color: D.text3 }}>불러오는 중…</div>}
-          {scripts?.length === 0 && !error && (
-            <div style={{ padding: '24px 16px', textAlign: 'center' }}>
-              <div style={{ fontSize: 24, marginBottom: 8, opacity: 0.4 }}>📄</div>
-              <div style={{ fontSize: 11, color: D.text3, lineHeight: 1.6 }}>가져온 작품이 없습니다.<br />검토 링크에서 가져오기를<br />눌러주세요.</div>
+        return isMobile ? (
+          /* 모바일: 바텀 시트 */
+          <BottomSheet open={sheetOpen} onClose={() => setSheetOpen(false)} title="작품 목록">
+            {scriptListContent}
+          </BottomSheet>
+        ) : (
+          /* 데스크톱: 좌측 패널 */
+          <div style={{ width: subCollapsed ? 28 : 260, flexShrink: 0, borderRight: `1px solid ${D.border}`, background: D.panel, display: 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'width 0.2s ease' }}>
+            <div style={{ padding: '10px 8px 10px 12px', borderBottom: `1px solid ${D.border}`, display: 'flex', alignItems: 'center', gap: 6 }}>
+              {!subCollapsed && <div style={{ flex: 1, fontSize: 11, fontWeight: 700, color: D.text3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>작품 목록</div>}
+              <button onClick={() => setSubCollapsed(v => !v)} title={subCollapsed ? '목록 열기' : '목록 닫기'}
+                style={{ flexShrink: 0, background: 'none', border: 'none', color: D.text3, cursor: 'pointer', fontSize: 10, padding: '2px 4px', lineHeight: 1 }}>
+                {subCollapsed ? '▶' : '◀'}
+              </button>
             </div>
-          )}
-          {scripts?.map(s => (
-            <ScriptListItem
-              key={s.id}
-              script={s}
-              active={selected?.id === s.id}
-              onClick={() => handleSelect(s)}
-              onDelete={handleDeleteScript}
-            />
-          ))}
-        </div>
-      </div>
+            {!subCollapsed && <div style={{ flex: 1, overflowY: 'auto' }}>{scriptListContent}</div>}
+          </div>
+        );
+      })()}
 
-      {/* 우: 대본 뷰어 영역 */}
+      {/* 대본 뷰어 영역 */}
       <div style={{ flex: 1, minHeight: 0, minWidth: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', background: '#d8d8d8' }}>
 
         {/* 뷰어 상단 바 */}
-        {selected && viewing?.appState && (
-          <div style={{
-            height: 44, flexShrink: 0,
-            display: 'flex', alignItems: 'center', padding: '0 16px', gap: 10,
-            background: D.sidebar, borderBottom: `1px solid ${D.border}`,
-          }}>
-            <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: D.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {selected.title}
-            </span>
-            <SendButton scriptRow={selected} viewing={viewing} />
-          </div>
-        )}
+        <div style={{ height: 44, flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 12px', gap: 10, background: D.sidebar, borderBottom: `1px solid ${D.border}` }}>
+          {isMobile && (
+            <button onClick={() => setSheetOpen(true)}
+              style={{ fontSize: 11, color: D.accent, background: 'none', border: `1px solid ${D.accent}`, borderRadius: 5, padding: '4px 10px', cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' }}>
+              📄 {selected ? selected.title.slice(0, 10) + (selected.title.length > 10 ? '…' : '') : '작품 선택'}
+            </button>
+          )}
+          {selected && viewing?.appState && (
+            <>
+              {!isMobile && <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: D.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selected.title}</span>}
+              <div style={{ marginLeft: 'auto' }}><SendButton scriptRow={selected} viewing={viewing} /></div>
+            </>
+          )}
+          {(!selected || !viewing?.appState) && !isMobile && <div style={{ flex: 1 }} />}
+        </div>
 
-        {/* 본문 스크롤 영역 */}
+        {/* 본문 */}
         <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
           {!selected && (
             <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: 32, marginBottom: 12, opacity: 0.3 }}>📄</div>
-                <div style={{ fontSize: 13, color: '#888' }}>좌측에서 작품을 선택하세요</div>
+                <div style={{ fontSize: 13, color: '#888' }}>{isMobile ? '위 버튼으로 작품을 선택하세요' : '좌측에서 작품을 선택하세요'}</div>
               </div>
             </div>
           )}
@@ -505,16 +937,10 @@ function ProjectsPanel({ session, isGuest }) {
           )}
           {selected && !loading && viewing?.appState && (
             <ViewerErrorBoundary key={selected.id}>
-              <DirectorScriptViewer
-                appState={viewing.appState}
-                selections={viewing.selections}
-                sharedScriptId={selected.id}
-              />
+              <DirectorScriptViewer appState={viewing.appState} selections={viewing.selections} sharedScriptId={selected.id} />
             </ViewerErrorBoundary>
           )}
         </div>
-      </div>
-
       </div>
     </div>
   );
@@ -632,10 +1058,12 @@ function SendButton({ scriptRow, viewing }) {
 
 const NOTE_COLORS_PANEL = ['#fdf6e3', '#fef08a', '#86efac', '#93c5fd', '#f9a8d4'];
 
-function NotesPanel() {
+function NotesPanel({ isMobile = false }) {
   const D = useD();
-  const [scripts,   setScripts]   = useState(null);
-  const [selected,  setSelected]  = useState(null);
+  const [scripts,       setScripts]       = useState(null);
+  const [selected,      setSelected]      = useState(null);
+  const [subCollapsed,  setSubCollapsed]  = useState(false);
+  const [sheetOpen,  setSheetOpen]  = useState(false);
   const [notes,     setNotes]     = useState([]);
   const [adding,    setAdding]    = useState(false);
   const [newText,   setNewText]   = useState('');
@@ -713,71 +1141,75 @@ function NotesPanel() {
     } catch { return 0; }
   };
 
+  const scriptListContent = (
+    <div style={{ padding: '8px 0' }}>
+      {scripts === null && <div style={{ padding: '12px 16px', fontSize: 12, color: D.text3 }}>불러오는 중…</div>}
+      {scripts?.length === 0 && (
+        <div style={{ padding: '24px 16px', textAlign: 'center' }}>
+          <div style={{ fontSize: 22, marginBottom: 8, opacity: 0.4 }}>📝</div>
+          <div style={{ fontSize: 11, color: D.text3, lineHeight: 1.6 }}>가져온 작품이 없습니다.</div>
+        </div>
+      )}
+      {scripts?.map(s => {
+        const count  = getNoteCount(s.id);
+        const active = selected?.id === s.id;
+        return (
+          <div key={s.id}
+            onClick={() => { setSelected(s); setAdding(false); setEditingId(null); setSheetOpen(false); }}
+            style={{ padding: '10px 16px', cursor: 'pointer', borderLeft: active ? `2px solid ${D.accent}` : '2px solid transparent', background: active ? D.active : 'transparent', transition: 'background 0.12s', display: 'flex', alignItems: 'center', gap: 8 }}
+          >
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: active ? 600 : 400, color: active ? D.accent : D.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</div>
+              <div style={{ fontSize: 10, color: D.text3, marginTop: 2 }}>메모 {count}개</div>
+            </div>
+            {count > 0 && (
+              <div style={{ flexShrink: 0, width: 18, height: 18, borderRadius: '50%', background: '#93c5fd', color: '#1a1a2e', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{count > 9 ? '9+' : count}</div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+
   return (
     <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
 
-      {/* 좌: 작품 목록 */}
-      <div style={{
-        width: 240, flexShrink: 0,
-        borderRight: `1px solid ${D.border}`,
-        background: D.panel,
-        display: 'flex', flexDirection: 'column',
-        overflow: 'hidden',
-      }}>
-        <div style={{ padding: '16px 16px 10px', borderBottom: `1px solid ${D.border}` }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: D.text3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>작품별 연출노트</div>
+      {/* 작품 목록: 모바일→BottomSheet / 데스크톱→좌측 패널 */}
+      {isMobile ? (
+        <BottomSheet open={sheetOpen} onClose={() => setSheetOpen(false)} title="작품별 연출노트">
+          {scriptListContent}
+        </BottomSheet>
+      ) : (
+        <div style={{ width: subCollapsed ? 28 : 240, flexShrink: 0, borderRight: `1px solid ${D.border}`, background: D.panel, display: 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'width 0.2s ease' }}>
+          <div style={{ padding: '10px 8px 10px 12px', borderBottom: `1px solid ${D.border}`, display: 'flex', alignItems: 'center', gap: 6 }}>
+            {!subCollapsed && <div style={{ flex: 1, fontSize: 11, fontWeight: 700, color: D.text3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>작품별 연출노트</div>}
+            <button onClick={() => setSubCollapsed(v => !v)} title={subCollapsed ? '목록 열기' : '목록 닫기'}
+              style={{ flexShrink: 0, background: 'none', border: 'none', color: D.text3, cursor: 'pointer', fontSize: 10, padding: '2px 4px', lineHeight: 1 }}>
+              {subCollapsed ? '▶' : '◀'}
+            </button>
+          </div>
+          {!subCollapsed && <div style={{ flex: 1, overflowY: 'auto' }}>{scriptListContent}</div>}
         </div>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
-          {scripts === null && <div style={{ padding: '12px 16px', fontSize: 12, color: D.text3 }}>불러오는 중…</div>}
-          {scripts?.length === 0 && (
-            <div style={{ padding: '24px 16px', textAlign: 'center' }}>
-              <div style={{ fontSize: 22, marginBottom: 8, opacity: 0.4 }}>📝</div>
-              <div style={{ fontSize: 11, color: D.text3, lineHeight: 1.6 }}>가져온 작품이 없습니다.</div>
-            </div>
-          )}
-          {scripts?.map(s => {
-            const count  = getNoteCount(s.id);
-            const active = selected?.id === s.id;
-            return (
-              <div key={s.id}
-                onClick={() => { setSelected(s); setAdding(false); setEditingId(null); }}
-                style={{
-                  padding: '10px 16px', cursor: 'pointer',
-                  borderLeft: active ? `2px solid ${D.accent}` : '2px solid transparent',
-                  background: active ? D.active : 'transparent',
-                  transition: 'background 0.12s',
-                  display: 'flex', alignItems: 'center', gap: 8,
-                }}
-                onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
-                onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent'; }}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: active ? 600 : 400, color: active ? D.accent : D.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {s.title}
-                  </div>
-                  <div style={{ fontSize: 10, color: D.text3, marginTop: 2 }}>메모 {count}개</div>
-                </div>
-                {count > 0 && (
-                  <div style={{
-                    flexShrink: 0, width: 18, height: 18, borderRadius: '50%',
-                    background: '#93c5fd', color: '#1a1a2e',
-                    fontSize: 10, fontWeight: 700,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>{count > 9 ? '9+' : count}</div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      )}
 
-      {/* 우: 노트 목록 */}
-      <div style={{ flex: 1, minHeight: 0, minWidth: 0, overflow: 'auto', background: D.bg, padding: 32 }}>
+      {/* 노트 목록 */}
+      <div style={{ flex: 1, minHeight: 0, minWidth: 0, overflow: 'auto', background: D.bg, padding: isMobile ? '16px 16px' : 32 }}>
+
+        {/* 모바일: 작품 선택 버튼 */}
+        {isMobile && (
+          <button onClick={() => setSheetOpen(true)}
+            style={{ width: '100%', marginBottom: 16, padding: '10px 14px', borderRadius: 8, border: `1px solid ${D.accent}`, background: 'transparent', color: D.accent, fontSize: 13, fontWeight: 600, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span>📝</span>
+            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selected ? selected.title : '작품 선택'}</span>
+            <span style={{ fontSize: 11, color: D.text3 }}>▾</span>
+          </button>
+        )}
+
         {!selected && (
-          <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ height: '60%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 36, marginBottom: 12, opacity: 0.3 }}>📋</div>
-              <div style={{ fontSize: 13, color: D.text3 }}>좌측에서 작품을 선택하세요</div>
+              <div style={{ fontSize: 13, color: D.text3 }}>{isMobile ? '위 버튼으로 작품을 선택하세요' : '좌측에서 작품을 선택하세요'}</div>
             </div>
           </div>
         )}
@@ -1503,7 +1935,7 @@ function GuestGuide({ onLogin }) {
         onClick={() => { setStep(0); setVisible(true); }}
         title="가이드 열기"
         style={{
-          position: 'fixed', right: 24, bottom: 24, zIndex: 9000,
+          position: 'fixed', right: 24, bottom: 'calc(64px + env(safe-area-inset-bottom, 0px) + 12px)', zIndex: 9000,
           width: 40, height: 40, borderRadius: '50%',
           background: D.accent, color: '#1a1a1a',
           border: 'none', fontSize: 18, cursor: 'pointer',
@@ -1518,7 +1950,7 @@ function GuestGuide({ onLogin }) {
   const cur = GUIDE_STEPS[step];
   return (
     <div style={{
-      position: 'fixed', right: 20, bottom: 20, zIndex: 9000,
+      position: 'fixed', right: 20, bottom: 'calc(64px + env(safe-area-inset-bottom, 0px) + 12px)', zIndex: 9000,
       width: 300,
       background: D.panel,
       border: `1px solid ${D.border}`,
@@ -1584,11 +2016,11 @@ function GuestGuide({ onLogin }) {
   );
 }
 
-function StoryboardPanel({ isGuest }) {
+function StoryboardPanel({ isGuest, isMobile = false, mobilePreSelected = null, mobilePrePanels = null, onMobilePanelsChange = null }) {
   const D = useD();
   const [scripts,         setScripts]         = useState(null);
   const [localScripts,    setLocalScripts]    = useState(() => loadLocalScripts());
-  const [selected,        setSelected]        = useState(null);
+  const [selected,        setSelected]        = useState(mobilePreSelected);
   const [panels,          setPanels]          = useState(null);   // null = 미생성
   const [loading,         setLoading]         = useState(false);
   const [error,           setError]           = useState('');
@@ -1597,6 +2029,10 @@ function StoryboardPanel({ isGuest }) {
   const [selectedPanelId, setSelectedPanelId] = useState(null);  // 선택된 패널
   const [draggingIdx,     setDraggingIdx]     = useState(null);   // 드래그 중인 인덱스
   const [dragOverIdx,     setDragOverIdx]     = useState(null);   // 드롭 대상 인덱스
+  const [sheetOpen,       setSheetOpen]       = useState(false);  // 모바일 작품 시트
+  const [printHeader,     setPrintHeader]     = useState(false);  // 출력 머리말/꼬리말
+  const [printBgGraphics, setPrintBgGraphics] = useState(false);  // 출력 배경 그래픽
+  const [subCollapsed,    setSubCollapsed]    = useState(false);  // 좌측 목록 패널 접힘
   const dragItem     = useRef(null);
   const dragOverItem = useRef(null);
 
@@ -1606,6 +2042,14 @@ function StoryboardPanel({ isGuest }) {
     setSelected(DEMO_SCRIPT);
     setPanels(DEMO_PANELS);
   }, [isGuest]);
+
+  // 모바일: 외부에서 선택된 작품 동기화 (데모 스크립트는 isGuest effect가 담당)
+  useEffect(() => {
+    if (!mobilePreSelected || mobilePreSelected._isDemo) return;
+    setSelected(mobilePreSelected);
+    const loaded = loadStoryboard(mobilePreSelected.id);
+    setPanels(loaded);
+  }, [mobilePreSelected?.id]);
 
   // Supabase 스크립트 목록
   useEffect(() => {
@@ -1854,16 +2298,17 @@ function StoryboardPanel({ isGuest }) {
   .note-label { display: block; font-size: 8px; font-weight: 700; color: #3b82f6; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; }
   @media print {
     @page { size: A4; margin: 15mm 15mm 20mm; }
-    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { -webkit-print-color-adjust: ${printBgGraphics ? 'exact' : 'economy'}; print-color-adjust: ${printBgGraphics ? 'exact' : 'economy'}; }
     .panel { break-inside: avoid; }
+    ${!printBgGraphics ? '.drawing { background: #fff !important; } .panel-header { background: #fff !important; }' : ''}
   }
 </style>
 </head>
 <body>
-  <div class="doc-title">
+  ${printHeader ? `<div class="doc-title">
     <h1>${esc(title)} — 스토리보드</h1>
     <div class="meta">패널 ${panels.length}개 · 예상 ${totalSec}초 · ${new Date().toLocaleDateString('ko-KR')}</div>
-  </div>
+  </div>` : ''}
   <div class="panels">${panelHtml}</div>
   <script>window.onload = () => { window.print(); }<\/script>
 </body>
@@ -1875,124 +2320,87 @@ function StoryboardPanel({ isGuest }) {
     w.document.close();
   };
 
+  // 스크립트 목록 공통 JSX (모바일 시트 + 데스크톱 패널 공용)
+  const sbScriptListContent = (
+    <div>
+      <div style={{ padding: '10px 16px 8px' }}>
+        <button onClick={() => { setShowUpload(true); setSheetOpen(false); }}
+          style={{ width: '100%', padding: '8px 0', borderRadius: 6, border: `1px solid ${D.accent}`, background: 'transparent', color: D.accent, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+          + 텍스트로 만들기
+        </button>
+      </div>
+      <div style={{ padding: '4px 0' }}>
+        {localScripts.length > 0 && (
+          <>
+            <div style={{ padding: '4px 16px 2px', fontSize: 9, fontWeight: 700, color: D.text3, letterSpacing: '0.08em', textTransform: 'uppercase' }}>업로드 파일</div>
+            {localScripts.map(s => {
+              const count = getPanelCount(s.id); const active = selected?.id === s.id;
+              return (
+                <div key={s.id} onClick={() => { handleSelect(s); setSheetOpen(false); }}
+                  style={{ padding: '8px 16px', cursor: 'pointer', borderLeft: active ? `2px solid ${D.accent}` : '2px solid transparent', background: active ? D.active : 'transparent', transition: 'background 0.12s', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: active ? 600 : 400, color: active ? D.accent : D.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</div>
+                    <div style={{ fontSize: 10, color: D.text3, marginTop: 1 }}>📄 {count > 0 ? `패널 ${count}개` : '패널 없음'}</div>
+                  </div>
+                  <button onClick={e => handleDeleteLocal(e, s.id)} style={{ background: 'none', border: 'none', color: D.text3, fontSize: 13, cursor: 'pointer', padding: '0 2px', flexShrink: 0, opacity: 0.5 }} title="삭제">×</button>
+                </div>
+              );
+            })}
+            {scripts?.length > 0 && <div style={{ margin: '6px 16px', borderBottom: `1px solid ${D.border}` }} />}
+          </>
+        )}
+        {localScripts.length > 0 && scripts?.length > 0 && (
+          <div style={{ padding: '4px 16px 2px', fontSize: 9, fontWeight: 700, color: D.text3, letterSpacing: '0.08em', textTransform: 'uppercase' }}>가져온 대본</div>
+        )}
+        {scripts === null && <div style={{ padding: '12px 16px', fontSize: 12, color: D.text3 }}>불러오는 중…</div>}
+        {scripts?.length === 0 && localScripts.length === 0 && (
+          <div style={{ padding: '24px 16px', textAlign: 'center' }}>
+            <div style={{ fontSize: 22, marginBottom: 8, opacity: 0.4 }}>🎞</div>
+            <div style={{ fontSize: 11, color: D.text3, lineHeight: 1.6 }}>가져온 작품이 없습니다.</div>
+          </div>
+        )}
+        {scripts?.map(s => {
+          const count = getPanelCount(s.id); const active = selected?.id === s.id;
+          return (
+            <div key={s.id} onClick={() => { handleSelect(s); setSheetOpen(false); }}
+              style={{ padding: '10px 16px', cursor: 'pointer', borderLeft: active ? `2px solid ${D.accent}` : '2px solid transparent', background: active ? D.active : 'transparent', transition: 'background 0.12s', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: active ? 600 : 400, color: active ? D.accent : D.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</div>
+                <div style={{ fontSize: 10, color: D.text3, marginTop: 2 }}>{count > 0 ? `패널 ${count}개` : '미생성'}</div>
+              </div>
+              {count > 0 && (
+                <div style={{ flexShrink: 0, width: 18, height: 18, borderRadius: '50%', background: D.accent, color: '#1a1a1a', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{count > 9 ? '9+' : count}</div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   return (
     <div style={{ display: 'flex', flex: 1, minHeight: 0, height: '100%' }}>
 
-      {/* 좌: 작품 목록 */}
-      <div style={{
-        width: 240, flexShrink: 0,
-        borderRight: `1px solid ${D.border}`,
-        background: D.panel,
-        display: 'flex', flexDirection: 'column',
-        overflow: 'hidden',
-      }}>
-        <div style={{ padding: '12px 16px 10px', borderBottom: `1px solid ${D.border}` }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: D.text3, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8 }}>스토리보드</div>
-          <button
-            onClick={() => setShowUpload(true)}
-            style={{
-              width: '100%', padding: '6px 0', borderRadius: 6, border: `1px solid ${D.accent}`,
-              background: 'transparent', color: D.accent, fontSize: 11, fontWeight: 700, cursor: 'pointer',
-            }}
-          >+ 텍스트로 만들기</button>
+      {/* 작품 목록: 모바일(mobilePreSelected 없을 때)→BottomSheet / 데스크톱→좌측 패널 */}
+      {isMobile && !mobilePreSelected ? (
+        <BottomSheet open={sheetOpen} onClose={() => setSheetOpen(false)} title="스토리보드">
+          {sbScriptListContent}
+        </BottomSheet>
+      ) : !isMobile ? (
+        <div style={{ width: subCollapsed ? 28 : 240, flexShrink: 0, borderRight: `1px solid ${D.border}`, background: D.panel, display: 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'width 0.2s ease' }}>
+          <div style={{ padding: '10px 8px 10px 12px', borderBottom: `1px solid ${D.border}`, display: 'flex', alignItems: 'center', gap: 6 }}>
+            {!subCollapsed && <div style={{ flex: 1, fontSize: 11, fontWeight: 700, color: D.text3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>스토리보드</div>}
+            <button onClick={() => setSubCollapsed(v => !v)} title={subCollapsed ? '목록 열기' : '목록 닫기'}
+              style={{ flexShrink: 0, background: 'none', border: 'none', color: D.text3, cursor: 'pointer', fontSize: 10, padding: '2px 4px', lineHeight: 1 }}>
+              {subCollapsed ? '▶' : '◀'}
+            </button>
+          </div>
+          {!subCollapsed && <div style={{ flex: 1, overflowY: 'auto' }}>{sbScriptListContent}</div>}
         </div>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
-
-          {/* 로컬 스크립트 섹션 */}
-          {localScripts.length > 0 && (
-            <>
-              <div style={{ padding: '4px 16px 2px', fontSize: 9, fontWeight: 700, color: D.text3, letterSpacing: '0.08em', textTransform: 'uppercase' }}>업로드 파일</div>
-              {localScripts.map(s => {
-                const count  = getPanelCount(s.id);
-                const active = selected?.id === s.id;
-                return (
-                  <div key={s.id}
-                    onClick={() => handleSelect(s)}
-                    style={{
-                      padding: '8px 16px', cursor: 'pointer',
-                      borderLeft: active ? `2px solid ${D.accent}` : '2px solid transparent',
-                      background: active ? D.active : 'transparent',
-                      transition: 'background 0.12s',
-                      display: 'flex', alignItems: 'center', gap: 8,
-                    }}
-                    onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
-                    onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent'; }}
-                  >
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12, fontWeight: active ? 600 : 400, color: active ? D.accent : D.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {s.title}
-                      </div>
-                      <div style={{ fontSize: 10, color: D.text3, marginTop: 1 }}>
-                        📄 {count > 0 ? `패널 ${count}개` : '패널 없음'}
-                      </div>
-                    </div>
-                    <button
-                      onClick={e => handleDeleteLocal(e, s.id)}
-                      style={{ background: 'none', border: 'none', color: D.text3, fontSize: 13, cursor: 'pointer', padding: '0 2px', flexShrink: 0, opacity: 0.5 }}
-                      title="삭제"
-                    >×</button>
-                  </div>
-                );
-              })}
-              {scripts?.length > 0 && (
-                <div style={{ margin: '6px 16px', borderBottom: `1px solid ${D.border}` }} />
-              )}
-            </>
-          )}
-
-          {/* Supabase 스크립트 섹션 */}
-          {localScripts.length > 0 && scripts?.length > 0 && (
-            <div style={{ padding: '4px 16px 2px', fontSize: 9, fontWeight: 700, color: D.text3, letterSpacing: '0.08em', textTransform: 'uppercase' }}>가져온 대본</div>
-          )}
-          {scripts === null && <div style={{ padding: '12px 16px', fontSize: 12, color: D.text3 }}>불러오는 중…</div>}
-          {scripts?.length === 0 && localScripts.length === 0 && (
-            <div style={{ padding: '24px 16px', textAlign: 'center' }}>
-              <div style={{ fontSize: 22, marginBottom: 8, opacity: 0.4 }}>🎞</div>
-              <div style={{ fontSize: 11, color: D.text3, lineHeight: 1.6 }}>가져온 작품이 없습니다.</div>
-            </div>
-          )}
-          {scripts?.map(s => {
-            const count  = getPanelCount(s.id);
-            const active = selected?.id === s.id;
-            return (
-              <div key={s.id}
-                onClick={() => handleSelect(s)}
-                style={{
-                  padding: '10px 16px', cursor: 'pointer',
-                  borderLeft: active ? `2px solid ${D.accent}` : '2px solid transparent',
-                  background: active ? D.active : 'transparent',
-                  transition: 'background 0.12s',
-                  display: 'flex', alignItems: 'center', gap: 8,
-                }}
-                onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
-                onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent'; }}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: active ? 600 : 400, color: active ? D.accent : D.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {s.title}
-                  </div>
-                  <div style={{ fontSize: 10, color: D.text3, marginTop: 2 }}>
-                    {count > 0 ? `패널 ${count}개` : '미생성'}
-                  </div>
-                </div>
-                {count > 0 && (
-                  <div style={{ flexShrink: 0, width: 18, height: 18, borderRadius: '50%', background: D.accent, color: '#1a1a1a', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {count > 9 ? '9+' : count}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      ) : null}
 
       {/* 업로드 모달 */}
-      {showUpload && (
-        <UploadScriptModal
-          onClose={() => setShowUpload(false)}
-          onGenerate={handleUploadGenerate}
-        />
-      )}
+      {showUpload && <UploadScriptModal onClose={() => setShowUpload(false)} onGenerate={handleUploadGenerate} />}
 
       {/* 우: 스토리보드 영역 */}
       <div style={{ flex: 1, minHeight: 0, minWidth: 0, overflow: 'auto', background: D.bg }}>
@@ -2002,7 +2410,7 @@ function StoryboardPanel({ isGuest }) {
           <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 40, marginBottom: 12, opacity: 0.25 }}>🎞</div>
-              <div style={{ fontSize: 13, color: D.text3 }}>좌측에서 작품을 선택하세요</div>
+              <div style={{ fontSize: 13, color: D.text3 }}>{isMobile ? '아래 버튼으로 작품을 선택하세요' : '좌측에서 작품을 선택하세요'}</div>
             </div>
           </div>
         )}
@@ -2028,31 +2436,52 @@ function StoryboardPanel({ isGuest }) {
 
         {/* 패널 목록 */}
         {selected && panels !== null && (
-          <div style={{ padding: 32 }}>
+          <div style={{ padding: isMobile ? '16px 12px' : 32 }}>
 
             {/* 상단 바 */}
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 20, gap: 10, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8, flexWrap: 'wrap' }}>
+              {/* 모바일: 작품 선택 버튼 */}
+              {isMobile && (
+                <button onClick={() => setSheetOpen(true)}
+                  style={{ padding: '5px 12px', borderRadius: 6, border: `1px solid ${D.border}`, background: D.panel, color: D.text2, fontSize: 11, cursor: 'pointer', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  🎞 {selected.title.slice(0, 10)}{selected.title.length > 10 ? '…' : ''}
+                </button>
+              )}
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 15, fontWeight: 700, color: D.text }}>{selected.title} — 스토리보드</div>
-                <div style={{ fontSize: 11, color: D.text3, marginTop: 3 }}>
+                {!isMobile && <div style={{ fontSize: 15, fontWeight: 700, color: D.text }}>{selected.title} — 스토리보드</div>}
+                <div style={{ fontSize: 11, color: D.text3, marginTop: isMobile ? 0 : 3 }}>
                   패널 {panels.length}개 · 예상 {totalSec}초
                 </div>
               </div>
               {/* 뷰 토글 */}
               <div style={{ display: 'flex', background: D.panel, borderRadius: 6, padding: 2, gap: 2 }}>
-                {[['card', '카드형'], ['row', '가로형']].map(([v, l]) => (
+                {[['card', isMobile ? '카드' : '카드형'], ['row', isMobile ? '가로' : '가로형']].map(([v, l]) => (
                   <button key={v} onClick={() => setCardView(v)}
-                    style={{ padding: '3px 10px', borderRadius: 4, border: 'none', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                    style={{ padding: isMobile ? '4px 8px' : '3px 10px', borderRadius: 4, border: 'none', fontSize: isMobile ? 12 : 11, fontWeight: 600, cursor: 'pointer',
                       background: cardView === v ? D.accent : 'transparent',
                       color: cardView === v ? '#1a1a1a' : D.text3 }}>
                     {l}
                   </button>
                 ))}
               </div>
-              <button onClick={handlePrint}
-                style={{ padding: '5px 14px', borderRadius: 6, border: 'none', background: D.accent, color: '#1a1a1a', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                출력 / PDF
-              </button>
+              {!isMobile && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {[
+                    { key: 'header',     label: '머리말',     val: printHeader,     set: setPrintHeader },
+                    { key: 'bg',         label: '배경',       val: printBgGraphics, set: setPrintBgGraphics },
+                  ].map(({ key, label, val, set }) => (
+                    <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, color: D.text3, cursor: 'pointer', userSelect: 'none' }}>
+                      <input type="checkbox" checked={val} onChange={e => set(e.target.checked)}
+                        style={{ accentColor: D.accent, cursor: 'pointer' }} />
+                      {label}
+                    </label>
+                  ))}
+                  <button onClick={handlePrint}
+                    style={{ padding: '5px 14px', borderRadius: 6, border: 'none', background: D.accent, color: '#1a1a1a', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                    출력 / PDF
+                  </button>
+                </div>
+              )}
               <button onClick={handleAddPanel}
                 style={{ padding: '5px 12px', borderRadius: 6, border: `1px solid ${D.accent}`, background: 'transparent', color: D.accent, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                 + 패널 추가
@@ -2069,10 +2498,12 @@ function StoryboardPanel({ isGuest }) {
               </div>
             )}
 
-            {/* 카드형: 2열 그리드 / 가로형: 1열 */}
-            <div style={cardView === 'card'
-              ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 20 }
-              : { display: 'flex', flexDirection: 'column', gap: 16 }
+            {/* 카드형: 2열 그리드 / 가로형: 1열 / 모바일: 1열 */}
+            <div style={isMobile
+              ? { display: 'flex', flexDirection: 'column', gap: 12 }
+              : cardView === 'card'
+                ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 20 }
+                : { display: 'flex', flexDirection: 'column', gap: 16 }
             }>
               {panels.map((panel, idx) => (
                 <SbPanelCard
