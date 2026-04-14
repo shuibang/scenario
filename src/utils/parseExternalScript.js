@@ -1,229 +1,155 @@
 /**
- * 외부 파일(DOCX / HWPX / PDF)에서 텍스트를 추출하고
- * 씬 헤더 패턴을 감지해 스토리보드 패널 배열로 변환합니다.
+ * 대본 텍스트 → 씬 목록 + 스토리보드 패널 변환
  */
-
-// ── 텍스트 추출 ────────────────────────────────────────────────────────────────
-
-/** DOCX → 텍스트 (mammoth) */
-export async function extractTextFromDocx(file) {
-  const mammoth = (await import('mammoth')).default ?? (await import('mammoth'));
-  const arrayBuffer = await file.arrayBuffer();
-  const result = await mammoth.extractRawText({ arrayBuffer });
-  return result.value || '';
-}
-
-/** HWPX → 텍스트 (JSZip)
- *  1순위: Preview/PrvText.txt (HWPX가 항상 생성하는 평문 미리보기)
- *  2순위: Contents/section*.xml 에서 hp:t 태그 추출 (폴백)
- */
-export async function extractTextFromHwpx(file) {
-  const JSZip = (await import('jszip')).default;
-  const arrayBuffer = await file.arrayBuffer();
-  const zip = await JSZip.loadAsync(arrayBuffer);
-
-  // ── 1순위: PrvText.txt ──────────────────────────────────────────────────────
-  const prvFile = zip.files['Preview/PrvText.txt'];
-  if (prvFile) {
-    const text = await prvFile.async('string');
-    if (text && text.trim().length > 5) return text;
-  }
-
-  // ── 2순위: section XML에서 hp:t 태그 추출 ──────────────────────────────────
-  const sectionFiles = Object.keys(zip.files).filter(
-    name => /^Contents\/[Ss]ection\d+\.xml$/i.test(name)
-  );
-  if (sectionFiles.length === 0) {
-    throw new Error('HWPX 파일 구조를 인식할 수 없습니다. 파일이 손상됐거나 지원하지 않는 형식입니다.');
-  }
-
-  const lines = [];
-  for (const fname of sectionFiles.sort()) {
-    const xml = await zip.files[fname].async('string');
-    const paras = xml.split('</hp:p>');
-    for (const para of paras) {
-      const ts = [...para.matchAll(/<hp:t[^>]*>([^<]*)<\/hp:t>/g)].map(m =>
-        m[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
-      );
-      const line = ts.join('').trim();
-      if (line) lines.push(line);
-    }
-  }
-  return lines.join('\n');
-}
-
-/** PDF → 텍스트 (pdfjs-dist) */
-export async function extractTextFromPdf(file) {
-  const pdfjsLib = await import('pdfjs-dist');
-  // Vite: new URL()으로 번들된 worker 경로 자동 해결 (v4+ 는 .mjs)
-  if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-    try {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-        'pdfjs-dist/build/pdf.worker.min.mjs',
-        import.meta.url
-      ).href;
-    } catch {
-      // 폴백: unpkg CDN (버전 고정)
-      pdfjsLib.GlobalWorkerOptions.workerSrc =
-        `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
-    }
-  }
-
-  const arrayBuffer = await file.arrayBuffer();
-  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-  const pdf = await loadingTask.promise;
-
-  const pageTexts = [];
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const content = await page.getTextContent();
-    const pageText = content.items.map(item => item.str).join(' ');
-    pageTexts.push(pageText);
-  }
-  const fullText = pageTexts.join('\n');
-
-  // 텍스트가 거의 없으면 스캔본일 가능성
-  const wordCount = fullText.replace(/\s+/g, ' ').trim().split(' ').length;
-  if (wordCount < 20) {
-    throw new Error('SCAN_ONLY');
-  }
-  return fullText;
-}
 
 // ── 씬 패턴 감지 ────────────────────────────────────────────────────────────────
 
-/**
- * 씬 헤더 단일 정규식
- * 그룹1 = 씬번호, 그룹2 = 이후 텍스트(장소·시간 등)
- *
- * 지원 형식:
- *   S#1. / S#1 / S# 1. / S#1,  / S#1-
- *   씬1. / 씬 1. / 씬1 / 씬1,
- *   #1. / #1 / # 1.
- *   Scene 1. / Scene#1.
- *   1. 장소  (숫자 + 마침표 + 공백 + 텍스트 — false positive 방지)
- *   INT. / EXT. (영문)
- */
-const SCENE_RE = /^(?:[Ss]cene\s*#?|[Ss]#|씬\s*|#)\s*(\d+)\s*(?:[.。·,，\-–—\/]\s*)?(.*)/;
-const NUM_ONLY_RE = /^(\d+)[.。]\s+(\S.*)/;  // 숫자만: "1. 장소" (마침표+공백+텍스트 필수)
-const INT_EXT_RE = /^(INT|EXT|I\/E|E\/I)[.\s]\s*(.*)/i;
+const SCENE_RE      = /^(?:[Ss]cene\s*#?|[Ss]#|씬\s*|#)\s*(\d+)\s*(?:[.。·,，\-–—\/]\s*)?(.*)/;
+const NUM_ONLY_RE   = /^(\d+)[.。]\s+(\S.*)/;
+const INT_EXT_RE    = /^(INT|EXT|I\/E|E\/I)[.\s]\s*(.*)/i;
 
-/**
- * 한 줄에서 씬 정보를 파싱
- * @returns {{ sceneNo: string, raw: string, location: string, timeOfDay: string } | null}
- */
 function parseSceneLine(line) {
   const trimmed = line.trim();
   if (!trimmed) return null;
 
-  // S# / 씬 / # / Scene 계열
   let m = trimmed.match(SCENE_RE);
   if (m) {
     const { location, timeOfDay } = splitLocationTime((m[2] || '').trim());
     return { sceneNo: m[1], raw: trimmed, location, timeOfDay };
   }
-
-  // 숫자만: "1. 장소" 형식
   m = trimmed.match(NUM_ONLY_RE);
   if (m) {
     const { location, timeOfDay } = splitLocationTime((m[2] || '').trim());
     return { sceneNo: m[1], raw: trimmed, location, timeOfDay };
   }
-
-  // INT./EXT. 계열 → 씬번호는 순번 할당 (null)
   m = trimmed.match(INT_EXT_RE);
   if (m) {
     const { location, timeOfDay } = splitLocationTime((m[2] || '').trim());
     return { sceneNo: null, raw: trimmed, location: `${m[1].toUpperCase()}. ${location}`.trim(), timeOfDay };
   }
-
   return null;
 }
 
-/**
- * "장소, 시간" / "장소 / 시간" / "장소 (시간)" / "장소 - 시간" 분리
- */
 function splitLocationTime(text) {
   if (!text) return { location: '', timeOfDay: '' };
-
-  // 괄호 안을 시간대로
   const parenMatch = text.match(/^(.*?)\s*[\(（]([^)）]+)[\)）]\s*$/);
   if (parenMatch) return { location: parenMatch[1].trim(), timeOfDay: parenMatch[2].trim() };
-
-  // 슬래시, 콤마, 하이픈 기준 분리 (첫 번째 구분자)
   const sepMatch = text.match(/^(.*?)\s*[,，\/\-]\s*(.+)$/);
   if (sepMatch) return { location: sepMatch[1].trim(), timeOfDay: sepMatch[2].trim() };
-
   return { location: text.trim(), timeOfDay: '' };
 }
 
+// 대사 줄 판별: "인물명: 대사" 또는 "인물명  대사"(인물명이 짧고 한글/영문만)
+const DIALOGUE_RE = /^([가-힣A-Za-z][가-힣A-Za-z\s]{0,14})\s*[:\：]\s*(.+)/;
+// 괄호체 (지문 속 연기 지시)
+const PAREN_RE    = /^[\(（].+[\)）]$/;
+
 /**
- * 전체 텍스트에서 씬 목록 추출
- * @param {string} text
- * @returns {Array<{ sceneNo: string|null, raw: string, location: string, timeOfDay: string }>}
+ * 씬 헤더 사이의 내용 줄들을 지문·대사·괄호체로 분류
  */
-export function detectScenes(text) {
-  const lines = text.split(/\r?\n/);
-  const scenes = [];
-  let autoNum = 0;
+function parseContentLines(lines) {
+  const actionParts   = [];
+  const dialogueParts = [];
+
+  let pendingChar = '';
+  for (const line of lines) {
+    const t = line.trim();
+    if (!t) continue;
+
+    const dm = t.match(DIALOGUE_RE);
+    if (dm) {
+      pendingChar = dm[1].trim();
+      dialogueParts.push(`${pendingChar}: ${dm[2].trim()}`);
+      continue;
+    }
+    if (PAREN_RE.test(t)) {
+      // 괄호체 → 직전 대사에 붙이거나 지문에 추가
+      if (dialogueParts.length > 0) {
+        dialogueParts[dialogueParts.length - 1] += ` ${t}`;
+      } else {
+        actionParts.push(t);
+      }
+      pendingChar = '';
+      continue;
+    }
+    // 그 외 → 지문
+    pendingChar = '';
+    actionParts.push(t);
+  }
+
+  return {
+    action:   actionParts.join('\n'),
+    dialogue: dialogueParts.join('\n'),
+  };
+}
+
+/**
+ * 전체 텍스트 파싱:
+ * - 씬 헤더 감지
+ * - 헤더 사이 내용 → 지문/대사 분류
+ * @returns {Array<{ sceneNo, raw, location, timeOfDay, contentLines }>}
+ */
+export function parseFullScript(text) {
+  const lines   = text.split(/\r?\n/);
+  const scenes  = [];
+  let current   = null;
+  let content   = [];
+  let autoNum   = 0;
+
+  const flush = () => {
+    if (!current) return;
+    current.contentLines = content;
+    scenes.push(current);
+    content = [];
+  };
 
   for (const line of lines) {
     const parsed = parseSceneLine(line);
     if (parsed) {
+      flush();
       if (parsed.sceneNo === null) {
         autoNum++;
         parsed.sceneNo = String(autoNum);
       } else {
         autoNum = parseInt(parsed.sceneNo, 10);
       }
-      scenes.push(parsed);
+      current = parsed;
+    } else if (current) {
+      content.push(line);
     }
   }
+  flush();
   return scenes;
 }
 
-// ── 패널 빌드 ────────────────────────────────────────────────────────────────
+// detectScenes는 씬 헤더만 반환 (미리보기용)
+export function detectScenes(text) {
+  return parseFullScript(text).map(s => ({ ...s, contentLines: undefined }));
+}
 
-/**
- * 감지된 씬 배열 → 스토리보드 패널 배열
- * DirectorDashboard의 parseScriptBlocksForDirector 출력과 동일한 구조
- */
+// ── 패널 빌드 ─────────────────────────────────────────────────────────────────
+
 export function buildPanelsFromScenes(scenes) {
   return scenes.map((scene, idx) => {
-    const cutNo = String(idx + 1);
-    const heading = [
-      scene.location,
-      scene.timeOfDay,
-    ].filter(Boolean).join(' / ') || scene.raw || `씬 ${scene.sceneNo}`;
+    const cutNo   = String(idx + 1);
+    const heading = [scene.location, scene.timeOfDay].filter(Boolean).join(' / ')
+                  || scene.raw || `씬 ${scene.sceneNo}`;
 
-    // 장소/시간 정보를 action 텍스트로 미리 채워줌
-    const actionLines = [];
-    if (scene.location) actionLines.push(`장소: ${scene.location}`);
-    if (scene.timeOfDay) actionLines.push(`시간: ${scene.timeOfDay}`);
+    const { action, dialogue } = parseContentLines(scene.contentLines || []);
 
     return {
-      id:           `sb_${Date.now()}_${cutNo}_${Math.random().toString(36).slice(2, 6)}`,
-      shotSize:     'MS',
-      cameraMove:   'Static',
-      transition:   'Cut',
-      dialogue:     '',
-      action:       actionLines.join('\n'),
-      duration:     '3',
-      sceneNo:      scene.sceneNo,
+      id:             `sb_${Date.now()}_${cutNo}_${Math.random().toString(36).slice(2, 6)}`,
+      shotSize:       'MS',
+      cameraMove:     'Static',
+      transition:     'Cut',
+      dialogue,
+      action,
+      duration:       '3',
+      sceneNo:        scene.sceneNo,
       cutNo,
-      drawingData:  null,
-      _sceneHeading: heading,
+      drawingData:    null,
+      _sceneHeading:  heading,
       annotatedBlocks: [],
     };
   });
-}
-
-// ── 파일 확장자 헬퍼 ──────────────────────────────────────────────────────────
-
-export function getFileExt(filename) {
-  return (filename || '').split('.').pop().toLowerCase();
-}
-
-export function isSupportedExt(ext) {
-  return ['docx', 'hwpx', 'pdf'].includes(ext);
 }

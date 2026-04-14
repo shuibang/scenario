@@ -3,11 +3,7 @@ import { supabaseSignOut, extractUserData, supabase, signInWithGoogle } from '..
 import { setAccessToken, isTokenValid, loadDirectorScript, deleteFileById } from '../../store/googleDrive';
 import DirectorScriptViewer from './DirectorScriptViewer';
 import PreviewRenderer from '../../print/PreviewRenderer';
-import {
-  getFileExt, isSupportedExt,
-  detectScenes, buildPanelsFromScenes,
-  extractTextFromDocx, extractTextFromHwpx, extractTextFromPdf,
-} from '../../utils/parseExternalScript';
+import { parseFullScript, buildPanelsFromScenes, detectScenes } from '../../utils/parseExternalScript';
 
 // OAuth 리디렉트 시 현재 hash 보존 → App.jsx onAuthStateChange에서 복원
 const RETURN_HASH_KEY = 'drama_pending_return_hash';
@@ -71,7 +67,7 @@ const useD = () => useContext(ThemeCtx);
 // ─── 감독 대시보드 ────────────────────────────────────────────────────────────
 export default function DirectorDashboard({ session, onBack, isGuest = false }) {
   const user = extractUserData(session);
-  const [activeMenu, setActiveMenu] = useState('projects');
+  const [activeMenu, setActiveMenu] = useState(isGuest ? 'storyboard' : 'projects');
   const [loggingOut, setLoggingOut] = useState(false);
   const [isDark, setIsDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
 
@@ -140,7 +136,7 @@ export default function DirectorDashboard({ session, onBack, isGuest = false }) 
               : <div style={{ width: 28, height: 28, borderRadius: '50%', background: D.card, border: `1px solid ${D.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: D.text2 }}>감</div>
             }
             <div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: D.text }}>{user?.name || '감독'}</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: D.text }}>{user?.name || '연출'}</div>
               <div style={{ fontSize: 10, color: D.text3 }}>{user?.email}</div>
             </div>
           </div>
@@ -195,10 +191,13 @@ export default function DirectorDashboard({ session, onBack, isGuest = false }) 
         <main style={{ flex: 1, display: 'flex', minHeight: 0, background: D.bg, overflow: 'hidden' }}>
           {activeMenu === 'projects'   && <ProjectsPanel session={session} isGuest={isGuest} />}
           {activeMenu === 'notes'      && <NotesPanel />}
-          {activeMenu === 'storyboard' && <StoryboardPanel />}
+          {activeMenu === 'storyboard' && <StoryboardPanel isGuest={isGuest} />}
         </main>
       </div>
     </div>
+
+    {/* 게스트 가이드 */}
+    {isGuest && <GuestGuide onLogin={loginWithReturnHash} />}
     </ThemeCtx.Provider>
   );
 }
@@ -223,9 +222,9 @@ function SideItem({ icon, label, active, onClick }) {
       onClick={onClick}
       style={{
         display: 'flex', alignItems: 'center', gap: 9,
-        padding: '8px 16px 8px 20px',
+        padding: '8px 16px 8px 18px',
         fontSize: 13, cursor: 'pointer',
-        borderRight: active ? `2px solid ${D.accent}` : '2px solid transparent',
+        borderLeft: active ? `2px solid ${D.accent}` : '2px solid transparent',
         background: active ? D.active : 'transparent',
         color: active ? D.accent : D.text2,
         fontWeight: active ? 600 : 400,
@@ -940,6 +939,7 @@ function loadStoryboard(scriptId) {
   catch { return null; }
 }
 function saveStoryboard(scriptId, panels) {
+  if (scriptId === '__guest_demo__') return; // 게스트 데모는 저장 안 함
   localStorage.setItem(getSbKey(scriptId), JSON.stringify(panels));
 }
 
@@ -1085,7 +1085,9 @@ function SbDrawingCanvas({ initialData, onSave }) {
 
 // ─── 패널 카드 ────────────────────────────────────────────────────────────────
 
-function SbPanelCard({ panel, index, total, onChange, onDelete, onMove, cardView }) {
+function SbPanelCard({ panel, index, total, onChange, onDelete, onMove, cardView,
+                        isSelected, onSelect, isDragging, isDragOver,
+                        onDragStart, onDragEnter, onDragEnd }) {
   const D = useD();
   const [expanded, setExpanded] = useState(true);
   const sbInp = { width: '100%', background: D.bg, border: `1px solid ${D.border}`, borderRadius: 4, color: D.text, padding: '5px 8px', fontSize: 12, fontFamily: 'inherit', boxSizing: 'border-box', outline: 'none' };
@@ -1152,24 +1154,41 @@ function SbPanelCard({ panel, index, total, onChange, onDelete, onMove, cardView
   );
 
   return (
-    <div style={{ background: D.card, border: `1px solid ${D.border}`, borderRadius: 8, overflow: 'hidden' }}>
+    <div
+      draggable
+      onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; onDragStart(index); }}
+      onDragEnter={() => onDragEnter(index)}
+      onDragOver={e => e.preventDefault()}
+      onDragEnd={onDragEnd}
+      onClick={() => onSelect(panel.id)}
+      style={{
+        background: D.card,
+        border: `1px solid ${isDragOver ? D.accent : (isSelected ? D.accentDim : D.border)}`,
+        borderTop: isDragOver ? `3px solid ${D.accent}` : `1px solid ${isSelected ? D.accentDim : D.border}`,
+        borderRadius: 8, overflow: 'hidden',
+        opacity: isDragging ? 0.45 : 1,
+        transition: 'border-color 0.1s, opacity 0.15s',
+        cursor: 'default',
+      }}
+    >
       {/* 카드 헤더 */}
-      <div style={{ background: D.panel, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: `1px solid ${D.border}` }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, opacity: 0.3 }}>
-          {[0,1,2].map(i => <div key={i} style={{ width: 4, height: 4, borderRadius: '50%', background: D.text2 }}/>)}
+      <div style={{ background: D.panel, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 8, borderBottom: `1px solid ${D.border}` }}>
+        {/* 드래그 핸들 */}
+        <div
+          title="드래그하여 순서 변경"
+          style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2.5, cursor: 'grab', padding: '2px 3px', flexShrink: 0, opacity: 0.35 }}
+        >
+          {[0,1,2,3,4,5].map(i => (
+            <div key={i} style={{ width: 3, height: 3, borderRadius: '50%', background: D.text2 }} />
+          ))}
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flex: 1, minWidth: 0 }}>
-          <span style={{ background: D.accent, color: '#1a1a1a', fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 3, fontFamily: 'monospace', flexShrink: 0 }}>
-            CUT {panel.cutNo || index + 1}
+          <span style={{ background: D.accent, color: '#1a1a1a', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 3, fontFamily: 'monospace', flexShrink: 0, minWidth: 24, textAlign: 'center' }}>
+            {index + 1}
           </span>
-          {panel.sceneNo && <span style={{ border: `1px solid ${D.border}`, color: D.text3, fontSize: 10, padding: '2px 6px', borderRadius: 3, fontFamily: 'monospace', flexShrink: 0 }}>S#{panel.sceneNo}</span>}
           {panel._sceneHeading && <span style={{ color: D.text2, fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{panel._sceneHeading}</span>}
         </div>
-        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-          <button onClick={() => onMove(index, -1)} disabled={index === 0}
-            style={{ border: `1px solid ${D.border}`, background: 'transparent', color: D.text3, cursor: 'pointer', padding: '2px 7px', borderRadius: 4, fontSize: 11 }}>↑</button>
-          <button onClick={() => onMove(index, 1)} disabled={index === total - 1}
-            style={{ border: `1px solid ${D.border}`, background: 'transparent', color: D.text3, cursor: 'pointer', padding: '2px 7px', borderRadius: 4, fontSize: 11 }}>↓</button>
+        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
           <button onClick={() => setExpanded(e => !e)}
             style={{ border: `1px solid ${D.border}`, background: 'transparent', color: D.text3, cursor: 'pointer', padding: '2px 8px', borderRadius: 4, fontSize: 11 }}>{expanded ? '−' : '+'}</button>
           <button onClick={() => onDelete(panel.id)}
@@ -1210,21 +1229,15 @@ function deleteLocalScript(id) {
   localStorage.removeItem(getSbKey(id));
 }
 
-// ── 파일 업로드 → 스토리보드 생성 모달 ──────────────────────────────────────────
+// ── 수동 입력 → 스토리보드 생성 모달 ──────────────────────────────────────────
 function UploadScriptModal({ onClose, onGenerate }) {
   const D = useD();
-  const fileInputRef = useRef(null);
-  const [step,          setStep]          = useState(1); // 1=파일선택  2=씬미리보기
-  const [extracting,    setExtracting]    = useState(false);
-  const [error,         setError]         = useState('');
-  const [filename,      setFilename]      = useState('');
-  const [title,         setTitle]         = useState('');
-  const [scenes,        setScenes]        = useState([]); // [{sceneNo, location, timeOfDay, raw}]
-  const [dragging,      setDragging]      = useState(false);
-  const [extractedText, setExtractedText] = useState('');
-  const [showRawText,   setShowRawText]   = useState(false);
-  const [inputTab,      setInputTab]      = useState('file'); // 'file' | 'paste'
-  const [pasteText,     setPasteText]     = useState('');
+  const [step,       setStep]       = useState(1); // 1=텍스트입력  2=씬미리보기
+  const [error,      setError]      = useState('');
+  const [title,      setTitle]      = useState('');
+  const [scenes,     setScenes]     = useState([]);     // 편집용 씬 목록 (contentLines 없음)
+  const [fullScenes, setFullScenes] = useState([]);     // 파싱 원본 (contentLines 보존)
+  const [scriptText, setScriptText] = useState('');
 
   const OVERLAY = {
     position: 'fixed', inset: 0, zIndex: 9000,
@@ -1238,72 +1251,15 @@ function UploadScriptModal({ onClose, onGenerate }) {
     border: `1px solid ${D.border}`, overflow: 'hidden',
   };
 
-  // 파일 처리 공통 로직
-  const processFile = async (file) => {
-    if (!file) return;
-    const ext = getFileExt(file.name);
+  // 텍스트 → 씬 감지 (parseFullScript 1회만 호출, 결과 보존)
+  const handleDetect = () => {
+    const text = scriptText.trim();
+    if (!text) { setError('대본 텍스트를 입력해주세요.'); return; }
     setError('');
-
-    // HWP → 지원 불가
-    if (ext === 'hwp') {
-      setError('HWP 파일은 지원하지 않습니다.\nHwp → 다른 이름으로 저장 → HWPX 또는 PDF로 변환 후 업로드해주세요.');
-      return;
-    }
-    if (!isSupportedExt(ext)) {
-      setError(`지원하지 않는 파일 형식입니다 (.${ext}).\n지원 형식: DOCX · HWPX · PDF`);
-      return;
-    }
-
-    setExtracting(true);
-    setFilename(file.name);
-    setTitle(file.name.replace(/\.[^.]+$/, ''));
-
-    try {
-      let text = '';
-      if (ext === 'docx') text = await extractTextFromDocx(file);
-      else if (ext === 'hwpx') text = await extractTextFromHwpx(file);
-      else if (ext === 'pdf') {
-        try { text = await extractTextFromPdf(file); }
-        catch (e) {
-          if (e.message === 'SCAN_ONLY') {
-            setError('스캔본 PDF는 텍스트를 추출할 수 없습니다.\n워드/HWPX로 저장된 원본 파일을 사용해주세요.');
-            setExtracting(false); return;
-          }
-          throw e;
-        }
-      }
-
-      setExtractedText(text);
-      const detected = detectScenes(text);
-      setScenes(detected);
-      setStep(2);
-    } catch (err) {
-      setError(`파일을 읽는 중 오류가 발생했습니다: ${err.message}`);
-    } finally {
-      setExtracting(false);
-    }
-  };
-
-  const handleFileDrop = (e) => {
-    e.preventDefault(); setDragging(false);
-    const file = e.dataTransfer?.files?.[0];
-    if (file) processFile(file);
-  };
-  const handleFileChange = (e) => {
-    const file = e.target.files?.[0];
-    if (file) processFile(file);
-  };
-
-  // 텍스트 붙여넣기 → 씬 감지
-  const handlePasteDetect = () => {
-    const text = pasteText.trim();
-    if (!text) { setError('텍스트를 입력해주세요.'); return; }
-    setError('');
-    setExtractedText(text);
-    setFilename('붙여넣기');
     if (!title) setTitle('대본');
-    const detected = detectScenes(text);
-    setScenes(detected);
+    const parsed = parseFullScript(text);
+    setFullScenes(parsed);
+    setScenes(parsed.map(s => ({ sceneNo: s.sceneNo, location: s.location, timeOfDay: s.timeOfDay, raw: s.raw })));
     setStep(2);
   };
 
@@ -1317,13 +1273,17 @@ function UploadScriptModal({ onClose, onGenerate }) {
     setScenes(prev => [...prev, { sceneNo: nextNo, location: '', timeOfDay: '', raw: '' }]);
   };
 
-  // 스토리보드 생성
+  // 스토리보드 생성 (parseFullScript 재호출 없이 fullScenes 재사용)
   const handleGenerate = () => {
     const validScenes = scenes.filter(s => s.location || s.sceneNo);
     if (validScenes.length === 0) { setError('최소 1개 이상의 씬이 필요합니다.'); return; }
-    const panels = buildPanelsFromScenes(validScenes);
+    const merged = validScenes.map((vs, i) => {
+      const fs = fullScenes[i] || vs;
+      return { ...fs, location: vs.location, timeOfDay: vs.timeOfDay, sceneNo: vs.sceneNo };
+    });
+    const panels = buildPanelsFromScenes(merged);
     const id = `ls_${Date.now()}`;
-    onGenerate({ id, title: title.trim() || filename, panels });
+    onGenerate({ id, title: title.trim() || '대본', panels });
   };
 
   return (
@@ -1332,9 +1292,9 @@ function UploadScriptModal({ onClose, onGenerate }) {
         {/* 헤더 */}
         <div style={{ padding: '16px 20px', borderBottom: `1px solid ${D.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: D.text }}>외부 파일로 스토리보드 만들기</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: D.text }}>수동 입력으로 스토리보드 만들기</div>
             <div style={{ fontSize: 11, color: D.text3, marginTop: 2 }}>
-              {step === 1 ? 'DOCX · HWPX · PDF 파일을 업로드하세요' : `${filename} — 씬 ${scenes.length}개 감지됨`}
+              {step === 1 ? '대본 텍스트를 붙여넣으면 씬·지문·대사를 자동 인식합니다' : `씬 ${scenes.length}개 감지됨 — 수정 후 생성하세요`}
             </div>
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: D.text3, fontSize: 18, cursor: 'pointer', lineHeight: 1 }}>×</button>
@@ -1343,80 +1303,39 @@ function UploadScriptModal({ onClose, onGenerate }) {
         {/* 본문 */}
         <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
 
-          {/* ── 1단계: 파일 업로드 | 텍스트 붙여넣기 ── */}
+          {/* ── 1단계: 제목 + 대본 텍스트 입력 ── */}
           {step === 1 && (
             <div>
-              {/* 탭 */}
-              <div style={{ display: 'flex', borderBottom: `1px solid ${D.border}`, marginBottom: 16 }}>
-                {[['file', '📄 파일 업로드'], ['paste', '📋 텍스트 붙여넣기']].map(([tab, label]) => (
-                  <button key={tab} onClick={() => { setInputTab(tab); setError(''); }}
-                    style={{
-                      padding: '7px 16px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600,
-                      background: 'transparent',
-                      color: inputTab === tab ? D.accent : D.text3,
-                      borderBottom: inputTab === tab ? `2px solid ${D.accent}` : '2px solid transparent',
-                      marginBottom: -1,
-                    }}
-                  >{label}</button>
-                ))}
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: D.text3, display: 'block', marginBottom: 5 }}>작품 제목</label>
+                <input
+                  value={title}
+                  onChange={e => setTitle(e.target.value)}
+                  placeholder="제목 입력 (선택)"
+                  style={{ width: '100%', padding: '7px 10px', borderRadius: 6, border: `1px solid ${D.border}`, background: D.bg, color: D.text, fontSize: 13 }}
+                />
               </div>
-
-              {/* 파일 업로드 탭 */}
-              {inputTab === 'file' && (
-                <div>
-                  <div
-                    onDragOver={e => { e.preventDefault(); setDragging(true); }}
-                    onDragLeave={() => setDragging(false)}
-                    onDrop={handleFileDrop}
-                    onClick={() => fileInputRef.current?.click()}
-                    style={{
-                      border: `2px dashed ${dragging ? D.accent : D.border}`,
-                      borderRadius: 10, padding: '36px 20px', textAlign: 'center',
-                      cursor: 'pointer', transition: 'border-color 0.15s',
-                      background: dragging ? 'rgba(232,184,75,0.06)' : 'transparent',
-                    }}
-                  >
-                    <div style={{ fontSize: 36, marginBottom: 12, opacity: 0.5 }}>📄</div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: D.text, marginBottom: 6 }}>
-                      파일을 드래그하거나 클릭해서 선택
-                    </div>
-                    <div style={{ fontSize: 11, color: D.text3, lineHeight: 1.8 }}>
-                      지원 형식: DOCX · HWPX · PDF<br />
-                      <span style={{ color: '#e05c5c' }}>HWP는 지원하지 않습니다</span> (HWPX 또는 PDF로 변환 후 업로드)
-                    </div>
-                    {extracting && (
-                      <div style={{ marginTop: 16, fontSize: 12, color: D.accent }}>텍스트 추출 중…</div>
-                    )}
-                  </div>
-                  <input ref={fileInputRef} type="file" accept=".docx,.hwpx,.pdf"
-                    style={{ display: 'none' }} onChange={handleFileChange} />
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: D.text3, display: 'block', marginBottom: 5 }}>대본 텍스트</label>
+                <div style={{ fontSize: 11, color: D.text3, marginBottom: 8, lineHeight: 1.7 }}>
+                  씬번호(S#1. / 씬1. / 1. / INT. 등)가 포함된 줄을 씬 헤더로 인식합니다.<br />
+                  대사(인물명: 대사)와 지문도 자동으로 구분해 패널에 채워집니다.
                 </div>
-              )}
-
-              {/* 텍스트 붙여넣기 탭 */}
-              {inputTab === 'paste' && (
-                <div>
-                  <div style={{ fontSize: 11, color: D.text3, marginBottom: 8, lineHeight: 1.7 }}>
-                    대본 텍스트를 복사해서 붙여넣으세요.<br />
-                    씬번호 형식(S#1. / 씬1. / 1. 등)이 포함된 줄을 자동 감지합니다.
-                  </div>
-                  <textarea
-                    value={pasteText}
-                    onChange={e => setPasteText(e.target.value)}
-                    placeholder={'예시:\nS#1. 카페 내부, 낮\n두 사람이 마주 앉아 있다.\n\nS#2. 골목길, 밤\n빗속을 걷는 주인공.'}
-                    style={{
-                      width: '100%', height: 220, resize: 'vertical',
-                      background: D.bg, color: D.text,
-                      border: `1px solid ${D.border}`, borderRadius: 8,
-                      padding: '10px 12px', fontSize: 12, fontFamily: 'inherit',
-                      lineHeight: 1.7,
-                    }}
-                  />
-                </div>
-              )}
-
+                <textarea
+                  value={scriptText}
+                  onChange={e => setScriptText(e.target.value)}
+                  placeholder={'예시:\nS#1. 카페 내부, 낮\n두 사람이 마주 앉아 있다.\n민준: 오늘은 어땠어?\n지수: 그냥... 별로였어.\n\nS#2. 골목길, 밤\n빗속을 걷는 주인공.'}
+                  style={{
+                    width: '100%', height: 280, resize: 'vertical',
+                    background: D.bg, color: D.text,
+                    border: `1px solid ${D.border}`, borderRadius: 8,
+                    padding: '10px 12px', fontSize: 12, fontFamily: 'inherit',
+                    lineHeight: 1.7, boxSizing: 'border-box',
+                  }}
+                />
+              </div>
               {error && (
-                <div style={{ marginTop: 12, padding: '10px 14px', background: 'rgba(224,92,92,0.12)', borderRadius: 7, fontSize: 12, color: '#e05c5c', lineHeight: 1.7, whiteSpace: 'pre-line' }}>
+                <div style={{ marginTop: 12, padding: '10px 14px', background: 'rgba(224,92,92,0.12)', borderRadius: 7, fontSize: 12, color: '#e05c5c', lineHeight: 1.7 }}>
                   {error}
                 </div>
               )}
@@ -1426,7 +1345,7 @@ function UploadScriptModal({ onClose, onGenerate }) {
           {/* ── 2단계: 씬 미리보기 ── */}
           {step === 2 && (
             <div>
-              {/* 제목 입력 */}
+              {/* 제목 수정 */}
               <div style={{ marginBottom: 12 }}>
                 <label style={{ fontSize: 11, fontWeight: 700, color: D.text3, display: 'block', marginBottom: 5 }}>작품 제목</label>
                 <input
@@ -1437,42 +1356,18 @@ function UploadScriptModal({ onClose, onGenerate }) {
                 />
               </div>
 
-              {/* 추출 텍스트 미리보기 (씬 인식 디버그용) */}
-              <div style={{ marginBottom: 14 }}>
-                <button
-                  onClick={() => setShowRawText(v => !v)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 5 }}
-                >
-                  <span style={{ fontSize: 10, color: D.text3 }}>{showRawText ? '▾' : '▸'}</span>
-                  <span style={{ fontSize: 11, color: D.text3 }}>추출된 텍스트 확인 ({extractedText.split(/\r?\n/).filter(Boolean).length}줄)</span>
-                </button>
-                {showRawText && (
-                  <textarea
-                    readOnly
-                    value={extractedText}
-                    style={{
-                      marginTop: 6, width: '100%', height: 140, resize: 'vertical',
-                      background: D.bg, color: D.text3, border: `1px solid ${D.border}`,
-                      borderRadius: 6, padding: '6px 8px', fontSize: 11, fontFamily: 'monospace',
-                      lineHeight: 1.6,
-                    }}
-                  />
-                )}
-              </div>
-
               {/* 씬 0개일 때 */}
               {scenes.length === 0 && (
                 <div style={{ padding: '20px 0', textAlign: 'center' }}>
                   <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.4 }}>🔍</div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: D.text, marginBottom: 6 }}>씬번호를 찾지 못했어요</div>
                   <div style={{ fontSize: 11, color: D.text3, lineHeight: 1.7, marginBottom: 16 }}>
-                    S#1. / 씬1. / INT. 형식의 씬 헤더가 없는 파일입니다.<br />
+                    S#1. / 씬1. / INT. 형식의 씬 헤더가 텍스트에 없습니다.<br />
                     씬을 직접 추가해서 스토리보드를 만들 수 있습니다.
                   </div>
                 </div>
               )}
 
-              {/* 씬 목록 */}
               {scenes.length > 0 && (
                 <div style={{ marginBottom: 12, fontSize: 11, color: D.text3 }}>
                   씬 번호 · 장소 · 시간대를 수정하거나 불필요한 항목을 삭제하세요.
@@ -1521,17 +1416,17 @@ function UploadScriptModal({ onClose, onGenerate }) {
             <button
               onClick={() => { setStep(1); setError(''); }}
               style={{ padding: '7px 16px', borderRadius: 7, border: `1px solid ${D.border}`, background: 'transparent', color: D.text3, fontSize: 12, cursor: 'pointer' }}
-            >← 다시 선택</button>
+            >← 텍스트 수정</button>
           )}
           <button
             onClick={onClose}
             style={{ padding: '7px 16px', borderRadius: 7, border: `1px solid ${D.border}`, background: 'transparent', color: D.text3, fontSize: 12, cursor: 'pointer' }}
           >취소</button>
-          {step === 1 && inputTab === 'paste' && (
+          {step === 1 && (
             <button
-              onClick={handlePasteDetect}
-              disabled={!pasteText.trim()}
-              style={{ padding: '7px 20px', borderRadius: 7, border: 'none', background: pasteText.trim() ? D.accent : '#555', color: '#1a1a1a', fontSize: 12, fontWeight: 700, cursor: pasteText.trim() ? 'pointer' : 'default' }}
+              onClick={handleDetect}
+              disabled={!scriptText.trim()}
+              style={{ padding: '7px 20px', borderRadius: 7, border: 'none', background: scriptText.trim() ? D.accent : '#555', color: '#1a1a1a', fontSize: 12, fontWeight: 700, cursor: scriptText.trim() ? 'pointer' : 'default' }}
             >씬 감지 →</button>
           )}
           {step === 2 && (
@@ -1546,19 +1441,175 @@ function UploadScriptModal({ onClose, onGenerate }) {
   );
 }
 
-function StoryboardPanel() {
+// 씬번호별로 컷번호를 순서대로 재부여 (1씬2컷 → 씬의 몇 번째 컷인지)
+function recalcCutNos(panels) {
+  const counts = {};
+  return panels.map(p => {
+    const key = p.sceneNo || '';
+    counts[key] = (counts[key] || 0) + 1;
+    return { ...p, cutNo: String(counts[key]) };
+  });
+}
+
+// ─── 게스트 데모 데이터 ───────────────────────────────────────────────────────
+const DEMO_SCRIPT = { id: '__guest_demo__', title: '예시: 이별의 카페', _isDemo: true };
+const DEMO_PANELS = [
+  { id: 'dp1', sceneNo: '1', cutNo: '1', shotSize: 'ELS', cameraMove: 'Static',   transition: 'Cut',  duration: '4', _sceneHeading: '카페 내부 / 낮',  dialogue: '',                              action: '텅 빈 카페. 창가로 햇살이 쏟아진다. 두 개의 빈 커피잔.', drawingData: null, annotatedBlocks: [] },
+  { id: 'dp2', sceneNo: '1', cutNo: '2', shotSize: 'MS',  cameraMove: 'Static',   transition: 'Cut',  duration: '5', _sceneHeading: '카페 내부 / 낮',  dialogue: '민준: 우리, 이제 어떻게 되는 거야.',    action: '민준, 커피잔을 내려놓으며 지수를 바라본다.', drawingData: null, annotatedBlocks: [] },
+  { id: 'dp3', sceneNo: '1', cutNo: '3', shotSize: 'CU',  cameraMove: 'Static',   transition: 'Cut',  duration: '3', _sceneHeading: '카페 내부 / 낮',  dialogue: '',                              action: '지수의 손. 커피잔을 꽉 쥐고 있다.', drawingData: null, annotatedBlocks: [] },
+  { id: 'dp4', sceneNo: '2', cutNo: '1', shotSize: 'MS',  cameraMove: 'Pan',      transition: 'Cut',  duration: '4', _sceneHeading: '카페 내부 / 낮',  dialogue: '지수: 그냥... 이게 맞는 것 같아.', action: '지수, 창밖을 바라보며 말한다. 눈이 촉촉하다.', drawingData: null, annotatedBlocks: [] },
+  { id: 'dp5', sceneNo: '2', cutNo: '2', shotSize: 'CU',  cameraMove: 'Zoom In',  transition: 'Cut',  duration: '3', _sceneHeading: '카페 내부 / 낮',  dialogue: '',                              action: '민준의 표정. 서서히 굳어간다.', drawingData: null, annotatedBlocks: [] },
+  { id: 'dp6', sceneNo: '3', cutNo: '1', shotSize: 'LS',  cameraMove: 'Dolly Out',transition: 'Fade', duration: '7', _sceneHeading: '골목길 / 저녁',   dialogue: '',                              action: '지수, 골목길을 걸어나간다. 빗방울이 떨어지기 시작한다. 카메라가 서서히 멀어진다.', drawingData: null, annotatedBlocks: [] },
+];
+
+// ─── 게스트 가이드 ────────────────────────────────────────────────────────────
+const GUIDE_STEPS = [
+  {
+    icon: '🎬',
+    title: '연출 작업실에 오신 걸 환영합니다',
+    desc: '대본을 씬 단위로 분석하고 컷별 스토리보드를 제작하는 공간입니다.\n예시 작품이 미리 열려 있어요 — 직접 조작해보세요!',
+  },
+  {
+    icon: '🎞',
+    title: '스토리보드 패널',
+    desc: '씬마다 컷이 카드로 나뉩니다. 카드 상단의 숫자(1, 2, 3…)는 순서 번호예요.\n카드 안에서 씬번호·컷번호·장소를 확인할 수 있습니다.',
+  },
+  {
+    icon: '✏️',
+    title: '패널 편집',
+    desc: '카드 안에서 샷 사이즈·카메라 무브·전환 효과를 고르고,\n드로잉 캔버스에 직접 그림을 그릴 수 있습니다.',
+  },
+  {
+    icon: '➕',
+    title: '패널 추가 & 정렬',
+    desc: '카드를 하나 선택한 뒤 상단 "패널 추가" 버튼을 누르면 바로 아래에 새 컷이 생깁니다.\n카드 왼쪽 ⠿ 핸들을 드래그하면 순서를 바꿀 수 있습니다.',
+  },
+  {
+    icon: '🔑',
+    title: 'Google 로그인으로 더 많은 기능을',
+    desc: '• 대본 작업실의 대본을 불러와 자동 씬 분리\n• 연출노트 작성 후 작가에게 피드백 전달\n• 스토리보드 저장 및 PDF 출력',
+    isLast: true,
+  },
+];
+
+function GuestGuide({ onLogin }) {
   const D = useD();
-  const [scripts,      setScripts]      = useState(null);
-  const [localScripts, setLocalScripts] = useState(() => loadLocalScripts());
-  const [selected,     setSelected]     = useState(null);
-  const [panels,       setPanels]       = useState(null);   // null = 미생성
-  const [loading,      setLoading]      = useState(false);
-  const [error,        setError]        = useState('');
-  const [cardView,     setCardView]     = useState('card'); // 'card' | 'row'
-  const [showUpload,   setShowUpload]   = useState(false);
+  const [step,    setStep]    = useState(0);
+  const [visible, setVisible] = useState(true);
+
+  if (!visible) {
+    return (
+      <button
+        onClick={() => { setStep(0); setVisible(true); }}
+        title="가이드 열기"
+        style={{
+          position: 'fixed', right: 24, bottom: 24, zIndex: 9000,
+          width: 40, height: 40, borderRadius: '50%',
+          background: D.accent, color: '#1a1a1a',
+          border: 'none', fontSize: 18, cursor: 'pointer',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontWeight: 700,
+        }}
+      >?</button>
+    );
+  }
+
+  const cur = GUIDE_STEPS[step];
+  return (
+    <div style={{
+      position: 'fixed', right: 20, bottom: 20, zIndex: 9000,
+      width: 300,
+      background: D.panel,
+      border: `1px solid ${D.border}`,
+      borderRadius: 12,
+      boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+      overflow: 'hidden',
+      fontFamily: "'Pretendard','Apple SD Gothic Neo',sans-serif",
+    }}>
+      {/* 헤더 */}
+      <div style={{ background: D.accent, padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: '#1a1a1a', letterSpacing: '0.06em' }}>
+          연출 작업실 가이드 {step + 1}/{GUIDE_STEPS.length}
+        </span>
+        <button onClick={() => setVisible(false)}
+          style={{ background: 'none', border: 'none', color: '#1a1a1a', fontSize: 16, cursor: 'pointer', lineHeight: 1, opacity: 0.7, padding: 0 }}>×</button>
+      </div>
+
+      {/* 스텝 도트 */}
+      <div style={{ display: 'flex', gap: 5, padding: '10px 14px 0', justifyContent: 'center' }}>
+        {GUIDE_STEPS.map((_, i) => (
+          <div key={i} onClick={() => setStep(i)} style={{
+            width: i === step ? 18 : 6, height: 6, borderRadius: 3,
+            background: i === step ? D.accent : D.border,
+            cursor: 'pointer', transition: 'all 0.2s',
+          }} />
+        ))}
+      </div>
+
+      {/* 본문 */}
+      <div style={{ padding: '14px 16px 6px' }}>
+        <div style={{ fontSize: 28, textAlign: 'center', marginBottom: 10 }}>{cur.icon}</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: D.text, marginBottom: 8, textAlign: 'center' }}>{cur.title}</div>
+        <div style={{ fontSize: 12, color: D.text2, lineHeight: 1.75, whiteSpace: 'pre-line' }}>{cur.desc}</div>
+      </div>
+
+      {/* 버튼 */}
+      <div style={{ padding: '12px 14px', display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+        {step > 0 && (
+          <button onClick={() => setStep(s => s - 1)}
+            style={{ padding: '5px 12px', borderRadius: 6, border: `1px solid ${D.border}`, background: 'transparent', color: D.text3, fontSize: 11, cursor: 'pointer' }}>
+            ← 이전
+          </button>
+        )}
+        {cur.isLast ? (
+          <>
+            <button onClick={() => setVisible(false)}
+              style={{ padding: '5px 12px', borderRadius: 6, border: `1px solid ${D.border}`, background: 'transparent', color: D.text3, fontSize: 11, cursor: 'pointer' }}>
+              닫기
+            </button>
+            <button onClick={onLogin}
+              style={{ padding: '5px 14px', borderRadius: 6, border: 'none', background: D.accent, color: '#1a1a1a', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+              Google 로그인 →
+            </button>
+          </>
+        ) : (
+          <button onClick={() => setStep(s => s + 1)}
+            style={{ padding: '5px 14px', borderRadius: 6, border: 'none', background: D.accent, color: '#1a1a1a', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+            다음 →
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StoryboardPanel({ isGuest }) {
+  const D = useD();
+  const [scripts,         setScripts]         = useState(null);
+  const [localScripts,    setLocalScripts]    = useState(() => loadLocalScripts());
+  const [selected,        setSelected]        = useState(null);
+  const [panels,          setPanels]          = useState(null);   // null = 미생성
+  const [loading,         setLoading]         = useState(false);
+  const [error,           setError]           = useState('');
+  const [cardView,        setCardView]        = useState('card'); // 'card' | 'row'
+  const [showUpload,      setShowUpload]      = useState(false);
+  const [selectedPanelId, setSelectedPanelId] = useState(null);  // 선택된 패널
+  const [draggingIdx,     setDraggingIdx]     = useState(null);   // 드래그 중인 인덱스
+  const [dragOverIdx,     setDragOverIdx]     = useState(null);   // 드롭 대상 인덱스
+  const dragItem     = useRef(null);
+  const dragOverItem = useRef(null);
+
+  // 게스트: 데모 자동 선택
+  useEffect(() => {
+    if (!isGuest) return;
+    setSelected(DEMO_SCRIPT);
+    setPanels(DEMO_PANELS);
+  }, [isGuest]);
 
   // Supabase 스크립트 목록
   useEffect(() => {
+    if (isGuest) { setScripts([]); return; }
     if (!supabase) { setScripts([]); return; }
     supabase.from('shared_scripts').select('id, title, imported_at, drive_file_id')
       .order('imported_at', { ascending: false })
@@ -1570,10 +1621,12 @@ function StoryboardPanel() {
     const entry = { id, title, createdAt: new Date().toISOString(), _isLocal: true };
     const updated = [entry, ...loadLocalScripts()];
     saveLocalScripts(updated);
-    saveStoryboard(id, generatedPanels);
+    const recalced = recalcCutNos(generatedPanels);
+    saveStoryboard(id, recalced);
     setLocalScripts(updated);
     setSelected(entry);
-    setPanels(generatedPanels);
+    setPanels(recalced);
+    setSelectedPanelId(null);
     setShowUpload(false);
   };
 
@@ -1591,6 +1644,7 @@ function StoryboardPanel() {
     setSelected(s);
     setError('');
     setPanels(loadStoryboard(s.id));
+    setSelectedPanelId(null);
   };
 
   // 스토리보드 생성: Drive에서 대본 로드 → 블록 파싱
@@ -1611,8 +1665,9 @@ function StoryboardPanel() {
         selected.id
       );
       if (generated.length === 0) throw new Error('씬 헤더 블록(scene_number)이 없어 패널을 나눌 수 없습니다.');
-      setPanels(generated);
-      saveStoryboard(selected.id, generated);
+      const recalced = recalcCutNos(generated);
+      setPanels(recalced);
+      saveStoryboard(selected.id, recalced);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -1630,7 +1685,7 @@ function StoryboardPanel() {
 
   const handleDelete = (id) => {
     setPanels(prev => {
-      const next = prev.filter(p => p.id !== id);
+      const next = recalcCutNos(prev.filter(p => p.id !== id));
       saveStoryboard(selected.id, next);
       return next;
     });
@@ -1649,16 +1704,56 @@ function StoryboardPanel() {
 
   const handleAddPanel = () => {
     if (!selected || !panels) return;
-    const cutNo = panels.length + 1;
+    // 선택된 패널 위치 (없으면 맨 끝)
+    const selIdx = selectedPanelId ? panels.findIndex(p => p.id === selectedPanelId) : -1;
+    const refPanel = selIdx >= 0 ? panels[selIdx] : (panels.length > 0 ? panels[panels.length - 1] : null);
+    const insertAfterIdx = selIdx >= 0 ? selIdx + 1 : panels.length;
+    // 선택된(또는 마지막) 패널과 같은 씬번호 상속
     const newPanel = {
-      id: `sb_${Date.now()}`, shotSize: 'MS', cameraMove: 'Static', transition: 'Cut',
+      id: `sb_${Date.now()}`,
+      shotSize: 'MS', cameraMove: 'Static', transition: 'Cut',
       dialogue: '', action: '', duration: '3',
-      sceneNo: String(cutNo), cutNo: String(cutNo),
-      drawingData: null, _sceneHeading: `씬 ${cutNo}`,
+      sceneNo: refPanel?.sceneNo || '',
+      cutNo: '1', // recalcCutNos로 즉시 재부여됨
+      drawingData: null,
+      _sceneHeading: refPanel?._sceneHeading || '',
+      annotatedBlocks: [],
     };
-    const next = [...panels, newPanel];
+    const inserted = [
+      ...panels.slice(0, insertAfterIdx),
+      newPanel,
+      ...panels.slice(insertAfterIdx),
+    ];
+    const next = recalcCutNos(inserted);
     setPanels(next);
+    setSelectedPanelId(newPanel.id);
     saveStoryboard(selected.id, next);
+  };
+
+  // 드래그 앤 드롭 핸들러
+  const handleDragStart = (index) => {
+    dragItem.current = index;
+    setDraggingIdx(index);
+  };
+  const handleDragEnter = (index) => {
+    if (dragItem.current === index) return;
+    dragOverItem.current = index;
+    setDragOverIdx(index);
+  };
+  const handleDragEnd = () => {
+    const from = dragItem.current;
+    const to   = dragOverItem.current;
+    dragItem.current = null; dragOverItem.current = null;
+    setDraggingIdx(null); setDragOverIdx(null);
+    if (from === null || to === null || from === to) return;
+    setPanels(prev => {
+      const next = [...prev];
+      const [item] = next.splice(from, 1);
+      next.splice(to, 0, item);
+      const recalced = recalcCutNos(next);
+      saveStoryboard(selected.id, recalced);
+      return recalced;
+    });
   };
 
   const handleReset = () => {
@@ -1666,6 +1761,7 @@ function StoryboardPanel() {
     if (!window.confirm('스토리보드를 초기화하면 모든 내용이 삭제됩니다. 계속할까요?')) return;
     localStorage.removeItem(getSbKey(selected.id));
     setPanels(null);
+    setSelectedPanelId(null);
   };
 
   const getPanelCount = (scriptId) => {
@@ -1678,26 +1774,33 @@ function StoryboardPanel() {
   const handlePrint = () => {
     if (!panels || panels.length === 0) return;
     const title = selected?.title || '스토리보드';
-    const esc = s => (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+    // XSS 방어: 속성값 포함 전체 이스케이핑
+    const esc = s => (s || '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/\n/g, '<br>');
+    // 색상 값 검증 (hex/rgb 계열만 허용)
+    const safeColor = c => /^#[0-9a-f]{3,8}$|^rgb/i.test(c || '') ? c : '#fef08a';
+    // drawingData: base64 data URL 형식만 허용
+    const safeDataUrl = d => typeof d === 'string' && d.startsWith('data:image/') ? d : null;
 
     const panelHtml = panels.map((p, i) => {
       const notes = (p.annotatedBlocks || []).filter(b => b.note);
       const notesHtml = notes.length > 0
         ? notes.map(b => `
-            <div class="note" style="background:${b.note.color || '#fef08a'}">
+            <div class="note" style="background:${safeColor(b.note.color)}">
               <span class="note-label">📋 연출노트</span>
               ${esc(b.note.content)}
             </div>`).join('')
         : '';
-      const drawingHtml = p.drawingData
-        ? `<img src="${p.drawingData}" class="canvas-img"/>`
+      const imgSrc = safeDataUrl(p.drawingData);
+      const drawingHtml = imgSrc
+        ? `<img src="${imgSrc}" class="canvas-img"/>`
         : `<div class="canvas-empty"><span>🎬</span></div>`;
 
       return `
         <div class="panel">
           <div class="panel-header">
-            <span class="cut-badge">CUT ${esc(p.cutNo || String(i+1))}</span>
-            <span class="scene-no">S#${esc(p.sceneNo)}</span>
+            <span class="cut-badge">${i + 1}</span>
             <span class="scene-heading">${esc(p._sceneHeading)}</span>
             <span class="transition">${esc(p.transition)}</span>
           </div>
@@ -1731,8 +1834,7 @@ function StoryboardPanel() {
   .panels { padding: 20px 32px; display: flex; flex-direction: column; gap: 20px; }
   .panel { border: 1px solid #ccc; border-radius: 6px; overflow: hidden; break-inside: avoid; page-break-inside: avoid; }
   .panel-header { background: #f4f4f4; padding: 6px 12px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #ddd; }
-  .cut-badge { background: #e8a020; color: #000; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 3px; font-family: monospace; }
-  .scene-no { border: 1px solid #bbb; color: #555; font-size: 10px; padding: 2px 6px; border-radius: 3px; font-family: monospace; }
+  .cut-badge { background: #e8a020; color: #000; font-size: 10px; font-weight: 700; padding: 2px 9px; border-radius: 3px; font-family: monospace; letter-spacing: 0.02em; }
   .scene-heading { font-size: 12px; font-weight: 600; flex: 1; }
   .transition { font-size: 10px; color: #888; }
   .panel-body { display: flex; gap: 0; }
@@ -1792,7 +1894,7 @@ function StoryboardPanel() {
               width: '100%', padding: '6px 0', borderRadius: 6, border: `1px solid ${D.accent}`,
               background: 'transparent', color: D.accent, fontSize: 11, fontWeight: 700, cursor: 'pointer',
             }}
-          >+ 외부 파일로 만들기</button>
+          >+ 텍스트로 만들기</button>
         </div>
         <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
 
@@ -1982,6 +2084,13 @@ function StoryboardPanel() {
                   onDelete={handleDelete}
                   onMove={handleMove}
                   cardView={cardView}
+                  isSelected={selectedPanelId === panel.id}
+                  onSelect={setSelectedPanelId}
+                  isDragging={draggingIdx === idx}
+                  isDragOver={dragOverIdx === idx && draggingIdx !== idx}
+                  onDragStart={handleDragStart}
+                  onDragEnter={handleDragEnter}
+                  onDragEnd={handleDragEnd}
                 />
               ))}
             </div>

@@ -1,13 +1,14 @@
 /**
  * DirectorDeliveryView
- * 작가가 감독 전송 링크(#delivery=UUID)를 열었을 때 보이는 화면
- * - PreviewRenderer로 원본 문서 형식 유지
- * - 우측 패널: 감독 메모 목록
+ * 작가가 연출 전송 링크(#delivery=UUID)를 열었을 때 보이는 화면
+ * - DirectorScriptViewer(readOnly)로 코멘트 인라인 표시
+ * - 우측 패널: 코멘트 목록 (위치 뱃지 클릭 → 해당 블록 스크롤)
  * - "연출노트로 저장" → localStorage에 버전 누적 저장
  */
 import { useState, useEffect } from 'react';
 import { supabase } from '../store/supabaseClient';
-import PreviewRenderer from '../print/PreviewRenderer';
+import DirectorScriptViewer from './director/DirectorScriptViewer';
+import { getBlockPosition, scrollToBlock } from '../utils/blockPosition';
 
 const DELIVERY_STORAGE_KEY = 'director_deliveries_received';
 
@@ -28,9 +29,10 @@ export default function DirectorDeliveryView() {
   const [panelOpen,    setPanelOpen]    = useState(true);
 
   const deliveryId = window.location.hash.slice('#delivery='.length);
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
   useEffect(() => {
-    if (!supabase || !deliveryId) { setBad(true); return; }
+    if (!supabase || !deliveryId || !UUID_RE.test(deliveryId)) { setBad(true); return; }
     supabase
       .from('director_deliveries')
       .select('*')
@@ -76,7 +78,10 @@ export default function DirectorDeliveryView() {
   const title      = delivery.script_snapshot?.projects?.[0]?.title || '연출노트';
   const notes      = delivery.notes_snapshot || [];
   const panelW     = panelOpen ? 280 : 44;
-  const colW       = Math.max(300, window.innerWidth - panelW - 64);
+
+  // notes_snapshot → { [block_id]: note } 맵
+  const notesMap = {};
+  notes.forEach(n => { if (n.block_id) notesMap[n.block_id] = n; });
 
   return (
     <div style={{ height: '100vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', fontFamily: "'Pretendard', 'Apple SD Gothic Neo', sans-serif" }}>
@@ -109,12 +114,17 @@ export default function DirectorDeliveryView() {
       {/* 본문 */}
       <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
 
-        {/* 미리보기 */}
-        <div style={{ flex: 1, minWidth: 0, overflow: 'auto', background: '#d8d8d8', padding: 16 }}>
-          <PreviewRenderer appState={appState} selections={selections} columnWidth={colW} />
+        {/* 대본 뷰어 (readOnly, 코멘트 인라인) */}
+        <div style={{ flex: 1, minWidth: 0, overflow: 'auto', background: '#d8d8d8' }}>
+          <DirectorScriptViewer
+            appState={appState}
+            selections={selections}
+            readOnly={true}
+            initialNotes={notesMap}
+          />
         </div>
 
-        {/* 감독 메모 패널 */}
+        {/* 코멘트 패널 */}
         <div style={{
           width: panelW, flexShrink: 0,
           background: '#fff', borderLeft: '1px solid #ddd',
@@ -122,7 +132,7 @@ export default function DirectorDeliveryView() {
           transition: 'width 0.2s ease', overflow: 'hidden',
         }}>
           <div style={{ height: 44, flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 12px', borderBottom: '1px solid #eee', gap: 8 }}>
-            {panelOpen && <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: '#222' }}>감독 메모 <span style={{ fontSize: 11, fontWeight: 400, color: '#999' }}>({notes.length})</span></span>}
+            {panelOpen && <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: '#222' }}>코멘트 <span style={{ fontSize: 11, fontWeight: 400, color: '#999' }}>({notes.length})</span></span>}
             <button onClick={() => setPanelOpen(v => !v)}
               style={{ background: 'none', border: '1px solid #e0e0e0', borderRadius: 5, cursor: 'pointer', fontSize: 11, color: '#888', padding: '3px 8px' }}>
               {panelOpen ? '접기 ▾' : '▴'}
@@ -131,18 +141,34 @@ export default function DirectorDeliveryView() {
           {panelOpen && (
             <div style={{ flex: 1, overflowY: 'auto', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
               {notes.length === 0 && (
-                <div style={{ textAlign: 'center', color: '#bbb', fontSize: 12, marginTop: 24 }}>메모가 없습니다.</div>
+                <div style={{ textAlign: 'center', color: '#bbb', fontSize: 12, marginTop: 24 }}>코멘트가 없습니다.</div>
               )}
-              {notes.map((n, i) => (
-                <div key={n.id || i} style={{
-                  background: n.color || '#fef08a', borderRadius: 6, padding: '8px 10px',
-                  boxShadow: '1px 2px 6px rgba(0,0,0,0.08)',
-                }}>
-                  <div style={{ fontSize: 13, color: '#111', lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                    {n.content}
+              {notes.map((n, i) => {
+                const pos = getBlockPosition(n.block_id, appState?.scriptBlocks);
+                return (
+                  <div key={n.id || i} style={{
+                    background: n.color || '#fef08a', borderRadius: 6, padding: '8px 10px',
+                    boxShadow: '1px 2px 6px rgba(0,0,0,0.08)',
+                  }}>
+                    {pos && (
+                      <div
+                        onClick={() => scrollToBlock(n.block_id)}
+                        title="클릭하면 해당 위치로 이동"
+                        style={{
+                          fontSize: 10, fontWeight: 700, color: '#2563eb', marginBottom: 6,
+                          background: 'rgba(37,99,235,0.08)', borderRadius: 4,
+                          padding: '2px 7px', display: 'inline-flex', alignItems: 'center', gap: 3,
+                          maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          cursor: 'pointer', border: '1px solid rgba(37,99,235,0.2)',
+                        }}
+                      >📍 {pos}</div>
+                    )}
+                    <div style={{ fontSize: 13, color: '#111', lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                      {n.content}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

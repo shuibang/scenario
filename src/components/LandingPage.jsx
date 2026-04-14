@@ -421,14 +421,6 @@ export default function LandingPage({ onStart, onLogin }) {
           <button onClick={onStart} style={heroPrimaryBtn}>로그인 없이 시작하기 →</button>
           <button onClick={() => setLoginOpen(true)} style={heroSecondaryBtn}>구글 로그인 (자동저장)</button>
         </div>
-        <div style={{ marginTop: 16 }}>
-          <button
-            onClick={() => { window.location.hash = '#director'; }}
-            style={{ fontSize: 12, color: 'var(--c-accent2)', background: 'none', border: '1px solid var(--c-accent2)', borderRadius: 6, padding: '6px 16px', cursor: 'pointer', opacity: 0.85 }}
-          >
-            🎬 감독이신가요? 연출 작업실 입장 →
-          </button>
-        </div>
         <p style={{ fontSize: 11, color: 'var(--c-text6)', marginTop: 12 }}>로그인 없이도 이 기기에 자동저장 — 구글 로그인 시 어디서든 이어서 작업</p>
       </section>
 

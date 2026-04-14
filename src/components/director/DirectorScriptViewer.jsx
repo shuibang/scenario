@@ -105,7 +105,7 @@ function NotePopup({ existing, noteType, onSave, onClose }) {
 }
 
 // ─── 포스트잇 ─────────────────────────────────────────────────────────────────
-function StickyNote({ note, noteType, onEdit, onDelete }) {
+function StickyNote({ note, noteType, onEdit, onDelete, readOnly }) {
   const [menu, setMenu] = useState(false);
   const isScript = noteType === 'script';
   return (
@@ -116,10 +116,10 @@ function StickyNote({ note, noteType, onEdit, onDelete }) {
         borderRadius: 4, padding: '6px 8px',
         boxShadow: '2px 2px 6px rgba(0,0,0,0.12)',
         fontSize: 13, lineHeight: 1.6, color: '#111',
-        cursor: 'pointer', zIndex: 10,
+        cursor: readOnly ? 'default' : 'pointer', zIndex: 10,
         borderTop: `3px solid ${isScript ? '#e8b84b' : '#93c5fd'}`,
       }}
-      onClick={() => setMenu(v => !v)}
+      onClick={readOnly ? undefined : () => setMenu(v => !v)}
     >
       <div style={{ fontSize: 9, color: isScript ? '#a07820' : '#3b82f6', fontWeight: 700, marginBottom: 3, textTransform: 'uppercase' }}>
         {isScript ? '✉ 작가 전달' : '📋 연출노트'}
@@ -168,6 +168,7 @@ function BlockRow({ block, scriptNote, privateNote, noteType, onAdd, onEdit, onD
 
   return (
     <div
+      id={`dsv-${block.id}`}
       style={{ position: 'relative', paddingRight: activeNote ? 176 : (hovered && !readOnly ? 36 : 0) }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -209,7 +210,7 @@ function BlockRow({ block, scriptNote, privateNote, noteType, onAdd, onEdit, onD
 
       {/* 포스트잇 */}
       {activeNote && !popupOpen && (
-        <StickyNote note={activeNote} noteType={noteType} onEdit={() => setPopupOpen(true)} onDelete={() => onDelete(activeNote.id ?? activeNote._localId, noteType)} />
+        <StickyNote note={activeNote} noteType={noteType} readOnly={readOnly} onEdit={() => setPopupOpen(true)} onDelete={() => onDelete(activeNote.id ?? activeNote._localId, noteType)} />
       )}
     </div>
   );

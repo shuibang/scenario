@@ -25,7 +25,7 @@ export default function DirectorLogin({ onBack, onGuest }) {
 
           <div>
             <div style={{ fontSize: 32, marginBottom: 12 }}>🎬</div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--c-text)', marginBottom: 6 }}>감독 로그인</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--c-text)', marginBottom: 6 }}>연출 작업실 로그인</div>
             <div style={{ fontSize: 13, color: 'var(--c-text4)', lineHeight: 1.6 }}>
               작가에게 공유 링크를 받은 후<br />본인 구글 계정으로 로그인하세요.
             </div>
