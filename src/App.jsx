@@ -1584,6 +1584,16 @@ export default function App() {
         if (session.provider_token) {
           setAccessToken(session.provider_token, 3600);
         }
+        // OAuth 복귀 후 검토 링크 등 이전 hash 복원
+        if (event === 'SIGNED_IN') {
+          try {
+            const returnHash = localStorage.getItem('drama_pending_return_hash');
+            if (returnHash) {
+              localStorage.removeItem('drama_pending_return_hash');
+              window.location.hash = returnHash;
+            }
+          } catch {}
+        }
       } else if (event === 'SIGNED_OUT') {
         try { localStorage.removeItem('drama_auth_user'); } catch {}
         clearAccessToken();

@@ -16,6 +16,13 @@ import { reviewLegacySchema } from '../utils/urlSchemas';
 import { supabase, signInWithGoogle } from '../store/supabaseClient';
 import { setAccessToken, saveDirectorScript } from '../store/googleDrive';
 
+const RETURN_HASH_KEY = 'drama_pending_return_hash';
+// 로그인 후 돌아올 hash 저장 (OAuth 리디렉트 시 hash가 날아가므로)
+function loginWithReturnHash() {
+  try { localStorage.setItem(RETURN_HASH_KEY, window.location.hash); } catch {}
+  signInWithGoogle();
+}
+
 const zBtnStyle = {
   background: '#fff', border: '1px solid #ddd', borderRadius: 6,
   cursor: 'pointer', fontSize: 16, color: '#444',
@@ -66,8 +73,7 @@ export default function SharedReviewView() {
       // 1) 로그인 확인
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        // 미로그인 → Google 로그인 리디렉트 (현재 hash 유지)
-        await signInWithGoogle();
+        loginWithReturnHash();
         return;
       }
 
@@ -210,7 +216,7 @@ export default function SharedReviewView() {
             다시 로그인하면 연출 작업실로 가져올 수 있어요.
           </div>
           <button
-            onClick={signInWithGoogle}
+            onClick={loginWithReturnHash}
             style={{
               padding: '6px 14px', borderRadius: 6, border: 'none',
               background: '#e8b84b', color: '#1a1a1a', fontSize: 12, fontWeight: 700,
