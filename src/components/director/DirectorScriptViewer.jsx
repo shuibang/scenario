@@ -324,7 +324,7 @@ export default function DirectorScriptViewer({ appState, selections, sharedScrip
     const epBlocks = scriptBlocks.filter(b => b && b.episodeId === ep.id);
     if (epBlocks.length === 0) return;
     const num = ep.number ?? (idx + 1);
-    rows.push({ type: 'ep_header', id: `ep_${ep.id}`, title: `#${num}${ep.title ? `  ${ep.title}` : ''}` });
+    rows.push({ type: 'ep_header', id: `ep_${ep.id}`, title: `에피소드${num}${ep.title ? `  ${ep.title}` : ''}` });
     epBlocks.forEach(b => rows.push({ type: 'block', block: b }));
   });
 
