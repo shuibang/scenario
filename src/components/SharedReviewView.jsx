@@ -245,11 +245,9 @@ export default function SharedReviewView() {
   );
 
   // ── 공통 레이아웃 (모바일/데스크톱 동일) ─────────────────────────────────
-  // zoom: PreviewRenderer는 ResizeObserver 기반이므로 컨테이너 너비를 직접 조정
+  // zoom: PreviewRenderer의 zoom prop으로 직접 전달 (ResizeObserver scale에 곱해짐)
   const previewWrapper = (
-    <div style={{ width: `${zoom * 100}%`, minWidth: `${zoom * 100}%` }}>
-      <PreviewRenderer appState={appState} selections={selections} />
-    </div>
+    <PreviewRenderer appState={appState} selections={selections} zoom={zoom} />
   );
 
   return (
