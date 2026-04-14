@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, createContext, useContext } from 'react';
 import { supabaseSignOut, extractUserData, supabase, signInWithGoogle } from '../../store/supabaseClient';
-import { setAccessToken, isTokenValid, loadDirectorScript } from '../../store/googleDrive';
+import { setAccessToken, isTokenValid, loadDirectorScript, deleteFileById } from '../../store/googleDrive';
 import DirectorScriptViewer from './DirectorScriptViewer';
 import PreviewRenderer from '../../print/PreviewRenderer';
 
@@ -343,7 +343,23 @@ function ProjectsPanel({ session, isGuest }) {
 
   const handleDeleteScript = async (script) => {
     if (!supabase) return;
-    if (!window.confirm(`"${script.title}" 을(를) 목록에서 삭제할까요?`)) return;
+    if (!window.confirm(`"${script.title}"\n\n목록에서 삭제하고 Google Drive 파일도 함께 삭제할까요?`)) return;
+
+    // 1) Drive 파일 삭제 (실패해도 계속 진행 — 파일이 이미 없는 경우 대비)
+    if (script.drive_file_id) {
+      try {
+        // 토큰이 없으면 세션에서 가져오기
+        if (!isTokenValid()) {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.provider_token) setAccessToken(session.provider_token, 3600);
+        }
+        await deleteFileById(script.drive_file_id);
+      } catch {
+        // Drive 삭제 실패는 무시 (파일 없음·권한 없음 등)
+      }
+    }
+
+    // 2) shared_scripts row 삭제
     const { error } = await supabase.from('shared_scripts').delete().eq('id', script.id);
     if (error) { alert(`삭제 실패: ${error.message}`); return; }
     setScripts(prev => prev.filter(s => s.id !== script.id));
