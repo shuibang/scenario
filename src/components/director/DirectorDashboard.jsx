@@ -344,7 +344,7 @@ function ProjectsPanel({ session, isGuest }) {
   };
 
   return (
-    <div style={{ display: 'flex', flex: 1, minHeight: 0, height: '100%', flexDirection: 'column' }}>
+    <div style={{ display: 'flex', flex: 1, minHeight: 0, flexDirection: 'column' }}>
 
       {/* 둘러보기 모드 안내 배너 */}
       {isGuest && (
