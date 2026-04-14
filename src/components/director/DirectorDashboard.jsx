@@ -617,12 +617,19 @@ function SendButton({ scriptRow, viewing }) {
   );
 }
 
+const NOTE_COLORS_PANEL = ['#fef08a', '#86efac', '#93c5fd', '#f9a8d4', '#fdba74'];
+
 function NotesPanel() {
   const D = useD();
-  const [scripts,  setScripts]  = useState(null);
-  const [selected, setSelected] = useState(null);
-  const [notes,    setNotes]    = useState([]);
-  const [, forceUpdate] = useState(0);
+  const [scripts,   setScripts]   = useState(null);
+  const [selected,  setSelected]  = useState(null);
+  const [notes,     setNotes]     = useState([]);
+  const [adding,    setAdding]    = useState(false);
+  const [newText,   setNewText]   = useState('');
+  const [newColor,  setNewColor]  = useState(NOTE_COLORS_PANEL[0]);
+  const [editingId, setEditingId] = useState(null); // _localId being edited
+  const [editText,  setEditText]  = useState('');
+  const addRef = useRef();
 
   // 스크립트 목록 로드
   useEffect(() => {
@@ -640,24 +647,52 @@ function NotesPanel() {
     const key = `director_private_notes_${selected.id}`;
     try {
       const map = JSON.parse(localStorage.getItem(key) || '{}');
-      setNotes(Object.values(map).sort((a, b) => a._localId?.localeCompare(b._localId)));
+      setNotes(Object.values(map).sort((a, b) => (a._localId || '').localeCompare(b._localId || '')));
     } catch { setNotes([]); }
   }, [selected]);
 
-  const handleDeleteNote = (localId) => {
+  useEffect(() => {
+    if (adding) setTimeout(() => addRef.current?.focus(), 50);
+  }, [adding]);
+
+  const saveMap = (map) => {
     if (!selected) return;
-    const key = `director_private_notes_${selected.id}`;
-    try {
-      const map = JSON.parse(localStorage.getItem(key) || '{}');
-      const entry = Object.values(map).find(n => n._localId === localId);
-      if (!entry) return;
-      delete map[entry.block_id];
-      localStorage.setItem(key, JSON.stringify(map));
-      setNotes(Object.values(map).sort((a, b) => a._localId?.localeCompare(b._localId)));
-    } catch {}
+    localStorage.setItem(`director_private_notes_${selected.id}`, JSON.stringify(map));
+    setNotes(Object.values(map).sort((a, b) => (a._localId || '').localeCompare(b._localId || '')));
   };
 
-  // 스크립트별 노트 개수
+  const loadMap = () => {
+    try { return JSON.parse(localStorage.getItem(`director_private_notes_${selected.id}`) || '{}'); }
+    catch { return {}; }
+  };
+
+  const handleAddNote = () => {
+    if (!newText.trim()) { setAdding(false); return; }
+    const map = loadMap();
+    const blockId = `standalone_${Date.now()}`;
+    map[blockId] = { _localId: String(Date.now()), block_id: blockId, content: newText.trim(), color: newColor };
+    saveMap(map);
+    setNewText(''); setNewColor(NOTE_COLORS_PANEL[0]); setAdding(false);
+  };
+
+  const handleDeleteNote = (localId) => {
+    const map = loadMap();
+    const entry = Object.values(map).find(n => n._localId === localId);
+    if (!entry) return;
+    delete map[entry.block_id];
+    saveMap(map);
+  };
+
+  const handleEditSave = (localId) => {
+    if (!editText.trim()) return;
+    const map = loadMap();
+    const entry = Object.values(map).find(n => n._localId === localId);
+    if (!entry) return;
+    map[entry.block_id] = { ...entry, content: editText.trim() };
+    saveMap(map);
+    setEditingId(null); setEditText('');
+  };
+
   const getNoteCount = (scriptId) => {
     try {
       const map = JSON.parse(localStorage.getItem(`director_private_notes_${scriptId}`) || '{}');
@@ -666,7 +701,7 @@ function NotesPanel() {
   };
 
   return (
-    <div style={{ display: 'flex', flex: 1, minHeight: 0, height: '100%' }}>
+    <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
 
       {/* 좌: 작품 목록 */}
       <div style={{
@@ -692,10 +727,9 @@ function NotesPanel() {
             const active = selected?.id === s.id;
             return (
               <div key={s.id}
-                onClick={() => setSelected(s)}
+                onClick={() => { setSelected(s); setAdding(false); setEditingId(null); }}
                 style={{
-                  padding: '10px 16px',
-                  cursor: 'pointer',
+                  padding: '10px 16px', cursor: 'pointer',
                   borderLeft: active ? `2px solid ${D.accent}` : '2px solid transparent',
                   background: active ? D.active : 'transparent',
                   transition: 'background 0.12s',
@@ -708,9 +742,7 @@ function NotesPanel() {
                   <div style={{ fontSize: 13, fontWeight: active ? 600 : 400, color: active ? D.accent : D.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {s.title}
                   </div>
-                  <div style={{ fontSize: 10, color: D.text3, marginTop: 2 }}>
-                    메모 {count}개
-                  </div>
+                  <div style={{ fontSize: 10, color: D.text3, marginTop: 2 }}>메모 {count}개</div>
                 </div>
                 {count > 0 && (
                   <div style={{
@@ -736,52 +768,146 @@ function NotesPanel() {
             </div>
           </div>
         )}
-        {selected && notes.length === 0 && (
-          <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 36, marginBottom: 12, opacity: 0.3 }}>📋</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: D.text2, marginBottom: 8 }}>{selected.title}</div>
-              <div style={{ fontSize: 12, color: D.text3 }}>이 작품에 작성된 연출노트가 없습니다.<br />메모 작성 모드에서 📋 내 연출노트를 선택해 추가하세요.</div>
-            </div>
-          </div>
-        )}
-        {selected && notes.length > 0 && (
+
+        {selected && (
           <div>
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: D.text }}>{selected.title}</div>
-              <div style={{ fontSize: 12, color: D.text3, marginTop: 4 }}>📋 내 연출노트 {notes.length}개</div>
+            {/* 헤더 */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: D.text }}>{selected.title}</div>
+                <div style={{ fontSize: 12, color: D.text3, marginTop: 2 }}>📋 내 연출노트 {notes.length}개</div>
+              </div>
+              {!adding && (
+                <button
+                  onClick={() => setAdding(true)}
+                  style={{
+                    padding: '7px 16px', borderRadius: 7, border: 'none',
+                    background: D.accent, color: '#1a1a1a',
+                    fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                    flexShrink: 0,
+                  }}
+                >+ 새 노트</button>
+              )}
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16 }}>
-              {notes.map(n => (
-                <div key={n._localId} style={{
-                  background: n.color || '#fef08a',
-                  borderRadius: 8, padding: '12px 14px',
-                  boxShadow: '2px 4px 12px rgba(0,0,0,0.15)',
-                  position: 'relative',
-                  borderTop: '3px solid #93c5fd',
-                }}>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: '#3b82f6', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                    📋 내 연출노트
-                  </div>
-                  <div style={{ fontSize: 13, color: '#111', lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                    {n.content}
-                  </div>
+
+            {/* 새 노트 입력 폼 */}
+            {adding && (
+              <div style={{
+                background: newColor, borderRadius: 10,
+                padding: '16px', marginBottom: 20,
+                boxShadow: '2px 4px 16px rgba(0,0,0,0.18)',
+                borderTop: '3px solid #93c5fd',
+              }}>
+                <textarea
+                  ref={addRef}
+                  value={newText}
+                  onChange={e => setNewText(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Escape') { setAdding(false); setNewText(''); } }}
+                  placeholder="연출노트 내용을 입력하세요…"
+                  rows={4}
+                  style={{
+                    width: '100%', boxSizing: 'border-box',
+                    border: 'none', background: 'transparent',
+                    fontSize: 13, color: '#111', lineHeight: 1.7,
+                    resize: 'vertical', outline: 'none',
+                    fontFamily: 'inherit',
+                  }}
+                />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                  {NOTE_COLORS_PANEL.map(c => (
+                    <button key={c} onClick={() => setNewColor(c)} style={{
+                      width: 20, height: 20, borderRadius: '50%', background: c, border: 'none',
+                      cursor: 'pointer', outline: newColor === c ? '2px solid #333' : 'none',
+                      outlineOffset: 2,
+                    }} />
+                  ))}
+                  <div style={{ flex: 1 }} />
+                  <button onClick={() => { setAdding(false); setNewText(''); }} style={{ fontSize: 12, color: '#555', background: 'none', border: 'none', cursor: 'pointer' }}>취소</button>
                   <button
-                    onClick={() => handleDeleteNote(n._localId)}
+                    onClick={handleAddNote}
+                    disabled={!newText.trim()}
                     style={{
-                      position: 'absolute', top: 8, right: 8,
-                      width: 20, height: 20, borderRadius: 4,
-                      border: '1px solid rgba(0,0,0,0.15)',
-                      background: 'rgba(255,255,255,0.6)',
-                      color: '#666', fontSize: 11, cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      lineHeight: 1,
+                      padding: '5px 14px', borderRadius: 6, border: 'none',
+                      background: newText.trim() ? '#1a1a2e' : '#999',
+                      color: '#fff', fontSize: 12, fontWeight: 700, cursor: newText.trim() ? 'pointer' : 'default',
                     }}
-                    title="삭제"
-                  >×</button>
+                  >저장</button>
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
+
+            {/* 빈 상태 */}
+            {notes.length === 0 && !adding && (
+              <div style={{ textAlign: 'center', paddingTop: 60, opacity: 0.5 }}>
+                <div style={{ fontSize: 36, marginBottom: 12 }}>📋</div>
+                <div style={{ fontSize: 13, color: D.text3 }}>노트가 없습니다. "+ 새 노트"로 추가하세요.</div>
+              </div>
+            )}
+
+            {/* 노트 그리드 */}
+            {notes.length > 0 && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16 }}>
+                {notes.map(n => (
+                  <div key={n._localId} style={{
+                    background: n.color || '#fef08a',
+                    borderRadius: 8, padding: '12px 14px',
+                    boxShadow: '2px 4px 12px rgba(0,0,0,0.15)',
+                    position: 'relative',
+                    borderTop: '3px solid #93c5fd',
+                  }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: '#3b82f6', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                      📋 내 연출노트
+                    </div>
+                    {editingId === n._localId ? (
+                      <div>
+                        <textarea
+                          autoFocus
+                          value={editText}
+                          onChange={e => setEditText(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Escape') { setEditingId(null); setEditText(''); } }}
+                          rows={4}
+                          style={{
+                            width: '100%', boxSizing: 'border-box',
+                            border: 'none', background: 'rgba(255,255,255,0.5)',
+                            borderRadius: 4, padding: '4px 6px',
+                            fontSize: 13, color: '#111', lineHeight: 1.6,
+                            resize: 'vertical', outline: 'none', fontFamily: 'inherit',
+                          }}
+                        />
+                        <div style={{ display: 'flex', gap: 6, marginTop: 6, justifyContent: 'flex-end' }}>
+                          <button onClick={() => { setEditingId(null); setEditText(''); }} style={{ fontSize: 11, color: '#555', background: 'none', border: 'none', cursor: 'pointer' }}>취소</button>
+                          <button
+                            onClick={() => handleEditSave(n._localId)}
+                            style={{ fontSize: 11, padding: '3px 10px', borderRadius: 4, border: 'none', background: '#1a1a2e', color: '#fff', cursor: 'pointer', fontWeight: 700 }}
+                          >저장</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        onClick={() => { setEditingId(n._localId); setEditText(n.content); }}
+                        style={{ fontSize: 13, color: '#111', lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word', cursor: 'text', minHeight: 40 }}
+                        title="클릭하여 편집"
+                      >
+                        {n.content}
+                      </div>
+                    )}
+                    <button
+                      onClick={() => handleDeleteNote(n._localId)}
+                      style={{
+                        position: 'absolute', top: 8, right: 8,
+                        width: 20, height: 20, borderRadius: 4,
+                        border: '1px solid rgba(0,0,0,0.15)',
+                        background: 'rgba(255,255,255,0.6)',
+                        color: '#666', fontSize: 11, cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        lineHeight: 1,
+                      }}
+                      title="삭제"
+                    >×</button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
