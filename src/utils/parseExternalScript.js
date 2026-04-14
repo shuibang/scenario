@@ -93,23 +93,20 @@ export async function extractTextFromPdf(file) {
 // ── 씬 패턴 감지 ────────────────────────────────────────────────────────────────
 
 /**
- * 지원 패턴 (공백/탭 허용):
- *   S#1.  S#1/  S#1-  S#1 장소  S#1. 장소, 시간
- *   씬1.  씬 1.  씬1/  scene 1.
- *   INT.  EXT.  (영문 대본)
+ * 씬 헤더 단일 정규식
+ * 그룹1 = 씬번호, 그룹2 = 이후 텍스트(장소·시간 등)
+ *
+ * 지원 형식:
+ *   S#1. / S#1 / S# 1. / S#1,  / S#1-
+ *   씬1. / 씬 1. / 씬1 / 씬1,
+ *   #1. / #1 / # 1.
+ *   Scene 1. / Scene#1.
+ *   1. 장소  (숫자 + 마침표 + 공백 + 텍스트 — false positive 방지)
+ *   INT. / EXT. (영문)
  */
-const SCENE_PATTERNS = [
-  // S#숫자 계열
-  /^[Ss]#\s*(\d+)\s*[./\-\s,]\s*(.*)/,
-  /^[Ss]#\s*(\d+)\s*$/,
-  // 씬 숫자 계열
-  /^씬\s*(\d+)\s*[./\-\s,]\s*(.*)/,
-  /^씬\s*(\d+)\s*$/,
-  // scene 숫자
-  /^[Ss][Cc][Ee][Nn][Ee]\s*(\d+)\s*[./\-\s,]\s*(.*)/,
-  // INT./EXT. (영문 대본)
-  /^(INT|EXT|I\/E|E\/I)[\.\s]\s*(.*)/i,
-];
+const SCENE_RE = /^(?:[Ss]cene\s*#?|[Ss]#|씬\s*|#)\s*(\d+)\s*(?:[.。·,，\-–—\/]\s*)?(.*)/;
+const NUM_ONLY_RE = /^(\d+)[.。]\s+(\S.*)/;  // 숫자만: "1. 장소" (마침표+공백+텍스트 필수)
+const INT_EXT_RE = /^(INT|EXT|I\/E|E\/I)[.\s]\s*(.*)/i;
 
 /**
  * 한 줄에서 씬 정보를 파싱
@@ -119,24 +116,25 @@ function parseSceneLine(line) {
   const trimmed = line.trim();
   if (!trimmed) return null;
 
-  // S#N / 씬N 계열
-  for (const pat of SCENE_PATTERNS.slice(0, 5)) {
-    const m = trimmed.match(pat);
-    if (m) {
-      const num  = m[1];
-      const rest = (m[2] || '').trim();
-      const { location, timeOfDay } = splitLocationTime(rest);
-      return { sceneNo: num, raw: trimmed, location, timeOfDay };
-    }
+  // S# / 씬 / # / Scene 계열
+  let m = trimmed.match(SCENE_RE);
+  if (m) {
+    const { location, timeOfDay } = splitLocationTime((m[2] || '').trim());
+    return { sceneNo: m[1], raw: trimmed, location, timeOfDay };
+  }
+
+  // 숫자만: "1. 장소" 형식
+  m = trimmed.match(NUM_ONLY_RE);
+  if (m) {
+    const { location, timeOfDay } = splitLocationTime((m[2] || '').trim());
+    return { sceneNo: m[1], raw: trimmed, location, timeOfDay };
   }
 
   // INT./EXT. 계열 → 씬번호는 순번 할당 (null)
-  const intExt = trimmed.match(SCENE_PATTERNS[5]);
-  if (intExt) {
-    const intExt2 = intExt[1].toUpperCase();
-    const rest = (intExt[2] || '').trim();
-    const { location, timeOfDay } = splitLocationTime(rest);
-    return { sceneNo: null, raw: trimmed, location: `${intExt2}. ${location}`.trim(), timeOfDay };
+  m = trimmed.match(INT_EXT_RE);
+  if (m) {
+    const { location, timeOfDay } = splitLocationTime((m[2] || '').trim());
+    return { sceneNo: null, raw: trimmed, location: `${m[1].toUpperCase()}. ${location}`.trim(), timeOfDay };
   }
 
   return null;

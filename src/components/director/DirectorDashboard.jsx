@@ -1214,13 +1214,15 @@ function deleteLocalScript(id) {
 function UploadScriptModal({ onClose, onGenerate }) {
   const D = useD();
   const fileInputRef = useRef(null);
-  const [step,       setStep]       = useState(1); // 1=파일선택  2=씬미리보기
-  const [extracting, setExtracting] = useState(false);
-  const [error,      setError]      = useState('');
-  const [filename,   setFilename]   = useState('');
-  const [title,      setTitle]      = useState('');
-  const [scenes,     setScenes]     = useState([]); // [{sceneNo, location, timeOfDay, raw}]
-  const [dragging,   setDragging]   = useState(false);
+  const [step,          setStep]          = useState(1); // 1=파일선택  2=씬미리보기
+  const [extracting,    setExtracting]    = useState(false);
+  const [error,         setError]         = useState('');
+  const [filename,      setFilename]      = useState('');
+  const [title,         setTitle]         = useState('');
+  const [scenes,        setScenes]        = useState([]); // [{sceneNo, location, timeOfDay, raw}]
+  const [dragging,      setDragging]      = useState(false);
+  const [extractedText, setExtractedText] = useState('');
+  const [showRawText,   setShowRawText]   = useState(false);
 
   const OVERLAY = {
     position: 'fixed', inset: 0, zIndex: 9000,
@@ -1269,6 +1271,7 @@ function UploadScriptModal({ onClose, onGenerate }) {
         }
       }
 
+      setExtractedText(text);
       const detected = detectScenes(text);
       setScenes(detected);
       setStep(2);
@@ -1370,7 +1373,7 @@ function UploadScriptModal({ onClose, onGenerate }) {
           {step === 2 && (
             <div>
               {/* 제목 입력 */}
-              <div style={{ marginBottom: 16 }}>
+              <div style={{ marginBottom: 12 }}>
                 <label style={{ fontSize: 11, fontWeight: 700, color: D.text3, display: 'block', marginBottom: 5 }}>작품 제목</label>
                 <input
                   value={title}
@@ -1378,6 +1381,29 @@ function UploadScriptModal({ onClose, onGenerate }) {
                   placeholder="제목 입력"
                   style={{ width: '100%', padding: '7px 10px', borderRadius: 6, border: `1px solid ${D.border}`, background: D.bg, color: D.text, fontSize: 13 }}
                 />
+              </div>
+
+              {/* 추출 텍스트 미리보기 (씬 인식 디버그용) */}
+              <div style={{ marginBottom: 14 }}>
+                <button
+                  onClick={() => setShowRawText(v => !v)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 5 }}
+                >
+                  <span style={{ fontSize: 10, color: D.text3 }}>{showRawText ? '▾' : '▸'}</span>
+                  <span style={{ fontSize: 11, color: D.text3 }}>추출된 텍스트 확인 ({extractedText.split(/\r?\n/).filter(Boolean).length}줄)</span>
+                </button>
+                {showRawText && (
+                  <textarea
+                    readOnly
+                    value={extractedText}
+                    style={{
+                      marginTop: 6, width: '100%', height: 140, resize: 'vertical',
+                      background: D.bg, color: D.text3, border: `1px solid ${D.border}`,
+                      borderRadius: 6, padding: '6px 8px', fontSize: 11, fontFamily: 'monospace',
+                      lineHeight: 1.6,
+                    }}
+                  />
+                )}
               </div>
 
               {/* 씬 0개일 때 */}
