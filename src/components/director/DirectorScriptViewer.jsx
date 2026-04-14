@@ -310,7 +310,8 @@ export default function DirectorScriptViewer({ appState, selections, sharedScrip
   // 시놉시스 블록 (선택된 경우)
   if (selections?.synopsis !== false) {
     const synopsisDoc = synopsisDocs.find(d => d && d.projectId === activeProjectId);
-    const synBlocks = (synopsisDoc?.blocks || synopsisDoc?.content || []).filter(Boolean);
+    const rawSyn = synopsisDoc?.blocks ?? synopsisDoc?.content;
+    const synBlocks = Array.isArray(rawSyn) ? rawSyn.filter(Boolean) : [];
     if (synBlocks.length > 0) {
       rows.push({ type: 'section_header', id: 'synopsis_header', title: '시놉시스' });
       synBlocks.forEach(b => rows.push({ type: 'block', block: b }));
