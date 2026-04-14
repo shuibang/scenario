@@ -726,8 +726,8 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
         {/* Center: brand */}
         <button
           onClick={() => { window.location.hash = '#landing'; }}
-          className="text-xs font-bold tracking-wider cursor-pointer"
-          style={{ color: 'var(--c-accent)', flexShrink: 0, background: 'none', border: 'none', padding: 0, userSelect: 'none' }}
+          className="text-xs font-bold tracking-wider"
+          style={{ color: 'var(--c-accent)', flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
         >
           대본 작업실
         </button>
@@ -1570,13 +1570,6 @@ export default function App() {
   });
   const [, forceUpdate] = useState(0);
 
-  // 해시 변경 시 리렌더 — #director, #review 등 해시 라우트가 즉시 반응
-  useEffect(() => {
-    const onHash = () => forceUpdate(n => n + 1);
-    window.addEventListener('hashchange', onHash);
-    return () => window.removeEventListener('hashchange', onHash);
-  }, []);
-
   // Supabase 세션 복원 + 상태 변화 구독
   useEffect(() => {
     if (!supabase) return;
@@ -1590,6 +1583,16 @@ export default function App() {
         }
         if (session.provider_token) {
           setAccessToken(session.provider_token, 3600);
+        }
+        // OAuth 복귀 후 검토 링크 등 이전 hash 복원
+        if (event === 'SIGNED_IN') {
+          try {
+            const returnHash = localStorage.getItem('drama_pending_return_hash');
+            if (returnHash) {
+              localStorage.removeItem('drama_pending_return_hash');
+              window.location.hash = returnHash;
+            }
+          } catch {}
         }
       } else if (event === 'SIGNED_OUT') {
         try { localStorage.removeItem('drama_auth_user'); } catch {}

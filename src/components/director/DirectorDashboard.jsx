@@ -1,8 +1,33 @@
-import { useState, useEffect, useRef, createContext, useContext } from 'react';
-import { supabaseSignOut, extractUserData, supabase } from '../../store/supabaseClient';
-import { setAccessToken, isTokenValid, loadDirectorScript } from '../../store/googleDrive';
+import { useState, useEffect, useRef, createContext, useContext, Component } from 'react';
+import { supabaseSignOut, extractUserData, supabase, signInWithGoogle } from '../../store/supabaseClient';
+import { setAccessToken, isTokenValid, loadDirectorScript, deleteFileById } from '../../store/googleDrive';
 import DirectorScriptViewer from './DirectorScriptViewer';
 import PreviewRenderer from '../../print/PreviewRenderer';
+import { parseFullScript, buildPanelsFromScenes, detectScenes } from '../../utils/parseExternalScript';
+
+// OAuth 리디렉트 시 현재 hash 보존 → App.jsx onAuthStateChange에서 복원
+const RETURN_HASH_KEY = 'drama_pending_return_hash';
+
+// ─── Error Boundary — 뷰어 render crash 시 검정화면 방지 ──────────────────────
+class ViewerErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: 32, textAlign: 'center', color: '#c00', fontSize: 13 }}>
+          대본을 표시하는 중 오류가 발생했습니다.<br />
+          <span style={{ color: '#999', fontSize: 11 }}>{String(this.state.error)}</span>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+function loginWithReturnHash() {
+  try { localStorage.setItem(RETURN_HASH_KEY, window.location.hash); } catch {}
+  signInWithGoogle();
+}
 
 // ─── 연출 작업실 전용 디자인 토큰 ─────────────────────────────────────────────
 const D_DARK = {
@@ -40,9 +65,9 @@ const ThemeCtx = createContext(D_DARK);
 const useD = () => useContext(ThemeCtx);
 
 // ─── 감독 대시보드 ────────────────────────────────────────────────────────────
-export default function DirectorDashboard({ session, onBack }) {
+export default function DirectorDashboard({ session, onBack, isGuest = false }) {
   const user = extractUserData(session);
-  const [activeMenu, setActiveMenu] = useState('projects');
+  const [activeMenu, setActiveMenu] = useState(isGuest ? 'storyboard' : 'projects');
   const [loggingOut, setLoggingOut] = useState(false);
   const [isDark, setIsDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
 
@@ -111,19 +136,30 @@ export default function DirectorDashboard({ session, onBack }) {
               : <div style={{ width: 28, height: 28, borderRadius: '50%', background: D.card, border: `1px solid ${D.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: D.text2 }}>감</div>
             }
             <div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: D.text }}>{user?.name || '감독'}</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: D.text }}>{user?.name || '연출'}</div>
               <div style={{ fontSize: 10, color: D.text3 }}>{user?.email}</div>
             </div>
           </div>
-          <button
-            onClick={handleLogout}
-            disabled={loggingOut}
-            style={{
-              fontSize: 11, color: D.text3,
-              background: 'none', border: `1px solid ${D.border}`,
-              borderRadius: 4, padding: '4px 10px', cursor: 'pointer',
-            }}
-          >{loggingOut ? '…' : '로그아웃'}</button>
+          {isGuest ? (
+            <button
+              onClick={loginWithReturnHash}
+              style={{
+                fontSize: 11, color: D.accent,
+                background: 'none', border: `1px solid ${D.accent}`,
+                borderRadius: 4, padding: '4px 10px', cursor: 'pointer',
+              }}
+            >Google로 로그인</button>
+          ) : (
+            <button
+              onClick={handleLogout}
+              disabled={loggingOut}
+              style={{
+                fontSize: 11, color: D.text3,
+                background: 'none', border: `1px solid ${D.border}`,
+                borderRadius: 4, padding: '4px 10px', cursor: 'pointer',
+              }}
+            >{loggingOut ? '…' : '로그아웃'}</button>
+          )}
         </div>
       </header>
 
@@ -153,12 +189,15 @@ export default function DirectorDashboard({ session, onBack }) {
 
         {/* 우측 콘텐츠 */}
         <main style={{ flex: 1, display: 'flex', minHeight: 0, background: D.bg, overflow: 'hidden' }}>
-          {activeMenu === 'projects'   && <ProjectsPanel />}
+          {activeMenu === 'projects'   && <ProjectsPanel session={session} isGuest={isGuest} />}
           {activeMenu === 'notes'      && <NotesPanel />}
-          {activeMenu === 'storyboard' && <StoryboardPanel />}
+          {activeMenu === 'storyboard' && <StoryboardPanel isGuest={isGuest} />}
         </main>
       </div>
     </div>
+
+    {/* 게스트 가이드 */}
+    {isGuest && <GuestGuide onLogin={loginWithReturnHash} />}
     </ThemeCtx.Provider>
   );
 }
@@ -183,9 +222,9 @@ function SideItem({ icon, label, active, onClick }) {
       onClick={onClick}
       style={{
         display: 'flex', alignItems: 'center', gap: 9,
-        padding: '8px 16px 8px 20px',
+        padding: '8px 16px 8px 18px',
         fontSize: 13, cursor: 'pointer',
-        borderRight: active ? `2px solid ${D.accent}` : '2px solid transparent',
+        borderLeft: active ? `2px solid ${D.accent}` : '2px solid transparent',
         background: active ? D.active : 'transparent',
         color: active ? D.accent : D.text2,
         fontWeight: active ? 600 : 400,
@@ -232,13 +271,49 @@ function EmptySlot({ icon, label, sub }) {
 }
 
 // ─── 패널들 ───────────────────────────────────────────────────────────────────
-function ProjectsPanel() {
+// Drive 끊김 여부: provider_token이 없을 때 참
+function isDriveError(msg) {
+  return msg && (msg.includes('Drive 권한') || msg.includes('provider_token') || msg.includes('Drive'));
+}
+
+function DriveReconnectCard({ D, message }) {
+  const [loading, setLoading] = useState(false);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, padding: 32, textAlign: 'center', maxWidth: 320 }}>
+      <div style={{ fontSize: 32 }}>🔌</div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: D.text }}>Drive 연결이 끊겼습니다</div>
+      <div style={{ fontSize: 12, color: D.text2, lineHeight: 1.7 }}>
+        {message || 'Google Drive 권한이 만료되었습니다.'}<br />
+        Google 계정으로 다시 로그인하면 계속 이용할 수 있습니다.
+      </div>
+      <button
+        onClick={() => { setLoading(true); loginWithReturnHash(); }}
+        disabled={loading}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          padding: '10px 20px', borderRadius: 8,
+          border: `1px solid ${D.border}`, background: D.card,
+          color: D.text, fontSize: 13, fontWeight: 500,
+          cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1,
+        }}
+      >
+        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="" style={{ width: 16, height: 16 }} />
+        {loading ? '이동 중…' : 'Google로 다시 로그인'}
+      </button>
+    </div>
+  );
+}
+
+function ProjectsPanel({ session, isGuest }) {
   const D = useD();
   const [scripts,  setScripts]  = useState(null);
   const [error,    setError]    = useState('');
   const [selected, setSelected] = useState(null);
   const [viewing,  setViewing]  = useState(null);
   const [loading,  setLoading]  = useState(false);
+
+  // Drive 토큰 유효성 사전 확인 (로그인은 됐지만 Drive 권한 만료 상태)
+  const driveDisconnected = !isGuest && session && !session.provider_token && !isTokenValid();
 
   useEffect(() => {
     if (!supabase) { setScripts([]); return; }
@@ -289,15 +364,72 @@ function ProjectsPanel() {
 
   const handleDeleteScript = async (script) => {
     if (!supabase) return;
-    if (!window.confirm(`"${script.title}" 을(를) 목록에서 삭제할까요?`)) return;
-    const { error } = await supabase.from('shared_scripts').delete().eq('id', script.id);
+    if (!window.confirm(`"${script.title}"\n\n목록에서 삭제하고 Google Drive 파일도 함께 삭제할까요?`)) return;
+
+    // 1) Drive 파일 삭제 (실패해도 계속 진행 — 파일이 이미 없는 경우 대비)
+    if (script.drive_file_id) {
+      try {
+        // 토큰이 없으면 세션에서 가져오기
+        if (!isTokenValid()) {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.provider_token) setAccessToken(session.provider_token, 3600);
+        }
+        await deleteFileById(script.drive_file_id);
+      } catch {
+        // Drive 삭제 실패는 무시 (파일 없음·권한 없음 등)
+      }
+    }
+
+    // 2) shared_scripts row 삭제
+    const { data: deleted, error } = await supabase
+      .from('shared_scripts')
+      .delete()
+      .eq('id', script.id)
+      .eq('director_id', session.user.id)
+      .select('id');
     if (error) { alert(`삭제 실패: ${error.message}`); return; }
+    if (!deleted || deleted.length === 0) {
+      alert('삭제 권한이 없거나 이미 삭제된 항목입니다.');
+      return;
+    }
     setScripts(prev => prev.filter(s => s.id !== script.id));
     if (selected?.id === script.id) { setSelected(null); setViewing(null); }
   };
 
   return (
-    <div style={{ display: 'flex', flex: 1, minHeight: 0, height: '100%' }}>
+    <div style={{ display: 'flex', flex: 1, minHeight: 0, flexDirection: 'column' }}>
+
+      {/* 둘러보기 모드 안내 배너 */}
+      {isGuest && (
+        <div style={{
+          flexShrink: 0, padding: '8px 16px',
+          background: D.accentDim, borderBottom: `1px solid ${D.border}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+        }}>
+          <span style={{ fontSize: 12, color: D.text2 }}>둘러보기 모드 — 대본 불러오기·저장은 로그인 후 이용할 수 있습니다.</span>
+          <button
+            onClick={loginWithReturnHash}
+            style={{ fontSize: 11, color: D.accent, background: 'none', border: `1px solid ${D.accent}`, borderRadius: 4, padding: '3px 10px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+          >Google로 로그인</button>
+        </div>
+      )}
+
+      {/* Drive 끊김 배너 (로그인은 됐지만 토큰 만료) */}
+      {driveDisconnected && (
+        <div style={{
+          flexShrink: 0, padding: '8px 16px',
+          background: '#3d1a1a', borderBottom: `1px solid #6b2e2e`,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+        }}>
+          <span style={{ fontSize: 12, color: '#f4a4a4' }}>🔌 Google Drive 연결이 끊겼습니다. 대본을 불러오려면 다시 로그인이 필요합니다.</span>
+          <button
+            onClick={loginWithReturnHash}
+            style={{ fontSize: 11, color: '#f87171', background: 'none', border: '1px solid #f87171', borderRadius: 4, padding: '3px 10px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+          >다시 로그인</button>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
 
       {/* 좌: 작품 목록 패널 */}
       <div style={{
@@ -365,17 +497,24 @@ function ProjectsPanel() {
           )}
           {selected && !loading && viewing?.error && (
             <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <div style={{ fontSize: 13, color: '#c00' }}>불러오기 실패: {viewing.error}</div>
+              {isDriveError(viewing.error)
+                ? <DriveReconnectCard D={D} message={viewing.error} />
+                : <div style={{ fontSize: 13, color: '#c00' }}>불러오기 실패: {viewing.error}</div>
+              }
             </div>
           )}
           {selected && !loading && viewing?.appState && (
-            <DirectorScriptViewer
-              appState={viewing.appState}
-              selections={viewing.selections}
-              sharedScriptId={selected.id}
-            />
+            <ViewerErrorBoundary key={selected.id}>
+              <DirectorScriptViewer
+                appState={viewing.appState}
+                selections={viewing.selections}
+                sharedScriptId={selected.id}
+              />
+            </ViewerErrorBoundary>
           )}
         </div>
+      </div>
+
       </div>
     </div>
   );
@@ -491,12 +630,19 @@ function SendButton({ scriptRow, viewing }) {
   );
 }
 
+const NOTE_COLORS_PANEL = ['#fdf6e3', '#fef08a', '#86efac', '#93c5fd', '#f9a8d4'];
+
 function NotesPanel() {
   const D = useD();
-  const [scripts,  setScripts]  = useState(null);
-  const [selected, setSelected] = useState(null);
-  const [notes,    setNotes]    = useState([]);
-  const [, forceUpdate] = useState(0);
+  const [scripts,   setScripts]   = useState(null);
+  const [selected,  setSelected]  = useState(null);
+  const [notes,     setNotes]     = useState([]);
+  const [adding,    setAdding]    = useState(false);
+  const [newText,   setNewText]   = useState('');
+  const [newColor,  setNewColor]  = useState(NOTE_COLORS_PANEL[0]);
+  const [editingId, setEditingId] = useState(null); // _localId being edited
+  const [editText,  setEditText]  = useState('');
+  const addRef = useRef();
 
   // 스크립트 목록 로드
   useEffect(() => {
@@ -514,24 +660,52 @@ function NotesPanel() {
     const key = `director_private_notes_${selected.id}`;
     try {
       const map = JSON.parse(localStorage.getItem(key) || '{}');
-      setNotes(Object.values(map).sort((a, b) => a._localId?.localeCompare(b._localId)));
+      setNotes(Object.values(map).sort((a, b) => (a._localId || '').localeCompare(b._localId || '')));
     } catch { setNotes([]); }
   }, [selected]);
 
-  const handleDeleteNote = (localId) => {
+  useEffect(() => {
+    if (adding) setTimeout(() => addRef.current?.focus(), 50);
+  }, [adding]);
+
+  const saveMap = (map) => {
     if (!selected) return;
-    const key = `director_private_notes_${selected.id}`;
-    try {
-      const map = JSON.parse(localStorage.getItem(key) || '{}');
-      const entry = Object.values(map).find(n => n._localId === localId);
-      if (!entry) return;
-      delete map[entry.block_id];
-      localStorage.setItem(key, JSON.stringify(map));
-      setNotes(Object.values(map).sort((a, b) => a._localId?.localeCompare(b._localId)));
-    } catch {}
+    localStorage.setItem(`director_private_notes_${selected.id}`, JSON.stringify(map));
+    setNotes(Object.values(map).sort((a, b) => (a._localId || '').localeCompare(b._localId || '')));
   };
 
-  // 스크립트별 노트 개수
+  const loadMap = () => {
+    try { return JSON.parse(localStorage.getItem(`director_private_notes_${selected.id}`) || '{}'); }
+    catch { return {}; }
+  };
+
+  const handleAddNote = () => {
+    if (!newText.trim()) { setAdding(false); return; }
+    const map = loadMap();
+    const blockId = `standalone_${Date.now()}`;
+    map[blockId] = { _localId: String(Date.now()), block_id: blockId, content: newText.trim(), color: newColor };
+    saveMap(map);
+    setNewText(''); setNewColor(NOTE_COLORS_PANEL[0]); setAdding(false);
+  };
+
+  const handleDeleteNote = (localId) => {
+    const map = loadMap();
+    const entry = Object.values(map).find(n => n._localId === localId);
+    if (!entry) return;
+    delete map[entry.block_id];
+    saveMap(map);
+  };
+
+  const handleEditSave = (localId) => {
+    if (!editText.trim()) return;
+    const map = loadMap();
+    const entry = Object.values(map).find(n => n._localId === localId);
+    if (!entry) return;
+    map[entry.block_id] = { ...entry, content: editText.trim() };
+    saveMap(map);
+    setEditingId(null); setEditText('');
+  };
+
   const getNoteCount = (scriptId) => {
     try {
       const map = JSON.parse(localStorage.getItem(`director_private_notes_${scriptId}`) || '{}');
@@ -540,7 +714,7 @@ function NotesPanel() {
   };
 
   return (
-    <div style={{ display: 'flex', flex: 1, minHeight: 0, height: '100%' }}>
+    <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
 
       {/* 좌: 작품 목록 */}
       <div style={{
@@ -566,10 +740,9 @@ function NotesPanel() {
             const active = selected?.id === s.id;
             return (
               <div key={s.id}
-                onClick={() => setSelected(s)}
+                onClick={() => { setSelected(s); setAdding(false); setEditingId(null); }}
                 style={{
-                  padding: '10px 16px',
-                  cursor: 'pointer',
+                  padding: '10px 16px', cursor: 'pointer',
                   borderLeft: active ? `2px solid ${D.accent}` : '2px solid transparent',
                   background: active ? D.active : 'transparent',
                   transition: 'background 0.12s',
@@ -582,9 +755,7 @@ function NotesPanel() {
                   <div style={{ fontSize: 13, fontWeight: active ? 600 : 400, color: active ? D.accent : D.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {s.title}
                   </div>
-                  <div style={{ fontSize: 10, color: D.text3, marginTop: 2 }}>
-                    메모 {count}개
-                  </div>
+                  <div style={{ fontSize: 10, color: D.text3, marginTop: 2 }}>메모 {count}개</div>
                 </div>
                 {count > 0 && (
                   <div style={{
@@ -610,52 +781,146 @@ function NotesPanel() {
             </div>
           </div>
         )}
-        {selected && notes.length === 0 && (
-          <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 36, marginBottom: 12, opacity: 0.3 }}>📋</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: D.text2, marginBottom: 8 }}>{selected.title}</div>
-              <div style={{ fontSize: 12, color: D.text3 }}>이 작품에 작성된 연출노트가 없습니다.<br />메모 작성 모드에서 📋 내 연출노트를 선택해 추가하세요.</div>
-            </div>
-          </div>
-        )}
-        {selected && notes.length > 0 && (
+
+        {selected && (
           <div>
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: D.text }}>{selected.title}</div>
-              <div style={{ fontSize: 12, color: D.text3, marginTop: 4 }}>📋 내 연출노트 {notes.length}개</div>
+            {/* 헤더 */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: D.text }}>{selected.title}</div>
+                <div style={{ fontSize: 12, color: D.text3, marginTop: 2 }}>📋 내 연출노트 {notes.length}개</div>
+              </div>
+              {!adding && (
+                <button
+                  onClick={() => setAdding(true)}
+                  style={{
+                    padding: '7px 16px', borderRadius: 7, border: 'none',
+                    background: D.accent, color: '#1a1a1a',
+                    fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                    flexShrink: 0,
+                  }}
+                >+ 새 노트</button>
+              )}
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16 }}>
-              {notes.map(n => (
-                <div key={n._localId} style={{
-                  background: n.color || '#fef08a',
-                  borderRadius: 8, padding: '12px 14px',
-                  boxShadow: '2px 4px 12px rgba(0,0,0,0.15)',
-                  position: 'relative',
-                  borderTop: '3px solid #93c5fd',
-                }}>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: '#3b82f6', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                    📋 내 연출노트
-                  </div>
-                  <div style={{ fontSize: 13, color: '#111', lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                    {n.content}
-                  </div>
+
+            {/* 새 노트 입력 폼 */}
+            {adding && (
+              <div style={{
+                background: newColor, borderRadius: 10,
+                padding: '16px', marginBottom: 20,
+                boxShadow: '2px 4px 16px rgba(0,0,0,0.18)',
+                borderTop: '3px solid #93c5fd',
+              }}>
+                <textarea
+                  ref={addRef}
+                  value={newText}
+                  onChange={e => setNewText(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Escape') { setAdding(false); setNewText(''); } }}
+                  placeholder="연출노트 내용을 입력하세요…"
+                  rows={4}
+                  style={{
+                    width: '100%', boxSizing: 'border-box',
+                    border: 'none', background: 'transparent',
+                    fontSize: 13, color: '#111', lineHeight: 1.7,
+                    resize: 'vertical', outline: 'none',
+                    fontFamily: 'inherit',
+                  }}
+                />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                  {NOTE_COLORS_PANEL.map(c => (
+                    <button key={c} onClick={() => setNewColor(c)} style={{
+                      width: 20, height: 20, borderRadius: '50%', background: c, border: 'none',
+                      cursor: 'pointer', outline: newColor === c ? '2px solid #333' : 'none',
+                      outlineOffset: 2,
+                    }} />
+                  ))}
+                  <div style={{ flex: 1 }} />
+                  <button onClick={() => { setAdding(false); setNewText(''); }} style={{ fontSize: 12, color: '#555', background: 'none', border: 'none', cursor: 'pointer' }}>취소</button>
                   <button
-                    onClick={() => handleDeleteNote(n._localId)}
+                    onClick={handleAddNote}
+                    disabled={!newText.trim()}
                     style={{
-                      position: 'absolute', top: 8, right: 8,
-                      width: 20, height: 20, borderRadius: 4,
-                      border: '1px solid rgba(0,0,0,0.15)',
-                      background: 'rgba(255,255,255,0.6)',
-                      color: '#666', fontSize: 11, cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      lineHeight: 1,
+                      padding: '5px 14px', borderRadius: 6, border: 'none',
+                      background: newText.trim() ? '#1a1a2e' : '#999',
+                      color: '#fff', fontSize: 12, fontWeight: 700, cursor: newText.trim() ? 'pointer' : 'default',
                     }}
-                    title="삭제"
-                  >×</button>
+                  >저장</button>
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
+
+            {/* 빈 상태 */}
+            {notes.length === 0 && !adding && (
+              <div style={{ textAlign: 'center', paddingTop: 60, opacity: 0.5 }}>
+                <div style={{ fontSize: 36, marginBottom: 12 }}>📋</div>
+                <div style={{ fontSize: 13, color: D.text3 }}>노트가 없습니다. "+ 새 노트"로 추가하세요.</div>
+              </div>
+            )}
+
+            {/* 노트 그리드 */}
+            {notes.length > 0 && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16 }}>
+                {notes.map(n => (
+                  <div key={n._localId} style={{
+                    background: n.color || '#fef08a',
+                    borderRadius: 8, padding: '12px 14px',
+                    boxShadow: '2px 4px 12px rgba(0,0,0,0.15)',
+                    position: 'relative',
+                    borderTop: '3px solid #93c5fd',
+                  }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: '#3b82f6', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                      📋 내 연출노트
+                    </div>
+                    {editingId === n._localId ? (
+                      <div>
+                        <textarea
+                          autoFocus
+                          value={editText}
+                          onChange={e => setEditText(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Escape') { setEditingId(null); setEditText(''); } }}
+                          rows={4}
+                          style={{
+                            width: '100%', boxSizing: 'border-box',
+                            border: 'none', background: 'rgba(255,255,255,0.5)',
+                            borderRadius: 4, padding: '4px 6px',
+                            fontSize: 13, color: '#111', lineHeight: 1.6,
+                            resize: 'vertical', outline: 'none', fontFamily: 'inherit',
+                          }}
+                        />
+                        <div style={{ display: 'flex', gap: 6, marginTop: 6, justifyContent: 'flex-end' }}>
+                          <button onClick={() => { setEditingId(null); setEditText(''); }} style={{ fontSize: 11, color: '#555', background: 'none', border: 'none', cursor: 'pointer' }}>취소</button>
+                          <button
+                            onClick={() => handleEditSave(n._localId)}
+                            style={{ fontSize: 11, padding: '3px 10px', borderRadius: 4, border: 'none', background: '#1a1a2e', color: '#fff', cursor: 'pointer', fontWeight: 700 }}
+                          >저장</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        onClick={() => { setEditingId(n._localId); setEditText(n.content); }}
+                        style={{ fontSize: 13, color: '#111', lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word', cursor: 'text', minHeight: 40 }}
+                        title="클릭하여 편집"
+                      >
+                        {n.content}
+                      </div>
+                    )}
+                    <button
+                      onClick={() => handleDeleteNote(n._localId)}
+                      style={{
+                        position: 'absolute', top: 8, right: 8,
+                        width: 20, height: 20, borderRadius: 4,
+                        border: '1px solid rgba(0,0,0,0.15)',
+                        background: 'rgba(255,255,255,0.6)',
+                        color: '#666', fontSize: 11, cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        lineHeight: 1,
+                      }}
+                      title="삭제"
+                    >×</button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -674,6 +939,7 @@ function loadStoryboard(scriptId) {
   catch { return null; }
 }
 function saveStoryboard(scriptId, panels) {
+  if (scriptId === '__guest_demo__') return; // 게스트 데모는 저장 안 함
   localStorage.setItem(getSbKey(scriptId), JSON.stringify(panels));
 }
 
@@ -819,7 +1085,9 @@ function SbDrawingCanvas({ initialData, onSave }) {
 
 // ─── 패널 카드 ────────────────────────────────────────────────────────────────
 
-function SbPanelCard({ panel, index, total, onChange, onDelete, onMove, cardView }) {
+function SbPanelCard({ panel, index, total, onChange, onDelete, onMove, cardView,
+                        isSelected, onSelect, isDragging, isDragOver,
+                        onDragStart, onDragEnter, onDragEnd }) {
   const D = useD();
   const [expanded, setExpanded] = useState(true);
   const sbInp = { width: '100%', background: D.bg, border: `1px solid ${D.border}`, borderRadius: 4, color: D.text, padding: '5px 8px', fontSize: 12, fontFamily: 'inherit', boxSizing: 'border-box', outline: 'none' };
@@ -886,24 +1154,41 @@ function SbPanelCard({ panel, index, total, onChange, onDelete, onMove, cardView
   );
 
   return (
-    <div style={{ background: D.card, border: `1px solid ${D.border}`, borderRadius: 8, overflow: 'hidden' }}>
+    <div
+      draggable
+      onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; onDragStart(index); }}
+      onDragEnter={() => onDragEnter(index)}
+      onDragOver={e => e.preventDefault()}
+      onDragEnd={onDragEnd}
+      onClick={() => onSelect(panel.id)}
+      style={{
+        background: D.card,
+        border: `1px solid ${isDragOver ? D.accent : (isSelected ? D.accentDim : D.border)}`,
+        borderTop: isDragOver ? `3px solid ${D.accent}` : `1px solid ${isSelected ? D.accentDim : D.border}`,
+        borderRadius: 8, overflow: 'hidden',
+        opacity: isDragging ? 0.45 : 1,
+        transition: 'border-color 0.1s, opacity 0.15s',
+        cursor: 'default',
+      }}
+    >
       {/* 카드 헤더 */}
-      <div style={{ background: D.panel, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: `1px solid ${D.border}` }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, opacity: 0.3 }}>
-          {[0,1,2].map(i => <div key={i} style={{ width: 4, height: 4, borderRadius: '50%', background: D.text2 }}/>)}
+      <div style={{ background: D.panel, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 8, borderBottom: `1px solid ${D.border}` }}>
+        {/* 드래그 핸들 */}
+        <div
+          title="드래그하여 순서 변경"
+          style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2.5, cursor: 'grab', padding: '2px 3px', flexShrink: 0, opacity: 0.35 }}
+        >
+          {[0,1,2,3,4,5].map(i => (
+            <div key={i} style={{ width: 3, height: 3, borderRadius: '50%', background: D.text2 }} />
+          ))}
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flex: 1, minWidth: 0 }}>
-          <span style={{ background: D.accent, color: '#1a1a1a', fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 3, fontFamily: 'monospace', flexShrink: 0 }}>
-            CUT {panel.cutNo || index + 1}
+          <span style={{ background: D.accent, color: '#1a1a1a', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 3, fontFamily: 'monospace', flexShrink: 0, minWidth: 24, textAlign: 'center' }}>
+            {index + 1}
           </span>
-          {panel.sceneNo && <span style={{ border: `1px solid ${D.border}`, color: D.text3, fontSize: 10, padding: '2px 6px', borderRadius: 3, fontFamily: 'monospace', flexShrink: 0 }}>S#{panel.sceneNo}</span>}
           {panel._sceneHeading && <span style={{ color: D.text2, fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{panel._sceneHeading}</span>}
         </div>
-        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-          <button onClick={() => onMove(index, -1)} disabled={index === 0}
-            style={{ border: `1px solid ${D.border}`, background: 'transparent', color: D.text3, cursor: 'pointer', padding: '2px 7px', borderRadius: 4, fontSize: 11 }}>↑</button>
-          <button onClick={() => onMove(index, 1)} disabled={index === total - 1}
-            style={{ border: `1px solid ${D.border}`, background: 'transparent', color: D.text3, cursor: 'pointer', padding: '2px 7px', borderRadius: 4, fontSize: 11 }}>↓</button>
+        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
           <button onClick={() => setExpanded(e => !e)}
             style={{ border: `1px solid ${D.border}`, background: 'transparent', color: D.text3, cursor: 'pointer', padding: '2px 8px', borderRadius: 4, fontSize: 11 }}>{expanded ? '−' : '+'}</button>
           <button onClick={() => onDelete(panel.id)}
@@ -931,28 +1216,435 @@ function SbPanelCard({ panel, index, total, onChange, onDelete, onMove, cardView
   );
 }
 
-function StoryboardPanel() {
-  const D = useD();
-  const [scripts,   setScripts]   = useState(null);
-  const [selected,  setSelected]  = useState(null);
-  const [panels,    setPanels]    = useState(null);   // null = 미생성
-  const [loading,   setLoading]   = useState(false);
-  const [error,     setError]     = useState('');
-  const [cardView,  setCardView]  = useState('card'); // 'card' | 'row'
+// ── 로컬 스크립트 (외부 파일 업로드 기반) ──────────────────────────────────────
+const LOCAL_SCRIPTS_KEY = 'director_local_scripts';
+function loadLocalScripts() {
+  try { return JSON.parse(localStorage.getItem(LOCAL_SCRIPTS_KEY) || '[]'); } catch { return []; }
+}
+function saveLocalScripts(list) {
+  localStorage.setItem(LOCAL_SCRIPTS_KEY, JSON.stringify(list));
+}
+function deleteLocalScript(id) {
+  saveLocalScripts(loadLocalScripts().filter(s => s.id !== id));
+  localStorage.removeItem(getSbKey(id));
+}
 
-  // 스크립트 목록
+// ── 수동 입력 → 스토리보드 생성 모달 ──────────────────────────────────────────
+function UploadScriptModal({ onClose, onGenerate }) {
+  const D = useD();
+  const [step,       setStep]       = useState(1); // 1=텍스트입력  2=씬미리보기
+  const [error,      setError]      = useState('');
+  const [title,      setTitle]      = useState('');
+  const [scenes,     setScenes]     = useState([]);     // 편집용 씬 목록 (contentLines 없음)
+  const [fullScenes, setFullScenes] = useState([]);     // 파싱 원본 (contentLines 보존)
+  const [scriptText, setScriptText] = useState('');
+
+  const OVERLAY = {
+    position: 'fixed', inset: 0, zIndex: 9000,
+    background: 'rgba(0,0,0,0.7)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    padding: 16,
+  };
+  const BOX = {
+    background: D.panel, borderRadius: 12, width: '100%', maxWidth: 600,
+    maxHeight: '90vh', display: 'flex', flexDirection: 'column',
+    border: `1px solid ${D.border}`, overflow: 'hidden',
+  };
+
+  // 텍스트 → 씬 감지 (parseFullScript 1회만 호출, 결과 보존)
+  const handleDetect = () => {
+    const text = scriptText.trim();
+    if (!text) { setError('대본 텍스트를 입력해주세요.'); return; }
+    setError('');
+    if (!title) setTitle('대본');
+    const parsed = parseFullScript(text);
+    setFullScenes(parsed);
+    setScenes(parsed.map(s => ({ sceneNo: s.sceneNo, location: s.location, timeOfDay: s.timeOfDay, raw: s.raw })));
+    setStep(2);
+  };
+
+  // 씬 편집
+  const updateScene = (idx, field, val) => {
+    setScenes(prev => prev.map((s, i) => i === idx ? { ...s, [field]: val } : s));
+  };
+  const deleteScene = (idx) => setScenes(prev => prev.filter((_, i) => i !== idx));
+  const addScene = () => {
+    const nextNo = String((scenes.length > 0 ? Math.max(...scenes.map(s => parseInt(s.sceneNo) || 0)) : 0) + 1);
+    setScenes(prev => [...prev, { sceneNo: nextNo, location: '', timeOfDay: '', raw: '' }]);
+  };
+
+  // 스토리보드 생성 (parseFullScript 재호출 없이 fullScenes 재사용)
+  const handleGenerate = () => {
+    const validScenes = scenes.filter(s => s.location || s.sceneNo);
+    if (validScenes.length === 0) { setError('최소 1개 이상의 씬이 필요합니다.'); return; }
+    const merged = validScenes.map((vs, i) => {
+      const fs = fullScenes[i] || vs;
+      return { ...fs, location: vs.location, timeOfDay: vs.timeOfDay, sceneNo: vs.sceneNo };
+    });
+    const panels = buildPanelsFromScenes(merged);
+    const id = `ls_${Date.now()}`;
+    onGenerate({ id, title: title.trim() || '대본', panels });
+  };
+
+  return (
+    <div style={OVERLAY} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={BOX}>
+        {/* 헤더 */}
+        <div style={{ padding: '16px 20px', borderBottom: `1px solid ${D.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: D.text }}>수동 입력으로 스토리보드 만들기</div>
+            <div style={{ fontSize: 11, color: D.text3, marginTop: 2 }}>
+              {step === 1 ? '대본 텍스트를 붙여넣으면 씬·지문·대사를 자동 인식합니다' : `씬 ${scenes.length}개 감지됨 — 수정 후 생성하세요`}
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: D.text3, fontSize: 18, cursor: 'pointer', lineHeight: 1 }}>×</button>
+        </div>
+
+        {/* 본문 */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
+
+          {/* ── 1단계: 제목 + 대본 텍스트 입력 ── */}
+          {step === 1 && (
+            <div>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: D.text3, display: 'block', marginBottom: 5 }}>작품 제목</label>
+                <input
+                  value={title}
+                  onChange={e => setTitle(e.target.value)}
+                  placeholder="제목 입력 (선택)"
+                  style={{ width: '100%', padding: '7px 10px', borderRadius: 6, border: `1px solid ${D.border}`, background: D.bg, color: D.text, fontSize: 13 }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: D.text3, display: 'block', marginBottom: 5 }}>대본 텍스트</label>
+                <div style={{ fontSize: 11, color: D.text3, marginBottom: 8, lineHeight: 1.7 }}>
+                  씬번호(S#1. / 씬1. / 1. / INT. 등)가 포함된 줄을 씬 헤더로 인식합니다.<br />
+                  대사(인물명: 대사)와 지문도 자동으로 구분해 패널에 채워집니다.
+                </div>
+                <textarea
+                  value={scriptText}
+                  onChange={e => setScriptText(e.target.value)}
+                  placeholder={'예시:\nS#1. 카페 내부, 낮\n두 사람이 마주 앉아 있다.\n민준: 오늘은 어땠어?\n지수: 그냥... 별로였어.\n\nS#2. 골목길, 밤\n빗속을 걷는 주인공.'}
+                  style={{
+                    width: '100%', height: 280, resize: 'vertical',
+                    background: D.bg, color: D.text,
+                    border: `1px solid ${D.border}`, borderRadius: 8,
+                    padding: '10px 12px', fontSize: 12, fontFamily: 'inherit',
+                    lineHeight: 1.7, boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+              {error && (
+                <div style={{ marginTop: 12, padding: '10px 14px', background: 'rgba(224,92,92,0.12)', borderRadius: 7, fontSize: 12, color: '#e05c5c', lineHeight: 1.7 }}>
+                  {error}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── 2단계: 씬 미리보기 ── */}
+          {step === 2 && (
+            <div>
+              {/* 제목 수정 */}
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: D.text3, display: 'block', marginBottom: 5 }}>작품 제목</label>
+                <input
+                  value={title}
+                  onChange={e => setTitle(e.target.value)}
+                  placeholder="제목 입력"
+                  style={{ width: '100%', padding: '7px 10px', borderRadius: 6, border: `1px solid ${D.border}`, background: D.bg, color: D.text, fontSize: 13 }}
+                />
+              </div>
+
+              {/* 씬 0개일 때 */}
+              {scenes.length === 0 && (
+                <div style={{ padding: '20px 0', textAlign: 'center' }}>
+                  <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.4 }}>🔍</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: D.text, marginBottom: 6 }}>씬번호를 찾지 못했어요</div>
+                  <div style={{ fontSize: 11, color: D.text3, lineHeight: 1.7, marginBottom: 16 }}>
+                    S#1. / 씬1. / INT. 형식의 씬 헤더가 텍스트에 없습니다.<br />
+                    씬을 직접 추가해서 스토리보드를 만들 수 있습니다.
+                  </div>
+                </div>
+              )}
+
+              {scenes.length > 0 && (
+                <div style={{ marginBottom: 12, fontSize: 11, color: D.text3 }}>
+                  씬 번호 · 장소 · 시간대를 수정하거나 불필요한 항목을 삭제하세요.
+                </div>
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+                {scenes.map((scene, idx) => (
+                  <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px', background: D.bg, borderRadius: 7, border: `1px solid ${D.border}` }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: D.accent, minWidth: 28, textAlign: 'center' }}>
+                      S#{scene.sceneNo}
+                    </div>
+                    <input
+                      value={scene.location}
+                      onChange={e => updateScene(idx, 'location', e.target.value)}
+                      placeholder="장소"
+                      style={{ flex: 2, padding: '4px 7px', borderRadius: 5, border: `1px solid ${D.border}`, background: D.panel, color: D.text, fontSize: 12 }}
+                    />
+                    <input
+                      value={scene.timeOfDay}
+                      onChange={e => updateScene(idx, 'timeOfDay', e.target.value)}
+                      placeholder="시간대"
+                      style={{ flex: 1, padding: '4px 7px', borderRadius: 5, border: `1px solid ${D.border}`, background: D.panel, color: D.text, fontSize: 12 }}
+                    />
+                    <button
+                      onClick={() => deleteScene(idx)}
+                      style={{ background: 'none', border: 'none', color: '#e05c5c', fontSize: 14, cursor: 'pointer', padding: '0 4px', lineHeight: 1 }}
+                    >×</button>
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={addScene}
+                style={{ width: '100%', padding: '7px 0', borderRadius: 7, border: `1px dashed ${D.border}`, background: 'transparent', color: D.text3, fontSize: 12, cursor: 'pointer' }}
+              >+ 씬 직접 추가</button>
+
+              {error && (
+                <div style={{ marginTop: 10, fontSize: 12, color: '#e05c5c' }}>{error}</div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* 푸터 */}
+        <div style={{ padding: '14px 20px', borderTop: `1px solid ${D.border}`, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          {step === 2 && (
+            <button
+              onClick={() => { setStep(1); setError(''); }}
+              style={{ padding: '7px 16px', borderRadius: 7, border: `1px solid ${D.border}`, background: 'transparent', color: D.text3, fontSize: 12, cursor: 'pointer' }}
+            >← 텍스트 수정</button>
+          )}
+          <button
+            onClick={onClose}
+            style={{ padding: '7px 16px', borderRadius: 7, border: `1px solid ${D.border}`, background: 'transparent', color: D.text3, fontSize: 12, cursor: 'pointer' }}
+          >취소</button>
+          {step === 1 && (
+            <button
+              onClick={handleDetect}
+              disabled={!scriptText.trim()}
+              style={{ padding: '7px 20px', borderRadius: 7, border: 'none', background: scriptText.trim() ? D.accent : '#555', color: '#1a1a1a', fontSize: 12, fontWeight: 700, cursor: scriptText.trim() ? 'pointer' : 'default' }}
+            >씬 감지 →</button>
+          )}
+          {step === 2 && (
+            <button
+              onClick={handleGenerate}
+              style={{ padding: '7px 20px', borderRadius: 7, border: 'none', background: D.accent, color: '#1a1a1a', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+            >🎞 스토리보드 생성</button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 씬번호별로 컷번호를 순서대로 재부여 (1씬2컷 → 씬의 몇 번째 컷인지)
+function recalcCutNos(panels) {
+  const counts = {};
+  return panels.map(p => {
+    const key = p.sceneNo || '';
+    counts[key] = (counts[key] || 0) + 1;
+    return { ...p, cutNo: String(counts[key]) };
+  });
+}
+
+// ─── 게스트 데모 데이터 ───────────────────────────────────────────────────────
+const DEMO_SCRIPT = { id: '__guest_demo__', title: '예시: 이별의 카페', _isDemo: true };
+const DEMO_PANELS = [
+  { id: 'dp1', sceneNo: '1', cutNo: '1', shotSize: 'ELS', cameraMove: 'Static',   transition: 'Cut',  duration: '4', _sceneHeading: '카페 내부 / 낮',  dialogue: '',                              action: '텅 빈 카페. 창가로 햇살이 쏟아진다. 두 개의 빈 커피잔.', drawingData: null, annotatedBlocks: [] },
+  { id: 'dp2', sceneNo: '1', cutNo: '2', shotSize: 'MS',  cameraMove: 'Static',   transition: 'Cut',  duration: '5', _sceneHeading: '카페 내부 / 낮',  dialogue: '민준: 우리, 이제 어떻게 되는 거야.',    action: '민준, 커피잔을 내려놓으며 지수를 바라본다.', drawingData: null, annotatedBlocks: [] },
+  { id: 'dp3', sceneNo: '1', cutNo: '3', shotSize: 'CU',  cameraMove: 'Static',   transition: 'Cut',  duration: '3', _sceneHeading: '카페 내부 / 낮',  dialogue: '',                              action: '지수의 손. 커피잔을 꽉 쥐고 있다.', drawingData: null, annotatedBlocks: [] },
+  { id: 'dp4', sceneNo: '2', cutNo: '1', shotSize: 'MS',  cameraMove: 'Pan',      transition: 'Cut',  duration: '4', _sceneHeading: '카페 내부 / 낮',  dialogue: '지수: 그냥... 이게 맞는 것 같아.', action: '지수, 창밖을 바라보며 말한다. 눈이 촉촉하다.', drawingData: null, annotatedBlocks: [] },
+  { id: 'dp5', sceneNo: '2', cutNo: '2', shotSize: 'CU',  cameraMove: 'Zoom In',  transition: 'Cut',  duration: '3', _sceneHeading: '카페 내부 / 낮',  dialogue: '',                              action: '민준의 표정. 서서히 굳어간다.', drawingData: null, annotatedBlocks: [] },
+  { id: 'dp6', sceneNo: '3', cutNo: '1', shotSize: 'LS',  cameraMove: 'Dolly Out',transition: 'Fade', duration: '7', _sceneHeading: '골목길 / 저녁',   dialogue: '',                              action: '지수, 골목길을 걸어나간다. 빗방울이 떨어지기 시작한다. 카메라가 서서히 멀어진다.', drawingData: null, annotatedBlocks: [] },
+];
+
+// ─── 게스트 가이드 ────────────────────────────────────────────────────────────
+const GUIDE_STEPS = [
+  {
+    icon: '🎬',
+    title: '연출 작업실에 오신 걸 환영합니다',
+    desc: '대본을 씬 단위로 분석하고 컷별 스토리보드를 제작하는 공간입니다.\n예시 작품이 미리 열려 있어요 — 직접 조작해보세요!',
+  },
+  {
+    icon: '🎞',
+    title: '스토리보드 패널',
+    desc: '씬마다 컷이 카드로 나뉩니다. 카드 상단의 숫자(1, 2, 3…)는 순서 번호예요.\n카드 안에서 씬번호·컷번호·장소를 확인할 수 있습니다.',
+  },
+  {
+    icon: '✏️',
+    title: '패널 편집',
+    desc: '카드 안에서 샷 사이즈·카메라 무브·전환 효과를 고르고,\n드로잉 캔버스에 직접 그림을 그릴 수 있습니다.',
+  },
+  {
+    icon: '➕',
+    title: '패널 추가 & 정렬',
+    desc: '카드를 하나 선택한 뒤 상단 "패널 추가" 버튼을 누르면 바로 아래에 새 컷이 생깁니다.\n카드 왼쪽 ⠿ 핸들을 드래그하면 순서를 바꿀 수 있습니다.',
+  },
+  {
+    icon: '🔑',
+    title: 'Google 로그인으로 더 많은 기능을',
+    desc: '• 대본 작업실의 대본을 불러와 자동 씬 분리\n• 연출노트 작성 후 작가에게 피드백 전달\n• 스토리보드 저장 및 PDF 출력',
+    isLast: true,
+  },
+];
+
+function GuestGuide({ onLogin }) {
+  const D = useD();
+  const [step,    setStep]    = useState(0);
+  const [visible, setVisible] = useState(true);
+
+  if (!visible) {
+    return (
+      <button
+        onClick={() => { setStep(0); setVisible(true); }}
+        title="가이드 열기"
+        style={{
+          position: 'fixed', right: 24, bottom: 24, zIndex: 9000,
+          width: 40, height: 40, borderRadius: '50%',
+          background: D.accent, color: '#1a1a1a',
+          border: 'none', fontSize: 18, cursor: 'pointer',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontWeight: 700,
+        }}
+      >?</button>
+    );
+  }
+
+  const cur = GUIDE_STEPS[step];
+  return (
+    <div style={{
+      position: 'fixed', right: 20, bottom: 20, zIndex: 9000,
+      width: 300,
+      background: D.panel,
+      border: `1px solid ${D.border}`,
+      borderRadius: 12,
+      boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+      overflow: 'hidden',
+      fontFamily: "'Pretendard','Apple SD Gothic Neo',sans-serif",
+    }}>
+      {/* 헤더 */}
+      <div style={{ background: D.accent, padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: '#1a1a1a', letterSpacing: '0.06em' }}>
+          연출 작업실 가이드 {step + 1}/{GUIDE_STEPS.length}
+        </span>
+        <button onClick={() => setVisible(false)}
+          style={{ background: 'none', border: 'none', color: '#1a1a1a', fontSize: 16, cursor: 'pointer', lineHeight: 1, opacity: 0.7, padding: 0 }}>×</button>
+      </div>
+
+      {/* 스텝 도트 */}
+      <div style={{ display: 'flex', gap: 5, padding: '10px 14px 0', justifyContent: 'center' }}>
+        {GUIDE_STEPS.map((_, i) => (
+          <div key={i} onClick={() => setStep(i)} style={{
+            width: i === step ? 18 : 6, height: 6, borderRadius: 3,
+            background: i === step ? D.accent : D.border,
+            cursor: 'pointer', transition: 'all 0.2s',
+          }} />
+        ))}
+      </div>
+
+      {/* 본문 */}
+      <div style={{ padding: '14px 16px 6px' }}>
+        <div style={{ fontSize: 28, textAlign: 'center', marginBottom: 10 }}>{cur.icon}</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: D.text, marginBottom: 8, textAlign: 'center' }}>{cur.title}</div>
+        <div style={{ fontSize: 12, color: D.text2, lineHeight: 1.75, whiteSpace: 'pre-line' }}>{cur.desc}</div>
+      </div>
+
+      {/* 버튼 */}
+      <div style={{ padding: '12px 14px', display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+        {step > 0 && (
+          <button onClick={() => setStep(s => s - 1)}
+            style={{ padding: '5px 12px', borderRadius: 6, border: `1px solid ${D.border}`, background: 'transparent', color: D.text3, fontSize: 11, cursor: 'pointer' }}>
+            ← 이전
+          </button>
+        )}
+        {cur.isLast ? (
+          <>
+            <button onClick={() => setVisible(false)}
+              style={{ padding: '5px 12px', borderRadius: 6, border: `1px solid ${D.border}`, background: 'transparent', color: D.text3, fontSize: 11, cursor: 'pointer' }}>
+              닫기
+            </button>
+            <button onClick={onLogin}
+              style={{ padding: '5px 14px', borderRadius: 6, border: 'none', background: D.accent, color: '#1a1a1a', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+              Google 로그인 →
+            </button>
+          </>
+        ) : (
+          <button onClick={() => setStep(s => s + 1)}
+            style={{ padding: '5px 14px', borderRadius: 6, border: 'none', background: D.accent, color: '#1a1a1a', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+            다음 →
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StoryboardPanel({ isGuest }) {
+  const D = useD();
+  const [scripts,         setScripts]         = useState(null);
+  const [localScripts,    setLocalScripts]    = useState(() => loadLocalScripts());
+  const [selected,        setSelected]        = useState(null);
+  const [panels,          setPanels]          = useState(null);   // null = 미생성
+  const [loading,         setLoading]         = useState(false);
+  const [error,           setError]           = useState('');
+  const [cardView,        setCardView]        = useState('card'); // 'card' | 'row'
+  const [showUpload,      setShowUpload]      = useState(false);
+  const [selectedPanelId, setSelectedPanelId] = useState(null);  // 선택된 패널
+  const [draggingIdx,     setDraggingIdx]     = useState(null);   // 드래그 중인 인덱스
+  const [dragOverIdx,     setDragOverIdx]     = useState(null);   // 드롭 대상 인덱스
+  const dragItem     = useRef(null);
+  const dragOverItem = useRef(null);
+
+  // 게스트: 데모 자동 선택
   useEffect(() => {
+    if (!isGuest) return;
+    setSelected(DEMO_SCRIPT);
+    setPanels(DEMO_PANELS);
+  }, [isGuest]);
+
+  // Supabase 스크립트 목록
+  useEffect(() => {
+    if (isGuest) { setScripts([]); return; }
     if (!supabase) { setScripts([]); return; }
     supabase.from('shared_scripts').select('id, title, imported_at, drive_file_id')
       .order('imported_at', { ascending: false })
       .then(({ data }) => setScripts(data || []));
   }, []);
 
+  // 외부 파일 업로드 완료 핸들러
+  const handleUploadGenerate = ({ id, title, panels: generatedPanels }) => {
+    const entry = { id, title, createdAt: new Date().toISOString(), _isLocal: true };
+    const updated = [entry, ...loadLocalScripts()];
+    saveLocalScripts(updated);
+    const recalced = recalcCutNos(generatedPanels);
+    saveStoryboard(id, recalced);
+    setLocalScripts(updated);
+    setSelected(entry);
+    setPanels(recalced);
+    setSelectedPanelId(null);
+    setShowUpload(false);
+  };
+
+  // 로컬 스크립트 삭제
+  const handleDeleteLocal = (e, id) => {
+    e.stopPropagation();
+    if (!window.confirm('이 스토리보드를 삭제할까요?\n(로컬에만 저장된 데이터가 삭제됩니다)')) return;
+    deleteLocalScript(id);
+    setLocalScripts(loadLocalScripts());
+    if (selected?.id === id) { setSelected(null); setPanels(null); }
+  };
+
   // 작품 선택 시 기존 스토리보드 로드
   const handleSelect = (s) => {
     setSelected(s);
     setError('');
     setPanels(loadStoryboard(s.id));
+    setSelectedPanelId(null);
   };
 
   // 스토리보드 생성: Drive에서 대본 로드 → 블록 파싱
@@ -973,8 +1665,9 @@ function StoryboardPanel() {
         selected.id
       );
       if (generated.length === 0) throw new Error('씬 헤더 블록(scene_number)이 없어 패널을 나눌 수 없습니다.');
-      setPanels(generated);
-      saveStoryboard(selected.id, generated);
+      const recalced = recalcCutNos(generated);
+      setPanels(recalced);
+      saveStoryboard(selected.id, recalced);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -992,7 +1685,7 @@ function StoryboardPanel() {
 
   const handleDelete = (id) => {
     setPanels(prev => {
-      const next = prev.filter(p => p.id !== id);
+      const next = recalcCutNos(prev.filter(p => p.id !== id));
       saveStoryboard(selected.id, next);
       return next;
     });
@@ -1011,16 +1704,56 @@ function StoryboardPanel() {
 
   const handleAddPanel = () => {
     if (!selected || !panels) return;
-    const cutNo = panels.length + 1;
+    // 선택된 패널 위치 (없으면 맨 끝)
+    const selIdx = selectedPanelId ? panels.findIndex(p => p.id === selectedPanelId) : -1;
+    const refPanel = selIdx >= 0 ? panels[selIdx] : (panels.length > 0 ? panels[panels.length - 1] : null);
+    const insertAfterIdx = selIdx >= 0 ? selIdx + 1 : panels.length;
+    // 선택된(또는 마지막) 패널과 같은 씬번호 상속
     const newPanel = {
-      id: `sb_${Date.now()}`, shotSize: 'MS', cameraMove: 'Static', transition: 'Cut',
+      id: `sb_${Date.now()}`,
+      shotSize: 'MS', cameraMove: 'Static', transition: 'Cut',
       dialogue: '', action: '', duration: '3',
-      sceneNo: String(cutNo), cutNo: String(cutNo),
-      drawingData: null, _sceneHeading: `씬 ${cutNo}`,
+      sceneNo: refPanel?.sceneNo || '',
+      cutNo: '1', // recalcCutNos로 즉시 재부여됨
+      drawingData: null,
+      _sceneHeading: refPanel?._sceneHeading || '',
+      annotatedBlocks: [],
     };
-    const next = [...panels, newPanel];
+    const inserted = [
+      ...panels.slice(0, insertAfterIdx),
+      newPanel,
+      ...panels.slice(insertAfterIdx),
+    ];
+    const next = recalcCutNos(inserted);
     setPanels(next);
+    setSelectedPanelId(newPanel.id);
     saveStoryboard(selected.id, next);
+  };
+
+  // 드래그 앤 드롭 핸들러
+  const handleDragStart = (index) => {
+    dragItem.current = index;
+    setDraggingIdx(index);
+  };
+  const handleDragEnter = (index) => {
+    if (dragItem.current === index) return;
+    dragOverItem.current = index;
+    setDragOverIdx(index);
+  };
+  const handleDragEnd = () => {
+    const from = dragItem.current;
+    const to   = dragOverItem.current;
+    dragItem.current = null; dragOverItem.current = null;
+    setDraggingIdx(null); setDragOverIdx(null);
+    if (from === null || to === null || from === to) return;
+    setPanels(prev => {
+      const next = [...prev];
+      const [item] = next.splice(from, 1);
+      next.splice(to, 0, item);
+      const recalced = recalcCutNos(next);
+      saveStoryboard(selected.id, recalced);
+      return recalced;
+    });
   };
 
   const handleReset = () => {
@@ -1028,6 +1761,7 @@ function StoryboardPanel() {
     if (!window.confirm('스토리보드를 초기화하면 모든 내용이 삭제됩니다. 계속할까요?')) return;
     localStorage.removeItem(getSbKey(selected.id));
     setPanels(null);
+    setSelectedPanelId(null);
   };
 
   const getPanelCount = (scriptId) => {
@@ -1040,26 +1774,33 @@ function StoryboardPanel() {
   const handlePrint = () => {
     if (!panels || panels.length === 0) return;
     const title = selected?.title || '스토리보드';
-    const esc = s => (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+    // XSS 방어: 속성값 포함 전체 이스케이핑
+    const esc = s => (s || '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/\n/g, '<br>');
+    // 색상 값 검증 (hex/rgb 계열만 허용)
+    const safeColor = c => /^#[0-9a-f]{3,8}$|^rgb/i.test(c || '') ? c : '#fef08a';
+    // drawingData: base64 data URL 형식만 허용
+    const safeDataUrl = d => typeof d === 'string' && d.startsWith('data:image/') ? d : null;
 
     const panelHtml = panels.map((p, i) => {
       const notes = (p.annotatedBlocks || []).filter(b => b.note);
       const notesHtml = notes.length > 0
         ? notes.map(b => `
-            <div class="note" style="background:${b.note.color || '#fef08a'}">
+            <div class="note" style="background:${safeColor(b.note.color)}">
               <span class="note-label">📋 연출노트</span>
               ${esc(b.note.content)}
             </div>`).join('')
         : '';
-      const drawingHtml = p.drawingData
-        ? `<img src="${p.drawingData}" class="canvas-img"/>`
+      const imgSrc = safeDataUrl(p.drawingData);
+      const drawingHtml = imgSrc
+        ? `<img src="${imgSrc}" class="canvas-img"/>`
         : `<div class="canvas-empty"><span>🎬</span></div>`;
 
       return `
         <div class="panel">
           <div class="panel-header">
-            <span class="cut-badge">CUT ${esc(p.cutNo || String(i+1))}</span>
-            <span class="scene-no">S#${esc(p.sceneNo)}</span>
+            <span class="cut-badge">${i + 1}</span>
             <span class="scene-heading">${esc(p._sceneHeading)}</span>
             <span class="transition">${esc(p.transition)}</span>
           </div>
@@ -1093,8 +1834,7 @@ function StoryboardPanel() {
   .panels { padding: 20px 32px; display: flex; flex-direction: column; gap: 20px; }
   .panel { border: 1px solid #ccc; border-radius: 6px; overflow: hidden; break-inside: avoid; page-break-inside: avoid; }
   .panel-header { background: #f4f4f4; padding: 6px 12px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #ddd; }
-  .cut-badge { background: #e8a020; color: #000; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 3px; font-family: monospace; }
-  .scene-no { border: 1px solid #bbb; color: #555; font-size: 10px; padding: 2px 6px; border-radius: 3px; font-family: monospace; }
+  .cut-badge { background: #e8a020; color: #000; font-size: 10px; font-weight: 700; padding: 2px 9px; border-radius: 3px; font-family: monospace; letter-spacing: 0.02em; }
   .scene-heading { font-size: 12px; font-weight: 600; flex: 1; }
   .transition { font-size: 10px; color: #888; }
   .panel-body { display: flex; gap: 0; }
@@ -1146,12 +1886,66 @@ function StoryboardPanel() {
         display: 'flex', flexDirection: 'column',
         overflow: 'hidden',
       }}>
-        <div style={{ padding: '16px 16px 10px', borderBottom: `1px solid ${D.border}` }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: D.text3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>스토리보드</div>
+        <div style={{ padding: '12px 16px 10px', borderBottom: `1px solid ${D.border}` }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: D.text3, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8 }}>스토리보드</div>
+          <button
+            onClick={() => setShowUpload(true)}
+            style={{
+              width: '100%', padding: '6px 0', borderRadius: 6, border: `1px solid ${D.accent}`,
+              background: 'transparent', color: D.accent, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+            }}
+          >+ 텍스트로 만들기</button>
         </div>
         <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
+
+          {/* 로컬 스크립트 섹션 */}
+          {localScripts.length > 0 && (
+            <>
+              <div style={{ padding: '4px 16px 2px', fontSize: 9, fontWeight: 700, color: D.text3, letterSpacing: '0.08em', textTransform: 'uppercase' }}>업로드 파일</div>
+              {localScripts.map(s => {
+                const count  = getPanelCount(s.id);
+                const active = selected?.id === s.id;
+                return (
+                  <div key={s.id}
+                    onClick={() => handleSelect(s)}
+                    style={{
+                      padding: '8px 16px', cursor: 'pointer',
+                      borderLeft: active ? `2px solid ${D.accent}` : '2px solid transparent',
+                      background: active ? D.active : 'transparent',
+                      transition: 'background 0.12s',
+                      display: 'flex', alignItems: 'center', gap: 8,
+                    }}
+                    onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
+                    onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: active ? 600 : 400, color: active ? D.accent : D.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {s.title}
+                      </div>
+                      <div style={{ fontSize: 10, color: D.text3, marginTop: 1 }}>
+                        📄 {count > 0 ? `패널 ${count}개` : '패널 없음'}
+                      </div>
+                    </div>
+                    <button
+                      onClick={e => handleDeleteLocal(e, s.id)}
+                      style={{ background: 'none', border: 'none', color: D.text3, fontSize: 13, cursor: 'pointer', padding: '0 2px', flexShrink: 0, opacity: 0.5 }}
+                      title="삭제"
+                    >×</button>
+                  </div>
+                );
+              })}
+              {scripts?.length > 0 && (
+                <div style={{ margin: '6px 16px', borderBottom: `1px solid ${D.border}` }} />
+              )}
+            </>
+          )}
+
+          {/* Supabase 스크립트 섹션 */}
+          {localScripts.length > 0 && scripts?.length > 0 && (
+            <div style={{ padding: '4px 16px 2px', fontSize: 9, fontWeight: 700, color: D.text3, letterSpacing: '0.08em', textTransform: 'uppercase' }}>가져온 대본</div>
+          )}
           {scripts === null && <div style={{ padding: '12px 16px', fontSize: 12, color: D.text3 }}>불러오는 중…</div>}
-          {scripts?.length === 0 && (
+          {scripts?.length === 0 && localScripts.length === 0 && (
             <div style={{ padding: '24px 16px', textAlign: 'center' }}>
               <div style={{ fontSize: 22, marginBottom: 8, opacity: 0.4 }}>🎞</div>
               <div style={{ fontSize: 11, color: D.text3, lineHeight: 1.6 }}>가져온 작품이 없습니다.</div>
@@ -1191,6 +1985,14 @@ function StoryboardPanel() {
           })}
         </div>
       </div>
+
+      {/* 업로드 모달 */}
+      {showUpload && (
+        <UploadScriptModal
+          onClose={() => setShowUpload(false)}
+          onGenerate={handleUploadGenerate}
+        />
+      )}
 
       {/* 우: 스토리보드 영역 */}
       <div style={{ flex: 1, minHeight: 0, minWidth: 0, overflow: 'auto', background: D.bg }}>
@@ -1282,6 +2084,13 @@ function StoryboardPanel() {
                   onDelete={handleDelete}
                   onMove={handleMove}
                   cardView={cardView}
+                  isSelected={selectedPanelId === panel.id}
+                  onSelect={setSelectedPanelId}
+                  isDragging={draggingIdx === idx}
+                  isDragOver={dragOverIdx === idx && draggingIdx !== idx}
+                  onDragStart={handleDragStart}
+                  onDragEnter={handleDragEnter}
+                  onDragEnd={handleDragEnd}
                 />
               ))}
             </div>

@@ -326,7 +326,7 @@ function CoverPage({ section, margins, fontFamily, fontSize, lineHeight, scale }
  *   selections — { cover, synopsis, episodes: {[id]:bool}, chars }
  *   columnWidth — available width for preview (default 340)
  */
-export default function PreviewRenderer({ appState, selections, columnWidth = 340 }) {
+export default function PreviewRenderer({ appState, selections, columnWidth = 340, zoom = 1 }) {
   // stylePreset이 undefined일 때 매 렌더마다 새 {} 생성을 막기 위해 useMemo 사용.
   // 새 객체가 생기면 metrics → useEffect가 매 렌더마다 재실행되어 pages가 영원히 null이 됨.
   const preset  = useMemo(() => appState?.stylePreset || {}, [appState?.stylePreset]);
@@ -350,7 +350,7 @@ export default function PreviewRenderer({ appState, selections, columnWidth = 34
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const scale = measuredWidth / A4_W_PX;
+  const scale = (measuredWidth / A4_W_PX) * zoom;
 
   // null = 계산 중, [] = 선택 없음, [...] = 완료
   const [pages, setPages] = useState(null);

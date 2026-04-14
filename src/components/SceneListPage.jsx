@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useApp } from '../store/AppContext';
 import { resolveSceneLabel, parseSceneContent, TIME_OF_DAY_OPTIONS } from '../utils/sceneResolver';
+import { buildSceneLabel } from '../utils/scenePrefix';
 import { now, genId } from '../store/db';
 import { getChipInlineStyle } from '../utils/emotionColor';
 import { exportScenelistXlsx } from '../print/scenelistExport';
@@ -429,7 +430,7 @@ export default function SceneListPage() {
     const merged = [...epBlocks, ...newBlocks];
     let seq = 0;
     const labelled = merged.map(b => {
-      if (b.type === 'scene_number') { seq++; return { ...b, label: `S#${seq}.` }; }
+      if (b.type === 'scene_number') { seq++; return { ...b, label: buildSceneLabel(seq) }; }
       return b;
     });
     dispatch({ type: 'SET_BLOCKS', episodeId: epId, payload: labelled });
@@ -444,7 +445,7 @@ export default function SceneListPage() {
     const nextSeq = (epScenes.length > 0 ? Math.max(...epScenes.map(s => s.sceneSeq || 0)) : 0) + 1;
     const newScene = {
       id: sceneId, episodeId: epId, projectId: activeProjectId,
-      sceneSeq: nextSeq, label: `S#${nextSeq}.`,
+      sceneSeq: nextSeq, label: buildSceneLabel(nextSeq),
       status: 'draft', tags: [], characters: [], characterIds: [],
       content: '', location: '', subLocation: '', timeOfDay: '',
       specialSituation: '', sceneListContent: '',

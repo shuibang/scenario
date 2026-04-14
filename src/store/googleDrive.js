@@ -234,6 +234,22 @@ export async function saveDirectorScript(title, data) {
 }
 
 /**
+ * fileId로 Drive 파일 삭제
+ * 파일이 이미 없거나 권한 없음(404/403)이면 조용히 무시
+ */
+export async function deleteFileById(fileId) {
+  if (!fileId || !isTokenValid()) return;
+  const res = await fetch(`${DRIVE_API}/files/${fileId}`, {
+    method:  'DELETE',
+    headers: { Authorization: `Bearer ${_accessToken}` },
+  });
+  // 204 = 성공, 404 = 이미 없음 → 둘 다 정상 처리
+  if (!res.ok && res.status !== 404) {
+    throw new Error(`Drive 파일 삭제 실패: ${res.status}`);
+  }
+}
+
+/**
  * 감독 드라이브에서 대본 데이터 불러오기
  * @param {string} fileId - Drive file id
  * @returns {object} { title, data, savedAt }
