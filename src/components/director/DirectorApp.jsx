@@ -42,9 +42,9 @@ export default function DirectorApp({ authUser }) {
     );
   }
 
-  const DEV_SESSION = { user: { id: 'dev', email: 'dev@test.com', user_metadata: { full_name: '개발자', avatar_url: '' } } };
+  const GUEST_SESSION = { user: { id: 'guest', email: '', user_metadata: { full_name: '둘러보기', avatar_url: '' } }, isGuest: true };
 
   return session
-    ? <DirectorDashboard session={session} onBack={handleBack} />
-    : <DirectorLogin onBack={handleBack} onDevBypass={() => setSession(DEV_SESSION)} />;
+    ? <DirectorDashboard session={session} onBack={handleBack} isGuest={!!session.isGuest} />
+    : <DirectorLogin onBack={handleBack} onGuest={() => setSession(GUEST_SESSION)} />;
 }

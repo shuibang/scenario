@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { signInWithGoogle } from '../../store/supabaseClient';
 
 // ─── 감독 로그인 화면 ─────────────────────────────────────────────────────────
-export default function DirectorLogin({ onBack, onDevBypass }) {
+export default function DirectorLogin({ onBack, onGuest }) {
   const [loading, setLoading] = useState(false);
 
   const handleGoogle = async () => {
@@ -49,21 +49,21 @@ export default function DirectorLogin({ onBack, onDevBypass }) {
             어떤 구글 계정이든 사용할 수 있습니다.
           </p>
 
-          {onDevBypass && (
-            <div style={{ borderTop: '1px dashed var(--c-border)', paddingTop: 16, marginTop: 4 }}>
-              <p style={{ margin: '0 0 8px', fontSize: 10, color: 'var(--c-text6)' }}>🛠 개발 전용</p>
-              <button
-                onClick={onDevBypass}
-                style={{
-                  width: '100%', padding: '8px', borderRadius: 6,
-                  border: '1px dashed var(--c-border)', background: 'transparent',
-                  color: 'var(--c-text5)', fontSize: 12, cursor: 'pointer',
-                }}
-              >
-                로그인 없이 둘러보기
-              </button>
-            </div>
-          )}
+          <div style={{ borderTop: '1px solid var(--c-border)', paddingTop: 16, marginTop: 4 }}>
+            <button
+              onClick={onGuest}
+              style={{
+                width: '100%', padding: '10px', borderRadius: 6,
+                border: '1px solid var(--c-border)', background: 'transparent',
+                color: 'var(--c-text4)', fontSize: 13, cursor: 'pointer',
+              }}
+            >
+              둘러보기
+            </button>
+            <p style={{ margin: '8px 0 0', fontSize: 11, color: 'var(--c-text6)', lineHeight: 1.5 }}>
+              로그인 없이 인터페이스를 체험할 수 있어요.<br />대본 불러오기·저장은 지원되지 않습니다.
+            </p>
+          </div>
 
         </div>
       </div>

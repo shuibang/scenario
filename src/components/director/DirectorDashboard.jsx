@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, createContext, useContext } from 'react';
-import { supabaseSignOut, extractUserData, supabase } from '../../store/supabaseClient';
+import { supabaseSignOut, extractUserData, supabase, signInWithGoogle } from '../../store/supabaseClient';
 import { setAccessToken, isTokenValid, loadDirectorScript } from '../../store/googleDrive';
 import DirectorScriptViewer from './DirectorScriptViewer';
 import PreviewRenderer from '../../print/PreviewRenderer';
@@ -40,7 +40,7 @@ const ThemeCtx = createContext(D_DARK);
 const useD = () => useContext(ThemeCtx);
 
 // ─── 감독 대시보드 ────────────────────────────────────────────────────────────
-export default function DirectorDashboard({ session, onBack }) {
+export default function DirectorDashboard({ session, onBack, isGuest = false }) {
   const user = extractUserData(session);
   const [activeMenu, setActiveMenu] = useState('projects');
   const [loggingOut, setLoggingOut] = useState(false);
@@ -115,15 +115,26 @@ export default function DirectorDashboard({ session, onBack }) {
               <div style={{ fontSize: 10, color: D.text3 }}>{user?.email}</div>
             </div>
           </div>
-          <button
-            onClick={handleLogout}
-            disabled={loggingOut}
-            style={{
-              fontSize: 11, color: D.text3,
-              background: 'none', border: `1px solid ${D.border}`,
-              borderRadius: 4, padding: '4px 10px', cursor: 'pointer',
-            }}
-          >{loggingOut ? '…' : '로그아웃'}</button>
+          {isGuest ? (
+            <button
+              onClick={signInWithGoogle}
+              style={{
+                fontSize: 11, color: D.accent,
+                background: 'none', border: `1px solid ${D.accent}`,
+                borderRadius: 4, padding: '4px 10px', cursor: 'pointer',
+              }}
+            >Google로 로그인</button>
+          ) : (
+            <button
+              onClick={handleLogout}
+              disabled={loggingOut}
+              style={{
+                fontSize: 11, color: D.text3,
+                background: 'none', border: `1px solid ${D.border}`,
+                borderRadius: 4, padding: '4px 10px', cursor: 'pointer',
+              }}
+            >{loggingOut ? '…' : '로그아웃'}</button>
+          )}
         </div>
       </header>
 
@@ -153,7 +164,7 @@ export default function DirectorDashboard({ session, onBack }) {
 
         {/* 우측 콘텐츠 */}
         <main style={{ flex: 1, display: 'flex', minHeight: 0, background: D.bg, overflow: 'hidden' }}>
-          {activeMenu === 'projects'   && <ProjectsPanel />}
+          {activeMenu === 'projects'   && <ProjectsPanel session={session} isGuest={isGuest} />}
           {activeMenu === 'notes'      && <NotesPanel />}
           {activeMenu === 'storyboard' && <StoryboardPanel />}
         </main>
@@ -232,13 +243,49 @@ function EmptySlot({ icon, label, sub }) {
 }
 
 // ─── 패널들 ───────────────────────────────────────────────────────────────────
-function ProjectsPanel() {
+// Drive 끊김 여부: provider_token이 없을 때 참
+function isDriveError(msg) {
+  return msg && (msg.includes('Drive 권한') || msg.includes('provider_token') || msg.includes('Drive'));
+}
+
+function DriveReconnectCard({ D, message }) {
+  const [loading, setLoading] = useState(false);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, padding: 32, textAlign: 'center', maxWidth: 320 }}>
+      <div style={{ fontSize: 32 }}>🔌</div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: D.text }}>Drive 연결이 끊겼습니다</div>
+      <div style={{ fontSize: 12, color: D.text2, lineHeight: 1.7 }}>
+        {message || 'Google Drive 권한이 만료되었습니다.'}<br />
+        Google 계정으로 다시 로그인하면 계속 이용할 수 있습니다.
+      </div>
+      <button
+        onClick={async () => { setLoading(true); await signInWithGoogle(); }}
+        disabled={loading}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          padding: '10px 20px', borderRadius: 8,
+          border: `1px solid ${D.border}`, background: D.card,
+          color: D.text, fontSize: 13, fontWeight: 500,
+          cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1,
+        }}
+      >
+        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="" style={{ width: 16, height: 16 }} />
+        {loading ? '이동 중…' : 'Google로 다시 로그인'}
+      </button>
+    </div>
+  );
+}
+
+function ProjectsPanel({ session, isGuest }) {
   const D = useD();
   const [scripts,  setScripts]  = useState(null);
   const [error,    setError]    = useState('');
   const [selected, setSelected] = useState(null);
   const [viewing,  setViewing]  = useState(null);
   const [loading,  setLoading]  = useState(false);
+
+  // Drive 토큰 유효성 사전 확인 (로그인은 됐지만 Drive 권한 만료 상태)
+  const driveDisconnected = !isGuest && session && !session.provider_token && !isTokenValid();
 
   useEffect(() => {
     if (!supabase) { setScripts([]); return; }
@@ -297,7 +344,39 @@ function ProjectsPanel() {
   };
 
   return (
-    <div style={{ display: 'flex', flex: 1, minHeight: 0, height: '100%' }}>
+    <div style={{ display: 'flex', flex: 1, minHeight: 0, height: '100%', flexDirection: 'column' }}>
+
+      {/* 둘러보기 모드 안내 배너 */}
+      {isGuest && (
+        <div style={{
+          flexShrink: 0, padding: '8px 16px',
+          background: D.accentDim, borderBottom: `1px solid ${D.border}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+        }}>
+          <span style={{ fontSize: 12, color: D.text2 }}>둘러보기 모드 — 대본 불러오기·저장은 로그인 후 이용할 수 있습니다.</span>
+          <button
+            onClick={signInWithGoogle}
+            style={{ fontSize: 11, color: D.accent, background: 'none', border: `1px solid ${D.accent}`, borderRadius: 4, padding: '3px 10px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+          >Google로 로그인</button>
+        </div>
+      )}
+
+      {/* Drive 끊김 배너 (로그인은 됐지만 토큰 만료) */}
+      {driveDisconnected && (
+        <div style={{
+          flexShrink: 0, padding: '8px 16px',
+          background: '#3d1a1a', borderBottom: `1px solid #6b2e2e`,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+        }}>
+          <span style={{ fontSize: 12, color: '#f4a4a4' }}>🔌 Google Drive 연결이 끊겼습니다. 대본을 불러오려면 다시 로그인이 필요합니다.</span>
+          <button
+            onClick={signInWithGoogle}
+            style={{ fontSize: 11, color: '#f87171', background: 'none', border: '1px solid #f87171', borderRadius: 4, padding: '3px 10px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+          >다시 로그인</button>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
 
       {/* 좌: 작품 목록 패널 */}
       <div style={{
@@ -365,7 +444,10 @@ function ProjectsPanel() {
           )}
           {selected && !loading && viewing?.error && (
             <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <div style={{ fontSize: 13, color: '#c00' }}>불러오기 실패: {viewing.error}</div>
+              {isDriveError(viewing.error)
+                ? <DriveReconnectCard D={D} message={viewing.error} />
+                : <div style={{ fontSize: 13, color: '#c00' }}>불러오기 실패: {viewing.error}</div>
+              }
             </div>
           )}
           {selected && !loading && viewing?.appState && (
@@ -376,6 +458,8 @@ function ProjectsPanel() {
             />
           )}
         </div>
+      </div>
+
       </div>
     </div>
   );
