@@ -1223,6 +1223,8 @@ function UploadScriptModal({ onClose, onGenerate }) {
   const [dragging,      setDragging]      = useState(false);
   const [extractedText, setExtractedText] = useState('');
   const [showRawText,   setShowRawText]   = useState(false);
+  const [inputTab,      setInputTab]      = useState('file'); // 'file' | 'paste'
+  const [pasteText,     setPasteText]     = useState('');
 
   const OVERLAY = {
     position: 'fixed', inset: 0, zIndex: 9000,
@@ -1292,6 +1294,19 @@ function UploadScriptModal({ onClose, onGenerate }) {
     if (file) processFile(file);
   };
 
+  // 텍스트 붙여넣기 → 씬 감지
+  const handlePasteDetect = () => {
+    const text = pasteText.trim();
+    if (!text) { setError('텍스트를 입력해주세요.'); return; }
+    setError('');
+    setExtractedText(text);
+    setFilename('붙여넣기');
+    if (!title) setTitle('대본');
+    const detected = detectScenes(text);
+    setScenes(detected);
+    setStep(2);
+  };
+
   // 씬 편집
   const updateScene = (idx, field, val) => {
     setScenes(prev => prev.map((s, i) => i === idx ? { ...s, [field]: val } : s));
@@ -1328,41 +1343,80 @@ function UploadScriptModal({ onClose, onGenerate }) {
         {/* 본문 */}
         <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
 
-          {/* ── 1단계: 파일 선택 ── */}
+          {/* ── 1단계: 파일 업로드 | 텍스트 붙여넣기 ── */}
           {step === 1 && (
             <div>
-              <div
-                onDragOver={e => { e.preventDefault(); setDragging(true); }}
-                onDragLeave={() => setDragging(false)}
-                onDrop={handleFileDrop}
-                onClick={() => fileInputRef.current?.click()}
-                style={{
-                  border: `2px dashed ${dragging ? D.accent : D.border}`,
-                  borderRadius: 10, padding: '40px 20px', textAlign: 'center',
-                  cursor: 'pointer', transition: 'border-color 0.15s',
-                  background: dragging ? 'rgba(232,184,75,0.06)' : 'transparent',
-                }}
-              >
-                <div style={{ fontSize: 36, marginBottom: 12, opacity: 0.5 }}>📄</div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: D.text, marginBottom: 6 }}>
-                  파일을 드래그하거나 클릭해서 선택
-                </div>
-                <div style={{ fontSize: 11, color: D.text3, lineHeight: 1.8 }}>
-                  지원 형식: DOCX · HWPX · PDF<br />
-                  <span style={{ color: '#e05c5c' }}>HWP는 지원하지 않습니다</span> (HWPX 또는 PDF로 변환 후 업로드)
-                </div>
-                {extracting && (
-                  <div style={{ marginTop: 16, fontSize: 12, color: D.accent }}>텍스트 추출 중…</div>
-                )}
+              {/* 탭 */}
+              <div style={{ display: 'flex', borderBottom: `1px solid ${D.border}`, marginBottom: 16 }}>
+                {[['file', '📄 파일 업로드'], ['paste', '📋 텍스트 붙여넣기']].map(([tab, label]) => (
+                  <button key={tab} onClick={() => { setInputTab(tab); setError(''); }}
+                    style={{
+                      padding: '7px 16px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                      background: 'transparent',
+                      color: inputTab === tab ? D.accent : D.text3,
+                      borderBottom: inputTab === tab ? `2px solid ${D.accent}` : '2px solid transparent',
+                      marginBottom: -1,
+                    }}
+                  >{label}</button>
+                ))}
               </div>
-              <input
-                ref={fileInputRef} type="file"
-                accept=".docx,.hwpx,.pdf"
-                style={{ display: 'none' }}
-                onChange={handleFileChange}
-              />
+
+              {/* 파일 업로드 탭 */}
+              {inputTab === 'file' && (
+                <div>
+                  <div
+                    onDragOver={e => { e.preventDefault(); setDragging(true); }}
+                    onDragLeave={() => setDragging(false)}
+                    onDrop={handleFileDrop}
+                    onClick={() => fileInputRef.current?.click()}
+                    style={{
+                      border: `2px dashed ${dragging ? D.accent : D.border}`,
+                      borderRadius: 10, padding: '36px 20px', textAlign: 'center',
+                      cursor: 'pointer', transition: 'border-color 0.15s',
+                      background: dragging ? 'rgba(232,184,75,0.06)' : 'transparent',
+                    }}
+                  >
+                    <div style={{ fontSize: 36, marginBottom: 12, opacity: 0.5 }}>📄</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: D.text, marginBottom: 6 }}>
+                      파일을 드래그하거나 클릭해서 선택
+                    </div>
+                    <div style={{ fontSize: 11, color: D.text3, lineHeight: 1.8 }}>
+                      지원 형식: DOCX · HWPX · PDF<br />
+                      <span style={{ color: '#e05c5c' }}>HWP는 지원하지 않습니다</span> (HWPX 또는 PDF로 변환 후 업로드)
+                    </div>
+                    {extracting && (
+                      <div style={{ marginTop: 16, fontSize: 12, color: D.accent }}>텍스트 추출 중…</div>
+                    )}
+                  </div>
+                  <input ref={fileInputRef} type="file" accept=".docx,.hwpx,.pdf"
+                    style={{ display: 'none' }} onChange={handleFileChange} />
+                </div>
+              )}
+
+              {/* 텍스트 붙여넣기 탭 */}
+              {inputTab === 'paste' && (
+                <div>
+                  <div style={{ fontSize: 11, color: D.text3, marginBottom: 8, lineHeight: 1.7 }}>
+                    대본 텍스트를 복사해서 붙여넣으세요.<br />
+                    씬번호 형식(S#1. / 씬1. / 1. 등)이 포함된 줄을 자동 감지합니다.
+                  </div>
+                  <textarea
+                    value={pasteText}
+                    onChange={e => setPasteText(e.target.value)}
+                    placeholder={'예시:\nS#1. 카페 내부, 낮\n두 사람이 마주 앉아 있다.\n\nS#2. 골목길, 밤\n빗속을 걷는 주인공.'}
+                    style={{
+                      width: '100%', height: 220, resize: 'vertical',
+                      background: D.bg, color: D.text,
+                      border: `1px solid ${D.border}`, borderRadius: 8,
+                      padding: '10px 12px', fontSize: 12, fontFamily: 'inherit',
+                      lineHeight: 1.7,
+                    }}
+                  />
+                </div>
+              )}
+
               {error && (
-                <div style={{ marginTop: 14, padding: '10px 14px', background: 'rgba(224,92,92,0.12)', borderRadius: 7, fontSize: 12, color: '#e05c5c', lineHeight: 1.7, whiteSpace: 'pre-line' }}>
+                <div style={{ marginTop: 12, padding: '10px 14px', background: 'rgba(224,92,92,0.12)', borderRadius: 7, fontSize: 12, color: '#e05c5c', lineHeight: 1.7, whiteSpace: 'pre-line' }}>
                   {error}
                 </div>
               )}
@@ -1473,6 +1527,13 @@ function UploadScriptModal({ onClose, onGenerate }) {
             onClick={onClose}
             style={{ padding: '7px 16px', borderRadius: 7, border: `1px solid ${D.border}`, background: 'transparent', color: D.text3, fontSize: 12, cursor: 'pointer' }}
           >취소</button>
+          {step === 1 && inputTab === 'paste' && (
+            <button
+              onClick={handlePasteDetect}
+              disabled={!pasteText.trim()}
+              style={{ padding: '7px 20px', borderRadius: 7, border: 'none', background: pasteText.trim() ? D.accent : '#555', color: '#1a1a1a', fontSize: 12, fontWeight: 700, cursor: pasteText.trim() ? 'pointer' : 'default' }}
+            >씬 감지 →</button>
+          )}
           {step === 2 && (
             <button
               onClick={handleGenerate}
