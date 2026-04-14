@@ -617,7 +617,7 @@ function SendButton({ scriptRow, viewing }) {
   );
 }
 
-const NOTE_COLORS_PANEL = ['#fef08a', '#86efac', '#93c5fd', '#f9a8d4', '#fdba74'];
+const NOTE_COLORS_PANEL = ['#fdf6e3', '#fef08a', '#86efac', '#93c5fd', '#f9a8d4'];
 
 function NotesPanel() {
   const D = useD();
