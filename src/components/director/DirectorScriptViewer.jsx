@@ -292,16 +292,25 @@ export default function DirectorScriptViewer({ appState, selections, sharedScrip
   const handleDelete = (id,            type) => type === 'script' ? deleteScript(id)            : deletePrivate(id);
 
   // ─── 블록 렌더 ────────────────────────────────────────────────────────────
-  const { scriptBlocks = [], episodes = [], synopsisDocs = [], activeProjectId } = appState;
-  const projectEpisodes = episodes.filter(e => e.projectId === activeProjectId);
+  // null 방어: 데이터가 배열이 아닌 경우 대비
+  const rawBlocks   = appState?.scriptBlocks;
+  const rawEpisodes = appState?.episodes;
+  const rawSynopsis = appState?.synopsisDocs;
+  const activeProjectId = appState?.activeProjectId;
+
+  const scriptBlocks = Array.isArray(rawBlocks)   ? rawBlocks.filter(Boolean)   : [];
+  const episodes     = Array.isArray(rawEpisodes)  ? rawEpisodes.filter(Boolean)  : [];
+  const synopsisDocs = Array.isArray(rawSynopsis)  ? rawSynopsis.filter(Boolean)  : [];
+
+  const projectEpisodes = episodes.filter(e => e && e.projectId === activeProjectId);
   const selEpisodes = selections?.episodes || {};
 
   const rows = [];
 
   // 시놉시스 블록 (선택된 경우)
   if (selections?.synopsis !== false) {
-    const synopsisDoc = synopsisDocs.find(d => d.projectId === activeProjectId);
-    const synBlocks = synopsisDoc?.blocks || synopsisDoc?.content || [];
+    const synopsisDoc = synopsisDocs.find(d => d && d.projectId === activeProjectId);
+    const synBlocks = (synopsisDoc?.blocks || synopsisDoc?.content || []).filter(Boolean);
     if (synBlocks.length > 0) {
       rows.push({ type: 'section_header', id: 'synopsis_header', title: '시놉시스' });
       synBlocks.forEach(b => rows.push({ type: 'block', block: b }));
@@ -311,7 +320,7 @@ export default function DirectorScriptViewer({ appState, selections, sharedScrip
   // 에피소드 대본 블록
   projectEpisodes.forEach((ep, idx) => {
     if (selEpisodes[ep.id] === false) return;
-    const epBlocks = scriptBlocks.filter(b => b.episodeId === ep.id);
+    const epBlocks = scriptBlocks.filter(b => b && b.episodeId === ep.id);
     if (epBlocks.length === 0) return;
     const num = ep.number ?? (idx + 1);
     rows.push({ type: 'ep_header', id: `ep_${ep.id}`, title: `#${num}${ep.title ? `  ${ep.title}` : ''}` });
@@ -357,6 +366,7 @@ export default function DirectorScriptViewer({ appState, selections, sharedScrip
             </div>
           );
           const { block } = row;
+          if (!block?.id) return null;
           return (
             <BlockRow
               key={block.id}

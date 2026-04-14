@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, createContext, useContext } from 'react';
+import { useState, useEffect, useRef, createContext, useContext, Component } from 'react';
 import { supabaseSignOut, extractUserData, supabase, signInWithGoogle } from '../../store/supabaseClient';
 import { setAccessToken, isTokenValid, loadDirectorScript, deleteFileById } from '../../store/googleDrive';
 import DirectorScriptViewer from './DirectorScriptViewer';
@@ -6,6 +6,23 @@ import PreviewRenderer from '../../print/PreviewRenderer';
 
 // OAuth 리디렉트 시 현재 hash 보존 → App.jsx onAuthStateChange에서 복원
 const RETURN_HASH_KEY = 'drama_pending_return_hash';
+
+// ─── Error Boundary — 뷰어 render crash 시 검정화면 방지 ──────────────────────
+class ViewerErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: 32, textAlign: 'center', color: '#c00', fontSize: 13 }}>
+          대본을 표시하는 중 오류가 발생했습니다.<br />
+          <span style={{ color: '#999', fontSize: 11 }}>{String(this.state.error)}</span>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 function loginWithReturnHash() {
   try { localStorage.setItem(RETURN_HASH_KEY, window.location.hash); } catch {}
   signInWithGoogle();
@@ -474,11 +491,13 @@ function ProjectsPanel({ session, isGuest }) {
             </div>
           )}
           {selected && !loading && viewing?.appState && (
-            <DirectorScriptViewer
-              appState={viewing.appState}
-              selections={viewing.selections}
-              sharedScriptId={selected.id}
-            />
+            <ViewerErrorBoundary key={selected.id}>
+              <DirectorScriptViewer
+                appState={viewing.appState}
+                selections={viewing.selections}
+                sharedScriptId={selected.id}
+              />
+            </ViewerErrorBoundary>
           )}
         </div>
       </div>
