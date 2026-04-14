@@ -16,6 +16,8 @@
  * }
  */
 
+import { buildSceneLabel } from '../utils/scenePrefix.js';
+
 function stripHtml(html) {
   return (html || '')
     .replace(/&lt;br\s*\/?&gt;/gi, '\n')           // &lt;br&gt; → 줄바꿈
@@ -314,7 +316,7 @@ export function tokenizeSection(section, metrics) {
     tokens.push(B());
     section.scenes.forEach((scene, i) => {
       const loc = [scene.location, scene.subLocation].filter(Boolean).join(' / ');
-      const sceneHead = [`S#${i + 1}`, loc, scene.timeOfDay].filter(Boolean).join('  ');
+      const sceneHead = [buildSceneLabel(i + 1).replace(/\.$/, ''), loc, scene.timeOfDay].filter(Boolean).join('  ');
       tokens.push(T('scene_number', sceneHead, { bold: true }));
       const desc = scene.sceneListContent || scene.content || '';
       if (desc) {

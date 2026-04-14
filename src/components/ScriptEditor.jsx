@@ -7,6 +7,7 @@ import DOMPurify from 'dompurify';
 import { useApp } from '../store/AppContext';
 import { genId, now } from '../store/db';
 import { resolveSceneLabel, parseSceneContent, SCENE_PREFIX_STRIP_RE } from '../utils/sceneResolver';
+import { buildSceneLabel, getScenePrefix } from '../utils/scenePrefix';
 import { resolveFont } from '../print/FontRegistry';
 import { getLayoutMetrics } from '../print/LineTokenizer';
 import EmotionTagPicker from './EmotionTagPicker';
@@ -441,7 +442,7 @@ function PageCounter({ blocks, stylePreset, scrollRef }) {
 function syncLabels(blocks) {
   let seq = 0;
   return blocks.map(b => {
-    if (b.type === 'scene_number') { seq++; return { ...b, label: `S#${seq}.` }; }
+    if (b.type === 'scene_number') { seq++; return { ...b, label: buildSceneLabel(seq) }; }
     return b;
   });
 }
@@ -2228,7 +2229,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
         return {
           id: b.sceneId || genId(),
           episodeId: activeEpisodeId, projectId: activeProjectId,
-          sceneSeq: idx + 1, label: `S#${idx + 1}.`,
+          sceneSeq: idx + 1, label: buildSceneLabel(idx + 1),
           status: existing?.status || 'draft',
           tags: existing?.tags || [], characters: existing?.characters || [],
           characterIds: existing?.characterIds || [],
@@ -2269,7 +2270,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
         return {
           id: b.sceneId || genId(),
           episodeId: epId, projectId: b.projectId,
-          sceneSeq: idx + 1, label: `S#${idx + 1}.`,
+          sceneSeq: idx + 1, label: buildSceneLabel(idx + 1),
           status: existing?.status || 'draft',
           tags: existing?.tags || [], characters: existing?.characters || [],
           characterIds: existing?.characterIds || [],
@@ -2685,7 +2686,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
       return {
         id: b.sceneId || genId(),
         episodeId: activeEpisodeId, projectId: activeProjectId,
-        sceneSeq: idx + 1, label: `S#${idx + 1}.`,
+        sceneSeq: idx + 1, label: buildSceneLabel(idx + 1),
         status: existing?.status || 'draft',
         tags: existing?.tags || [], characters: existing?.characters || [],
         characterIds: existing?.characterIds || [],
@@ -3126,7 +3127,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   }, []);
 
   const BLOCK_TYPE_BTNS = [
-    { type: 'scene_number', label: 'S#',  title: '씬번호 (Ctrl+Shift+1)' },
+    { type: 'scene_number', label: getScenePrefix().trim() || 'S#', title: '씬번호 (Ctrl+Shift+1)' },
     { type: 'action',       label: '지문', title: '지문 (Ctrl+Shift+2)' },
     { type: 'dialogue',     label: '대사', title: '대사 (Ctrl+Shift+3)' },
   ];
@@ -3830,7 +3831,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
           overflowX: 'auto', scrollbarWidth: 'none',
         }}>
           {[
-            { type: 'scene_number', label: 'S#' },
+            { type: 'scene_number', label: getScenePrefix().trim() || 'S#' },
             { type: 'action',       label: '지문' },
             { type: 'dialogue',     label: '대사' },
           ].map(({ type, label }) => {

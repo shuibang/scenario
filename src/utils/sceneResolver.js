@@ -30,8 +30,12 @@
  *   S#1. 카페 내부 - 세부장소, D->N
  */
 
-/** 씬번호 prefix(S#n) + 구분자 제거용 공통 정규식. 모든 파일에서 이 상수를 사용할 것. */
-export const SCENE_PREFIX_STRIP_RE = /^S#\d+[-.,/]?\s*/;
+/**
+ * 씬번호 prefix + 번호 + 구분자 제거용 정규식.
+ * S#n / 씬n / Scene #n / #n 네 가지 형식 모두 인식 (소급 호환 포함).
+ */
+export const SCENE_PREFIX_STRIP_RE =
+  /^(?:Scene\s*#|S#|씬\s*|#)\d+[-.,/]?\s*/i;
 
 /** 시간대 선택지 (드롭다운·파싱 공용) */
 export const TIME_OF_DAY_OPTIONS = ['낮', '밤', '아침', '오전', '오후', '저녁', '새벽', '점심', 'D', 'N'];

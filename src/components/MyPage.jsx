@@ -11,6 +11,7 @@ import {
 import { resetPageHints } from './OnboardingTour';
 import AdBanner from './AdBanner';
 import { NOTICES, ANNOUNCEMENTS } from './UpdateBanner';
+import { SCENE_PREFIX_OPTIONS, getScenePrefix, setScenePrefix } from '../utils/scenePrefix';
 
 // ─── Log PDF ──────────────────────────────────────────────────────────────────
 const LOG_PDF_FONT = '함초롱바탕';
@@ -572,6 +573,12 @@ function SettingsTab() {
   const [designTool, setDesignTool]       = useState(() => localStorage.getItem(DESIGN_TOOL_KEY) || 'treatment');
   const [treatmentSync, setTreatmentSync] = useState(() => localStorage.getItem(TREATMENT_SYNC_KEY) || 'sync');
   const [scenelistSync, setScenelistSync] = useState(() => localStorage.getItem(SCENELIST_SYNC_KEY) || 'sync');
+  const [scenePrefix, setScenePrefixState] = useState(() => getScenePrefix());
+
+  const handleScenePrefix = (val) => {
+    setScenePrefixState(val);
+    setScenePrefix(val, supabase || null);
+  };
 
   const togglePublicPc = () => {
     const next = !publicPc;
@@ -727,6 +734,42 @@ function SettingsTab() {
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* 씬번호 형식 */}
+      <div className="rounded-lg" style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)', padding: '12px 16px' }}>
+        <div className="text-sm font-medium mb-1" style={{ color: 'var(--c-text)' }}>씬번호 형식</div>
+        <div className="text-xs mb-3" style={{ color: 'var(--c-text5)' }}>
+          새로 입력하는 씬번호에 적용됩니다. 기존 씬번호는 변경되지 않습니다.
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {SCENE_PREFIX_OPTIONS.map(opt => (
+            <label
+              key={opt.value}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
+                padding: '7px 10px', borderRadius: 7,
+                border: `1px solid ${scenePrefix === opt.value ? 'var(--c-accent)' : 'var(--c-border3)'}`,
+                background: scenePrefix === opt.value ? 'color-mix(in srgb, var(--c-accent) 8%, transparent)' : 'transparent',
+              }}
+            >
+              <input
+                type="radio"
+                name="scenePrefix"
+                value={opt.value}
+                checked={scenePrefix === opt.value}
+                onChange={() => handleScenePrefix(opt.value)}
+                style={{ accentColor: 'var(--c-accent)', cursor: 'pointer' }}
+              />
+              <span style={{ fontSize: 12, color: 'var(--c-text)', flex: 1 }}>{opt.label}</span>
+              <span style={{
+                fontSize: 11, fontFamily: 'monospace', fontWeight: 600,
+                color: scenePrefix === opt.value ? 'var(--c-accent)' : 'var(--c-text5)',
+                background: 'var(--c-input)', borderRadius: 4, padding: '1px 7px',
+              }}>{opt.example}</span>
+            </label>
+          ))}
         </div>
       </div>
 
