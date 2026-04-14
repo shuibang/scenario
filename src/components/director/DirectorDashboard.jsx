@@ -4,6 +4,13 @@ import { setAccessToken, isTokenValid, loadDirectorScript } from '../../store/go
 import DirectorScriptViewer from './DirectorScriptViewer';
 import PreviewRenderer from '../../print/PreviewRenderer';
 
+// OAuth 리디렉트 시 현재 hash 보존 → App.jsx onAuthStateChange에서 복원
+const RETURN_HASH_KEY = 'drama_pending_return_hash';
+function loginWithReturnHash() {
+  try { localStorage.setItem(RETURN_HASH_KEY, window.location.hash); } catch {}
+  signInWithGoogle();
+}
+
 // ─── 연출 작업실 전용 디자인 토큰 ─────────────────────────────────────────────
 const D_DARK = {
   bg:        '#0d0f14',
@@ -117,7 +124,7 @@ export default function DirectorDashboard({ session, onBack, isGuest = false }) 
           </div>
           {isGuest ? (
             <button
-              onClick={signInWithGoogle}
+              onClick={loginWithReturnHash}
               style={{
                 fontSize: 11, color: D.accent,
                 background: 'none', border: `1px solid ${D.accent}`,
@@ -259,7 +266,7 @@ function DriveReconnectCard({ D, message }) {
         Google 계정으로 다시 로그인하면 계속 이용할 수 있습니다.
       </div>
       <button
-        onClick={async () => { setLoading(true); await signInWithGoogle(); }}
+        onClick={() => { setLoading(true); loginWithReturnHash(); }}
         disabled={loading}
         style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
@@ -355,7 +362,7 @@ function ProjectsPanel({ session, isGuest }) {
         }}>
           <span style={{ fontSize: 12, color: D.text2 }}>둘러보기 모드 — 대본 불러오기·저장은 로그인 후 이용할 수 있습니다.</span>
           <button
-            onClick={signInWithGoogle}
+            onClick={loginWithReturnHash}
             style={{ fontSize: 11, color: D.accent, background: 'none', border: `1px solid ${D.accent}`, borderRadius: 4, padding: '3px 10px', cursor: 'pointer', whiteSpace: 'nowrap' }}
           >Google로 로그인</button>
         </div>
@@ -370,7 +377,7 @@ function ProjectsPanel({ session, isGuest }) {
         }}>
           <span style={{ fontSize: 12, color: '#f4a4a4' }}>🔌 Google Drive 연결이 끊겼습니다. 대본을 불러오려면 다시 로그인이 필요합니다.</span>
           <button
-            onClick={signInWithGoogle}
+            onClick={loginWithReturnHash}
             style={{ fontSize: 11, color: '#f87171', background: 'none', border: '1px solid #f87171', borderRadius: 4, padding: '3px 10px', cursor: 'pointer', whiteSpace: 'nowrap' }}
           >다시 로그인</button>
         </div>
