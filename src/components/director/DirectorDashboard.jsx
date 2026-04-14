@@ -377,8 +377,17 @@ function ProjectsPanel({ session, isGuest }) {
     }
 
     // 2) shared_scripts row 삭제
-    const { error } = await supabase.from('shared_scripts').delete().eq('id', script.id);
+    const { data: deleted, error } = await supabase
+      .from('shared_scripts')
+      .delete()
+      .eq('id', script.id)
+      .eq('director_id', session.user.id)
+      .select('id');
     if (error) { alert(`삭제 실패: ${error.message}`); return; }
+    if (!deleted || deleted.length === 0) {
+      alert('삭제 권한이 없거나 이미 삭제된 항목입니다.');
+      return;
+    }
     setScripts(prev => prev.filter(s => s.id !== script.id));
     if (selected?.id === script.id) { setSelected(null); setViewing(null); }
   };
