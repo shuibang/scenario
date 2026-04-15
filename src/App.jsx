@@ -37,6 +37,7 @@ import SharedReviewView from './components/SharedReviewView';
 import DirectorDeliveryView from './components/DirectorDeliveryView';
 import SurveyPage from './components/SurveyPage';
 import AdBanner from './components/AdBanner';
+import ProdGuard from './components/ProdGuard';
 // ─── v2: extracted mobile components ──────────────────────────────────────────
 import MobileMenuBar    from './components/mobile/MobileMenuBar';
 import MobileBottomPanel from './components/mobile/MobileBottomPanel';
@@ -1706,6 +1707,7 @@ export default function App() {
 
   return (
     <AppProvider>
+      <ProdGuard />
       <Shell authUser={authUser} setAuthUser={setAuthUser} />
       {webViewModal && <WebViewModal onClose={() => setWebViewModal(false)} />}
     </AppProvider>

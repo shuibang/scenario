@@ -27,4 +27,31 @@ export default defineConfig({
   define: {
     'import.meta.env.VITE_BUILD_VERSION': JSON.stringify(buildVersion),
   },
+  build: {
+    // 소스맵 완전 비활성화 (프로덕션 코드 노출 방지)
+    sourcemap: false,
+    // Terser 난독화
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        // console.log / debugger 구문 제거
+        drop_console: true,
+        drop_debugger: true,
+        pure_funcs: ['console.info', 'console.warn', 'console.error', 'console.debug'],
+        passes: 2,
+      },
+      mangle: {
+        // 변수명·함수명 난독화
+        toplevel: true,
+        // _로 시작하는 내부 프로퍼티명만 난독화 (외부 API·React prop 안전 보호)
+        properties: {
+          regex: /^_/,
+        },
+      },
+      format: {
+        // 주석 전체 제거
+        comments: false,
+      },
+    },
+  },
 })
