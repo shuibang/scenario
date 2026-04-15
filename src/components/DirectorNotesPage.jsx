@@ -1,10 +1,11 @@
 /**
  * DirectorNotesPage — 작가 대본작업실 내 연출노트 페이지
  * - 연출자에게 받은 전송본을 버전별로 목록 표시
+ * - 좌측 LeftPanel 피드백 토글에서 선택 → drama_delivery_changed 이벤트로 동기화
  * - 선택 시 DirectorScriptViewer(readOnly) + 우측 코멘트 패널
  * - 코멘트 위치 뱃지 클릭 → 해당 블록으로 스크롤
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { getReceivedDeliveries } from './DirectorDeliveryView';
 import DirectorScriptViewer from './director/DirectorScriptViewer';
 import { getBlockPosition, scrollToBlock } from '../utils/blockPosition';
@@ -13,24 +14,34 @@ const DELIVERY_STORAGE_KEY = 'director_deliveries_received';
 
 export default function DirectorNotesPage() {
   const [deliveries, setDeliveries] = useState(() => getReceivedDeliveries());
-  const [selected,   setSelected]   = useState(deliveries[0] || null);
+  const [selected,   setSelected]   = useState(() => {
+    const id = localStorage.getItem('drama_active_delivery_id');
+    const list = getReceivedDeliveries();
+    return (id && list.find(d => d.id === id)) || list[0] || null;
+  });
   const [panelOpen,  setPanelOpen]  = useState(true);
 
-  const handleDelete = (id) => {
-    const next = deliveries.filter(d => d.id !== id);
-    localStorage.setItem(DELIVERY_STORAGE_KEY, JSON.stringify(next));
-    setDeliveries(next);
-    if (selected?.id === id) setSelected(next[0] || null);
-  };
+  // 좌측 패널 피드백 목록에서 선택 변경 시 동기화
+  useEffect(() => {
+    const handler = () => {
+      const list = getReceivedDeliveries();
+      setDeliveries(list);
+      const id = localStorage.getItem('drama_active_delivery_id');
+      if (id) setSelected(list.find(d => d.id === id) || list[0] || null);
+      else setSelected(list[0] || null);
+    };
+    window.addEventListener('drama_delivery_changed', handler);
+    return () => window.removeEventListener('drama_delivery_changed', handler);
+  }, []);
 
   if (deliveries.length === 0) {
     return (
       <div style={{ padding: '60px 32px', textAlign: 'center', color: 'var(--c-text5)', fontSize: 13 }}>
         <div style={{ fontSize: 32, marginBottom: 16, opacity: 0.4 }}>🎬</div>
-        <div style={{ fontWeight: 600, marginBottom: 8 }}>받은 연출노트가 없습니다</div>
+        <div style={{ fontWeight: 600, marginBottom: 8 }}>받은 피드백 노트가 없습니다</div>
         <div style={{ fontSize: 12, lineHeight: 1.7, color: 'var(--c-text6)' }}>
           연출자에게 검토 링크를 공유하고,<br />
-          연출자가 연출노트를 전송하면 여기에 표시됩니다.
+          연출자가 피드백 노트를 전송하면 여기에 표시됩니다.
         </div>
       </div>
     );
@@ -48,60 +59,6 @@ export default function DirectorNotesPage() {
   return (
     <div style={{ display: 'flex', height: '100%', minHeight: 0, background: 'var(--c-bg)' }}>
 
-      {/* 좌: 버전 목록 */}
-      <div style={{
-        width: 220, flexShrink: 0,
-        borderRight: '1px solid var(--c-border)',
-        background: 'var(--c-panel)',
-        display: 'flex', flexDirection: 'column',
-        overflow: 'hidden',
-      }}>
-        <div style={{ padding: '12px 16px 8px', borderBottom: '1px solid var(--c-border)' }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--c-text5)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>받은 연출노트</div>
-        </div>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '6px 0' }}>
-          {deliveries.map(d => {
-            const date   = new Date(d.savedAt).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
-            const active = selected?.id === d.id;
-            return (
-              <div key={d.id}
-                style={{
-                  display: 'flex', alignItems: 'center',
-                  borderLeft: active ? '2px solid var(--c-accent)' : '2px solid transparent',
-                  background: active ? 'var(--c-active)' : 'transparent',
-                  transition: 'background 0.12s',
-                }}
-                onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'var(--c-hover)'; }}
-                onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent'; }}
-              >
-                <div onClick={() => setSelected(d)}
-                  style={{ flex: 1, padding: '9px 8px 9px 16px', cursor: 'pointer', minWidth: 0 }}
-                >
-                  <div style={{ fontSize: 13, fontWeight: active ? 600 : 400, color: active ? 'var(--c-accent)' : 'var(--c-text)', marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {d.title}
-                  </div>
-                  <div style={{ fontSize: 10, color: 'var(--c-text5)' }}>
-                    코멘트 {d.notes?.length || 0}개 · {date}
-                  </div>
-                </div>
-                <button
-                  onClick={e => { e.stopPropagation(); handleDelete(d.id); }}
-                  style={{
-                    flexShrink: 0, marginRight: 8,
-                    width: 22, height: 22, borderRadius: 4,
-                    border: '1px solid var(--c-border)', background: 'transparent',
-                    color: 'var(--c-text5)', fontSize: 12, cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    lineHeight: 1,
-                  }}
-                  title="삭제"
-                >×</button>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
       {/* 중: 대본 뷰어 (readOnly, 코멘트 인라인 표시) */}
       <div style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: 'auto', background: '#d8d8d8' }}>
         {appState ? (
@@ -113,7 +70,7 @@ export default function DirectorNotesPage() {
           />
         ) : (
           <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 13 }}>
-            좌측에서 버전을 선택하세요
+            좌측 피드백 메뉴에서 버전을 선택하세요
           </div>
         )}
       </div>

@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useApp } from '../store/AppContext';
 import { resolveSceneLabel, parseSceneContent, TIME_OF_DAY_OPTIONS } from '../utils/sceneResolver';
 import { buildSceneLabel } from '../utils/scenePrefix';
+import { getSceneFormat, parseWithFormat, formatSceneHeader } from '../utils/sceneFormat';
 import { now, genId } from '../store/db';
 import { getChipInlineStyle } from '../utils/emotionColor';
 import { exportScenelistXlsx } from '../print/scenelistExport';
@@ -135,45 +136,24 @@ function CharacterMultiSelect({ characterIds = [], projectChars, autoDetectedStr
 }
 
 // ─── Single row ───────────────────────────────────────────────────────────────
-function sceneHeaderText(scene) {
-  return resolveSceneLabel({ ...scene, label: '' }).trim();
-}
-
 function SceneListRow({ scene, idx, blockLabel, autoCharacters, projectChars, onContentChange, onMetaChange, onCharsChange, onNavigate, remarkMode, emotionTags }) {
-  const [contentVal, setContentVal] = useState(scene.sceneListContent || '');
-  const [headerVal, setHeaderVal] = useState(() => sceneHeaderText(scene));
+  const [contentVal,  setContentVal]  = useState(scene.sceneListContent || '');
+  const [locVal,      setLocVal]      = useState(scene.location     || '');
+  const [subLocVal,   setSubLocVal]   = useState(scene.subLocation  || '');
+  const [todVal,      setTodVal]      = useState(scene.timeOfDay    || '');
 
-  // Sync when scene.sceneListContent changes externally (undo/redo)
-  useEffect(() => {
-    setContentVal(scene.sceneListContent || '');
-  }, [scene.sceneListContent]);
+  // 대본 편집기에서 변경 시 즉시 반영
+  useEffect(() => { setContentVal(scene.sceneListContent || ''); }, [scene.sceneListContent]);
+  useEffect(() => { setLocVal(scene.location    || ''); }, [scene.location]);
+  useEffect(() => { setSubLocVal(scene.subLocation || ''); }, [scene.subLocation]);
+  useEffect(() => { setTodVal(scene.timeOfDay   || ''); }, [scene.timeOfDay]);
 
-  // Sync header text when structured fields change externally
-  useEffect(() => {
-    setHeaderVal(sceneHeaderText(scene));
-  }, [scene.location, scene.subLocation, scene.timeOfDay, scene.specialSituation, scene.content]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleHeaderBlur = () => {
-    const parsed = parseSceneContent(headerVal);
-    onMetaChange(parsed);
+  const cellStyle = {
+    background: 'var(--c-input)', color: 'var(--c-text)',
+    border: '1px solid transparent', minWidth: '44px',
   };
-
-  const cellInput = (placeholder, value, onChange) => (
-    <input
-      placeholder={placeholder}
-      value={value || ''}
-      onChange={e => onChange(e.target.value)}
-      className="w-full rounded text-xs px-1.5 py-0.5 outline-none"
-      style={{
-        background: 'var(--c-input)',
-        color: 'var(--c-text)',
-        border: '1px solid transparent',
-        minWidth: '52px',
-      }}
-      onFocus={e => { e.target.style.borderColor = 'var(--c-accent)'; }}
-      onBlur={e => { e.target.style.borderColor = 'transparent'; }}
-    />
-  );
+  const onFocus = e => { e.target.style.borderColor = 'var(--c-accent)'; };
+  const onBlurBorder = e => { e.target.style.borderColor = 'transparent'; };
 
   return (
     <tr
@@ -181,54 +161,48 @@ function SceneListRow({ scene, idx, blockLabel, autoCharacters, projectChars, on
       onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-hover)'; }}
       onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
     >
-      {/* 씬번호 + 헤더 입력 */}
-      <td className="px-2 py-1" style={{ whiteSpace: 'nowrap' }}>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={onNavigate}
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              color: 'var(--c-accent)', fontWeight: 700, fontSize: '11px',
-              flexShrink: 0,
-            }}
-            title="대본 씬으로 이동"
-          >
-            {blockLabel || `S#${idx + 1}.`}
-          </button>
-          <input
-            value={headerVal}
-            onChange={e => setHeaderVal(e.target.value)}
-            onBlur={handleHeaderBlur}
-            placeholder="장소 - 세부장소 (시간대)"
-            className="rounded text-xs px-1.5 py-0.5 outline-none"
-            style={{
-              background: 'var(--c-input)',
-              color: 'var(--c-text)',
-              border: '1px solid transparent',
-              width: '100%', minWidth: 0,
-            }}
-            onFocus={e => { e.target.style.borderColor = 'var(--c-accent)'; }}
-            title="회상) 장소 - 세부장소 (시간대) 형식으로 입력"
-          />
-        </div>
+      {/* 씬번호 */}
+      <td className="px-2 py-1" style={{ whiteSpace: 'nowrap', textAlign: 'center' }}>
+        <button
+          onClick={onNavigate}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--c-accent)', fontWeight: 700, fontSize: '11px' }}
+          title="대본 씬으로 이동"
+        >
+          {blockLabel || `S#${idx + 1}.`}
+        </button>
       </td>
 
-      {/* 내용 (씬리스트 입력 → 씬보드에 표시) */}
+      {/* 장소 */}
       <td className="px-2 py-1">
-        <input
-          value={contentVal}
-          onChange={e => setContentVal(e.target.value)}
-          onBlur={() => onContentChange(contentVal)}
-          placeholder="내용 입력"
-          className="w-full rounded text-xs px-1.5 py-0.5 outline-none"
-          style={{
-            background: 'var(--c-input)',
-            color: 'var(--c-text)',
-            border: '1px solid transparent',
-          }}
-          onFocus={e => { e.target.style.borderColor = 'var(--c-accent)'; }}
-          onBlur={e => { e.target.style.borderColor = 'transparent'; onContentChange(contentVal); }}
-        />
+        <input value={locVal} onChange={e => setLocVal(e.target.value)}
+          onFocus={onFocus}
+          onBlur={e => { onBlurBorder(e); onMetaChange({ location: locVal.trim() }); }}
+          placeholder="장소" className="w-full rounded text-xs px-1.5 py-0.5 outline-none" style={cellStyle} />
+      </td>
+
+      {/* 세부장소 */}
+      <td className="px-2 py-1">
+        <input value={subLocVal} onChange={e => setSubLocVal(e.target.value)}
+          onFocus={onFocus}
+          onBlur={e => { onBlurBorder(e); onMetaChange({ subLocation: subLocVal.trim() }); }}
+          placeholder="세부장소" className="w-full rounded text-xs px-1.5 py-0.5 outline-none" style={cellStyle} />
+      </td>
+
+      {/* 시간대 */}
+      <td className="px-2 py-1">
+        <input value={todVal} onChange={e => setTodVal(e.target.value)}
+          onFocus={onFocus}
+          onBlur={e => { onBlurBorder(e); onMetaChange({ timeOfDay: todVal.trim() }); }}
+          placeholder="시간대" className="w-full rounded text-xs px-1.5 py-0.5 outline-none" style={cellStyle} />
+      </td>
+
+      {/* 내용 */}
+      <td className="px-2 py-1">
+        <input value={contentVal} onChange={e => setContentVal(e.target.value)}
+          onFocus={onFocus}
+          onBlur={e => { onBlurBorder(e); onContentChange(contentVal); }}
+          placeholder="내용 입력" className="w-full rounded text-xs px-1.5 py-0.5 outline-none"
+          style={{ ...cellStyle, minWidth: undefined }} />
       </td>
 
       {/* 등장인물 (multi-select from character data) */}
@@ -262,9 +236,11 @@ function SceneListRow({ scene, idx, blockLabel, autoCharacters, projectChars, on
 }
 
 // ─── SceneListPage ────────────────────────────────────────────────────────────
+const RECEIVED_SL_KEY = 'director_received_scenelists';
+
 export default function SceneListPage() {
   const { state, dispatch } = useApp();
-  const { scenes, scriptBlocks, episodes, characters, activeProjectId, activeEpisodeId } = state;
+  const { scenes, scriptBlocks, episodes, characters, activeProjectId, activeEpisodeId, projects } = state;
 
   const projectEpisodes = useMemo(() =>
     episodes.filter(e => e.projectId === activeProjectId).sort((a, b) => a.number - b.number),
@@ -337,9 +313,49 @@ export default function SceneListPage() {
     dispatch({ type: 'UPDATE_SCENE', payload: { id: sceneId, sceneListContent: content, updatedAt: now() }, _record: true });
   };
 
+  // 포맷 설정 변경 감지 (scene_format_changed 이벤트)
+  const [formatVer, setFormatVer] = useState(0);
+  useEffect(() => {
+    const handler = () => setFormatVer(v => v + 1);
+    window.addEventListener('scene_format_changed', handler);
+    return () => window.removeEventListener('scene_format_changed', handler);
+  }, []);
+
   const handleMetaChange = (sceneId, meta) => {
     dispatch({ type: 'UPDATE_SCENE', payload: { id: sceneId, ...meta, updatedAt: now() } });
+    // 씬 헤더 블록(scene_number)도 동기화 → 대본 본문에 반영
+    const block = epBlocks.find(b => b.type === 'scene_number' && b.sceneId === sceneId);
+    if (block) {
+      const scene = epScenes.find(s => s.id === sceneId);
+      const merged = { ...scene, ...meta };
+      const fmt = getSceneFormat();
+      const newContent = formatSceneHeader(merged, fmt);
+      const updatedBlocks = epBlocks.map(b =>
+        b.id === block.id ? { ...b, content: newContent, updatedAt: now() } : b
+      );
+      dispatch({ type: 'SET_BLOCKS', episodeId: epId, payload: updatedBlocks });
+    }
   };
+
+  // 대본 편집기에서 씬 헤더(scene_number 블록)가 바뀌면 scene 객체 필드도 동기화
+  // 포맷 설정이 바뀌어도 재파싱 (formatVer 의존)
+  useEffect(() => {
+    const fmt = getSceneFormat();
+    epScenes.forEach(scene => {
+      const block = epBlocks.find(b => b.type === 'scene_number' && b.sceneId === scene.id);
+      if (!block?.content) return;
+      // 레이블 prefix(S#1. / 1. / INT. 등) 제거 후 포맷 기반 파싱
+      const raw = block.content.replace(/^(?:S#\d+\.|INT\.|EXT\.|\d+\.)\s*/i, '').trim();
+      if (!raw) return;
+      const parsed = parseWithFormat(raw, fmt);
+      const loc = parsed.location    || '';
+      const sub = parsed.subLocation || '';
+      const tod = parsed.timeOfDay   || '';
+      if (loc !== (scene.location || '') || sub !== (scene.subLocation || '') || tod !== (scene.timeOfDay || '')) {
+        dispatch({ type: 'UPDATE_SCENE', payload: { id: scene.id, location: loc, subLocation: sub, timeOfDay: tod, updatedAt: now() } });
+      }
+    });
+  }, [epBlocks, formatVer]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleCharsChange = (sceneId, characterIds) => {
     dispatch({ type: 'UPDATE_SCENE', payload: { id: sceneId, characterIds, updatedAt: now() } });
@@ -373,6 +389,49 @@ export default function SceneListPage() {
 
   const [downloading, setDownloading] = useState(false);
   const [dlMsg, setDlMsg] = useState('');
+  const [shareMsg, setShareMsg] = useState('');
+
+  const handleShare = () => {
+    if (!epScenes.length) { setShareMsg('씬이 없습니다'); setTimeout(() => setShareMsg(''), 2000); return; }
+    const currentEpObj = projectEpisodes.find(e => e.id === epId);
+    const project = projects.find(p => p.id === activeProjectId);
+    const shareData = {
+      id: genId(),
+      title: [project?.title, currentEpObj ? `${currentEpObj.number}회${currentEpObj.title ? ' ' + currentEpObj.title : ''}` : ''].filter(Boolean).join(' '),
+      savedAt: new Date().toISOString(),
+      isReceived: true,
+      scenes: epScenes.map((scene, idx) => {
+        // 레거시 데이터: location이 비어있으면 content에서 파싱
+        const meta = (!scene.location && scene.content) ? parseWithFormat(scene.content, getSceneFormat()) : null;
+        return {
+          sn: blockLabelMap.get(scene.id) || `S#${idx + 1}.`,
+          loc: scene.location || meta?.location || '',
+          sub: scene.subLocation || meta?.subLocation || '',
+          tod: scene.timeOfDay || meta?.timeOfDay || '',
+          chars: sceneCharacters[scene.id] || '',
+          content: scene.sceneListContent || '',
+        };
+      }),
+    };
+    // 로컬 저장 (본인 디바이스 직접 테스트용)
+    try {
+      const existing = JSON.parse(localStorage.getItem(RECEIVED_SL_KEY) || '[]');
+      if (!existing.some(s => s.id === shareData.id)) {
+        localStorage.setItem(RECEIVED_SL_KEY, JSON.stringify([shareData, ...existing]));
+      }
+    } catch {}
+    // URL 인코딩 (크로스 디바이스 공유)
+    try {
+      const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(shareData))));
+      const url = `${window.location.origin}${window.location.pathname}#sl=${encoded}`;
+      navigator.clipboard.writeText(url).catch(() => {
+        const el = document.createElement('input');
+        el.value = url; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el);
+      });
+      setShareMsg('링크 복사됨 ✓');
+    } catch { setShareMsg('공유 실패'); }
+    setTimeout(() => setShareMsg(''), 3000);
+  };
 
   const currentEp = useMemo(() => projectEpisodes.find(e => e.id === epId), [projectEpisodes, epId]);
 
@@ -511,13 +570,19 @@ export default function SceneListPage() {
         </select>
         <span className="text-xs" style={{ color: 'var(--c-text6)' }}>{epScenes.length}개 씬</span>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          {(importMsg || dlMsg) && <span className="text-xs" style={{ color: 'var(--c-accent2)' }}>{importMsg || dlMsg}</span>}
+          {(importMsg || dlMsg || shareMsg) && <span className="text-xs" style={{ color: shareMsg.includes('✓') ? 'var(--c-accent)' : 'var(--c-accent2)' }}>{importMsg || dlMsg || shareMsg}</span>}
           <button
             onClick={handleDownload}
             disabled={downloading || !epScenes.length}
             title="엑셀(XLSX)로 다운로드"
             style={{ padding: '3px 10px', borderRadius: 4, fontSize: 11, background: 'transparent', color: 'var(--c-text3)', border: '1px solid var(--c-border3)', cursor: downloading ? 'default' : 'pointer', opacity: downloading ? 0.5 : 1 }}
           >XLSX</button>
+          <button
+            onClick={handleShare}
+            disabled={!epScenes.length}
+            title="연출자에게 씬리스트 공유"
+            style={{ padding: '3px 10px', borderRadius: 4, fontSize: 11, background: 'transparent', color: 'var(--c-accent)', border: '1px solid var(--c-accent)', cursor: !epScenes.length ? 'default' : 'pointer', opacity: !epScenes.length ? 0.5 : 1 }}
+          >씬리스트 공유</button>
           <button
             onClick={() => setImporting(true)}
             style={{ padding: '3px 10px', borderRadius: 4, fontSize: 11, background: 'transparent', color: 'var(--c-text3)', border: '1px solid var(--c-border3)', cursor: 'pointer' }}
@@ -582,19 +647,21 @@ export default function SceneListPage() {
             {epScenes.length === 0 ? (
               <div className="py-16 text-center text-sm" style={{ color: 'var(--c-text5)' }}>씬이 없습니다.</div>
             ) : (
-              <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%', minWidth: '480px' }}>
+              <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%', minWidth: '640px' }}>
                 <colgroup>
-                  <col style={{ width: '25%' }} />
-                  <col style={{ width: '35%' }} />
-                  <col style={{ width: '25%' }} />
-                  <col style={{ width: '15%' }} />
+                  <col style={{ width: '7%' }} />
+                  <col style={{ width: '13%' }} />
+                  <col style={{ width: '12%' }} />
+                  <col style={{ width: '8%' }} />
+                  <col style={{ width: '30%' }} />
+                  <col style={{ width: '18%' }} />
+                  <col style={{ width: '12%' }} />
                 </colgroup>
                 <thead>
                   <tr style={{ background: 'var(--c-panel)', borderBottom: '2px solid var(--c-border2)', position: 'sticky', top: 0, zIndex: 1 }}>
-                    {['씬번호 / 장소', '내용', '등장인물'].map(h => (
-                      <th key={h} className="px-3 py-2 text-left font-semibold text-xs" style={{ color: 'var(--c-text4)', whiteSpace: 'nowrap' }}>{h}</th>
+                    {['씬번호', '장소', '세부장소', '시간대', '내용', '등장인물', '비고'].map(h => (
+                      <th key={h} className="px-2 py-2 text-left font-semibold text-xs" style={{ color: 'var(--c-text4)', whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
-                    <th className="px-3 py-2 text-left font-semibold text-xs" style={{ color: 'var(--c-text4)', whiteSpace: 'nowrap' }}>비고</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -639,19 +706,21 @@ export default function SceneListPage() {
             씬이 없습니다. 대본 편집기에서 Ctrl+1로 씬번호를 추가하세요.
           </div>
         ) : (
-          <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%', minWidth: '480px' }}>
+          <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%', minWidth: '640px' }}>
             <colgroup>
-              <col style={{ width: '25%' }} />
-              <col style={{ width: '35%' }} />
-              <col style={{ width: '25%' }} />
-              <col style={{ width: '15%' }} />
+              <col style={{ width: '7%' }} />
+              <col style={{ width: '13%' }} />
+              <col style={{ width: '12%' }} />
+              <col style={{ width: '8%' }} />
+              <col style={{ width: '30%' }} />
+              <col style={{ width: '18%' }} />
+              <col style={{ width: '12%' }} />
             </colgroup>
             <thead>
               <tr style={{ background: 'var(--c-panel)', borderBottom: '2px solid var(--c-border2)', position: 'sticky', top: 0, zIndex: 1 }}>
-                {['씬번호 / 장소', '내용', '등장인물'].map(h => (
-                  <th key={h} className="px-3 py-2 text-left font-semibold text-xs" style={{ color: 'var(--c-text4)', whiteSpace: 'nowrap' }}>{h}</th>
+                {['씬번호', '장소', '세부장소', '시간대', '내용', '등장인물', '비고'].map(h => (
+                  <th key={h} className="px-2 py-2 text-left font-semibold text-xs" style={{ color: 'var(--c-text4)', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
-                <th className="px-3 py-2 text-left font-semibold text-xs" style={{ color: 'var(--c-text4)', whiteSpace: 'nowrap' }}>비고</th>
               </tr>
             </thead>
             <tbody>

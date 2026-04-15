@@ -8,6 +8,7 @@ import { useApp } from '../store/AppContext';
 import { genId, now } from '../store/db';
 import { resolveSceneLabel, parseSceneContent, SCENE_PREFIX_STRIP_RE } from '../utils/sceneResolver';
 import { buildSceneLabel, getScenePrefix } from '../utils/scenePrefix';
+import { getSceneFormat } from '../utils/sceneFormat';
 import { resolveFont } from '../print/FontRegistry';
 import { getLayoutMetrics } from '../print/LineTokenizer';
 import EmotionTagPicker from './EmotionTagPicker';
@@ -1392,6 +1393,7 @@ const EditorSurface = forwardRef(function EditorSurface({
   const metaRef = useRef({});
   const composingRef = useRef(false);
   const slashOffsetRef = useRef(null); // { blockId, offset } — '/' 위치 추적
+  const lastKeyRef = useRef(null); // 더블스페이스 감지용
   const fromParseRef = useRef(false); // doParse 직후엔 DOM 이미 최신 → useEffect 동기화 불필요
   const epIdRef = useRef(activeEpisodeId);
   const projIdRef = useRef(activeProjectId);
@@ -1822,6 +1824,62 @@ const EditorSurface = forwardRef(function EditorSurface({
       return;
     }
 
+    // ── 씬번호 블록 더블스페이스: 구분자 자동 삽입
+    if (e.key === ' ' && type === 'scene_number' && lastKeyRef.current === ' ' && !ctrl && !e.shiftKey && !composingRef.current) {
+      e.preventDefault();
+      lastKeyRef.current = null;
+
+      const fmt = getSceneFormat();
+      const currentText = blockEl.textContent || '';
+      const hasLocSep = currentText.includes(fmt.locSep.trim());
+
+      // 앞 스페이스 하나 제거 (첫 번째 스페이스 입력분)
+      const selNow = window.getSelection();
+      if (selNow?.rangeCount) {
+        const r = selNow.getRangeAt(0);
+        // 캐럿 직전 문자가 스페이스면 삭제
+        const preRange = r.cloneRange();
+        preRange.collapse(true);
+        if (preRange.startOffset > 0) {
+          preRange.setStart(preRange.startContainer, preRange.startOffset - 1);
+          if (preRange.toString() === ' ') preRange.deleteContents();
+        }
+      }
+
+      if (!hasLocSep) {
+        // 1차: 장소↔세부장소 구분자 삽입
+        document.execCommand('insertText', false, fmt.locSep);
+      } else {
+        // 2차: 시간대 wrapper 삽입 + 커서를 열림/닫힘 사이로
+        const open  = fmt.timeFmt === 'paren'  ? ' ('
+                    : fmt.timeFmt === 'slash'  ? '/'
+                    : fmt.timeFmt === 'space'  ? ' '
+                    : (fmt.customTimeOpen ?? ' ');
+        const close = fmt.timeFmt === 'paren'  ? ')'
+                    : fmt.timeFmt === 'slash'  ? ''
+                    : fmt.timeFmt === 'space'  ? ' '
+                    : (fmt.customTimeClose ?? '');
+
+        if (close) {
+          document.execCommand('insertText', false, open);
+          // 커서 위치 저장 후 닫힘 문자 삽입, 커서 되돌리기
+          const sel2 = window.getSelection();
+          const afterOpen = sel2.getRangeAt(0).cloneRange();
+          document.execCommand('insertText', false, close);
+          // 커서를 open과 close 사이로 복원
+          sel2.removeAllRanges();
+          sel2.addRange(afterOpen);
+        } else {
+          document.execCommand('insertText', false, open);
+        }
+      }
+
+      doParse();
+      return;
+    }
+    // 직전 키 기록 (Space 여부만 추적)
+    lastKeyRef.current = (e.key === ' ' && type === 'scene_number') ? ' ' : null;
+
     // ── Enter: split block at caret
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -2093,8 +2151,9 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     const prev = undoStack.current[undoStack.current.length - 1];
     if (!prev) { redoStack.current.pop(); return; }
     undoActive.current = true;
-    const currentBlocks = JSON.parse(currentSerialized);
-    const restored = JSON.parse(prev);
+    let currentBlocks, restored;
+    try { currentBlocks = JSON.parse(currentSerialized); } catch { undoActive.current = false; return; }
+    try { restored = JSON.parse(prev); } catch { undoActive.current = false; return; }
     setBlocks(restored);
     requestAnimationFrame(() => {
       surfaceApiRef.current?.loadBlocks(restored);
@@ -2113,8 +2172,9 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     undoStack.current.push(next);
     if (undoStack.current.length > 20) undoStack.current.shift();
     undoActive.current = true;
-    const currentBlocks = currentSerialized ? JSON.parse(currentSerialized) : [];
-    const restored = JSON.parse(next);
+    let currentBlocks, restored;
+    try { currentBlocks = currentSerialized ? JSON.parse(currentSerialized) : []; } catch { currentBlocks = []; }
+    try { restored = JSON.parse(next); } catch { undoActive.current = false; return; }
     setBlocks(restored);
     requestAnimationFrame(() => {
       surfaceApiRef.current?.loadBlocks(restored);
@@ -3797,6 +3857,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
                 <span>Ctrl+Enter 형식 선택 후 새 블록</span>
                 <span>Shift+Enter 줄바꿈</span>
                 <span>Backspace 빈 블록 삭제</span>
+                <span>씬번호 줄에서 Space×2 구분자 자동 삽입</span>
               </div>
             )}
           </div>

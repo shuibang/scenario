@@ -5,6 +5,7 @@ import { setAccessToken, isTokenValid, loadDirectorScript, deleteFileById } from
 import DirectorScriptViewer from './DirectorScriptViewer';
 import PreviewRenderer from '../../print/PreviewRenderer';
 import { parseFullScript, buildPanelsFromScenes, detectScenes } from '../../utils/parseExternalScript';
+import ExcelJS from 'exceljs';
 
 // ─── 텍스트 → appState 변환 (로컬 텍스트 가져오기용) ─────────────────────────
 // DirectorScriptViewer가 기대하는 scriptBlocks 형식으로 파싱한다.
@@ -181,6 +182,9 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
   const [newColor,    setNewColor]    = useState(NOTE_COLORS_M[0]);
   const addRef = useRef(null);
 
+  // 씬리스트 탭 state
+  const [sceneScript,  setSceneScript]  = useState(null);
+
   // 스토리보드 탭 state
   const [boardScript, setBoardScript] = useState(isGuest ? DEMO_SCRIPT : null);
 
@@ -203,6 +207,7 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
   }, [noteScript?.id]);
 
   useEffect(() => { if (adding) setTimeout(() => addRef.current?.focus(), 50); }, [adding]);
+
 
   // ── 작품 탭: 대본 로드 ─────────────────────────────────────────────────────
   const loadProjScript = async (script) => {
@@ -260,9 +265,10 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
 
   const handleMobileDeleteLocalScript = (e, script) => {
     e.stopPropagation();
-    if (!window.confirm(`"${script.title}"\n\n로컬에서 삭제할까요?`)) return;
+    if (!window.confirm(`"${script.title}"\n\n로컬에서 삭제할까요?\n연출노트와 스토리보드도 함께 삭제됩니다.`)) return;
     deleteLocalScript(script.id);
     try { localStorage.removeItem(`director_private_notes_${script.id}`); } catch {}
+    try { localStorage.removeItem(`director_storyboard_${script.id}`); } catch {}
     const updated = loadLocalScripts();
     setLocalScripts(updated);
     if (projSelected?.id === script.id) { setProjSelected(null); setProjViewing(null); }
@@ -273,6 +279,7 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
   const TABS = [
     { id: 'projects',   icon: '📄', label: '작품' },
     { id: 'notes',      icon: '📝', label: '연출' },
+    { id: 'scenelist',  icon: '📋', label: '씬리스트' },
     { id: 'storyboard', icon: '🎞',  label: '보드' },
   ];
 
@@ -350,6 +357,38 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
                 <div style={{ fontSize: 10, color: D.text3 }}>메모 {cnt}개</div>
               </div>
               {cnt > 0 && <div style={{ flexShrink: 0, width: 18, height: 18, borderRadius: '50%', background: '#93c5fd', color: '#1a1a2e', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{cnt > 9 ? '9+' : cnt}</div>}
+            </div>
+          );
+        })}
+      </div>
+    );
+
+    if (tab === 'scenelist') return (
+      <div style={{ padding: '6px 0' }}>
+        {localScripts.length > 0 && (
+          <>
+            <div style={{ padding: '2px 14px', fontSize: 10, color: D.text3, opacity: 0.7 }}>로컬</div>
+            {localScripts.map(s => {
+              const active = sceneScript?.id === s.id;
+              return (
+                <div key={s.id} onClick={() => { setSceneScript(s); setPanelOpen(false); }}
+                  style={{ padding: '10px 14px', borderLeft: active ? `2px solid ${D.accent}` : '2px solid transparent', background: active ? D.active : 'transparent', cursor: 'pointer' }}>
+                  <div style={{ fontSize: 13, fontWeight: active ? 600 : 400, color: active ? D.accent : D.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📁 {s.title}</div>
+                </div>
+              );
+            })}
+            {(scripts?.length ?? 0) > 0 && <div style={{ height: 1, background: D.border, margin: '4px 0' }} />}
+          </>
+        )}
+        {scripts === null && <div style={{ padding: '16px', fontSize: 12, color: D.text3 }}>불러오는 중…</div>}
+        {scripts?.length === 0 && localScripts.length === 0 && <div style={{ padding: '12px 14px', fontSize: 12, color: D.text3, textAlign: 'center' }}>가져온 작품이 없습니다</div>}
+        {(scripts?.length ?? 0) > 0 && <div style={{ padding: '2px 14px', fontSize: 10, color: D.text3, opacity: 0.7 }}>클라우드</div>}
+        {scripts?.map(s => {
+          const active = sceneScript?.id === s.id;
+          return (
+            <div key={s.id} onClick={() => { setSceneScript(s); setPanelOpen(false); }}
+              style={{ padding: '10px 14px', borderLeft: active ? `2px solid ${D.accent}` : '2px solid transparent', background: active ? D.active : 'transparent', cursor: 'pointer' }}>
+              <div style={{ fontSize: 13, fontWeight: active ? 600 : 400, color: active ? D.accent : D.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</div>
             </div>
           );
         })}
@@ -446,6 +485,12 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
             </div>
           ))}
         </div>
+      );
+    }
+
+    if (tab === 'scenelist') {
+      return (
+        <SceneListPanel isMobile={true} mobileSelected={sceneScript} />
       );
     }
 
@@ -671,6 +716,7 @@ export default function DirectorDashboard({ session, onBack, isGuest = false }) 
             <div style={{ margin: '12px 0 0', height: 1, background: D.border }} />
             <SideSection label="연출" />
             <SideItem icon="📝" label="연출노트"   active={activeMenu === 'notes'}      onClick={() => setActiveMenu('notes')} />
+            <SideItem icon="📋" label="씬리스트"   active={activeMenu === 'scenelist'}  onClick={() => setActiveMenu('scenelist')} />
             <SideItem icon="🎞" label="스토리보드" active={activeMenu === 'storyboard'} onClick={() => setActiveMenu('storyboard')} />
           </div>
         </aside>
@@ -678,6 +724,7 @@ export default function DirectorDashboard({ session, onBack, isGuest = false }) 
         <main style={{ flex: 1, display: 'flex', minHeight: 0, background: D.bg, overflow: 'hidden' }}>
           {activeMenu === 'projects'   && <ProjectsPanel session={session} isGuest={isGuest} />}
           {activeMenu === 'notes'      && <NotesPanel />}
+          {activeMenu === 'scenelist'  && <SceneListPanel />}
           {activeMenu === 'storyboard' && <StoryboardPanel isGuest={isGuest} />}
         </main>
       </div>
@@ -904,9 +951,10 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
   };
 
   const handleDeleteLocalScript = (script) => {
-    if (!window.confirm(`"${script.title}"\n\n로컬에서 삭제할까요?`)) return;
+    if (!window.confirm(`"${script.title}"\n\n로컬에서 삭제할까요?\n연출노트와 스토리보드도 함께 삭제됩니다.`)) return;
     deleteLocalScript(script.id);
     try { localStorage.removeItem(`director_private_notes_${script.id}`); } catch {}
+    try { localStorage.removeItem(`director_storyboard_${script.id}`); } catch {}
     setLocalScripts(loadLocalScripts());
     if (selected?.id === script.id) { setSelected(null); setViewing(null); }
   };
@@ -922,7 +970,7 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
 
   const handleDeleteScript = async (script) => {
     if (!supabase) return;
-    if (!window.confirm(`"${script.title}"\n\n목록에서 삭제하고 Google Drive 파일도 함께 삭제할까요?`)) return;
+    if (!window.confirm(`"${script.title}"\n\n목록에서 삭제하고 Google Drive 파일도 함께 삭제할까요?\n연출노트와 스토리보드도 함께 삭제됩니다.`)) return;
 
     // 1) Drive 파일 삭제 (실패해도 계속 진행 — 파일이 이미 없는 경우 대비)
     if (script.drive_file_id) {
@@ -950,6 +998,8 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
       alert('삭제 권한이 없거나 이미 삭제된 항목입니다.');
       return;
     }
+    try { localStorage.removeItem(`director_private_notes_${script.id}`); } catch {}
+    try { localStorage.removeItem(`director_storyboard_${script.id}`); } catch {}
     setScripts(prev => prev.filter(s => s.id !== script.id));
     if (selected?.id === script.id) { setSelected(null); setViewing(null); }
   };
@@ -1220,6 +1270,453 @@ function SendButton({ scriptRow, viewing }) {
       >
         작가에게 전송
       </button>
+    </div>
+  );
+}
+
+// ─── 씬리스트 행 (대본 작업실 SceneListPage와 동일한 레이아웃) ─────────────────
+function DirectorSceneRow({ scene, idx, contentVal, onContentChange, onMetaChange, chars, D }) {
+  const [val, setVal] = useState(contentVal);
+  useEffect(() => { setVal(contentVal); }, [contentVal]);
+
+  const inpStyle = {
+    width: '100%', background: D.card, border: `1px solid transparent`,
+    borderRadius: 3, color: D.text, padding: '3px 5px',
+    fontSize: 11, fontFamily: 'inherit', boxSizing: 'border-box', outline: 'none',
+  };
+  const label = scene.sceneNo ? `S#${scene.sceneNo}.` : `S#${idx + 1}.`;
+
+  const metaInput = (field, placeholder, value) => (
+    <input
+      defaultValue={value || ''}
+      key={`${idx}-${field}-${value}`}
+      placeholder={placeholder}
+      onFocus={e => { e.target.style.borderColor = D.accent; }}
+      onBlur={e => { e.target.style.borderColor = 'transparent'; const v = e.target.value.trim(); if (v !== (value || '')) onMetaChange({ [field]: v }); }}
+      style={{ ...inpStyle, minWidth: 40 }}
+    />
+  );
+
+  return (
+    <tr style={{ borderBottom: `1px solid ${D.border}` }}
+      onMouseEnter={e => { e.currentTarget.style.background = D.active; }}
+      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+      {/* 씬번호 */}
+      <td style={{ padding: '6px 8px', whiteSpace: 'nowrap', verticalAlign: 'middle', textAlign: 'center' }}>
+        <span style={{ color: D.accent, fontWeight: 700, fontSize: 11 }}>{label}</span>
+      </td>
+      {/* 장소 */}
+      <td style={{ padding: '4px 5px', verticalAlign: 'middle' }}>{metaInput('location', '장소', scene.location)}</td>
+      {/* 세부장소 */}
+      <td style={{ padding: '4px 5px', verticalAlign: 'middle' }}>{metaInput('subLocation', '세부장소', scene.subLocation)}</td>
+      {/* 시간대 */}
+      <td style={{ padding: '4px 5px', verticalAlign: 'middle' }}>{metaInput('timeOfDay', '시간대', scene.timeOfDay)}</td>
+      {/* 내용 */}
+      <td style={{ padding: '4px 5px', verticalAlign: 'middle' }}>
+        <input value={val} onChange={e => setVal(e.target.value)}
+          onFocus={e => { e.target.style.borderColor = D.accent; }}
+          onBlur={e => { e.target.style.borderColor = 'transparent'; onContentChange(val); }}
+          placeholder="내용 입력"
+          style={inpStyle} />
+      </td>
+      {/* 등장인물 */}
+      <td style={{ padding: '6px 8px', verticalAlign: 'middle' }}>
+        <span style={{ fontSize: 11, color: D.text2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', maxWidth: 100 }}
+          title={chars.join(', ')}>
+          {chars.join(', ') || '—'}
+        </span>
+      </td>
+      {/* 비고 (빈칸) */}
+      <td style={{ padding: '6px 8px', verticalAlign: 'middle' }}></td>
+    </tr>
+  );
+}
+
+// ─── 씬 파싱 공통 헬퍼 ─────────────────────────────────────────────────────────
+async function extractScenesFromScript(selected) {
+  if (selected._isLocal) {
+    return parseFullScript(selected.text || '');
+  }
+  // 클라우드: Drive에서 로드 후 scriptBlocks 파싱
+  if (!isTokenValid()) {
+    const { data: { session: s } } = await supabase.auth.getSession();
+    if (s?.provider_token) setAccessToken(s.provider_token, s.expires_in ?? 3600);
+  }
+  const saved  = await loadDirectorScript(selected.drive_file_id);
+  const data   = saved?.data ?? saved;
+  const blocks = data?.scriptBlocks || [];
+  const extracted = [];
+  let current = null;
+  const dlre = /^([가-힣A-Za-z][가-힣A-Za-z\s]{0,14})\s*[:\：]/;
+  for (const b of blocks) {
+    if (b.type === 'scene_number') {
+      if (current) extracted.push(current);
+      const raw = b.content || '';
+      const m   = raw.match(/^S#(\d+)\.\s*(.+?)(?:\s+(낮|밤|새벽|저녁|아침|오후|오전|실내|실외|INT|EXT))?$/i);
+      current = { sceneNo: m?.[1] || '', location: m ? m[2].trim() : raw, timeOfDay: m?.[3] || '', raw, contentLines: [] };
+    } else if (current && (b.type === 'character' || b.type === 'dialogue' || b.type === 'action' || b.type === 'parenthetical')) {
+      current.contentLines.push(b.content || '');
+    }
+  }
+  if (current) extracted.push(current);
+  return extracted;
+}
+
+function getSceneChars(contentLines = []) {
+  const seen = new Set();
+  const dlre = /^([가-힣A-Za-z][가-힣A-Za-z\s]{0,14})\s*[:\：]/;
+  for (const line of contentLines) {
+    const m = line.match(dlre);
+    if (m) seen.add(m[1].trim());
+  }
+  return [...seen];
+}
+
+// ─── 씬리스트 엑셀 내보내기 (연출 작업실 전용) ────────────────────────────────
+async function exportDirectorScenesXlsx(title, scenes, contentMap, sceneKeyFn) {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = '연출 작업실';
+  const ws = wb.addWorksheet('씬리스트', {
+    pageSetup: { paperSize: 9, orientation: 'landscape', margins: { left: 0.79, right: 0.79, top: 0.79, bottom: 0.79, header: 0, footer: 0 } },
+    views: [{ state: 'frozen', ySplit: 2 }],
+  });
+  const HEADERS = ['씬번호', '장소', '세부장소', '시간대', '등장인물', '내용', '비고'];
+  const WIDTHS  = [9, 14, 12, 9, 16, 36, 12];
+  ws.columns = WIDTHS.map(w => ({ width: w }));
+  ws.mergeCells(1, 1, 1, HEADERS.length);
+  const titleCell = ws.getCell(1, 1);
+  titleCell.value = title; titleCell.font = { bold: true, size: 12 }; titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getRow(1).height = 24;
+  const hr = ws.getRow(2); hr.height = 20;
+  HEADERS.forEach((h, i) => {
+    const c = hr.getCell(i + 1);
+    c.value = h; c.font = { bold: true, size: 10 };
+    c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFECECEC' } };
+    c.border = { top: { style: 'thin', color: { argb: 'FF999999' } }, bottom: { style: 'thin', color: { argb: 'FF999999' } }, left: { style: 'thin', color: { argb: 'FF999999' } }, right: { style: 'thin', color: { argb: 'FF999999' } } };
+  });
+  scenes.forEach((scene, idx) => {
+    const key     = sceneKeyFn(scene, idx);
+    const content = contentMap[key] || scene._receivedContent || '';
+    const chars   = (scene._receivedChars?.join(', ')) || getSceneChars(scene.contentLines).join(', ');
+    const label   = scene.sceneNo ? `S#${scene.sceneNo}.` : `S#${idx + 1}.`;
+    const row = ws.addRow([label, scene.location, scene.subLocation || '', scene.timeOfDay, chars, content, '']);
+    row.height = 18;
+    row.eachCell({ includeEmpty: true }, (cell, colNum) => {
+      cell.font = { size: 10 };
+      cell.alignment = { vertical: 'top', wrapText: true, horizontal: colNum === 1 ? 'center' : 'left' };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: idx % 2 === 1 ? 'FFF8F8F8' : 'FFFFFFFF' } };
+      cell.border = { top: { style: 'thin', color: { argb: 'FFDDDDDD' } }, bottom: { style: 'thin', color: { argb: 'FFDDDDDD' } }, left: { style: 'thin', color: { argb: 'FFCCCCCC' } }, right: { style: 'thin', color: { argb: 'FFCCCCCC' } } };
+    });
+  });
+  const buf  = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a'); a.href = url; a.download = `${title}_씬리스트.xlsx`; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+const RECEIVED_SL_KEY = 'director_received_scenelists';
+
+// ─── 씬리스트 패널 ────────────────────────────────────────────────────────────
+function SceneListPanel({ isMobile = false, mobileSelected = null }) {
+  const D = useD();
+  const [scripts,         setScripts]         = useState(null);
+  const [localScripts,    setLocalScripts]    = useState(() => loadLocalScripts());
+  const [receivedLists,   setReceivedLists]   = useState(() => {
+    try { return JSON.parse(localStorage.getItem(RECEIVED_SL_KEY) || '[]'); } catch { return []; }
+  });
+  const [selected,        setSelected]        = useState(mobileSelected);
+  const [scenes,          setScenes]          = useState([]);
+  const [loading,         setLoading]         = useState(false);
+  const [subCollapsed,    setSubCollapsed]    = useState(false);
+  const [sheetOpen,       setSheetOpen]       = useState(false);
+  const [xlsxBusy,        setXlsxBusy]        = useState(false);
+  const [actionMsg,       setActionMsg]       = useState('');
+  // 씬 내용 저장: { [sceneKey]: string }
+  const [contentMap,      setContentMap]      = useState({});
+
+  const contentStorageKey = selected ? `director_scenelist_${selected.id}` : null;
+
+  // 클라우드 스크립트 목록
+  useEffect(() => {
+    if (!supabase) { setScripts([]); return; }
+    supabase.from('shared_scripts').select('id, title, imported_at, drive_file_id')
+      .order('imported_at', { ascending: false })
+      .then(({ data }) => setScripts(data || []));
+  }, []);
+
+  // 선택 시 씬 파싱 + 내용 로드
+  useEffect(() => {
+    if (!selected) { setScenes([]); setContentMap({}); return; }
+    // 내용 맵 로드
+    const savedMap = (() => { try { const s = localStorage.getItem(`director_scenelist_${selected.id}`); return s ? JSON.parse(s) : null; } catch { return null; } })();
+
+    if (selected._isReceived) {
+      // 받은 씬리스트: 공유 데이터에서 직접 씬 추출
+      const rawScenes = (selected.scenes || []).map(s => ({
+        sceneNo:          s.sn?.replace(/S#(\d+)\./, '$1') || '',
+        location:         s.loc || '',
+        subLocation:      s.sub || '',
+        timeOfDay:        s.tod || '',
+        raw:              `${s.sn || ''} ${s.loc || ''} ${s.sub || ''} ${s.tod || ''}`.trim(),
+        contentLines:     [],
+        _receivedChars:   s.chars ? s.chars.split(', ').filter(Boolean) : [],
+        _receivedContent: s.content || '',
+      }));
+      setScenes(rawScenes);
+      // contentMap: 로컬 저장 있으면 그걸 쓰고, 없으면 공유 데이터의 content로 초기화
+      if (savedMap) {
+        setContentMap(savedMap);
+      } else {
+        const initMap = {};
+        rawScenes.forEach((scene, idx) => {
+          const k = scene.sceneNo ? `s${scene.sceneNo}` : `i${idx}`;
+          if (scene._receivedContent) initMap[k] = scene._receivedContent;
+        });
+        setContentMap(initMap);
+      }
+      return;
+    }
+
+    setContentMap(savedMap || {});
+    setLoading(true);
+    extractScenesFromScript(selected)
+      .then(s => setScenes(s))
+      .catch(() => setScenes([]))
+      .finally(() => setLoading(false));
+  }, [selected]);
+
+  const sceneKey = (scene, idx) => scene.sceneNo ? `s${scene.sceneNo}` : `i${idx}`;
+
+  const handleContentChange = (scene, idx, val) => {
+    const k   = sceneKey(scene, idx);
+    const next = { ...contentMap, [k]: val };
+    setContentMap(next);
+    if (contentStorageKey) {
+      try { localStorage.setItem(contentStorageKey, JSON.stringify(next)); } catch {}
+    }
+  };
+
+  const handleReset = () => {
+    if (!selected) return;
+    if (!window.confirm('입력한 내용을 모두 초기화하시겠습니까?')) return;
+    setContentMap({});
+    try { localStorage.removeItem(`director_scenelist_${selected.id}`); } catch {}
+    setActionMsg('초기화됨');
+    setTimeout(() => setActionMsg(''), 2000);
+  };
+
+  const handleXlsx = async () => {
+    if (!selected || scenes.length === 0 || xlsxBusy) return;
+    setXlsxBusy(true);
+    try {
+      await exportDirectorScenesXlsx(selected.title || '씬리스트', scenes, contentMap, sceneKey);
+    } catch { setActionMsg('오류 발생'); setTimeout(() => setActionMsg(''), 2000); }
+    setXlsxBusy(false);
+  };
+
+  const handleMetaChange = (idx, meta) => {
+    setScenes(prev => {
+      const next = [...prev];
+      next[idx] = { ...next[idx], ...meta };
+      return next;
+    });
+  };
+
+  const handleDeleteReceived = (id) => {
+    const next = receivedLists.filter(s => s.id !== id);
+    localStorage.setItem(RECEIVED_SL_KEY, JSON.stringify(next));
+    setReceivedLists(next);
+    if (selected?.id === id) { setSelected(null); setScenes([]); setContentMap({}); }
+  };
+
+  const scriptListContent = (
+    <div style={{ padding: '8px 0' }}>
+      {/* 받은 씬리스트 */}
+      {receivedLists.length > 0 && (
+        <>
+          <div style={{ padding: '4px 16px 2px', fontSize: 10, fontWeight: 700, color: D.text3, letterSpacing: '0.05em', textTransform: 'uppercase', opacity: 0.7 }}>받은 씬리스트</div>
+          {receivedLists.map(s => {
+            const active = selected?.id === s.id;
+            return (
+              <div key={s.id} style={{ display: 'flex', alignItems: 'center', borderLeft: active ? `2px solid ${D.accent}` : '2px solid transparent', background: active ? D.active : 'transparent', transition: 'background 0.12s' }}>
+                <div onClick={() => { setSelected({ ...s, _isReceived: true }); setSheetOpen(false); }}
+                  style={{ flex: 1, minWidth: 0, padding: '9px 8px 9px 14px', cursor: 'pointer' }}>
+                  <div style={{ fontSize: 13, fontWeight: active ? 600 : 400, color: active ? D.accent : D.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📨 {s.title}</div>
+                  <div style={{ fontSize: 10, color: D.text3 }}>{s.scenes?.length || 0}씬 · {new Date(s.savedAt).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}</div>
+                </div>
+                <button onClick={e => { e.stopPropagation(); handleDeleteReceived(s.id); }}
+                  style={{ flexShrink: 0, marginRight: 8, width: 22, height: 22, borderRadius: 4, border: `1px solid ${D.border}`, background: 'transparent', color: D.text3, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+              </div>
+            );
+          })}
+          {(localScripts.length > 0 || (scripts?.length ?? 0) > 0) && <div style={{ height: 1, background: D.border, margin: '4px 0' }} />}
+        </>
+      )}
+      {/* 로컬 작품 */}
+      {localScripts.length > 0 && (
+        <>
+          <div style={{ padding: '4px 16px 2px', fontSize: 10, fontWeight: 700, color: D.text3, letterSpacing: '0.05em', textTransform: 'uppercase', opacity: 0.7 }}>로컬</div>
+          {localScripts.map(s => {
+            const active = selected?.id === s.id;
+            return (
+              <div key={s.id} onClick={() => { setSelected(s); setSheetOpen(false); }}
+                style={{ padding: '10px 16px', cursor: 'pointer', borderLeft: active ? `2px solid ${D.accent}` : '2px solid transparent', background: active ? D.active : 'transparent', transition: 'background 0.12s' }}>
+                <div style={{ fontSize: 13, fontWeight: active ? 600 : 400, color: active ? D.accent : D.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📁 {s.title}</div>
+              </div>
+            );
+          })}
+          {(scripts?.length ?? 0) > 0 && <div style={{ height: 1, background: D.border, margin: '4px 0' }} />}
+        </>
+      )}
+      {(scripts?.length ?? 0) > 0 && <div style={{ padding: '4px 16px 2px', fontSize: 10, fontWeight: 700, color: D.text3, letterSpacing: '0.05em', textTransform: 'uppercase', opacity: 0.7 }}>클라우드</div>}
+      {scripts === null && <div style={{ padding: '12px 16px', fontSize: 12, color: D.text3 }}>불러오는 중…</div>}
+      {scripts?.length === 0 && localScripts.length === 0 && receivedLists.length === 0 && (
+        <div style={{ padding: '24px 16px', textAlign: 'center' }}>
+          <div style={{ fontSize: 22, marginBottom: 8, opacity: 0.4 }}>📋</div>
+          <div style={{ fontSize: 11, color: D.text3, lineHeight: 1.6 }}>가져온 작품이 없습니다.</div>
+        </div>
+      )}
+      {scripts?.map(s => {
+        const active = selected?.id === s.id;
+        return (
+          <div key={s.id} onClick={() => { setSelected(s); setSheetOpen(false); }}
+            style={{ padding: '10px 16px', cursor: 'pointer', borderLeft: active ? `2px solid ${D.accent}` : '2px solid transparent', background: active ? D.active : 'transparent', transition: 'background 0.12s' }}>
+            <div style={{ fontSize: 13, fontWeight: active ? 600 : 400, color: active ? D.accent : D.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  // 씬 테이블 (대본 작업실 SceneListPage와 동일 구조)
+  const sceneTable = (
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* 헤더 바 */}
+      <div style={{ flexShrink: 0, padding: '8px 12px', borderBottom: `1px solid ${D.border}`, display: 'flex', alignItems: 'center', gap: 8, background: D.panel }}>
+        {isMobile ? (
+          <button onClick={() => setSheetOpen(true)}
+            style={{ flex: 1, padding: '6px 10px', borderRadius: 6, border: `1px solid ${D.accent}`, background: 'transparent', color: D.accent, fontSize: 12, fontWeight: 600, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span>📋</span>
+            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selected ? selected.title : '작품 선택'}</span>
+            <span style={{ fontSize: 10, color: D.text3 }}>▾</span>
+          </button>
+        ) : (
+          <>
+            <span style={{ fontSize: 13, fontWeight: 600, color: D.text2 }}>씬리스트</span>
+            {selected && !loading && <span style={{ fontSize: 11, color: D.text3 }}>{scenes.length}개 씬</span>}
+            {selected && <span style={{ fontSize: 12, color: D.text2, marginLeft: 4 }}>— {selected.title}</span>}
+          </>
+        )}
+        {actionMsg && <span style={{ fontSize: 11, color: D.accent, marginLeft: 4 }}>{actionMsg}</span>}
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, flexShrink: 0 }}>
+          {selected && scenes.length > 0 && (
+            <>
+              <button onClick={handleXlsx} disabled={xlsxBusy}
+                title="엑셀로 내보내기"
+                style={{ padding: '3px 8px', borderRadius: 4, fontSize: 11, background: 'transparent', color: D.text3, border: `1px solid ${D.border}`, cursor: xlsxBusy ? 'default' : 'pointer', opacity: xlsxBusy ? 0.5 : 1 }}>
+                XLSX
+              </button>
+              <button onClick={handleReset}
+                title="내용 초기화"
+                style={{ padding: '3px 8px', borderRadius: 4, fontSize: 11, background: 'transparent', color: '#e05c5c', border: '1px solid rgba(224,92,92,0.4)', cursor: 'pointer' }}>
+                초기화
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* 본문 */}
+      <div style={{ flex: 1, overflow: 'auto', position: 'relative' }}>
+        {/* 오른쪽 페이드 */}
+        <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 20, pointerEvents: 'none', background: `linear-gradient(to right, transparent, ${D.bg})`, zIndex: 2 }} />
+
+        {!selected && (
+          <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, color: D.text3 }}>
+            <div style={{ fontSize: 36, opacity: 0.25 }}>📋</div>
+            <div style={{ fontSize: 13 }}>{isMobile ? '위 버튼으로 작품을 선택하세요' : '좌측에서 작품을 선택하세요'}</div>
+          </div>
+        )}
+        {selected && loading && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 48, color: D.text3, fontSize: 13 }}>씬 목록 불러오는 중…</div>
+        )}
+        {selected && !loading && scenes.length === 0 && (
+          <div style={{ padding: '48px 16px', textAlign: 'center' }}>
+            <div style={{ fontSize: 32, marginBottom: 12, opacity: 0.3 }}>🎬</div>
+            <div style={{ fontSize: 13, color: D.text3 }}>씬 정보를 찾을 수 없습니다.<br /><span style={{ fontSize: 11 }}>씬 머리글(S#1. 장소 시간)이 있는 대본인지 확인하세요.</span></div>
+          </div>
+        )}
+        {selected && !loading && scenes.length > 0 && (
+          <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%', minWidth: 600 }}>
+            <colgroup>
+              <col style={{ width: '7%' }} />
+              <col style={{ width: '12%' }} />
+              <col style={{ width: '11%' }} />
+              <col style={{ width: '8%' }} />
+              <col style={{ width: '30%' }} />
+              <col style={{ width: '20%' }} />
+              <col style={{ width: '12%' }} />
+            </colgroup>
+            <thead>
+              <tr style={{ background: D.panel, borderBottom: `2px solid ${D.border}`, position: 'sticky', top: 0, zIndex: 1 }}>
+                {['씬번호', '장소', '세부장소', '시간대', '내용', '등장인물', '비고'].map(h => (
+                  <th key={h} style={{ padding: '7px 6px', textAlign: 'left', color: D.text3, fontWeight: 700, fontSize: 11, letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {scenes.map((scene, idx) => (
+                <DirectorSceneRow
+                  key={idx}
+                  scene={scene}
+                  idx={idx}
+                  contentVal={contentMap[sceneKey(scene, idx)] || ''}
+                  onContentChange={val => handleContentChange(scene, idx, val)}
+                  onMetaChange={meta => handleMetaChange(idx, meta)}
+                  chars={scene._receivedChars || getSceneChars(scene.contentLines)}
+                  D={D}
+                />
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+      {/* 데스크톱 좌측: 작품 목록 */}
+      {!isMobile && (
+        <div style={{ width: subCollapsed ? 28 : 240, flexShrink: 0, borderRight: `1px solid ${D.border}`, background: D.panel, display: 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'width 0.2s ease' }}>
+          <div style={{ padding: '10px 8px 10px 12px', borderBottom: `1px solid ${D.border}`, display: 'flex', alignItems: 'center', gap: 6 }}>
+            {!subCollapsed && <div style={{ flex: 1, fontSize: 11, fontWeight: 700, color: D.text3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>작품별 씬리스트</div>}
+            <button onClick={() => setSubCollapsed(v => !v)} title={subCollapsed ? '목록 열기' : '목록 닫기'}
+              style={{ flexShrink: 0, background: 'none', border: 'none', color: D.text3, cursor: 'pointer', fontSize: 10, padding: '2px 4px', lineHeight: 1 }}>
+              {subCollapsed ? '▶' : '◀'}
+            </button>
+          </div>
+          {!subCollapsed && <div style={{ flex: 1, overflowY: 'auto' }}>{scriptListContent}</div>}
+        </div>
+      )}
+      {sceneTable}
+
+      {/* 모바일 시트: 작품 선택 */}
+      {isMobile && sheetOpen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9000, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'flex-end' }}
+          onClick={() => setSheetOpen(false)}>
+          <div style={{ width: '100%', maxHeight: '60vh', background: D.panel, borderRadius: '16px 16px 0 0', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ padding: '14px 16px 10px', borderBottom: `1px solid ${D.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: D.text }}>작품 선택</span>
+              <button onClick={() => setSheetOpen(false)} style={{ background: 'none', border: 'none', color: D.text3, fontSize: 18, cursor: 'pointer', lineHeight: 1 }}>×</button>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto' }}>{scriptListContent}</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2317,8 +2814,10 @@ function StoryboardPanel({ isGuest, isMobile = false, mobilePreSelected = null, 
   // 로컬 스크립트 삭제
   const handleDeleteLocal = (e, id) => {
     e.stopPropagation();
-    if (!window.confirm('이 스토리보드를 삭제할까요?\n(로컬에만 저장된 데이터가 삭제됩니다)')) return;
+    if (!window.confirm('이 작품을 삭제할까요?\n연출노트와 스토리보드도 함께 삭제됩니다.')) return;
     deleteLocalScript(id);
+    try { localStorage.removeItem(`director_private_notes_${id}`); } catch {}
+    try { localStorage.removeItem(`director_storyboard_${id}`); } catch {}
     setLocalScripts(loadLocalScripts());
     if (selected?.id === id) { setSelected(null); setPanels(null); }
   };

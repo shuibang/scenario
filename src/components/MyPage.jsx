@@ -12,6 +12,7 @@ import { resetPageHints } from './OnboardingTour';
 import AdBanner from './AdBanner';
 import { NOTICES, ANNOUNCEMENTS } from './UpdateBanner';
 import { SCENE_PREFIX_OPTIONS, getScenePrefix, setScenePrefix } from '../utils/scenePrefix';
+import { getSceneFormat, setSceneFormat, LOC_SEP_PRESETS, TIME_FMT_PRESETS, isCustomLocSep, previewFormat } from '../utils/sceneFormat';
 
 // ─── Log PDF ──────────────────────────────────────────────────────────────────
 const LOG_PDF_FONT = '함초롱바탕';
@@ -574,10 +575,23 @@ function SettingsTab() {
   const [treatmentSync, setTreatmentSync] = useState(() => localStorage.getItem(TREATMENT_SYNC_KEY) || 'sync');
   const [scenelistSync, setScenelistSync] = useState(() => localStorage.getItem(SCENELIST_SYNC_KEY) || 'sync');
   const [scenePrefix, setScenePrefixState] = useState(() => getScenePrefix());
+  const [sceneFormat, setSceneFormatState] = useState(() => getSceneFormat());
+  const [customLocSepInput, setCustomLocSepInput] = useState(() => {
+    const fmt = getSceneFormat();
+    return isCustomLocSep(fmt.locSep) ? fmt.locSep : '';
+  });
+  const [customTimeOpenInput,  setCustomTimeOpenInput]  = useState(() => getSceneFormat().customTimeOpen  ?? ' ');
+  const [customTimeCloseInput, setCustomTimeCloseInput] = useState(() => getSceneFormat().customTimeClose ?? '');
 
   const handleScenePrefix = (val) => {
     setScenePrefixState(val);
     setScenePrefix(val, supabase || null);
+  };
+
+  const handleSceneFormat = (patch) => {
+    const next = { ...sceneFormat, ...patch };
+    setSceneFormatState(next);
+    setSceneFormat(next);
   };
 
   const togglePublicPc = () => {
@@ -770,6 +784,129 @@ function SettingsTab() {
               }}>{opt.example}</span>
             </label>
           ))}
+        </div>
+      </div>
+
+      {/* 씬 헤더 형식 */}
+      <div className="rounded-lg" style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)', padding: '12px 16px' }}>
+        <div className="text-sm font-medium mb-1" style={{ color: 'var(--c-text)' }}>씬 헤더 형식</div>
+        <div className="text-xs mb-3" style={{ color: 'var(--c-text5)' }}>
+          씬리스트와 대본 씬 헤더의 장소·시간대 구분 방식을 설정합니다.<br />
+          <span style={{ color: 'var(--c-accent2)' }}>씬리스트 자동감지 시 이 형식을 기준으로 파싱됩니다.</span><br />
+          <span style={{ color: 'var(--c-text5)' }}>씬번호 줄에서 스페이스를 두 번 누르면 구분자가 순서대로 자동 입력됩니다.</span>
+        </div>
+
+        {/* 미리보기 */}
+        <div style={{ marginBottom: 14, padding: '7px 12px', borderRadius: 6, background: 'var(--c-input)', border: '1px solid var(--c-border3)', fontSize: 13, fontWeight: 600, color: 'var(--c-accent)', letterSpacing: '0.01em' }}>
+          {previewFormat(sceneFormat) || <span style={{ color: 'var(--c-text6)', fontWeight: 400 }}>미리보기</span>}
+        </div>
+
+        {/* 장소↔세부장소 구분자 */}
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 11, color: 'var(--c-text5)', marginBottom: 5 }}>장소 ↔ 세부장소 구분자</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {LOC_SEP_PRESETS.map(opt => (
+              <label key={opt.value} style={{
+                display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
+                padding: '6px 10px', borderRadius: 6,
+                border: `1px solid ${sceneFormat.locSep === opt.value ? 'var(--c-accent)' : 'var(--c-border3)'}`,
+                background: sceneFormat.locSep === opt.value ? 'color-mix(in srgb, var(--c-accent) 8%, transparent)' : 'transparent',
+              }}>
+                <input type="radio" name="locSep" value={opt.value}
+                  checked={sceneFormat.locSep === opt.value}
+                  onChange={() => handleSceneFormat({ locSep: opt.value })}
+                  style={{ accentColor: 'var(--c-accent)', cursor: 'pointer' }} />
+                <span style={{ fontSize: 12, color: 'var(--c-text)', flex: 1 }}>{opt.label}</span>
+                <span style={{ fontSize: 11, color: 'var(--c-text5)', fontFamily: 'monospace' }}>{opt.example}</span>
+              </label>
+            ))}
+            {/* 직접 입력 */}
+            <label style={{
+              display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
+              padding: '6px 10px', borderRadius: 6,
+              border: `1px solid ${isCustomLocSep(sceneFormat.locSep) ? 'var(--c-accent)' : 'var(--c-border3)'}`,
+              background: isCustomLocSep(sceneFormat.locSep) ? 'color-mix(in srgb, var(--c-accent) 8%, transparent)' : 'transparent',
+            }}>
+              <input type="radio" name="locSep" value="custom"
+                checked={isCustomLocSep(sceneFormat.locSep)}
+                onChange={() => handleSceneFormat({ locSep: customLocSepInput || ' ' })}
+                style={{ accentColor: 'var(--c-accent)', cursor: 'pointer' }} />
+              <span style={{ fontSize: 12, color: 'var(--c-text)' }}>직접 입력</span>
+              <input
+                value={customLocSepInput}
+                onChange={e => {
+                  const v = e.target.value;
+                  setCustomLocSepInput(v);
+                  if (isCustomLocSep(sceneFormat.locSep)) handleSceneFormat({ locSep: v || ' ' });
+                }}
+                onFocus={() => { if (!isCustomLocSep(sceneFormat.locSep)) handleSceneFormat({ locSep: customLocSepInput || ' ' }); }}
+                placeholder="구분자 입력"
+                style={{
+                  flex: 1, minWidth: 0, fontSize: 12, padding: '2px 7px', borderRadius: 4,
+                  background: 'var(--c-input)', color: 'var(--c-text)',
+                  border: '1px solid var(--c-border3)', outline: 'none', fontFamily: 'monospace',
+                }}
+              />
+            </label>
+          </div>
+        </div>
+
+        {/* 시간대 표기 방식 */}
+        <div>
+          <div style={{ fontSize: 11, color: 'var(--c-text5)', marginBottom: 5 }}>시간대 표기 방식</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {TIME_FMT_PRESETS.map(opt => (
+              <label key={opt.value} style={{
+                display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
+                padding: '6px 10px', borderRadius: 6,
+                border: `1px solid ${sceneFormat.timeFmt === opt.value ? 'var(--c-accent)' : 'var(--c-border3)'}`,
+                background: sceneFormat.timeFmt === opt.value ? 'color-mix(in srgb, var(--c-accent) 8%, transparent)' : 'transparent',
+              }}>
+                <input type="radio" name="timeFmt" value={opt.value}
+                  checked={sceneFormat.timeFmt === opt.value}
+                  onChange={() => handleSceneFormat({ timeFmt: opt.value })}
+                  style={{ accentColor: 'var(--c-accent)', cursor: 'pointer' }} />
+                <span style={{ fontSize: 12, color: 'var(--c-text)', flex: 1 }}>{opt.label}</span>
+                <span style={{ fontSize: 11, color: 'var(--c-text5)', fontFamily: 'monospace' }}>{opt.example}</span>
+              </label>
+            ))}
+            {/* 직접 입력 */}
+            <label style={{
+              display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer',
+              padding: '6px 10px', borderRadius: 6,
+              border: `1px solid ${sceneFormat.timeFmt === 'custom' ? 'var(--c-accent)' : 'var(--c-border3)'}`,
+              background: sceneFormat.timeFmt === 'custom' ? 'color-mix(in srgb, var(--c-accent) 8%, transparent)' : 'transparent',
+            }}>
+              <input type="radio" name="timeFmt" value="custom"
+                checked={sceneFormat.timeFmt === 'custom'}
+                onChange={() => handleSceneFormat({ timeFmt: 'custom', customTimeOpen: customTimeOpenInput ?? ' ', customTimeClose: customTimeCloseInput ?? '' })}
+                style={{ accentColor: 'var(--c-accent)', cursor: 'pointer', flexShrink: 0 }} />
+              <span style={{ fontSize: 12, color: 'var(--c-text)', flexShrink: 0 }}>직접 입력</span>
+              <input
+                value={customTimeOpenInput}
+                onChange={e => {
+                  const v = e.target.value;
+                  setCustomTimeOpenInput(v);
+                  if (sceneFormat.timeFmt === 'custom') handleSceneFormat({ timeFmt: 'custom', customTimeOpen: v, customTimeClose: customTimeCloseInput ?? '' });
+                }}
+                onFocus={() => { if (sceneFormat.timeFmt !== 'custom') handleSceneFormat({ timeFmt: 'custom', customTimeOpen: customTimeOpenInput ?? ' ', customTimeClose: customTimeCloseInput ?? '' }); }}
+                placeholder="앞"
+                style={{ width: 44, fontSize: 12, padding: '2px 6px', borderRadius: 4, background: 'var(--c-input)', color: 'var(--c-text)', border: '1px solid var(--c-border3)', outline: 'none', fontFamily: 'monospace', textAlign: 'center' }}
+              />
+              <span style={{ fontSize: 11, color: 'var(--c-text5)', flexShrink: 0 }}>시간대</span>
+              <input
+                value={customTimeCloseInput}
+                onChange={e => {
+                  const v = e.target.value;
+                  setCustomTimeCloseInput(v);
+                  if (sceneFormat.timeFmt === 'custom') handleSceneFormat({ timeFmt: 'custom', customTimeOpen: customTimeOpenInput ?? ' ', customTimeClose: v });
+                }}
+                onFocus={() => { if (sceneFormat.timeFmt !== 'custom') handleSceneFormat({ timeFmt: 'custom', customTimeOpen: customTimeOpenInput ?? ' ', customTimeClose: customTimeCloseInput ?? '' }); }}
+                placeholder="뒤"
+                style={{ width: 44, fontSize: 12, padding: '2px 6px', borderRadius: 4, background: 'var(--c-input)', color: 'var(--c-text)', border: '1px solid var(--c-border3)', outline: 'none', fontFamily: 'monospace', textAlign: 'center' }}
+              />
+            </label>
+          </div>
         </div>
       </div>
 

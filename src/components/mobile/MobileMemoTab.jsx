@@ -7,7 +7,7 @@ export default function MobileMemoTab() {
   const { state } = useApp();
   const { activeProjectId, activeDoc, activeEpisodeId } = state;
 
-  const docKey    = activeEpisodeId ? `ep-${activeEpisodeId}` : (activeDoc || 'default');
+  const docKey     = activeEpisodeId ? `ep-${activeEpisodeId}` : (activeDoc || 'default');
   const storageKey = `drama_docMemo_${activeProjectId}_${docKey}`;
   const [memo, setMemo] = useState(() => {
     try { return localStorage.getItem(storageKey) || ''; } catch { return ''; }
@@ -36,17 +36,11 @@ export default function MobileMemoTab() {
         onChange={e => saveMemo(e.target.value)}
         placeholder="메모를 입력하세요…"
         style={{
-          flex: 1,
-          resize: 'none',
-          border: '1px solid var(--c-border2)',
-          borderRadius: 6,
-          padding: '6px 8px',
-          fontSize: 12,
-          lineHeight: 1.6,
-          background: 'var(--c-input)',
-          color: 'var(--c-text)',
-          outline: 'none',
-          fontFamily: 'inherit',
+          flex: 1, resize: 'none',
+          border: '1px solid var(--c-border2)', borderRadius: 6,
+          padding: '6px 8px', fontSize: 12, lineHeight: 1.6,
+          background: 'var(--c-input)', color: 'var(--c-text)',
+          outline: 'none', fontFamily: 'inherit',
         }}
       />
     </div>

@@ -1,14 +1,21 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../../store/AppContext';
 import MobileScriptTab from './MobileScriptTab';
 import MobileMemoTab, { MobileChecklistPanel } from './MobileMemoTab';
 import AdBanner from '../AdBanner';
 
+const DELIVERY_STORAGE_KEY = 'director_deliveries_received';
+function getReceivedDeliveries() {
+  try { const r = localStorage.getItem(DELIVERY_STORAGE_KEY); return r ? JSON.parse(r) : []; }
+  catch { return []; }
+}
+
 const TABS = [
-  { id: 'script', icon: '📝', label: '대본' },
-  { id: 'data',   icon: '👤', label: '자료' },
-  { id: 'plan',   icon: '🗂',  label: '설계' },
-  { id: 'memo',   icon: '✏️',  label: '메모' },
+  { id: 'script',   icon: '📝', label: '대본' },
+  { id: 'data',     icon: '👤', label: '자료' },
+  { id: 'plan',     icon: '🗂',  label: '설계' },
+  { id: 'feedback', icon: '📋', label: '피드백' },
+  { id: 'memo',     icon: '✏️',  label: '메모' },
 ];
 
 const DATA_DOCS = [
@@ -23,6 +30,39 @@ const PLAN_DOCS = [
   { doc: 'treatment',  label: '트리트먼트' },
   { doc: 'scenelist',  label: '씬리스트' },
 ];
+
+function FeedbackTabContent({ dispatch, onClose }) {
+  const [deliveries] = useState(() => getReceivedDeliveries());
+
+  if (deliveries.length === 0) {
+    return (
+      <div className="m-panel-content">
+        <div style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--c-text6)', fontSize: 12 }}>
+          받은 피드백 노트가 없습니다
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="m-panel-content">
+      {deliveries.map((d, i) => {
+        const date = new Date(d.savedAt).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+        return (
+          <div
+            key={d.id || i}
+            className="m-item"
+            onClick={() => { dispatch({ type: 'SET_ACTIVE_DOC', payload: 'director_notes' }); onClose?.(); }}
+            style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}
+          >
+            <span style={{ fontWeight: 500 }}>{d.title || `피드백 ${i + 1}`}</span>
+            <span style={{ fontSize: 10, color: 'var(--c-text6)' }}>코멘트 {d.notes?.length || 0}개 · {date}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 const TAB_H      = 56;   // px — 탭바 고정 높이
 const OPEN_H     = 280;  // px — 열렸을 때 패널 전체 고정 높이
@@ -136,6 +176,9 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, on
                       >{label}</div>
                     ))}
                   </div>
+                )}
+                {tab === 'feedback' && (
+                  <FeedbackTabContent dispatch={dispatch} onClose={onClose} />
                 )}
               </div>
             </>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../store/AppContext';
 import { genId, now } from '../store/db';
 
@@ -59,17 +59,12 @@ function InlineInput({ placeholder, defaultValue = '', onCommit, onCancel, inden
   );
 }
 
-function ProjectItem({ project, section = 'all' }) {
+function ProjectItem({ project, section = 'all', expanded, onToggle }) {
   const { state, dispatch } = useApp();
   const { episodes, characters, activeProjectId, activeEpisodeId, activeDoc, synopsisDocs, stylePreset } = state;
   const isActive = project.id === activeProjectId;
-  const [expanded, setExpanded] = useState(isActive);
   const [addingEp, setAddingEp] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-
-  useEffect(() => {
-    if (isActive) setExpanded(true);
-  }, [isActive]);
 
   const epList = episodes
     .filter(e => e.projectId === project.id)
@@ -77,7 +72,7 @@ function ProjectItem({ project, section = 'all' }) {
 
   const handleSelect = () => {
     dispatch({ type: 'SET_ACTIVE_PROJECT', id: project.id });
-    setExpanded(true);
+    onToggle(project.id, true);
   };
 
   const synopsisDoc = synopsisDocs?.find(d => d.projectId === project.id);
@@ -112,7 +107,7 @@ function ProjectItem({ project, section = 'all' }) {
         >
           <span
             style={{ color: 'var(--c-text6)', marginRight: 6, fontSize: large ? 12 : 10, userSelect: 'none' }}
-            onClick={e => { e.stopPropagation(); setExpanded(o => !o); }}
+            onClick={e => { e.stopPropagation(); onToggle(project.id); }}
           >
             {expanded ? '▼' : '▶'}
           </span>
@@ -131,7 +126,7 @@ function ProjectItem({ project, section = 'all' }) {
           )}
         </div>
 
-      {expanded && isActive && (
+      {expanded && (
         <div>
           <NavItem large={large} label="표지" active={activeDoc === 'cover' && !activeEpisodeId} onClick={() => { dispatch({ type: 'SET_ACTIVE_PROJECT', id: project.id }); dispatch({ type: 'SET_ACTIVE_DOC', payload: 'cover' }); }} indent={2} />
           <NavItem large={large} label="작품 시놉시스" active={activeDoc === 'synopsis'} onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'synopsis' })} indent={2} badge={synopsisPages > 0 ? `약 ${synopsisPages}p` : null} />
@@ -200,18 +195,6 @@ function ProjectItem({ project, section = 'all' }) {
                 label="씬리스트"
                 active={activeDoc === 'scenelist'}
                 onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'scenelist' })}
-                indent={2}
-              />
-              <NavItem
-                label="스토리보드"
-                active={activeDoc === 'storyboard'}
-                onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'storyboard' })}
-                indent={2}
-              />
-              <NavItem
-                label="연출노트"
-                active={activeDoc === 'director_notes'}
-                onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'director_notes' })}
                 indent={2}
               />
             </div>
@@ -478,10 +461,150 @@ function NewProjectModal({ onCommit, onCancel }) {
   );
 }
 
+const DELIVERY_KEY = 'director_deliveries_received';
+function getDeliveries() {
+  try { return JSON.parse(localStorage.getItem(DELIVERY_KEY) || '[]'); } catch { return []; }
+}
+
+function FeedbackPanel({ activeDoc, dispatch }) {
+  const [expanded, setExpanded] = useState(false);
+  const [deliveries, setDeliveries] = useState(() => getDeliveries());
+  const [activeId, setActiveId] = useState(() => localStorage.getItem('drama_active_delivery_id') || null);
+
+  // 외부에서 전송 목록이 바뀌면 동기화
+  useEffect(() => {
+    const handler = () => {
+      setDeliveries(getDeliveries());
+      setActiveId(localStorage.getItem('drama_active_delivery_id'));
+    };
+    window.addEventListener('drama_delivery_changed', handler);
+    return () => window.removeEventListener('drama_delivery_changed', handler);
+  }, []);
+
+  const handleSelect = (d) => {
+    localStorage.setItem('drama_active_delivery_id', d.id);
+    setActiveId(d.id);
+    window.dispatchEvent(new Event('drama_delivery_changed'));
+    dispatch({ type: 'SET_ACTIVE_DOC', payload: 'director_notes' });
+  };
+
+  const handleDelete = (e, id) => {
+    e.stopPropagation();
+    const next = deliveries.filter(d => d.id !== id);
+    localStorage.setItem(DELIVERY_KEY, JSON.stringify(next));
+    if (activeId === id) {
+      const fallback = next[0]?.id || null;
+      if (fallback) localStorage.setItem('drama_active_delivery_id', fallback);
+      else localStorage.removeItem('drama_active_delivery_id');
+      setActiveId(fallback);
+    }
+    setDeliveries(next);
+    window.dispatchEvent(new Event('drama_delivery_changed'));
+  };
+
+  return (
+    <div style={{ flexShrink: 0, borderTop: '1px solid var(--c-border)', paddingTop: 4 }}>
+      {/* 피드백 노트 — 클릭 시 목록 펼침 + 페이지 이동 */}
+      <div
+        onClick={() => { setExpanded(true); dispatch({ type: 'SET_ACTIVE_DOC', payload: 'director_notes' }); }}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 4,
+          padding: '5px 8px 5px 12px', cursor: 'pointer',
+          borderRadius: 4, margin: '0 4px',
+          background: activeDoc === 'director_notes' ? 'var(--c-active)' : 'transparent',
+          color: activeDoc === 'director_notes' ? 'var(--c-accent)' : 'var(--c-text4)',
+          WebkitTapHighlightColor: 'transparent',
+          fontSize: 13,
+        }}
+        onMouseEnter={e => { if (activeDoc !== 'director_notes') e.currentTarget.style.background = 'var(--c-hover)'; }}
+        onMouseLeave={e => { if (activeDoc !== 'director_notes') e.currentTarget.style.background = 'transparent'; }}
+      >
+        <span style={{ flex: 1 }}>피드백 노트</span>
+        {deliveries.length > 0 && (
+          <span style={{ fontSize: 9, color: 'var(--c-text6)', background: 'var(--c-tag)', borderRadius: 8, padding: '1px 5px' }}>{deliveries.length}</span>
+        )}
+        {expanded && (
+          <span
+            onClick={e => { e.stopPropagation(); setExpanded(false); }}
+            style={{ fontSize: 9, color: 'var(--c-text6)', userSelect: 'none', padding: '0 2px' }}
+          >▾</span>
+        )}
+      </div>
+
+      {/* 전송 목록 — 아코디언 */}
+      {expanded && (
+        <div style={{ maxHeight: 200, overflowY: 'auto', paddingBottom: 6 }}>
+          {deliveries.length === 0 && (
+            <div style={{ paddingLeft: 24, paddingBottom: 8, fontSize: 10, color: 'var(--c-text6)' }}>받은 노트 없음</div>
+          )}
+          {deliveries.map(d => {
+            const isActive = d.id === activeId;
+            const date = new Date(d.savedAt).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+            return (
+              <div
+                key={d.id}
+                style={{
+                  display: 'flex', alignItems: 'center',
+                  borderLeft: isActive ? '2px solid var(--c-accent)' : '2px solid transparent',
+                  background: isActive ? 'var(--c-active)' : 'transparent',
+                  transition: 'background 0.12s',
+                }}
+                onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--c-hover)'; }}
+                onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
+              >
+                <div
+                  onClick={() => handleSelect(d)}
+                  style={{ flex: 1, padding: '6px 6px 6px 20px', cursor: 'pointer', minWidth: 0 }}
+                >
+                  <div style={{
+                    fontSize: 11, fontWeight: isActive ? 600 : 400,
+                    color: isActive ? 'var(--c-accent)' : 'var(--c-text4)',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    marginBottom: 1,
+                  }}>{d.title}</div>
+                  <div style={{ fontSize: 9, color: 'var(--c-text6)' }}>
+                    코멘트 {d.notes?.length || 0}개 · {date}
+                  </div>
+                </div>
+                <button
+                  onClick={e => handleDelete(e, d.id)}
+                  style={{
+                    flexShrink: 0, marginRight: 6,
+                    width: 18, height: 18, borderRadius: 3,
+                    border: '1px solid var(--c-border)', background: 'transparent',
+                    color: 'var(--c-text5)', fontSize: 11, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    lineHeight: 1,
+                  }}
+                  title="삭제"
+                >×</button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* 하단 여백 */}
+      <div style={{ paddingBottom: 8 }} />
+    </div>
+  );
+}
+
 export default function LeftPanel({ section = 'all' }) {
   const { state, dispatch } = useApp();
-  const { projects } = state;
+  const { projects, activeDoc, activeProjectId } = state;
   const [addingProject, setAddingProject] = useState(false);
+  const [expandedId, setExpandedId] = useState(() => activeProjectId || null);
+
+  // 외부에서 activeProjectId 변경 시(예: 에피소드 클릭) 해당 프로젝트 자동 펼침
+  useEffect(() => {
+    if (activeProjectId) setExpandedId(activeProjectId);
+  }, [activeProjectId]);
+
+  // forceOpen=true 이면 무조건 열기, false/undefined 이면 토글
+  const handleToggle = useCallback((id, forceOpen) => {
+    setExpandedId(prev => forceOpen ? id : (prev === id ? null : id));
+  }, []);
 
   const handleAddProject = (title, projectType, totalEpisodes = 1, climaxSettings = {}) => {
     const { totalMins = 70, climaxStart = 55, climaxEnd = 68 } = climaxSettings;
@@ -516,14 +639,28 @@ export default function LeftPanel({ section = 'all' }) {
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto py-2" style={{ paddingBottom: '88px' }}>
-        {projects.map(p => <ProjectItem key={p.id} project={p} section={section} />)}
+      {/* 작품 목록 — 최신순(역순), 최대 70% 높이로 캡핑 → 피드백 메뉴 항상 30% 이상 위에 */}
+      <div style={{ flex: '1 1 0', maxHeight: '70%', overflowY: 'auto', paddingTop: 8, paddingBottom: 8, minHeight: 0 }}>
+        {[...projects].reverse().map(p => (
+          <ProjectItem
+            key={p.id}
+            project={p}
+            section={section}
+            expanded={expandedId === p.id}
+            onToggle={handleToggle}
+          />
+        ))}
         {projects.length === 0 && (
           <div className="px-4 py-6 text-center text-xs" style={{ color: 'var(--c-text6)' }}>
             + 버튼으로 첫 작품을 만들어보세요
           </div>
         )}
       </div>
+
+      {/* 피드백 메뉴 — 스크롤 영역 밖 하단 고정 */}
+      {section !== 'script' && (
+        <FeedbackPanel activeDoc={activeDoc} dispatch={dispatch} />
+      )}
 
     </div>
   );

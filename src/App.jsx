@@ -317,7 +317,6 @@ function CenterPanel({ scrollToSceneId, onScrollHandled, keyboardUp, isMobile, f
   if (activeDoc === 'resources') return <ResourcePanel />;
   if (activeDoc === 'structure') return <StructurePage />;
   if (activeDoc === 'scenelist') return <SceneListPage />;
-  if (activeDoc === 'storyboard') return <StoryboardPage />;
   if (activeDoc === 'director_notes') return <DirectorNotesPage />;
   if (activeDoc === 'treatment') return <TreatmentPage />;
   if (activeDoc === 'biography') return <BiographyPage />;
@@ -1649,6 +1648,21 @@ export default function App() {
     });
     return () => subscription.unsubscribe();
   }, []);
+
+  // 씬리스트 공유 링크 수신 → 로컬 저장 후 연출 작업실으로
+  if (window.location.hash.startsWith('#sl=')) {
+    try {
+      const encoded = window.location.hash.slice(4);
+      const data = JSON.parse(decodeURIComponent(escape(atob(encoded))));
+      const key = 'director_received_scenelists';
+      const existing = JSON.parse(localStorage.getItem(key) || '[]');
+      if (!existing.some(s => s.id === data.id)) {
+        localStorage.setItem(key, JSON.stringify([data, ...existing]));
+      }
+    } catch {}
+    window.location.hash = '#director';
+    return <DirectorApp authUser={authUser} />;
+  }
 
   // 연출 작업실 — 감독 전용 독립 페이지
   if (window.location.hash === '#director')         return <DirectorApp authUser={authUser} />;
