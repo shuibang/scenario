@@ -1070,14 +1070,21 @@ function ErrorReportTab() {
 
   const handleSubmit = async () => {
     if (!description.trim()) return;
+    // 1분 이내 중복 제출 방지 — 조용히 무시
+    const lastAt = localStorage.getItem('error_report_last_at');
+    if (lastAt && Date.now() - Number(lastAt) < 60 * 1000) return;
     setStatus('sending');
     if (!supabase) { setStatus('error'); return; }
+    const { data: sessionData } = await supabase.auth.getSession();
+    const userId = sessionData?.session?.user?.id ?? null;
     const { error } = await supabase.from('error_reports').insert({
       type,
       description: description.trim(),
       page: page.trim() || null,
       email: email.trim() || null,
+      user_id: userId,
     });
+    if (!error) localStorage.setItem('error_report_last_at', String(Date.now()));
     setStatus(error ? 'error' : 'done');
   };
 

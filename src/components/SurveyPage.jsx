@@ -307,6 +307,7 @@ export default function SurveyPage() {
   });
   const [errors, setErrors]       = useState({});
   const [submitted, setSubmitted] = useState(() => !!localStorage.getItem('survey_submitted'));
+  const [isDuplicate, setIsDuplicate] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
 
@@ -343,6 +344,12 @@ export default function SurveyPage() {
       document.getElementById(firstKey)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
+    // 24시간 내 중복 제출 방지
+    const lastAt = localStorage.getItem('survey_submitted_at');
+    if (lastAt && Date.now() - Number(lastAt) < 24 * 60 * 60 * 1000) {
+      setIsDuplicate(true);
+      return;
+    }
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -374,6 +381,7 @@ export default function SurveyPage() {
         if (error) throw error;
       }
       localStorage.setItem('survey_submitted', '1');
+      localStorage.setItem('survey_submitted_at', String(Date.now()));
       setSubmitted(true);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
@@ -383,6 +391,26 @@ export default function SurveyPage() {
       setSubmitting(false);
     }
   };
+
+  // ── 24시간 내 중복 제출 화면 ──
+  if (isDuplicate) {
+    return (
+      <div style={{
+        minHeight: '100vh', background: 'var(--c-bg)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+      }}>
+        <div style={{ textAlign: 'center', maxWidth: 440 }}>
+          <div style={{ fontSize: 64, marginBottom: 20 }}>💛</div>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--c-text)', marginBottom: 14 }}>
+            이미 참여해 주셨습니다.
+          </h1>
+          <p style={{ color: 'var(--c-text3)', fontSize: 15, lineHeight: 1.8 }}>
+            소중한 의견 감사해요!
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // ── 완료 화면 ──
   if (submitted) {

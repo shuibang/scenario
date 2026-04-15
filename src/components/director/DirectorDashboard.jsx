@@ -157,7 +157,7 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
     try {
       if (!isTokenValid()) {
         const { data: { session: s } } = await supabase.auth.getSession();
-        if (s?.provider_token) setAccessToken(s.provider_token, 3600);
+        if (s?.provider_token) setAccessToken(s.provider_token, s.expires_in ?? 3600);
       }
       const saved = await loadDirectorScript(script.drive_file_id);
       const data  = saved?.data ?? saved;
@@ -815,7 +815,7 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
       if (!isTokenValid()) {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.provider_token) throw new Error('Drive 권한이 없습니다. 다시 로그인해주세요.');
-        setAccessToken(session.provider_token, 3600);
+        setAccessToken(session.provider_token, session.expires_in ?? 3600);
       }
       const saved = await loadDirectorScript(script.drive_file_id);
       const data  = saved?.data ?? saved;
@@ -867,7 +867,7 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
         // 토큰이 없으면 세션에서 가져오기
         if (!isTokenValid()) {
           const { data: { session } } = await supabase.auth.getSession();
-          if (session?.provider_token) setAccessToken(session.provider_token, 3600);
+          if (session?.provider_token) setAccessToken(session.provider_token, session.expires_in ?? 3600);
         }
         await deleteFileById(script.drive_file_id);
       } catch {
@@ -2274,7 +2274,7 @@ function StoryboardPanel({ isGuest, isMobile = false, mobilePreSelected = null, 
       if (!isTokenValid()) {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.provider_token) throw new Error('Drive 권한이 없습니다. 다시 로그인해주세요.');
-        setAccessToken(session.provider_token, 3600);
+        setAccessToken(session.provider_token, session.expires_in ?? 3600);
       }
       const saved = await loadDirectorScript(selected.drive_file_id);
       const data  = saved?.data ?? saved;
