@@ -6,6 +6,59 @@ import DirectorScriptViewer from './DirectorScriptViewer';
 import PreviewRenderer from '../../print/PreviewRenderer';
 import { parseFullScript, buildPanelsFromScenes, detectScenes } from '../../utils/parseExternalScript';
 
+// ─── 텍스트 → appState 변환 (로컬 텍스트 가져오기용) ─────────────────────────
+// DirectorScriptViewer가 기대하는 scriptBlocks 형식으로 파싱한다.
+// 블록 ID는 localId + 인덱스로 고정 → localStorage 메모 키가 안정적으로 유지됨.
+const _LOCAL_DLRE = /^([가-힣A-Za-z][가-힣A-Za-z\s]{0,14})\s*[:\：]\s*(.+)/;
+const _LOCAL_PRRE = /^[\(（].+[\)）]$/;
+
+function textToAppState(text, title, localId) {
+  const projectId = `${localId}_proj`;
+  const episodeId = `${localId}_ep`;
+  const scenes    = parseFullScript(text || '');
+  const scriptBlocks = [];
+  let idx = 0;
+
+  for (const scene of scenes) {
+    const heading = [
+      scene.sceneNo ? `S#${scene.sceneNo}.` : null,
+      scene.location,
+      scene.timeOfDay,
+    ].filter(Boolean).join(' ') || scene.raw;
+
+    scriptBlocks.push({ id: `${localId}_${idx++}`, type: 'scene_number', content: heading, episodeId, projectId });
+
+    for (const line of (scene.contentLines || [])) {
+      const t = line.trim();
+      if (!t) continue;
+      const dm = t.match(_LOCAL_DLRE);
+      if (dm) {
+        const charName = dm[1].trim();
+        scriptBlocks.push({ id: `${localId}_${idx++}`, type: 'character',    content: charName,     episodeId, projectId });
+        scriptBlocks.push({ id: `${localId}_${idx++}`, type: 'dialogue',     content: dm[2].trim(), charName,  episodeId, projectId });
+      } else if (_LOCAL_PRRE.test(t)) {
+        scriptBlocks.push({ id: `${localId}_${idx++}`, type: 'parenthetical', content: t, episodeId, projectId });
+      } else {
+        scriptBlocks.push({ id: `${localId}_${idx++}`, type: 'action',        content: t, episodeId, projectId });
+      }
+    }
+  }
+
+  return {
+    projects:        [{ id: projectId, title: title || '로컬 대본' }],
+    episodes:        [{ id: episodeId, projectId, number: 1, title: '' }],
+    scriptBlocks,
+    scenes:          [],
+    characters:      [],
+    coverDocs:       [],
+    synopsisDocs:    [],
+    activeProjectId: projectId,
+    stylePreset:     {},
+    initialized:     true,
+  };
+}
+const LOCAL_SELECTIONS = { cover: false, synopsis: false, episodes: {}, chars: false };
+
 // OAuth 리디렉트 시 현재 hash 보존 → App.jsx onAuthStateChange에서 복원
 const RETURN_HASH_KEY = 'drama_pending_return_hash';
 
@@ -226,7 +279,7 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
           <>
             <div style={{ padding: '2px 14px', fontSize: 10, color: D.text3, opacity: 0.7 }}>로컬</div>
             {localScripts.map(s => (
-              <div key={s.id} onClick={() => { setProjSelected(s); setProjViewing({ localText: s.text || '' }); setPanelOpen(false); }}
+              <div key={s.id} onClick={() => { setProjSelected(s); setProjViewing({ appState: textToAppState(s.text, s.title, s.id), selections: LOCAL_SELECTIONS }); setPanelOpen(false); }}
                 style={{ padding: '9px 14px', borderLeft: projSelected?.id === s.id ? `2px solid ${D.accent}` : '2px solid transparent', background: projSelected?.id === s.id ? D.active : 'transparent', cursor: 'pointer' }}>
                 <div style={{ fontSize: 13, fontWeight: projSelected?.id === s.id ? 600 : 400, color: projSelected?.id === s.id ? D.accent : D.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📁 {s.title}</div>
               </div>
@@ -321,14 +374,6 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
       );
       if (projViewing?.error) return (
         <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#e05c5c', fontSize: 13, padding: 16, textAlign: 'center' }}>{projViewing.error}</div>
-      );
-      if (projViewing?.localText !== undefined) return (
-        <div style={{ height: '100%', overflowY: 'auto', padding: '16px', background: D.bg }}>
-          <div style={{ fontSize: 11, color: D.text3, marginBottom: 10 }}>📁 {projSelected?.title} · 로컬</div>
-          <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 13, color: D.text, lineHeight: 1.9, fontFamily: 'inherit', margin: 0 }}>
-            {projViewing.localText || '(내용 없음)'}
-          </pre>
-        </div>
       );
       if (projViewing) return (
         <div style={{ height: '100%', overflow: 'auto', background: '#d8d8d8' }}>
@@ -808,7 +853,7 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
     setSelected(script);
     setViewing(null);
     if (script._isLocal) {
-      setViewing({ localText: script.text || '' });
+      setViewing({ appState: textToAppState(script.text, script.title, script.id), selections: LOCAL_SELECTIONS });
       return;
     }
     setLoading(true);
@@ -1041,14 +1086,6 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
             <ViewerErrorBoundary key={selected.id}>
               <DirectorScriptViewer appState={viewing.appState} selections={viewing.selections} sharedScriptId={selected.id} />
             </ViewerErrorBoundary>
-          )}
-          {selected && viewing?.localText !== undefined && (
-            <div style={{ height: '100%', overflowY: 'auto', padding: '24px 32px', background: D.bg }}>
-              <div style={{ fontSize: 12, color: D.text3, marginBottom: 12 }}>📁 로컬 대본 — {selected.title}</div>
-              <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 13, color: D.text, lineHeight: 1.9, fontFamily: 'inherit', margin: 0 }}>
-                {viewing.localText || '(내용 없음)'}
-              </pre>
-            </div>
           )}
         </div>
       </div>
