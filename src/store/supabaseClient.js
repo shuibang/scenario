@@ -53,6 +53,7 @@ export async function refreshDriveToken() {
   if (!supabase) return null;
   const { data, error } = await supabase.auth.refreshSession();
   if (error || !data.session?.provider_token) return null;
-  setAccessToken(data.session.provider_token, 3600);
+  // expires_in 실제값 사용 — 하드코딩 3600 대체 (시나리오 5)
+  setAccessToken(data.session.provider_token, data.session.expires_in ?? 3600);
   return data.session.provider_token;
 }

@@ -48,6 +48,7 @@ import SnapshotPanel from './components/SnapshotPanel';
 import { getLayoutMetrics } from './print/LineTokenizer';
 import { saveReviewPayload } from './utils/reviewShare';
 import SyncConflictModal from './components/SyncConflictModal';
+import { usePageTracking } from './hooks/usePageTracking';
 
 // ─── Panel width persistence ───────────────────────────────────────────────────
 const PANEL_WIDTHS_KEY = 'panelWidths';
@@ -1564,6 +1565,8 @@ let _shellEverRendered = (() => {
 })();
 
 export default function App() {
+  usePageTracking();
+
   const [authUser, setAuthUser] = useState(() => {
     try { const s = localStorage.getItem('drama_auth_user'); return s ? JSON.parse(s) : null; }
     catch { return null; }

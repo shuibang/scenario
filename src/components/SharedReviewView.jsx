@@ -23,6 +23,19 @@ function loginWithReturnHash() {
   signInWithGoogle();
 }
 
+// source_url 검증 — javascript:/data: 스킴 주입 방지 (시나리오 4)
+function getSafeSourceUrl() {
+  try {
+    const u = new URL(window.location.href);
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return window.location.origin;
+    // hash는 100자로 자름 (악의적 페이로드 삽입 방지)
+    const hash = u.hash.slice(0, 100);
+    return u.origin + u.pathname + hash;
+  } catch {
+    return window.location.origin;
+  }
+}
+
 const zBtnStyle = {
   background: '#fff', border: '1px solid #ddd', borderRadius: 6,
   cursor: 'pointer', fontSize: 16, color: '#444',
@@ -53,6 +66,7 @@ const A4_W_PX = 794;
 export default function SharedReviewView() {
   const [data, setData]         = useState(null);
   const [bad,  setBad]          = useState(false);
+  const [expired, setExpired]   = useState(false);
   const [zoom, setZoom]         = useState(1.0);
   const [driveError, setDriveError] = useState(false); // Drive 권한 없음 상태
   const isMobile = useIsMobile();
@@ -77,9 +91,9 @@ export default function SharedReviewView() {
         return;
       }
 
-      // 2) Drive 토큰 세팅
+      // 2) Drive 토큰 세팅 — expires_in 실제값 사용 (시나리오 5)
       if (session.provider_token) {
-        setAccessToken(session.provider_token, 3600);
+        setAccessToken(session.provider_token, session.expires_in ?? 3600);
       } else {
         setDriveError(true);
         setImportToast('');
@@ -96,7 +110,7 @@ export default function SharedReviewView() {
         director_id:   session.user.id,
         title,
         drive_file_id: driveFileId,
-        source_url:    window.location.href,
+        source_url:    getSafeSourceUrl(),
       });
       if (error) throw new Error(`저장 실패: ${error.message}`);
 
@@ -144,7 +158,10 @@ export default function SharedReviewView() {
     if (isShortReviewId(val)) {
       loadReviewPayload(val)
         .then(setData)
-        .catch(() => setBad(true));
+        .catch((err) => {
+          if (err?.message === 'EXPIRED') setExpired(true);
+          else setBad(true);
+        });
     } else {
       const result = decodeLegacy(window.location.hash);
       if (result) setData(result);
@@ -152,9 +169,14 @@ export default function SharedReviewView() {
     }
   }, []);
 
+  if (expired) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: '#888', fontSize: 14 }}>
+      링크가 만료되었습니다. 작가에게 새 링크를 요청해주세요.
+    </div>
+  );
   if (bad) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: '#888', fontSize: 14 }}>
-      링크가 올바르지 않거나 만료되었습니다.
+      링크가 올바르지 않습니다.
     </div>
   );
   if (!data) return (
