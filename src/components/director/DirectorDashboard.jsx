@@ -110,7 +110,9 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
   const keyboardUp = (window.innerHeight - vvHeight - vvOffsetTop) > 100;
 
   // 공통: 작품 목록 (projects + notes + storyboard 탭 공유)
-  const [scripts,    setScripts]    = useState(null);
+  const [scripts,      setScripts]      = useState(null);
+  const [localScripts, setLocalScripts] = useState(() => loadLocalScripts());
+  const [importOpen,   setImportOpen]   = useState(false);
 
   // 작품 탭 state
   const [projSelected,  setProjSelected]  = useState(null);
@@ -130,6 +132,7 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
 
   // ── 데이터 로드 ────────────────────────────────────────────────────────────
   useEffect(() => {
+    setLocalScripts(loadLocalScripts());
     if (isGuest) { setScripts([]); return; }
     if (!supabase) { setScripts([]); return; }
     supabase.from('shared_scripts').select('id, title, imported_at, drive_file_id')
@@ -193,6 +196,14 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
     try { return Object.keys(JSON.parse(localStorage.getItem(`director_private_notes_${scriptId}`) || '{}')).length; } catch { return 0; }
   };
 
+  const handleMobileImport = ({ id, title, text }) => {
+    const entry = { id, title, text, createdAt: new Date().toISOString(), _isLocal: true };
+    const updated = [entry, ...loadLocalScripts()];
+    saveLocalScripts(updated);
+    setLocalScripts(updated);
+    setImportOpen(false);
+  };
+
   // ── 탭 항목 ───────────────────────────────────────────────────────────────
   const TABS = [
     { id: 'projects',   icon: '📄', label: '작품' },
@@ -204,8 +215,27 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
   const listContent = (() => {
     if (tab === 'projects') return (
       <div style={{ padding: '6px 0' }}>
+        <div style={{ padding: '4px 12px 8px' }}>
+          <button onClick={() => setImportOpen(true)}
+            style={{ width: '100%', padding: '7px 12px', borderRadius: 6, border: `1px solid ${D.accent}`, background: 'transparent', color: D.accent, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+            + 텍스트로 가져오기
+          </button>
+        </div>
+        {localScripts.length > 0 && (
+          <>
+            <div style={{ padding: '2px 14px', fontSize: 10, color: D.text3, opacity: 0.7 }}>로컬</div>
+            {localScripts.map(s => (
+              <div key={s.id} onClick={() => { setProjSelected(s); setProjViewing({ localText: s.text || '' }); setPanelOpen(false); }}
+                style={{ padding: '9px 14px', borderLeft: projSelected?.id === s.id ? `2px solid ${D.accent}` : '2px solid transparent', background: projSelected?.id === s.id ? D.active : 'transparent', cursor: 'pointer' }}>
+                <div style={{ fontSize: 13, fontWeight: projSelected?.id === s.id ? 600 : 400, color: projSelected?.id === s.id ? D.accent : D.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📁 {s.title}</div>
+              </div>
+            ))}
+            {(scripts?.length ?? 0) > 0 && <div style={{ height: 1, background: D.border, margin: '4px 0' }} />}
+          </>
+        )}
         {scripts === null && <div style={{ padding: '16px', fontSize: 12, color: D.text3 }}>불러오는 중…</div>}
-        {scripts?.length === 0 && <div style={{ padding: '16px', fontSize: 12, color: D.text3, textAlign: 'center' }}>가져온 작품이 없습니다</div>}
+        {scripts?.length === 0 && localScripts.length === 0 && <div style={{ padding: '12px 14px', fontSize: 12, color: D.text3, textAlign: 'center' }}>가져온 작품이 없습니다</div>}
+        {(scripts?.length ?? 0) > 0 && <div style={{ padding: '2px 14px', fontSize: 10, color: D.text3, opacity: 0.7 }}>클라우드</div>}
         {scripts?.map(s => (
           <div key={s.id} onClick={() => loadProjScript(s)}
             style={{ padding: '10px 14px', borderLeft: projSelected?.id === s.id ? `2px solid ${D.accent}` : '2px solid transparent', background: projSelected?.id === s.id ? D.active : 'transparent', cursor: 'pointer' }}>
@@ -217,8 +247,28 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
 
     if (tab === 'notes') return (
       <div style={{ padding: '6px 0' }}>
+        {localScripts.length > 0 && (
+          <>
+            <div style={{ padding: '2px 14px', fontSize: 10, color: D.text3, opacity: 0.7 }}>로컬</div>
+            {localScripts.map(s => {
+              const cnt = getNoteCount(s.id);
+              const active = noteScript?.id === s.id;
+              return (
+                <div key={s.id} onClick={() => { setNoteScript(s); setAdding(false); setPanelOpen(false); }}
+                  style={{ padding: '10px 14px', borderLeft: active ? `2px solid ${D.accent}` : '2px solid transparent', background: active ? D.active : 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: active ? 600 : 400, color: active ? D.accent : D.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📁 {s.title}</div>
+                    <div style={{ fontSize: 10, color: D.text3 }}>메모 {cnt}개 · 로컬</div>
+                  </div>
+                  {cnt > 0 && <div style={{ flexShrink: 0, width: 18, height: 18, borderRadius: '50%', background: '#93c5fd', color: '#1a1a2e', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{cnt > 9 ? '9+' : cnt}</div>}
+                </div>
+              );
+            })}
+            {(scripts?.length ?? 0) > 0 && <div style={{ height: 1, background: D.border, margin: '4px 0' }} />}
+          </>
+        )}
         {scripts === null && <div style={{ padding: '16px', fontSize: 12, color: D.text3 }}>불러오는 중…</div>}
-        {scripts?.length === 0 && <div style={{ padding: '16px', fontSize: 12, color: D.text3, textAlign: 'center' }}>가져온 작품이 없습니다</div>}
+        {scripts?.length === 0 && localScripts.length === 0 && <div style={{ padding: '16px', fontSize: 12, color: D.text3, textAlign: 'center' }}>가져온 작품이 없습니다</div>}
         {scripts?.map(s => {
           const cnt = getNoteCount(s.id);
           const active = noteScript?.id === s.id;
@@ -277,6 +327,14 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
       );
       if (projViewing?.error) return (
         <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#e05c5c', fontSize: 13, padding: 16, textAlign: 'center' }}>{projViewing.error}</div>
+      );
+      if (projViewing?.localText !== undefined) return (
+        <div style={{ height: '100%', overflowY: 'auto', padding: '16px', background: D.bg }}>
+          <div style={{ fontSize: 11, color: D.text3, marginBottom: 10 }}>📁 {projSelected?.title} · 로컬</div>
+          <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 13, color: D.text, lineHeight: 1.9, fontFamily: 'inherit', margin: 0 }}>
+            {projViewing.localText || '(내용 없음)'}
+          </pre>
+        </div>
       );
       if (projViewing) return (
         <div style={{ height: '100%', overflow: 'auto', background: '#d8d8d8' }}>
@@ -439,6 +497,7 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
           </div>
         )}
       </div>
+      {importOpen && <ImportTextModal onClose={() => setImportOpen(false)} onImport={handleMobileImport} />}
     </div>
   );
 }
@@ -734,6 +793,8 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
   const [loading,       setLoading]       = useState(false);
   const [sheetOpen,     setSheetOpen]     = useState(false);
   const [subCollapsed,  setSubCollapsed]  = useState(false);
+  const [localScripts,  setLocalScripts]  = useState(() => loadLocalScripts());
+  const [importOpen,    setImportOpen]    = useState(false);
 
   // Drive 토큰 유효성 사전 확인 (로그인은 됐지만 Drive 권한 만료 상태)
   const driveDisconnected = !isGuest && session && !session.provider_token && !isTokenValid();
@@ -754,6 +815,10 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
     if (selected?.id === script.id) return;
     setSelected(script);
     setViewing(null);
+    if (script._isLocal) {
+      setViewing({ localText: script.text || '' });
+      return;
+    }
     setLoading(true);
     try {
       if (!isTokenValid()) {
@@ -783,6 +848,22 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleDeleteLocalScript = (script) => {
+    if (!window.confirm(`"${script.title}"\n\n로컬에서 삭제할까요?`)) return;
+    deleteLocalScript(script.id);
+    setLocalScripts(loadLocalScripts());
+    if (selected?.id === script.id) { setSelected(null); setViewing(null); }
+  };
+
+  const handleImport = ({ id, title, text }) => {
+    const entry = { id, title, text, createdAt: new Date().toISOString(), _isLocal: true };
+    const updated = [entry, ...loadLocalScripts()];
+    saveLocalScripts(updated);
+    setLocalScripts(updated);
+    setImportOpen(false);
+    handleSelect(entry);
   };
 
   const handleDeleteScript = async (script) => {
@@ -856,14 +937,43 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
       {(() => {
         const scriptListContent = (
           <div style={{ padding: '8px 0' }}>
+            {/* 텍스트로 가져오기 버튼 */}
+            <div style={{ padding: '6px 12px 10px' }}>
+              <button onClick={() => setImportOpen(true)}
+                style={{ width: '100%', padding: '7px 12px', borderRadius: 6, border: `1px solid ${D.accent}`, background: 'transparent', color: D.accent, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                + 텍스트로 가져오기
+              </button>
+            </div>
+            {/* 로컬 작품 */}
+            {localScripts.length > 0 && (
+              <>
+                <div style={{ padding: '4px 16px 2px', fontSize: 10, fontWeight: 700, color: D.text3, letterSpacing: '0.05em', textTransform: 'uppercase', opacity: 0.7 }}>로컬</div>
+                {localScripts.map(s => (
+                  <div key={s.id} style={{ display: 'flex', alignItems: 'center', borderLeft: selected?.id === s.id ? `2px solid ${D.accent}` : '2px solid transparent', background: selected?.id === s.id ? D.active : 'transparent', transition: 'background 0.12s' }}
+                    onMouseEnter={e => { if (selected?.id !== s.id) e.currentTarget.style.background = 'rgba(128,128,128,0.08)'; }}
+                    onMouseLeave={e => { if (selected?.id !== s.id) e.currentTarget.style.background = 'transparent'; }}>
+                    <div onClick={() => { handleSelect(s); setSheetOpen(false); }} style={{ flex: 1, minWidth: 0, padding: '9px 8px 9px 16px', cursor: 'pointer' }}>
+                      <div style={{ fontSize: 13, fontWeight: selected?.id === s.id ? 600 : 400, color: selected?.id === s.id ? D.accent : D.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }}>
+                        📁 {s.title}
+                      </div>
+                      <div style={{ fontSize: 10, color: D.text3 }}>{new Date(s.createdAt).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })} · 로컬</div>
+                    </div>
+                    <button onClick={e => { e.stopPropagation(); handleDeleteLocalScript(s); }}
+                      style={{ flexShrink: 0, marginRight: 8, width: 22, height: 22, borderRadius: 4, border: `1px solid ${D.border}`, background: 'transparent', color: D.text3, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+                  </div>
+                ))}
+                {(scripts?.length ?? 0) > 0 && <div style={{ height: 1, background: D.border, margin: '6px 0' }} />}
+              </>
+            )}
+            {/* 클라우드 작품 */}
             {error && <div style={{ padding: '12px 16px', fontSize: 12, color: '#e05c5c' }}>오류: {error}</div>}
             {scripts === null && <div style={{ padding: '12px 16px', fontSize: 12, color: D.text3 }}>불러오는 중…</div>}
-            {scripts?.length === 0 && !error && (
-              <div style={{ padding: '24px 16px', textAlign: 'center' }}>
-                <div style={{ fontSize: 24, marginBottom: 8, opacity: 0.4 }}>📄</div>
-                <div style={{ fontSize: 11, color: D.text3, lineHeight: 1.6 }}>가져온 작품이 없습니다.<br />검토 링크에서 가져오기를<br />눌러주세요.</div>
+            {scripts?.length === 0 && !error && localScripts.length === 0 && (
+              <div style={{ padding: '16px 16px', textAlign: 'center' }}>
+                <div style={{ fontSize: 11, color: D.text3, lineHeight: 1.6 }}>가져온 작품이 없습니다.<br />검토 링크에서 가져오거나<br />위 버튼으로 텍스트를 붙여넣으세요.</div>
               </div>
             )}
+            {scripts?.length > 0 && <div style={{ padding: '4px 16px 2px', fontSize: 10, fontWeight: 700, color: D.text3, letterSpacing: '0.05em', textTransform: 'uppercase', opacity: 0.7 }}>클라우드</div>}
             {scripts?.map(s => (
               <ScriptListItem key={s.id} script={s} active={selected?.id === s.id}
                 onClick={() => { handleSelect(s); setSheetOpen(false); }}
@@ -940,8 +1050,17 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
               <DirectorScriptViewer appState={viewing.appState} selections={viewing.selections} sharedScriptId={selected.id} />
             </ViewerErrorBoundary>
           )}
+          {selected && viewing?.localText !== undefined && (
+            <div style={{ height: '100%', overflowY: 'auto', padding: '24px 32px', background: D.bg }}>
+              <div style={{ fontSize: 12, color: D.text3, marginBottom: 12 }}>📁 로컬 대본 — {selected.title}</div>
+              <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 13, color: D.text, lineHeight: 1.9, fontFamily: 'inherit', margin: 0 }}>
+                {viewing.localText || '(내용 없음)'}
+              </pre>
+            </div>
+          )}
         </div>
       </div>
+      {importOpen && <ImportTextModal onClose={() => setImportOpen(false)} onImport={handleImport} />}
     </div>
   );
 }
@@ -1061,6 +1180,7 @@ const NOTE_COLORS_PANEL = ['#fdf6e3', '#fef08a', '#86efac', '#93c5fd', '#f9a8d4'
 function NotesPanel({ isMobile = false }) {
   const D = useD();
   const [scripts,       setScripts]       = useState(null);
+  const [localScripts,  setLocalScripts]  = useState(() => loadLocalScripts());
   const [selected,      setSelected]      = useState(null);
   const [subCollapsed,  setSubCollapsed]  = useState(false);
   const [sheetOpen,  setSheetOpen]  = useState(false);
@@ -1143,8 +1263,30 @@ function NotesPanel({ isMobile = false }) {
 
   const scriptListContent = (
     <div style={{ padding: '8px 0' }}>
+      {/* 로컬 작품 */}
+      {localScripts.length > 0 && (
+        <>
+          <div style={{ padding: '4px 16px 2px', fontSize: 10, fontWeight: 700, color: D.text3, letterSpacing: '0.05em', textTransform: 'uppercase', opacity: 0.7 }}>로컬</div>
+          {localScripts.map(s => {
+            const count = getNoteCount(s.id);
+            const active = selected?.id === s.id;
+            return (
+              <div key={s.id} onClick={() => { setSelected(s); setAdding(false); setEditingId(null); setSheetOpen(false); }}
+                style={{ padding: '10px 16px', cursor: 'pointer', borderLeft: active ? `2px solid ${D.accent}` : '2px solid transparent', background: active ? D.active : 'transparent', transition: 'background 0.12s', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: active ? 600 : 400, color: active ? D.accent : D.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📁 {s.title}</div>
+                  <div style={{ fontSize: 10, color: D.text3, marginTop: 2 }}>메모 {count}개 · 로컬</div>
+                </div>
+                {count > 0 && <div style={{ flexShrink: 0, width: 18, height: 18, borderRadius: '50%', background: '#93c5fd', color: '#1a1a2e', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{count > 9 ? '9+' : count}</div>}
+              </div>
+            );
+          })}
+          {(scripts?.length ?? 0) > 0 && <div style={{ height: 1, background: D.border, margin: '4px 0' }} />}
+        </>
+      )}
+      {(scripts?.length ?? 0) > 0 && <div style={{ padding: '4px 16px 2px', fontSize: 10, fontWeight: 700, color: D.text3, letterSpacing: '0.05em', textTransform: 'uppercase', opacity: 0.7 }}>클라우드</div>}
       {scripts === null && <div style={{ padding: '12px 16px', fontSize: 12, color: D.text3 }}>불러오는 중…</div>}
-      {scripts?.length === 0 && (
+      {scripts?.length === 0 && localScripts.length === 0 && (
         <div style={{ padding: '24px 16px', textAlign: 'center' }}>
           <div style={{ fontSize: 22, marginBottom: 8, opacity: 0.4 }}>📝</div>
           <div style={{ fontSize: 11, color: D.text3, lineHeight: 1.6 }}>가져온 작품이 없습니다.</div>
@@ -1711,7 +1853,7 @@ function UploadScriptModal({ onClose, onGenerate }) {
     });
     const panels = buildPanelsFromScenes(merged);
     const id = `ls_${Date.now()}`;
-    onGenerate({ id, title: title.trim() || '대본', panels });
+    onGenerate({ id, title: title.trim() || '대본', panels, text: scriptText.trim() });
   };
 
   return (
@@ -1863,6 +2005,52 @@ function UploadScriptModal({ onClose, onGenerate }) {
               style={{ padding: '7px 20px', borderRadius: 7, border: 'none', background: D.accent, color: '#1a1a1a', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
             >🎞 스토리보드 생성</button>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── 텍스트 가져오기 모달 (스토리보드 생성 없이 바로 저장) ──────────────────────
+function ImportTextModal({ onClose, onImport }) {
+  const D = useD();
+  const [title, setTitle] = useState('');
+  const [text,  setText]  = useState('');
+  const [error, setError] = useState('');
+
+  const handleSave = () => {
+    if (!text.trim()) { setError('대본 텍스트를 입력해주세요.'); return; }
+    const id = `ls_${Date.now()}`;
+    onImport({ id, title: title.trim() || '로컬 대본', text: text.trim() });
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9000, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ background: D.panel, borderRadius: 12, width: '100%', maxWidth: 560, maxHeight: '90vh', display: 'flex', flexDirection: 'column', border: `1px solid ${D.border}`, overflow: 'hidden' }}>
+        <div style={{ padding: '16px 20px', borderBottom: `1px solid ${D.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: D.text }}>텍스트로 가져오기</div>
+            <div style={{ fontSize: 11, color: D.text3, marginTop: 2 }}>대본 텍스트를 붙여넣으면 연출노트와 스토리보드를 작성할 수 있습니다</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: D.text3, fontSize: 18, cursor: 'pointer', lineHeight: 1 }}>×</button>
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto', padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 700, color: D.text3, display: 'block', marginBottom: 5 }}>작품 제목</label>
+            <input value={title} onChange={e => setTitle(e.target.value)} placeholder="제목 없음"
+              style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', borderRadius: 6, border: `1px solid ${D.border}`, background: D.bg, color: D.text, fontSize: 13, outline: 'none' }} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: D.text3 }}>대본 텍스트</label>
+            <textarea value={text} onChange={e => setText(e.target.value)} placeholder="대본 텍스트를 붙여넣으세요…" rows={12}
+              style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', borderRadius: 6, border: `1px solid ${D.border}`, background: D.bg, color: D.text, fontSize: 12, lineHeight: 1.7, outline: 'none', resize: 'vertical', fontFamily: 'inherit' }} />
+          </div>
+          {error && <div style={{ fontSize: 12, color: '#e05c5c' }}>{error}</div>}
+        </div>
+        <div style={{ padding: '12px 20px', borderTop: `1px solid ${D.border}`, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <button onClick={onClose} style={{ padding: '7px 16px', borderRadius: 6, border: `1px solid ${D.border}`, background: 'transparent', color: D.text3, fontSize: 12, cursor: 'pointer' }}>취소</button>
+          <button onClick={handleSave} style={{ padding: '7px 16px', borderRadius: 6, border: 'none', background: D.accent, color: '#1a1a1a', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>가져오기</button>
         </div>
       </div>
     </div>
@@ -2057,8 +2245,8 @@ function StoryboardPanel({ isGuest, isMobile = false, mobilePreSelected = null, 
   }, []);
 
   // 외부 파일 업로드 완료 핸들러
-  const handleUploadGenerate = ({ id, title, panels: generatedPanels }) => {
-    const entry = { id, title, createdAt: new Date().toISOString(), _isLocal: true };
+  const handleUploadGenerate = ({ id, title, panels: generatedPanels, text = '' }) => {
+    const entry = { id, title, text, createdAt: new Date().toISOString(), _isLocal: true };
     const updated = [entry, ...loadLocalScripts()];
     saveLocalScripts(updated);
     const recalced = recalcCutNos(generatedPanels);
