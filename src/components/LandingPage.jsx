@@ -582,13 +582,14 @@ export default function LandingPage({ onStart, onLogin }) {
             { href: '/notice.html', label: '공지사항' },
             { href: '/changelog.html', label: '업데이트 내역' },
             { href: '/help.html', label: '사용 설명서' },
-          ].map(({ href, label }) => (
+            { href: '/devlog-1.html', label: '개발기 읽기', underline: true },
+          ].map(({ href, label, underline }) => (
             <a
               key={href}
               href={href}
               target="_blank"
               rel="noopener noreferrer"
-              style={{ color: 'var(--c-text4)', textDecoration: 'none', borderBottom: '1px solid var(--c-border3)', paddingBottom: 1 }}
+              style={{ color: 'var(--c-text4)', textDecoration: underline ? 'underline' : 'none', borderBottom: underline ? 'none' : '1px solid var(--c-border3)', paddingBottom: 1 }}
             >{label}</a>
           ))}
         </p>
