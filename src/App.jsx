@@ -1570,6 +1570,13 @@ export default function App() {
   });
   const [, forceUpdate] = useState(0);
 
+  // hash 변경 시 재렌더 (#director, #landing 등 이동 즉시 반영)
+  useEffect(() => {
+    const handler = () => forceUpdate(n => n + 1);
+    window.addEventListener('hashchange', handler);
+    return () => window.removeEventListener('hashchange', handler);
+  }, []);
+
   // Supabase 세션 복원 + 상태 변화 구독
   useEffect(() => {
     if (!supabase) return;
