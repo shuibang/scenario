@@ -27,4 +27,22 @@ export default defineConfig({
   define: {
     'import.meta.env.VITE_BUILD_VERSION': JSON.stringify(buildVersion),
   },
+  build: {
+    // 소스맵 완전 비활성화
+    sourcemap: false,
+    // Terser 난독화 (mangle.properties 제거 — React 내부 _속성 보호)
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true,
+        drop_debugger: true,
+        pure_funcs: ['console.info', 'console.warn', 'console.error', 'console.debug'],
+        passes: 2,
+      },
+      mangle: true,
+      format: {
+        comments: false,
+      },
+    },
+  },
 })
