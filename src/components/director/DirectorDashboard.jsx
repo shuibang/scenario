@@ -288,13 +288,6 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
 
     if (tab === 'storyboard') return (
       <div style={{ padding: '8px 0' }}>
-        <div style={{ padding: '4px 14px 10px' }}>
-          <button
-            onClick={() => { window.dispatchEvent(new CustomEvent('director:uploadOpen')); setPanelOpen(false); }}
-            style={{ width: '100%', padding: '8px 12px', borderRadius: 7, border: `1px solid ${D.accent}`, background: 'transparent', color: D.accent, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-            + 텍스트로 만들기
-          </button>
-        </div>
         {(() => {
           const localScripts = loadLocalScripts();
           const allScripts = [...localScripts, ...(scripts || [])];
@@ -2507,12 +2500,6 @@ function StoryboardPanel({ isGuest, isMobile = false, mobilePreSelected = null, 
   // 스크립트 목록 공통 JSX (모바일 시트 + 데스크톱 패널 공용)
   const sbScriptListContent = (
     <div>
-      <div style={{ padding: '10px 16px 8px' }}>
-        <button onClick={() => { setShowUpload(true); setSheetOpen(false); }}
-          style={{ width: '100%', padding: '8px 0', borderRadius: 6, border: `1px solid ${D.accent}`, background: 'transparent', color: D.accent, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-          + 텍스트로 만들기
-        </button>
-      </div>
       <div style={{ padding: '4px 0' }}>
         {localScripts.length > 0 && (
           <>
