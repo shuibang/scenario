@@ -2239,6 +2239,10 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     });
     setBlocks(loaded);
     lastSavedBlocks.current = JSON.stringify(loaded);
+    // 회차 진입 시 첫 블록에 커서 자동 포커스
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => surfaceApiRef.current?.focus());
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeEpisodeId, initialized]);
 
