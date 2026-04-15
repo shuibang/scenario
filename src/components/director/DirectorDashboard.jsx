@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, createContext, useContext, Component, memo } from 'react';
-import { supabaseSignOut, extractUserData, supabase, signInWithGoogle } from '../../store/supabaseClient';
+import { supabaseSignOut, extractUserData, supabase } from '../../store/supabaseClient';
+import { guardedSignInWithGoogle } from '../../utils/guardedSignIn';
 import { setAccessToken, isTokenValid, loadDirectorScript, deleteFileById } from '../../store/googleDrive';
 import DirectorScriptViewer from './DirectorScriptViewer';
 import PreviewRenderer from '../../print/PreviewRenderer';
@@ -46,7 +47,7 @@ class ViewerErrorBoundary extends Component {
 }
 function loginWithReturnHash() {
   try { localStorage.setItem(RETURN_HASH_KEY, window.location.hash); } catch {}
-  signInWithGoogle();
+  guardedSignInWithGoogle();
 }
 
 // ─── 연출 작업실 전용 디자인 토큰 ─────────────────────────────────────────────

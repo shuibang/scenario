@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { signInWithGoogle } from '../../store/supabaseClient';
+import { guardedSignInWithGoogle } from '../../utils/guardedSignIn';
 
 // ─── 감독 로그인 화면 ─────────────────────────────────────────────────────────
 export default function DirectorLogin({ onBack, onGuest }) {
@@ -7,7 +7,7 @@ export default function DirectorLogin({ onBack, onGuest }) {
 
   const handleGoogle = async () => {
     setLoading(true);
-    await signInWithGoogle(); // 리디렉트 → onAuthStateChange가 세션 처리
+    guardedSignInWithGoogle();
   };
 
   return (

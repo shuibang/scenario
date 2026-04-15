@@ -6,7 +6,8 @@ import { mobileTbtnStyle } from '../../styles/tokens';
 import { applyInlineFormat } from '../../utils/textFormat';
 import { clearAccessToken, loadFromDrive, isTokenValid } from '../../store/googleDrive';
 import { isPublicPcMode } from '../../store/db';
-import { signInWithGoogle, supabaseSignOut, refreshDriveToken } from '../../store/supabaseClient';
+import { supabaseSignOut, refreshDriveToken } from '../../store/supabaseClient';
+import { guardedSignInWithGoogle } from '../../utils/guardedSignIn';
 
 export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, WorkTimer, authUser, onLogout }) {
   const { state, dispatch } = useApp();
@@ -143,14 +144,14 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
                         setDriveStatus('none');
                         const newToken = await refreshDriveToken();
                         if (newToken) runDriveSync();
-                        else signInWithGoogle();
+                        else guardedSignInWithGoogle();
                       }}
                     >재연결 시도</button>
                   )}
                   {driveStatus === 'reauth' && (
                     <button
                       style={{ ...dropItemStyle, padding: '4px 0', fontSize: 11, color: '#f6ad55' }}
-                      onClick={() => signInWithGoogle()}
+                      onClick={() => guardedSignInWithGoogle()}
                     >구글 드라이브 재연결이 필요해요 (탭해서 재로그인)</button>
                   )}
                   <button
@@ -162,7 +163,7 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
                 <div style={{ padding: '10px 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <div style={{ fontSize: 12, color: 'var(--c-text4)' }}>Google로 로그인하면 Drive에 자동 저장됩니다.</div>
                   <button
-                    onClick={() => { signInWithGoogle(); }}
+                    onClick={() => { guardedSignInWithGoogle(); }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 8,
                       width: '100%', padding: '8px 12px', borderRadius: 6,

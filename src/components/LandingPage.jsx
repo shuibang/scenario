@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { signInWithGoogle } from '../store/supabaseClient';
+import { guardedSignInWithGoogle } from '../utils/guardedSignIn';
 
 // ─── 데이터 ────────────────────────────────────────────────────────────────────
 const COMPARE_ROWS = [
@@ -590,7 +590,7 @@ function LandingLoginModal({ onClose }) {
 
   const handleGoogle = async () => {
     setLoading(true);
-    await signInWithGoogle(); // 리디렉트 후 onAuthStateChange가 처리
+    guardedSignInWithGoogle();
   };
 
   return (

@@ -49,6 +49,7 @@ import { getLayoutMetrics } from './print/LineTokenizer';
 import { saveReviewPayload } from './utils/reviewShare';
 import SyncConflictModal from './components/SyncConflictModal';
 import { usePageTracking } from './hooks/usePageTracking';
+import { guardedSignInWithGoogle } from './utils/guardedSignIn';
 
 // ─── Panel width persistence ───────────────────────────────────────────────────
 const PANEL_WIDTHS_KEY = 'panelWidths';
@@ -506,7 +507,7 @@ function LoginModal({ onClose }) {
 
   const handleGoogle = async () => {
     setLoading(true);
-    await signInWithGoogle(); // 리디렉트 → 돌아오면 onAuthStateChange가 처리
+    guardedSignInWithGoogle();
   };
 
   return (
@@ -680,7 +681,7 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
                     setDriveStatus('none');
                     const newToken = await refreshDriveToken();
                     if (newToken) runDriveSync();
-                    else signInWithGoogle();
+                    else guardedSignInWithGoogle();
                   }}
                 >Drive 오류 (재시도)</span>
               )}
@@ -689,7 +690,7 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
                   className="text-[10px] cursor-pointer"
                   style={{ color: '#f6ad55' }}
                   title="Google Drive 권한이 없습니다. 클릭해서 재로그인"
-                  onClick={() => signInWithGoogle()}
+                  onClick={() => guardedSignInWithGoogle()}
                 >구글 드라이브 재연결이 필요해요</span>
               )}
               <button onClick={async () => {
@@ -1564,6 +1565,34 @@ let _shellEverRendered = (() => {
   catch { return false; }
 })();
 
+// ─── WebView 안내 모달 ────────────────────────────────────────────────────────
+function WebViewModal({ onClose }) {
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+      onClick={onClose}
+    >
+      <div
+        style={{ background: '#fff', borderRadius: 16, padding: '32px 28px', maxWidth: 360, width: '100%', textAlign: 'center', boxShadow: '0 8px 40px rgba(0,0,0,0.2)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div style={{ fontSize: 40, marginBottom: 16 }}>🌐</div>
+        <div style={{ fontSize: 17, fontWeight: 700, color: '#111', marginBottom: 12 }}>
+          외부 브라우저에서 열어주세요
+        </div>
+        <p style={{ fontSize: 13, color: '#555', lineHeight: 1.7, margin: '0 0 24px' }}>
+          카카오톡·인스타그램 등 앱에서는 Google 로그인이 제한됩니다.<br />
+          상단 메뉴(···)에서 <strong>'외부 브라우저로 열기'</strong>를 선택 후 다시 시도해주세요.
+        </p>
+        <button
+          onClick={onClose}
+          style={{ width: '100%', padding: '12px 0', borderRadius: 8, border: 'none', background: '#e8b84b', color: '#1a1a1a', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+        >확인</button>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   usePageTracking();
 
@@ -1572,6 +1601,14 @@ export default function App() {
     catch { return null; }
   });
   const [, forceUpdate] = useState(0);
+  const [webViewModal, setWebViewModal] = useState(false);
+
+  // WebView 안내 모달 — guardedSignInWithGoogle()이 발사하는 이벤트 수신
+  useEffect(() => {
+    const handler = () => setWebViewModal(true);
+    window.addEventListener('show-webview-modal', handler);
+    return () => window.removeEventListener('show-webview-modal', handler);
+  }, []);
 
   // hash 변경 시 재렌더 (#director, #landing 등 이동 즉시 반영)
   useEffect(() => {
@@ -1670,6 +1707,7 @@ export default function App() {
   return (
     <AppProvider>
       <Shell authUser={authUser} setAuthUser={setAuthUser} />
+      {webViewModal && <WebViewModal onClose={() => setWebViewModal(false)} />}
     </AppProvider>
   );
 }

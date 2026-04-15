@@ -13,14 +13,15 @@ import PreviewRenderer from '../print/PreviewRenderer';
 import { exportPdf } from '../print/pdfViaServer';
 import { loadReviewPayload, isShortReviewId } from '../utils/reviewShare';
 import { reviewLegacySchema } from '../utils/urlSchemas';
-import { supabase, signInWithGoogle } from '../store/supabaseClient';
+import { supabase } from '../store/supabaseClient';
+import { guardedSignInWithGoogle } from '../utils/guardedSignIn';
 import { setAccessToken, saveDirectorScript } from '../store/googleDrive';
 
 const RETURN_HASH_KEY = 'drama_pending_return_hash';
 // 로그인 후 돌아올 hash 저장 (OAuth 리디렉트 시 hash가 날아가므로)
 function loginWithReturnHash() {
   try { localStorage.setItem(RETURN_HASH_KEY, window.location.hash); } catch {}
-  signInWithGoogle();
+  guardedSignInWithGoogle();
 }
 
 // source_url 검증 — javascript:/data: 스킴 주입 방지 (시나리오 4)
