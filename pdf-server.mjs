@@ -21,14 +21,15 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 
-let puppeteer, express, cors;
+let puppeteer, express, cors, rateLimit;
 try {
-  puppeteer = (await import('puppeteer')).default;
-  express   = (await import('express')).default;
-  cors      = (await import('cors')).default;
+  puppeteer  = (await import('puppeteer')).default;
+  express    = (await import('express')).default;
+  cors       = (await import('cors')).default;
+  rateLimit  = (await import('express-rate-limit')).default;
 } catch {
   console.error('[pdf-server] 필수 패키지가 없습니다. 아래 명령을 실행하세요:');
-  console.error('  npm install puppeteer express cors');
+  console.error('  npm install puppeteer express cors express-rate-limit');
   process.exit(1);
 }
 
@@ -55,6 +56,13 @@ const app = express();
 
 app.use(cors());                               // 모든 origin 허용 (로컬 개발용)
 app.use(express.json({ limit: '20mb' }));      // HTML payload 최대 20MB
+
+const pdfLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1분
+  max: 5,              // IP당 5회
+  message: { error: '요청이 너무 많습니다. 잠시 후 시도해주세요.' }
+});
+app.use('/pdf', pdfLimiter);
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
