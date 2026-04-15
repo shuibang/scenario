@@ -1174,12 +1174,8 @@ function NotesPanel({ isMobile = false }) {
   return (
     <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
 
-      {/* 작품 목록: 모바일→BottomSheet / 데스크톱→좌측 패널 */}
-      {isMobile ? (
-        <BottomSheet open={sheetOpen} onClose={() => setSheetOpen(false)} title="작품별 연출노트">
-          {scriptListContent}
-        </BottomSheet>
-      ) : (
+      {/* 작품 목록: 모바일→부모(DirectorMobileView)가 관리 / 데스크톱→좌측 패널 */}
+      {!isMobile ? (
         <div style={{ width: subCollapsed ? 28 : 240, flexShrink: 0, borderRight: `1px solid ${D.border}`, background: D.panel, display: 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'width 0.2s ease' }}>
           <div style={{ padding: '10px 8px 10px 12px', borderBottom: `1px solid ${D.border}`, display: 'flex', alignItems: 'center', gap: 6 }}>
             {!subCollapsed && <div style={{ flex: 1, fontSize: 11, fontWeight: 700, color: D.text3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>작품별 연출노트</div>}
@@ -1190,7 +1186,7 @@ function NotesPanel({ isMobile = false }) {
           </div>
           {!subCollapsed && <div style={{ flex: 1, overflowY: 'auto' }}>{scriptListContent}</div>}
         </div>
-      )}
+      ) : null}
 
       {/* 노트 목록 */}
       <div style={{ flex: 1, minHeight: 0, minWidth: 0, overflow: 'auto', background: D.bg, padding: isMobile ? '16px 16px' : 32 }}>
@@ -2381,12 +2377,8 @@ function StoryboardPanel({ isGuest, isMobile = false, mobilePreSelected = null, 
   return (
     <div style={{ display: 'flex', flex: 1, minHeight: 0, height: '100%' }}>
 
-      {/* 작품 목록: 모바일(mobilePreSelected 없을 때)→BottomSheet / 데스크톱→좌측 패널 */}
-      {isMobile && !mobilePreSelected ? (
-        <BottomSheet open={sheetOpen} onClose={() => setSheetOpen(false)} title="스토리보드">
-          {sbScriptListContent}
-        </BottomSheet>
-      ) : !isMobile ? (
+      {/* 작품 목록: 모바일→부모(DirectorMobileView)가 관리 / 데스크톱→좌측 패널 */}
+      {!isMobile ? (
         <div style={{ width: subCollapsed ? 28 : 240, flexShrink: 0, borderRight: `1px solid ${D.border}`, background: D.panel, display: 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'width 0.2s ease' }}>
           <div style={{ padding: '10px 8px 10px 12px', borderBottom: `1px solid ${D.border}`, display: 'flex', alignItems: 'center', gap: 6 }}>
             {!subCollapsed && <div style={{ flex: 1, fontSize: 11, fontWeight: 700, color: D.text3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>스토리보드</div>}
