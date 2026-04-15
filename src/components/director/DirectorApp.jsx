@@ -42,7 +42,7 @@ export default function DirectorApp({ authUser }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const handleBack = () => { window.location.hash = ''; };
+  const handleBack = () => { window.location.hash = '#landing'; };
 
   const GUEST_SESSION = { user: { id: 'guest', email: '', user_metadata: { full_name: '둘러보기', avatar_url: '' } }, isGuest: true };
 
