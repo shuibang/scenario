@@ -1,12 +1,16 @@
 import { useState } from 'react';
 import { guardedSignInWithGoogle } from '../../utils/guardedSignIn';
 
+const RETURN_HASH_KEY = 'drama_pending_return_hash';
+
 // ─── 감독 로그인 화면 ─────────────────────────────────────────────────────────
 export default function DirectorLogin({ onBack, onGuest }) {
   const [loading, setLoading] = useState(false);
 
   const handleGoogle = async () => {
     setLoading(true);
+    // OAuth 복귀 후 #director로 돌아오도록 현재 hash 보존
+    try { localStorage.setItem(RETURN_HASH_KEY, window.location.hash || '#director'); } catch {}
     guardedSignInWithGoogle();
   };
 

@@ -258,6 +258,17 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
     setImportOpen(false);
   };
 
+  const handleMobileDeleteLocalScript = (e, script) => {
+    e.stopPropagation();
+    if (!window.confirm(`"${script.title}"\n\n로컬에서 삭제할까요?`)) return;
+    deleteLocalScript(script.id);
+    try { localStorage.removeItem(`director_private_notes_${script.id}`); } catch {}
+    const updated = loadLocalScripts();
+    setLocalScripts(updated);
+    if (projSelected?.id === script.id) { setProjSelected(null); setProjViewing(null); }
+    if (noteScript?.id === script.id) { setNoteScript(null); setNotes([]); }
+  };
+
   // ── 탭 항목 ───────────────────────────────────────────────────────────────
   const TABS = [
     { id: 'projects',   icon: '📄', label: '작품' },
@@ -279,9 +290,14 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
           <>
             <div style={{ padding: '2px 14px', fontSize: 10, color: D.text3, opacity: 0.7 }}>로컬</div>
             {localScripts.map(s => (
-              <div key={s.id} onClick={() => { setProjSelected(s); setProjViewing({ appState: textToAppState(s.text, s.title, s.id), selections: LOCAL_SELECTIONS }); setPanelOpen(false); }}
-                style={{ padding: '9px 14px', borderLeft: projSelected?.id === s.id ? `2px solid ${D.accent}` : '2px solid transparent', background: projSelected?.id === s.id ? D.active : 'transparent', cursor: 'pointer' }}>
-                <div style={{ fontSize: 13, fontWeight: projSelected?.id === s.id ? 600 : 400, color: projSelected?.id === s.id ? D.accent : D.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📁 {s.title}</div>
+              <div key={s.id}
+                style={{ display: 'flex', alignItems: 'center', borderLeft: projSelected?.id === s.id ? `2px solid ${D.accent}` : '2px solid transparent', background: projSelected?.id === s.id ? D.active : 'transparent' }}>
+                <div onClick={() => { setProjSelected(s); setProjViewing({ appState: textToAppState(s.text, s.title, s.id), selections: LOCAL_SELECTIONS }); setPanelOpen(false); }}
+                  style={{ flex: 1, minWidth: 0, padding: '9px 8px 9px 14px', cursor: 'pointer' }}>
+                  <div style={{ fontSize: 13, fontWeight: projSelected?.id === s.id ? 600 : 400, color: projSelected?.id === s.id ? D.accent : D.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📁 {s.title}</div>
+                </div>
+                <button onClick={e => handleMobileDeleteLocalScript(e, s)}
+                  style={{ flexShrink: 0, marginRight: 8, width: 22, height: 22, borderRadius: 4, border: `1px solid ${D.border}`, background: 'transparent', color: D.text3, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
               </div>
             ))}
             {(scripts?.length ?? 0) > 0 && <div style={{ height: 1, background: D.border, margin: '4px 0' }} />}
@@ -378,7 +394,7 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
       if (projViewing) return (
         <div style={{ height: '100%', overflow: 'auto', background: '#d8d8d8' }}>
           <ViewerErrorBoundary>
-            <DirectorScriptViewer appState={projViewing.appState} selections={projViewing.selections} readOnly />
+            <DirectorScriptViewer appState={projViewing.appState} selections={projViewing.selections} sharedScriptId={projSelected.id} localOnly={!!projSelected._isLocal} />
           </ViewerErrorBoundary>
         </div>
       );
@@ -890,6 +906,7 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
   const handleDeleteLocalScript = (script) => {
     if (!window.confirm(`"${script.title}"\n\n로컬에서 삭제할까요?`)) return;
     deleteLocalScript(script.id);
+    try { localStorage.removeItem(`director_private_notes_${script.id}`); } catch {}
     setLocalScripts(loadLocalScripts());
     if (selected?.id === script.id) { setSelected(null); setViewing(null); }
   };
@@ -938,7 +955,7 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
   };
 
   return (
-    <div style={{ display: 'flex', flex: 1, minHeight: 0, flexDirection: 'column' }}>
+    <div style={{ display: 'flex', flex: 1, minHeight: 0, flexDirection: 'column', overflow: 'hidden' }}>
 
       {/* 둘러보기 모드 안내 배너 */}
       {isGuest && (
@@ -970,6 +987,8 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
         </div>
       )}
 
+      {/* 작품 목록 + 뷰어 영역 (row) */}
+      <div style={{ display: 'flex', flex: '1 1 0', minHeight: 0, overflow: 'hidden' }}>
       {/* 작품 목록 (공통 JSX) */}
       {(() => {
         const scriptListContent = (
@@ -1026,7 +1045,7 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
           </BottomSheet>
         ) : (
           /* 데스크톱: 좌측 패널 */
-          <div style={{ width: subCollapsed ? 28 : 260, flexShrink: 0, borderRight: `1px solid ${D.border}`, background: D.panel, display: 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'width 0.2s ease' }}>
+          <div style={{ width: subCollapsed ? 28 : 260, flexShrink: 0, alignSelf: 'stretch', borderRight: `1px solid ${D.border}`, background: D.panel, display: 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'width 0.2s ease' }}>
             <div style={{ padding: '10px 8px 10px 12px', borderBottom: `1px solid ${D.border}`, display: 'flex', alignItems: 'center', gap: 6 }}>
               {!subCollapsed && <div style={{ flex: 1, fontSize: 11, fontWeight: 700, color: D.text3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>작품 목록</div>}
               <button onClick={() => setSubCollapsed(v => !v)} title={subCollapsed ? '목록 열기' : '목록 닫기'}
@@ -1040,7 +1059,7 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
       })()}
 
       {/* 대본 뷰어 영역 */}
-      <div style={{ flex: 1, minHeight: 0, minWidth: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', background: '#d8d8d8' }}>
+      <div style={{ flex: 1, minHeight: 0, minWidth: 0, alignSelf: 'stretch', overflow: 'hidden', display: 'flex', flexDirection: 'column', background: '#d8d8d8' }}>
 
         {/* 뷰어 상단 바 */}
         <div style={{ height: 44, flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 12px', gap: 10, background: D.sidebar, borderBottom: `1px solid ${D.border}` }}>
@@ -1084,11 +1103,12 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
           )}
           {selected && !loading && viewing?.appState && (
             <ViewerErrorBoundary key={selected.id}>
-              <DirectorScriptViewer appState={viewing.appState} selections={viewing.selections} sharedScriptId={selected.id} />
+              <DirectorScriptViewer appState={viewing.appState} selections={viewing.selections} sharedScriptId={selected.id} localOnly={!!selected._isLocal} />
             </ViewerErrorBoundary>
           )}
         </div>
       </div>
+      </div>{/* end row wrapper */}
       {importOpen && <ImportTextModal onClose={() => setImportOpen(false)} onImport={handleImport} />}
     </div>
   );

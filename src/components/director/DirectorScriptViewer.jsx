@@ -217,10 +217,10 @@ function BlockRow({ block, scriptNote, privateNote, noteType, onAdd, onEdit, onD
 }
 
 // ─── 메인 뷰어 ────────────────────────────────────────────────────────────────
-export default function DirectorScriptViewer({ appState, selections, sharedScriptId, readOnly = false, initialNotes = null }) {
+export default function DirectorScriptViewer({ appState, selections, sharedScriptId, readOnly = false, initialNotes = null, localOnly = false }) {
   const [scriptNotes,  setScriptNotes]  = useState(initialNotes || {});
   const [privateNotes, setPrivateNotes] = useState(() => sharedScriptId ? loadPrivateNotes(sharedScriptId) : {});
-  const [noteType,     setNoteType]     = useState('script'); // 'script' | 'private'
+  const [noteType,     setNoteType]     = useState(localOnly ? 'private' : 'script'); // 'script' | 'private'
   const [session,      setSession]      = useState(null);
 
   useEffect(() => {
@@ -340,14 +340,16 @@ export default function DirectorScriptViewer({ appState, selections, sharedScrip
       {/* 메모 타입 탭 */}
       {!readOnly && (
         <div style={{ position: 'sticky', top: 0, zIndex: 30, background: '#f5f5f5', borderBottom: '1px solid #ddd', padding: '8px 48px', display: 'flex', gap: 8 }}>
-          {[['script', '✉ 작가 전달 메모', '#e8b84b'], ['private', '📋 내 연출노트', '#93c5fd']].map(([type, label, color]) => (
-            <button key={type} onClick={() => setNoteType(type)} style={{
-              padding: '5px 14px', borderRadius: 20, border: 'none', fontSize: 12, fontWeight: 600,
-              background: noteType === type ? color : '#e8e8e8',
-              color: noteType === type ? '#1a1a1a' : '#666',
-              cursor: 'pointer',
-            }}>{label}</button>
-          ))}
+          {[['script', '✉ 작가 전달 메모', '#e8b84b'], ['private', '📋 내 연출노트', '#93c5fd']]
+            .filter(([type]) => !(localOnly && type === 'script'))
+            .map(([type, label, color]) => (
+              <button key={type} onClick={() => setNoteType(type)} style={{
+                padding: '5px 14px', borderRadius: 20, border: 'none', fontSize: 12, fontWeight: 600,
+                background: noteType === type ? color : '#e8e8e8',
+                color: noteType === type ? '#1a1a1a' : '#666',
+                cursor: 'pointer',
+              }}>{label}</button>
+            ))}
           <span style={{ fontSize: 11, color: '#999', marginLeft: 8, alignSelf: 'center' }}>
             {noteType === 'script' ? '작가에게 전송됩니다' : '나만 볼 수 있는 메모입니다'}
           </span>
