@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>공지사항 — 대본 작업실</title>
+<meta name="description" content="대본 작업실 공지사항. 서비스 주소 변경, 베타 테스트 안내 등 중요 공지를 확인하세요.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://scenario-876h.vercel.app/notice.html">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:         #1a1a1a;
+    --header:     #111111;
+    --border:     #2e2e42;
+    --border2:    #3a3a52;
+    --border3:    #3a3a52;
+    --text:       #e0e0e0;
+    --text2:      #bbbbbb;
+    --text3:      #888888;
+    --text4:      #666666;
+    --accent:     #5a5af5;
+    --accent2:    #a78bfa;
+    --card:       #1e1e2e;
+    --tip-bg:     #1e1e30;
+    --tip-border: #3a3aaa;
+    --chip-bg:    #2a2a3e;
+    --chip-text:  #a0a0c8;
+    --red:        #ef4444;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg:         #f8f8f8;
+      --header:     #f0f0f0;
+      --border:     #e0e0e0;
+      --border2:    #d0d0d0;
+      --border3:    #dddddd;
+      --text:       #1a1a1a;
+      --text2:      #333333;
+      --text3:      #555555;
+      --text4:      #777777;
+      --accent:     #4f46e5;
+      --accent2:    #7c3aed;
+      --card:       #f5f5f5;
+      --tip-bg:     #f0eeff;
+      --tip-border: #c4b5fd;
+      --chip-bg:    #edeaff;
+      --chip-text:  #4f46e5;
+      --red:        #dc2626;
+    }
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.75;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Header ── */
+  .site-header {
+    position: sticky; top: 0; z-index: 100;
+    background: var(--header);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px; height: 52px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .site-logo { font-weight: 700; font-size: 16px; color: var(--accent); letter-spacing: 0.05em; text-decoration: none; }
+  .site-header-cta {
+    padding: 7px 18px; border-radius: 6px; font-size: 13px; font-weight: 600;
+    background: var(--accent); color: #fff; border: none; text-decoration: none;
+  }
+  .site-header-cta:hover { background: #6a6aff; color: #fff; }
+
+  /* ── Page nav ── */
+  .page-nav {
+    display: flex; gap: 6px; padding: 12px 0 0;
+    flex-wrap: wrap;
+  }
+  .page-nav a {
+    font-size: 12px; color: var(--text3); text-decoration: none;
+    padding: 4px 12px; border-radius: 20px;
+    border: 1px solid var(--border2);
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .page-nav a:hover { color: var(--accent2); border-color: var(--accent2); }
+  .page-nav a.current { color: var(--accent); border-color: var(--accent); font-weight: 600; }
+
+  /* ── Page shell ── */
+  .page { max-width: 800px; margin: 0 auto; padding: 3rem 2rem 6rem; }
+
+  /* ── Hero ── */
+  .hero { text-align: center; margin-bottom: 3rem; padding-bottom: 2rem; border-bottom: 1px solid var(--border); }
+  .hero-badge {
+    display: inline-block; background: var(--accent); color: #fff;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.1em;
+    padding: 4px 14px; border-radius: 20px; margin-bottom: 1rem;
+  }
+  .hero h1 { font-size: clamp(1.5rem, 4vw, 2rem); font-weight: 800; letter-spacing: -0.02em; margin-bottom: 0.4rem; }
+  .hero p { color: var(--text3); font-size: 14px; }
+
+  /* ── Notice entry ── */
+  .notice-entry {
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .notice-entry.urgent { border-color: var(--red); }
+
+  details { display: block; }
+  details[open] summary .arrow { transform: rotate(90deg); }
+
+  summary {
+    display: flex; align-items: center; gap: 12px;
+    padding: 1rem 1.25rem;
+    background: var(--card);
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+  }
+  summary::-webkit-details-marker { display: none; }
+  summary:hover { background: var(--tip-bg); }
+
+  .notice-entry.urgent summary { border-left: 3px solid var(--red); }
+
+  .notice-meta {
+    display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0;
+  }
+  .notice-date { font-size: 11px; color: var(--text3); font-weight: 500; letter-spacing: 0.04em; }
+  .notice-title { font-size: 14.5px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .urgent-badge {
+    font-size: 10px; font-weight: 700; color: var(--red);
+    border: 1px solid var(--red); border-radius: 4px;
+    padding: 1px 6px; flex-shrink: 0;
+  }
+  .arrow { font-size: 12px; color: var(--text3); flex-shrink: 0; transition: transform 0.2s; display: inline-block; }
+
+  .notice-body {
+    padding: 1.25rem 1.5rem;
+    border-top: 1px solid var(--border);
+    background: var(--bg);
+  }
+
+  .notice-body p { font-size: 14px; color: var(--text2); margin-bottom: 0.7rem; line-height: 1.75; }
+  .notice-body p:last-child { margin-bottom: 0; }
+  .notice-body strong { color: var(--text); }
+
+  .notice-body .section-head {
+    font-size: 13px; font-weight: 700; color: var(--accent2);
+    margin: 1.1rem 0 0.4rem;
+  }
+  .notice-body ul { list-style: none; margin: 0.3rem 0 0.7rem; padding: 0; }
+  .notice-body ul li {
+    font-size: 13.5px; color: var(--text2); padding: 3px 0 3px 16px;
+    position: relative; line-height: 1.65;
+  }
+  .notice-body ul li::before { content: '·'; position: absolute; left: 4px; color: var(--accent); font-weight: 700; }
+
+  .notice-body ol { list-style: none; counter-reset: step; margin: 0.3rem 0 0.7rem; padding: 0; }
+  .notice-body ol li {
+    counter-increment: step; font-size: 13.5px; color: var(--text2);
+    padding: 4px 0 4px 28px; position: relative; line-height: 1.65;
+  }
+  .notice-body ol li::before {
+    content: counter(step); position: absolute; left: 0;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: var(--accent); color: #fff;
+    font-size: 10px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    top: 5px;
+  }
+
+  .notice-body .tip {
+    background: var(--tip-bg); border-left: 3px solid var(--tip-border);
+    border-radius: 0 8px 8px 0; padding: 0.8rem 1rem;
+    margin: 0.75rem 0; font-size: 13.5px; color: var(--text2); line-height: 1.65;
+  }
+  .notice-body .info-row {
+    font-size: 13px; color: var(--text3);
+    background: var(--card); border-radius: 6px;
+    padding: 0.5rem 0.9rem; margin: 0.5rem 0;
+    font-family: 'Consolas', monospace;
+  }
+  .notice-body .info-row span { color: var(--accent2); }
+
+  /* ── Footer ── */
+  .site-footer {
+    background: var(--header); border-top: 1px solid var(--border);
+    padding: 28px 24px; text-align: center; font-size: 12px; color: var(--text4); line-height: 2;
+  }
+  .site-footer a { color: var(--text3); text-decoration: none; border-bottom: 1px solid var(--border2); padding-bottom: 1px; }
+  .site-footer a:hover { color: var(--accent2); }
+
+  @media (max-width: 600px) {
+    .page { padding: 2rem 1.25rem 4rem; }
+    .site-header { padding: 0 16px; }
+    .notice-title { font-size: 13.5px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <a href="/" class="site-logo">대본 작업실</a>
+  <a href="/" class="site-header-cta">바로 시작하기 →</a>
+</header>
+
+<div class="page">
+
+  <div class="hero">
+    <div class="hero-badge">공지사항</div>
+    <h1>공지사항</h1>
+    <p>서비스 관련 중요 안내를 확인하세요</p>
+  </div>
+
+  <nav class="page-nav" aria-label="관련 페이지">
+    <a href="/notice.html" class="current">공지사항</a>
+    <a href="/changelog.html">업데이트 내역</a>
+    <a href="/help.html">사용 설명서</a>
+  </nav>
+
+  <div style="height: 2rem;"></div>
+
+  <!-- 공지 1: 서비스 주소 변경 -->
+  <div class="notice-entry urgent">
+    <details open>
+      <summary>
+        <div class="notice-meta">
+          <div class="notice-date">2026-04-11</div>
+          <div class="notice-title">🔴 서비스 주소 변경 안내</div>
+        </div>
+        <span class="urgent-badge">중요</span>
+        <span class="arrow">▶</span>
+      </summary>
+      <div class="notice-body">
+        <p>베타 서비스 주소가 변경됩니다.</p>
+        <div class="info-row">기존 주소: <span>scenario-876h.vercel.app</span></div>
+        <div class="info-row">새 주소: <span>daejak.kr</span></div>
+        <p>기존 주소로 작업하신 분들은 이동 전에 꼭 백업해주세요!</p>
+        <div class="section-head">백업 방법</div>
+        <ol>
+          <li>기존 주소 접속</li>
+          <li>상단 백업/복원 버튼 클릭</li>
+          <li>백업 파일 다운로드</li>
+          <li>daejak.kr 접속</li>
+          <li>백업/복원 → 복원으로 불러오기</li>
+        </ol>
+        <p>불편을 드려서 죄송해요. 새 주소에서 더 안정적인 서비스로 찾아뵐게요 🎬</p>
+        <p>문의: daejak.official@gmail.com</p>
+      </div>
+    </details>
+  </div>
+
+  <!-- 공지 2: 베타 테스트 안내 -->
+  <div class="notice-entry">
+    <details open>
+      <summary>
+        <div class="notice-meta">
+          <div class="notice-date">2026-04-06</div>
+          <div class="notice-title">📢 대본 작업실 베타 테스트 안내</div>
+        </div>
+        <span class="arrow">▶</span>
+      </summary>
+      <div class="notice-body">
+        <p>안녕하세요, 대본 작업실 개발자입니다.<br>
+        오늘 처음 문을 열었어요. 가장 먼저 찾아와 주신 분들께 진심으로 감사드려요.<br>
+        여러분이 이 작업실의 첫 번째 입주 작가님들이에요. 🎬</p>
+
+        <div class="section-head">📅 베타 테스트 기간</div>
+        <p>약 2~3개월 동안 진행될 예정이에요. 종료 전 최소 2주 전에 미리 공지할게요.</p>
+
+        <div class="section-head">💡 베타 종료 이후 서비스 구조</div>
+        <p>유료화 방향이 확정되면 아래와 같이 운영될 예정이에요.</p>
+
+        <div class="section-head">✅ 무료 (광고형)</div>
+        <ul>
+          <li>대본 작성 기능 전체</li>
+          <li>시놉시스 (인물설명 포함)</li>
+          <li>트리트먼트</li>
+          <li>PDF/DOCX/HWPX 출력</li>
+        </ul>
+        <p>기본적인 집필과 준비에는 전혀 문제 없게 구성할게요.</p>
+
+        <div class="section-head">⭐ 유료 (멤버십)</div>
+        <ul>
+          <li>무료 기능 전체 포함</li>
+          <li>인물현황 (등장 씬, 대사량, 흐름 분석)</li>
+          <li>설계 파트</li>
+          <li>광고 없음</li>
+          <li>추후 다양한 기능 추가 예정</li>
+        </ul>
+        <p>합리적인 가격으로 제공할게요.</p>
+
+        <div class="tip">
+          지금 베타 기간 동안은 모든 기능을 자유롭게 써보실 수 있어요.
+          버그나 불편한 점은 오류제출 또는 댓글로 알려주세요.
+          피드백 하나하나 다 읽고 반영할게요.
+        </div>
+        <p>아직 완성형은 아니지만, 처음을 함께해 주셔서 정말 감사해요. 🎬</p>
+      </div>
+    </details>
+  </div>
+
+</div><!-- /.page -->
+
+<footer class="site-footer">
+  <p>대본 작업실 — 드라마 작가를 위한 무료 대본 편집기</p>
+  <p>
+    <a href="/notice.html">공지사항</a> ·
+    <a href="/changelog.html">업데이트 내역</a> ·
+    <a href="/help.html">사용 설명서</a> ·
+    <a href="/">홈으로</a>
+  </p>
+</footer>
+
+</body>
+</html>

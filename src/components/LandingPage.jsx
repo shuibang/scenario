@@ -577,6 +577,14 @@ export default function LandingPage({ onStart, onLogin }) {
       <footer style={{ background: 'var(--c-header)', borderTop: '1px solid var(--c-border)', padding: '24px', textAlign: 'center', fontSize: 12, color: 'var(--c-text6)' }}>
         <p style={{ margin: 0 }}>대본 작업실 — 드라마 작가를 위한 무료 대본 편집기</p>
         <p style={{ margin: '6px 0 0' }}>버그 제보 및 피드백은 서비스 내 QnA 또는 이메일로 알려주세요</p>
+        <p style={{ margin: '10px 0 0' }}>
+          <a
+            href="/help.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: 'var(--c-text4)', textDecoration: 'none', borderBottom: '1px solid var(--c-border3)', paddingBottom: 1 }}
+          >사용 설명서</a>
+        </p>
       </footer>
 
       {loginOpen && <LandingLoginModal onClose={() => setLoginOpen(false)} />}

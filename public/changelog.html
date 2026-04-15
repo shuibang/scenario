@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>업데이트 내역 — 대본 작업실</title>
+<meta name="description" content="대본 작업실 업데이트 내역. 최신 기능 추가, 버그 수정, UI 개선 사항을 확인하세요.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://scenario-876h.vercel.app/changelog.html">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:         #1a1a1a;
+    --header:     #111111;
+    --border:     #2e2e42;
+    --border2:    #3a3a52;
+    --border3:    #3a3a52;
+    --text:       #e0e0e0;
+    --text2:      #bbbbbb;
+    --text3:      #888888;
+    --text4:      #666666;
+    --accent:     #5a5af5;
+    --accent2:    #a78bfa;
+    --card:       #1e1e2e;
+    --tip-bg:     #1e1e30;
+    --tip-border: #3a3aaa;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg:         #f8f8f8;
+      --header:     #f0f0f0;
+      --border:     #e0e0e0;
+      --border2:    #d0d0d0;
+      --border3:    #dddddd;
+      --text:       #1a1a1a;
+      --text2:      #333333;
+      --text3:      #555555;
+      --text4:      #777777;
+      --accent:     #4f46e5;
+      --accent2:    #7c3aed;
+      --card:       #f5f5f5;
+      --tip-bg:     #f0eeff;
+      --tip-border: #c4b5fd;
+    }
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.75;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Header ── */
+  .site-header {
+    position: sticky; top: 0; z-index: 100;
+    background: var(--header); border-bottom: 1px solid var(--border);
+    padding: 0 24px; height: 52px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .site-logo { font-weight: 700; font-size: 16px; color: var(--accent); letter-spacing: 0.05em; text-decoration: none; }
+  .site-header-cta {
+    padding: 7px 18px; border-radius: 6px; font-size: 13px; font-weight: 600;
+    background: var(--accent); color: #fff; border: none; text-decoration: none;
+  }
+  .site-header-cta:hover { background: #6a6aff; color: #fff; }
+
+  /* ── Page nav ── */
+  .page-nav { display: flex; gap: 6px; padding: 12px 0 0; flex-wrap: wrap; }
+  .page-nav a {
+    font-size: 12px; color: var(--text3); text-decoration: none;
+    padding: 4px 12px; border-radius: 20px; border: 1px solid var(--border2);
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .page-nav a:hover { color: var(--accent2); border-color: var(--accent2); }
+  .page-nav a.current { color: var(--accent); border-color: var(--accent); font-weight: 600; }
+
+  /* ── Page shell ── */
+  .page { max-width: 800px; margin: 0 auto; padding: 3rem 2rem 6rem; }
+
+  /* ── Hero ── */
+  .hero { text-align: center; margin-bottom: 3rem; padding-bottom: 2rem; border-bottom: 1px solid var(--border); }
+  .hero-badge {
+    display: inline-block; background: var(--accent); color: #fff;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.1em;
+    padding: 4px 14px; border-radius: 20px; margin-bottom: 1rem;
+  }
+  .hero h1 { font-size: clamp(1.5rem, 4vw, 2rem); font-weight: 800; letter-spacing: -0.02em; margin-bottom: 0.4rem; }
+  .hero p { color: var(--text3); font-size: 14px; }
+
+  /* ── Timeline layout ── */
+  .timeline { position: relative; padding-left: 28px; }
+  .timeline::before {
+    content: ''; position: absolute; left: 7px; top: 6px; bottom: 0;
+    width: 2px; background: var(--border);
+  }
+
+  .cl-entry { position: relative; margin-bottom: 2rem; }
+  .cl-dot {
+    position: absolute; left: -25px; top: 14px;
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--accent); border: 2px solid var(--bg);
+    flex-shrink: 0;
+  }
+  .cl-entry:first-child .cl-dot { background: var(--accent); box-shadow: 0 0 0 3px rgba(90,90,245,0.25); }
+  .cl-entry.archive .cl-dot { background: var(--border2); }
+
+  /* ── Entry card (details/summary) ── */
+  .cl-card { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .cl-entry:first-child .cl-card { border-color: var(--accent); }
+  .cl-entry.archive .cl-card { border-style: dashed; }
+
+  details[open] summary .arrow { transform: rotate(90deg); }
+
+  summary {
+    display: flex; align-items: center; gap: 12px;
+    padding: 1rem 1.25rem;
+    background: var(--card); cursor: pointer;
+    list-style: none; user-select: none;
+  }
+  summary::-webkit-details-marker { display: none; }
+  summary:hover { background: var(--tip-bg); }
+
+  .cl-meta { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+  .cl-date { font-size: 11px; color: var(--text3); font-weight: 500; letter-spacing: 0.04em; }
+  .cl-title { font-size: 14.5px; font-weight: 700; color: var(--text); }
+  .new-badge {
+    font-size: 10px; font-weight: 700; color: var(--accent);
+    border: 1px solid var(--accent); border-radius: 4px; padding: 1px 6px; flex-shrink: 0;
+  }
+  .arrow { font-size: 12px; color: var(--text3); flex-shrink: 0; transition: transform 0.2s; display: inline-block; }
+
+  /* ── Entry body ── */
+  .cl-body {
+    padding: 1.25rem 1.5rem;
+    border-top: 1px solid var(--border);
+    background: var(--bg);
+  }
+  .cl-body p { font-size: 14px; color: var(--text2); margin-bottom: 0.65rem; line-height: 1.75; }
+  .cl-body p:last-child { margin-bottom: 0; }
+
+  .cl-section { margin-top: 1rem; }
+  .cl-section-head { font-size: 12px; font-weight: 700; color: var(--accent2); letter-spacing: 0.04em; margin-bottom: 0.4rem; }
+  .cl-section ul { list-style: none; padding: 0; margin: 0; }
+  .cl-section ul li {
+    font-size: 13.5px; color: var(--text2);
+    padding: 3px 0 3px 16px; position: relative; line-height: 1.65;
+  }
+  .cl-section ul li::before { content: '·'; position: absolute; left: 4px; color: var(--accent); font-weight: 700; }
+  .cl-section ul li.sub { padding-left: 28px; color: var(--text3); font-size: 13px; }
+  .cl-section ul li.sub::before { content: '—'; left: 14px; color: var(--border2); }
+
+  .cl-body .tip {
+    background: var(--tip-bg); border-left: 3px solid var(--tip-border);
+    border-radius: 0 8px 8px 0; padding: 0.8rem 1rem;
+    margin: 0.75rem 0; font-size: 13px; color: var(--text2); line-height: 1.65;
+  }
+
+  /* ── Footer ── */
+  .site-footer {
+    background: var(--header); border-top: 1px solid var(--border);
+    padding: 28px 24px; text-align: center; font-size: 12px; color: var(--text4); line-height: 2;
+  }
+  .site-footer a { color: var(--text3); text-decoration: none; border-bottom: 1px solid var(--border2); padding-bottom: 1px; }
+  .site-footer a:hover { color: var(--accent2); }
+
+  @media (max-width: 600px) {
+    .page { padding: 2rem 1rem 4rem; }
+    .site-header { padding: 0 16px; }
+    .timeline { padding-left: 20px; }
+    .cl-dot { left: -18px; }
+    .cl-title { font-size: 13.5px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <a href="/" class="site-logo">대본 작업실</a>
+  <a href="/" class="site-header-cta">바로 시작하기 →</a>
+</header>
+
+<div class="page">
+
+  <div class="hero">
+    <div class="hero-badge">업데이트 내역</div>
+    <h1>업데이트 내역</h1>
+    <p>새로운 기능과 개선 사항을 확인하세요</p>
+  </div>
+
+  <nav class="page-nav" aria-label="관련 페이지">
+    <a href="/notice.html">공지사항</a>
+    <a href="/changelog.html" class="current">업데이트 내역</a>
+    <a href="/help.html">사용 설명서</a>
+  </nav>
+
+  <div style="height: 2rem;"></div>
+
+  <div class="timeline">
+
+    <!-- v11 -->
+    <div class="cl-entry">
+      <div class="cl-dot"></div>
+      <div class="cl-card">
+        <details open>
+          <summary>
+            <div class="cl-meta">
+              <div class="cl-date">2026-04-14</div>
+              <div class="cl-title">🎬 연출 작업실 모바일 UI 전면 개편 및 서브패널 접기 기능</div>
+            </div>
+            <span class="new-badge">최신</span>
+            <span class="arrow">▶</span>
+          </summary>
+          <div class="cl-body">
+            <div class="cl-section">
+              <div class="cl-section-head">연출 작업실 모바일 UI 전면 개편</div>
+              <ul>
+                <li>대본 작업실과 동일한 하단 슬라이딩 패널 구조로 통일</li>
+                <li>하단 탭: 작품 / 연출 / 보드
+                  <ul>
+                    <li class="sub">작품: 작품 목록 + 대본 본문 미리보기</li>
+                    <li class="sub">연출: 작품별 연출노트 목록 + 메모 작성</li>
+                    <li class="sub">보드: 스토리보드 생성 및 편집</li>
+                  </ul>
+                </li>
+                <li>키보드 감지 시 하단 패널 자동 수축 (타이핑 방해 없음)</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">연출 작업실 데스크톱 개선</div>
+              <ul>
+                <li>메인 사이드바 토글 버튼을 헤더로 이동 — 메뉴 항목 가림 해소</li>
+                <li>작품 목록 · 연출노트 목록 · 스토리보드 목록 패널 개별 접기(◀/▶) 지원</li>
+                <li>패널 너비 전환 시 부드러운 애니메이션</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">스토리보드</div>
+              <ul>
+                <li>모바일에서 가로형 뷰 지원</li>
+                <li>출력 기본값 변경 — 머리말/꼬리말·배경그래픽 기본 OFF</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">버그 수정</div>
+              <ul>
+                <li>게스트(둘러보기) 모드 검은 화면 오류 수정</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- v10 -->
+    <div class="cl-entry">
+      <div class="cl-dot"></div>
+      <div class="cl-card">
+        <details>
+          <summary>
+            <div class="cl-meta">
+              <div class="cl-date">2026-04-13</div>
+              <div class="cl-title">🎬 씬번호 인식 형식 확장</div>
+            </div>
+            <span class="arrow">▶</span>
+          </summary>
+          <div class="cl-body">
+            <div class="cl-section">
+              <div class="cl-section-head">씬번호 인식 패턴 유연화</div>
+              <ul>
+                <li>구분자로 마침표(.), 슬래시(/), 쉼표(,), 대시(-) 모두 허용</li>
+                <li>시간대를 괄호 없이 표기 가능 (예: S#1. 카페, 낮)</li>
+                <li>연결 시간대 지원 — 낮~밤, D→N 형식 인식</li>
+                <li>시간대 키워드 추가: 점심·D·N</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">오류제출 탭 개선</div>
+              <ul>
+                <li>씬번호 형식 안내 카드 추가 (읽기 전용 예시 모음)</li>
+                <li>인식 안 되는 형식 제보하기 버튼</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- v9 -->
+    <div class="cl-entry">
+      <div class="cl-dot"></div>
+      <div class="cl-card">
+        <details>
+          <summary>
+            <div class="cl-meta">
+              <div class="cl-date">2026-04-12</div>
+              <div class="cl-title">🔧 타임라인 분량 계산 수정 및 안정성 개선</div>
+            </div>
+            <span class="arrow">▶</span>
+          </summary>
+          <div class="cl-body">
+            <div class="cl-section">
+              <div class="cl-section-head">타임라인 분량 계산 수정</div>
+              <ul>
+                <li>0.5페이지 → 1.0분, 1.2페이지 → 2.4분 등 실제 분량에 비례하게 표시</li>
+                <li>타임라인 하단에 총 분량(소수점) 레이블 추가</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">내부 안정성 개선</div>
+              <ul>
+                <li>Supabase 중복 연결 오류 수정 — 브라우저 콘솔에 뜨던 GoTrueClient 경고 해소</li>
+                <li>불필요한 디버그 로그 제거</li>
+                <li>공통 색상 유틸 정리 (중복 코드 제거)</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- v8 -->
+    <div class="cl-entry">
+      <div class="cl-dot"></div>
+      <div class="cl-card">
+        <details>
+          <summary>
+            <div class="cl-meta">
+              <div class="cl-date">2026-04-10</div>
+              <div class="cl-title">⌨️ 기타 단축어 편집 기능 추가 및 UI 개선</div>
+            </div>
+            <span class="arrow">▶</span>
+          </summary>
+          <div class="cl-body">
+            <div class="cl-section">
+              <div class="cl-section-head">기타 단축어 편집 기능 추가</div>
+              <ul>
+                <li>편집 버튼 → 단축어 순서 변경(↑/↓) 및 삭제(×) 가능</li>
+                <li>기본 제공 단축어도 순서 변경·삭제 가능</li>
+                <li>초기화 버튼으로 기본 목록 복원 가능</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">방향키 이동 개선</div>
+              <ul>
+                <li>2열 그리드 기준으로 방향키 이동이 직관적으로 동작</li>
+                <li>목록 끝에서 반대쪽으로 튀는 현상 제거</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">팝업 색상 개선</div>
+              <ul>
+                <li>선택된 항목과 배경 색상 대비 강화 — 선택 항목이 더 잘 보임</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">괄호체 출력 개선</div>
+              <ul>
+                <li>HWPX·DOCX·PDF 모든 출력에서 이탤릭 적용</li>
+                <li>글자색 검정 고정 (강조색 제거)</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- v7 -->
+    <div class="cl-entry">
+      <div class="cl-dot"></div>
+      <div class="cl-card">
+        <details>
+          <summary>
+            <div class="cl-meta">
+              <div class="cl-date">2026-04-08</div>
+              <div class="cl-title">🗂️ 씬리스트 출력 · 트리트먼트 · 타임라인 · 작품 생성 개편</div>
+            </div>
+            <span class="arrow">▶</span>
+          </summary>
+          <div class="cl-body">
+            <div class="cl-section">
+              <div class="cl-section-head">씬리스트 출력 형식 변경</div>
+              <ul>
+                <li>가로 A4(Landscape) 표 형식으로 출력 (PDF·DOCX)</li>
+                <li>컬럼 구성: 씬번호 / 장소 / 세부장소 / 낮 / 밤 / 등장인물 / 내용 요약 / 비고</li>
+                <li>낮/밤 칸에 입력된 시간대 텍스트 그대로 표시 (낮·밤·D·N·아침 등)</li>
+                <li>비고 칸은 빈 칸으로 — 현장 메모용</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">트리트먼트 개편</div>
+              <ul>
+                <li>회차 선택에 전체 보기 추가 — 모든 회차를 한 화면에서 편집 가능</li>
+                <li>전체 뷰에서 각 회차별 항목 직접 입력·추가 가능</li>
+                <li>미니시리즈 미생성 회차 자동생성 선택지 추가</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">타임라인 눈금 수정</div>
+              <ul>
+                <li>1장 = 2분 고정 계산으로 변경</li>
+                <li>대본 분량에 따라 타임라인 총 분이 자동 반영 (35매→70분, 40매→80분)</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">작품 생성 개편</div>
+              <ul>
+                <li>단막 / 미니시리즈 / 영화 / 기타 4가지 형식 선택</li>
+                <li>유형별 클라이막스 구간 자동 설정</li>
+                <li>미니시리즈: 부작 수 입력 → 회차 자동 생성</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">구조 페이지 컬러바 개선</div>
+              <ul>
+                <li>씬 위치를 타임라인 기준 시간 비율로 계산</li>
+                <li>클라이막스 구간에 가까울수록 색상 짙어짐 (라벤더 → 인디고)</li>
+                <li>⚡ 버튼으로 총 분량·클라이막스 구간 직접 수정 가능</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- v6 -->
+    <div class="cl-entry">
+      <div class="cl-dot"></div>
+      <div class="cl-card">
+        <details>
+          <summary>
+            <div class="cl-meta">
+              <div class="cl-date">2026-04-08</div>
+              <div class="cl-title">🎬 설계 페이지 씬보드 개편</div>
+            </div>
+            <span class="arrow">▶</span>
+          </summary>
+          <div class="cl-body">
+            <div class="cl-section">
+              <div class="cl-section-head">씬보드 카드 구성</div>
+              <ul>
+                <li>씬번호 + 씬정보 (장소·시간)</li>
+                <li>인물등장 — 인물 정보가 등록된 경우만 표시</li>
+                <li>내용요약 — 씬리스트 내용이 그대로 연동</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">씬 관리</div>
+              <ul>
+                <li>씬 카드 드래그로 순서 변경 → 씬번호 즉시 반영</li>
+                <li>카드 더블클릭 → 삭제 버튼 표시 (실수 방지)</li>
+                <li>삭제된 씬 되살리기 가능</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">성능 개선</div>
+              <ul>
+                <li>키입력 렉 대폭 감소 (에디터 내부 DOM 업데이트 최적화)</li>
+                <li>저장 시 불필요한 화면 갱신 제거</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- archive -->
+    <div class="cl-entry archive">
+      <div class="cl-dot"></div>
+      <div class="cl-card">
+        <details>
+          <summary>
+            <div class="cl-meta">
+              <div class="cl-date">2026-04-04 ~ 2026-04-07</div>
+              <div class="cl-title">📋 이전 업데이트 기록</div>
+            </div>
+            <span class="arrow">▶</span>
+          </summary>
+          <div class="cl-body">
+            <div class="cl-section">
+              <div class="cl-section-head">2026-04-07</div>
+              <ul>
+                <li>DOCX 출력 권장 안내 — PDF 줄바꿈·페이지 나누기 개선 중</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">2026-04-06</div>
+              <ul>
+                <li>백업/복원 시스템 추가 — 자동저장(10분, 3개)·수동저장(5개)·백업(5개) 스냅샷 관리</li>
+                <li>복원 시 현재 상태 자동 보존, 기기 정보 표시</li>
+                <li>Drive 동기화 버그 수정 — 다른 기기 불러오기 후 화면 갱신 안 되던 문제 해결</li>
+                <li>모바일 툴바 되돌리기·다시하기 버튼 추가</li>
+                <li>메모 탭 하단 광고 클릭 차단 문제 수정</li>
+                <li>Drive 동기화 안정화 — 빈 화면 버그, 빈 배열 덮어쓰기 방지, 로그인 타이밍 수정</li>
+                <li>구조 페이지 [첫등장] 뱃지 추가</li>
+                <li>검토링크 모바일 하단 피드백 패널</li>
+                <li>마이페이지 탭 여백 정비, 인물이력서 설명 문구</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">2026-04-04</div>
+              <ul>
+                <li>자료수집 그리드/목록 뷰 토글, 메모·이미지 카드 타입 분리</li>
+                <li>표지↔작품명 동기화</li>
+                <li>UI 개선 — 광고영역 표기, 씬리스트 가로출력, 인물 첫등장 뱃지, 체크리스트 줄바꿈</li>
+                <li>Save the Cat 기본 접힘</li>
+                <li>씬리스트 버그 수정 — 씬 추가 후 목록 사라지던 문제, 대본 연동 개선</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+  </div><!-- /.timeline -->
+
+</div><!-- /.page -->
+
+<footer class="site-footer">
+  <p>대본 작업실 — 드라마 작가를 위한 무료 대본 편집기</p>
+  <p>
+    <a href="/notice.html">공지사항</a> ·
+    <a href="/changelog.html">업데이트 내역</a> ·
+    <a href="/help.html">사용 설명서</a> ·
+    <a href="/">홈으로</a>
+  </p>
+</footer>
+
+</body>
+</html>

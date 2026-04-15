@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>사용 설명서 — 대본 작업실</title>
+<meta name="description" content="대본 작업실 사용 설명서. 드라마 대본 에디터, 씬리스트, 인물 관리, 출력, 검토 링크 등 모든 기능을 안내합니다.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://scenario-876h.vercel.app/help.html">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #1a1a1a;
+    --panel:    #1e1e1e;
+    --header:   #111111;
+    --border:   #2e2e42;
+    --border2:  #3a3a52;
+    --text:     #e0e0e0;
+    --text2:    #bbbbbb;
+    --text3:    #888888;
+    --text4:    #666666;
+    --accent:   #5a5af5;
+    --accent2:  #a78bfa;
+    --card:     #1e1e2e;
+    --tip-bg:   #1e1e30;
+    --tip-border: #3a3aaa;
+    --chip-bg:  #2a2a3e;
+    --chip-text: #a0a0c8;
+    --table-head: #181828;
+    --table-row:  #212132;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg:       #f8f8f8;
+      --panel:    #ffffff;
+      --header:   #f0f0f0;
+      --border:   #e0e0e0;
+      --border2:  #d0d0d0;
+      --text:     #1a1a1a;
+      --text2:    #333333;
+      --text3:    #555555;
+      --text4:    #777777;
+      --accent:   #4f46e5;
+      --accent2:  #7c3aed;
+      --card:     #f5f5f5;
+      --tip-bg:   #f0eeff;
+      --tip-border: #c4b5fd;
+      --chip-bg:  #edeaff;
+      --chip-text: #4f46e5;
+      --table-head: #f0f0f0;
+      --table-row:  #fafafa;
+    }
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.75;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a { color: var(--accent); }
+  a:hover { color: var(--accent2); }
+
+  /* ── Header ── */
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--header);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .site-logo {
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--accent);
+    letter-spacing: 0.05em;
+    text-decoration: none;
+  }
+  .site-header-cta {
+    padding: 7px 18px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    text-decoration: none;
+    letter-spacing: 0.02em;
+  }
+  .site-header-cta:hover {
+    background: #6a6aff;
+    color: #fff;
+  }
+
+  /* ── Page shell ── */
+  .page {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 3.5rem 2rem 6rem;
+  }
+
+  /* ── Hero ── */
+  .hero {
+    text-align: center;
+    margin-bottom: 3.5rem;
+    padding-bottom: 2.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .hero-badge {
+    display: inline-block;
+    background: var(--accent);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    padding: 4px 14px;
+    border-radius: 20px;
+    margin-bottom: 1rem;
+  }
+  .hero h1 {
+    font-size: clamp(1.6rem, 4vw, 2.2rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.5rem;
+    color: var(--text);
+  }
+  .hero p {
+    color: var(--text3);
+    font-size: 15px;
+  }
+
+  /* ── TOC ── */
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem 2rem;
+    margin-bottom: 3rem;
+  }
+  .toc-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text4);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+  }
+  .toc-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 6px 20px;
+  }
+  .toc-grid a {
+    color: var(--text2);
+    text-decoration: none;
+    font-size: 13.5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 0;
+    transition: color 0.15s;
+  }
+  .toc-grid a:hover { color: var(--accent2); }
+  .toc-num {
+    font-size: 10px;
+    color: var(--text4);
+    font-weight: 600;
+    min-width: 20px;
+    letter-spacing: 0.04em;
+  }
+
+  /* ── Sections ── */
+  .section { margin-bottom: 3rem; }
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1.5px solid var(--accent);
+  }
+  .section-num {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.06em;
+  }
+  .section-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--text);
+  }
+
+  p { margin-bottom: 0.75rem; color: var(--text2); }
+  strong { color: var(--text); }
+
+  ul {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 1rem;
+  }
+  ul li {
+    padding: 5px 0 5px 18px;
+    position: relative;
+    color: var(--text2);
+    font-size: 14px;
+  }
+  ul li::before {
+    content: '·';
+    position: absolute;
+    left: 4px;
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  /* ── Cards ── */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 10px;
+    margin: 1rem 0;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.15rem;
+  }
+  .card-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--accent2);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .card-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 5px;
+  }
+  .card-desc {
+    font-size: 13px;
+    color: var(--text3);
+    line-height: 1.6;
+  }
+
+  /* ── Tip box ── */
+  .tip {
+    background: var(--tip-bg);
+    border-left: 3px solid var(--tip-border);
+    border-radius: 0 8px 8px 0;
+    padding: 0.9rem 1.15rem;
+    margin: 1rem 0;
+    font-size: 13.5px;
+    color: var(--text2);
+    line-height: 1.65;
+  }
+  .tip strong { color: var(--accent2); }
+
+  /* ── Shortcut table ── */
+  .shortcut-list {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 8px 20px;
+    margin: 0.75rem 0 1rem;
+  }
+  .shortcut-key {
+    background: var(--chip-bg);
+    border: 1px solid var(--border2);
+    border-radius: 5px;
+    padding: 2px 9px;
+    font-family: 'Consolas', 'SFMono-Regular', monospace;
+    font-size: 12px;
+    color: var(--chip-text);
+    white-space: nowrap;
+    align-self: start;
+  }
+  .shortcut-desc {
+    font-size: 13.5px;
+    color: var(--text2);
+    align-self: center;
+  }
+
+  /* ── Steps ── */
+  .steps { margin: 0.75rem 0 1rem; }
+  .step {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 10px;
+    align-items: flex-start;
+  }
+  .step-num {
+    min-width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .step-text {
+    font-size: 14px;
+    color: var(--text2);
+    line-height: 1.65;
+  }
+
+  /* ── Chip ── */
+  .chip {
+    display: inline-block;
+    background: var(--chip-bg);
+    border-radius: 4px;
+    padding: 1px 8px;
+    font-size: 12px;
+    color: var(--chip-text);
+    margin: 2px 2px;
+    font-family: 'Consolas', monospace;
+  }
+
+  /* ── Table ── */
+  .simple-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+    margin: 0.75rem 0 1rem;
+  }
+  .simple-table th {
+    text-align: left;
+    padding: 9px 14px;
+    background: var(--table-head);
+    color: var(--text3);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+  }
+  .simple-table td {
+    padding: 9px 14px;
+    color: var(--text2);
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .simple-table tr:last-child td { border-bottom: none; }
+  .simple-table tr:nth-child(even) td { background: var(--table-row); }
+
+  /* ── Footer ── */
+  .site-footer {
+    background: var(--header);
+    border-top: 1px solid var(--border);
+    padding: 28px 24px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--text4);
+    line-height: 2;
+  }
+  .site-footer a {
+    color: var(--text3);
+    text-decoration: none;
+    border-bottom: 1px solid var(--border2);
+    padding-bottom: 1px;
+  }
+  .site-footer a:hover { color: var(--accent2); }
+
+  /* ── Responsive ── */
+  @media (max-width: 600px) {
+    .page { padding: 2rem 1.25rem 4rem; }
+    .card-grid { grid-template-columns: 1fr; }
+    .hero h1 { font-size: 1.45rem; }
+    .toc-grid { grid-template-columns: 1fr 1fr; }
+    .site-header { padding: 0 16px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="site-header">
+  <a href="/" class="site-logo">대본 작업실</a>
+  <a href="/" class="site-header-cta">바로 시작하기 →</a>
+</header>
+
+<div class="page">
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-badge">사용 설명서</div>
+    <h1>대본 작업실</h1>
+    <p>한국 드라마 작가를 위한 전용 대본 집필 도구 · 전체 기능 안내</p>
+  </div>
+
+  <!-- 관련 페이지 nav -->
+  <nav style="display:flex;gap:6px;padding:12px 0 0;flex-wrap:wrap;" aria-label="관련 페이지">
+    <a href="/notice.html" style="font-size:12px;color:var(--text3);text-decoration:none;padding:4px 12px;border-radius:20px;border:1px solid var(--border2);">공지사항</a>
+    <a href="/changelog.html" style="font-size:12px;color:var(--text3);text-decoration:none;padding:4px 12px;border-radius:20px;border:1px solid var(--border2);">업데이트 내역</a>
+    <a href="/help.html" style="font-size:12px;color:var(--accent);font-weight:600;text-decoration:none;padding:4px 12px;border-radius:20px;border:1px solid var(--accent);">사용 설명서</a>
+  </nav>
+
+  <div style="height:1.5rem;"></div>
+
+  <!-- TOC -->
+  <div class="toc">
+    <div class="toc-title">목차</div>
+    <div class="toc-grid">
+      <a href="#start"><span class="toc-num">01</span>시작하기</a>
+      <a href="#project"><span class="toc-num">02</span>작품 관리</a>
+      <a href="#editor"><span class="toc-num">03</span>대본 에디터</a>
+      <a href="#scenelist"><span class="toc-num">04</span>씬 리스트</a>
+      <a href="#structure"><span class="toc-num">05</span>구조 설계</a>
+      <a href="#character"><span class="toc-num">06</span>인물 관리</a>
+      <a href="#treatment"><span class="toc-num">07</span>트리트먼트 &amp; 시놉시스</a>
+      <a href="#resources"><span class="toc-num">08</span>자료 수집 &amp; 메모</a>
+      <a href="#export"><span class="toc-num">09</span>출력 (PDF / DOCX / HWP)</a>
+      <a href="#share"><span class="toc-num">10</span>검토 링크 공유</a>
+      <a href="#settings"><span class="toc-num">11</span>환경 설정</a>
+    </div>
+  </div>
+
+  <!-- 01 시작하기 -->
+  <div class="section" id="start">
+    <div class="section-header">
+      <span class="section-num">01</span>
+      <span class="section-title">시작하기</span>
+    </div>
+    <p>대본 작업실은 <strong>로그인 없이도</strong> 바로 사용할 수 있습니다. 작성한 대본은 브라우저에 자동으로 저장됩니다.</p>
+
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-label">로그인 없이</div>
+        <div class="card-title">바로 시작</div>
+        <div class="card-desc">가입 없이 즉시 사용 가능합니다. 데이터는 현재 기기의 브라우저에 보관됩니다.</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Google 로그인</div>
+        <div class="card-title">클라우드 동기화</div>
+        <div class="card-desc">Google 계정으로 로그인하면 Google Drive에 자동 백업되어 여러 기기에서 이어서 작업할 수 있습니다.</div>
+      </div>
+      <div class="card">
+        <div class="card-label">공용 PC 사용 시</div>
+        <div class="card-title">공개 PC 모드</div>
+        <div class="card-desc">도서관·카페 등 공용 컴퓨터에서 사용할 때 켜두면 로컬에 데이터를 남기지 않습니다.</div>
+      </div>
+    </div>
+
+    <div class="tip">
+      <strong>자동 저장 안내</strong><br>
+      작성 중인 내용은 30초마다 자동으로 저장됩니다. 화면 상단에서 저장 상태(방금 저장됨 / N분 전)를 확인할 수 있습니다.
+    </div>
+  </div>
+
+  <!-- 02 작품 관리 -->
+  <div class="section" id="project">
+    <div class="section-header">
+      <span class="section-num">02</span>
+      <span class="section-title">작품 관리</span>
+    </div>
+    <p>작품 단위로 대본을 관리합니다. 한 작품 안에 에디터, 씬리스트, 인물, 구조 등 모든 정보가 담깁니다.</p>
+    <ul>
+      <li>새 작품 만들기 — 제목과 포맷을 선택해 생성합니다.</li>
+      <li>지원 포맷: <span class="chip">드라마</span> <span class="chip">영화</span> <span class="chip">웹드라마</span> <span class="chip">단막극</span></li>
+      <li>작품 목록에서 선택해 전환하거나, 더 이상 필요 없는 작품은 삭제할 수 있습니다.</li>
+    </ul>
+    <div class="tip">
+      <strong>다기기 충돌 주의</strong><br>
+      Google Drive 동기화 중 다른 기기에서도 같은 작품을 열었다면, 어느 버전을 유지할지 선택하는 화면이 나타납니다. 덮어쓰기 전에 꼭 확인하세요.
+    </div>
+  </div>
+
+  <!-- 03 대본 에디터 -->
+  <div class="section" id="editor">
+    <div class="section-header">
+      <span class="section-num">03</span>
+      <span class="section-title">대본 에디터</span>
+    </div>
+    <p>실제 대본을 쓰는 공간입니다. 블록 단위로 구성되어 있으며, 각 블록의 형식을 자유롭게 바꿀 수 있습니다.</p>
+
+    <p><strong>블록 종류</strong></p>
+    <table class="simple-table">
+      <thead><tr><th>블록</th><th>용도</th></tr></thead>
+      <tbody>
+        <tr><td>씬 번호</td><td>#1, #2… 씬의 시작을 표시. 씬리스트와 자동 연동됩니다.</td></tr>
+        <tr><td>지문</td><td>장소, 행동, 상황 묘사</td></tr>
+        <tr><td>대사</td><td>인물의 말</td></tr>
+        <tr><td>괄호체</td><td>감정 지시나 행동 보조 설명 (예: (작게), (웃으며))</td></tr>
+        <tr><td>씬 참조</td><td>다른 씬 번호를 언급할 때 — 씬 순서가 바뀌면 참조 번호도 자동 갱신</td></tr>
+        <tr><td>기타</td><td>메모나 자유 형식 텍스트</td></tr>
+      </tbody>
+    </table>
+
+    <p><strong>자주 쓰는 단축키</strong></p>
+    <div class="shortcut-list">
+      <span class="shortcut-key">Enter</span>
+      <span class="shortcut-desc">새 블록 추가</span>
+      <span class="shortcut-key">/</span>
+      <span class="shortcut-desc">블록 타입 선택 메뉴 열기</span>
+      <span class="shortcut-key">Ctrl+Shift+1/2/3</span>
+      <span class="shortcut-desc">현재 블록 타입 빠르게 변환 (씬번호 / 지문 / 대사)</span>
+      <span class="shortcut-key">Ctrl+S</span>
+      <span class="shortcut-desc">수동 저장</span>
+      <span class="shortcut-key">Ctrl+Z</span>
+      <span class="shortcut-desc">실행 취소</span>
+      <span class="shortcut-key">Ctrl+Shift+Z</span>
+      <span class="shortcut-desc">다시 실행</span>
+      <span class="shortcut-key">Shift+Enter</span>
+      <span class="shortcut-desc">블록 내 줄바꿈</span>
+    </div>
+
+    <p><strong>감정 태그</strong></p>
+    <p>각 블록에 감정 단어, 색상, 강도(1~5)를 달 수 있습니다. 블록 위에 마우스를 올리면 태그 내용이 툴팁으로 표시되고, 구조 페이지 타임라인에서 전체 감정 흐름을 색상으로 확인할 수 있습니다.</p>
+
+    <p><strong>타이프라이터 스크롤</strong></p>
+    <p>글을 쓸 때 현재 커서 위치가 항상 화면 중앙에 고정되는 집중 모드입니다. 긴 대본을 쓸 때 시선 이동 없이 편하게 작성할 수 있습니다.</p>
+
+    <p><strong>인라인 서식</strong></p>
+    <p>툴바에서 <strong>굵게(B)</strong>, <em>기울임(I)</em>, 밑줄(U) 서식을 적용할 수 있습니다. PDF 및 HWPX 출력에도 반영됩니다.</p>
+  </div>
+
+  <!-- 04 씬 리스트 -->
+  <div class="section" id="scenelist">
+    <div class="section-header">
+      <span class="section-num">04</span>
+      <span class="section-title">씬 리스트</span>
+    </div>
+    <p>대본의 씬 목록을 한눈에 보고 관리하는 패널입니다. 에디터와 실시간으로 연동됩니다.</p>
+    <ul>
+      <li>씬마다 <strong>제목, 장소, 시간대, 특수상황</strong>을 입력할 수 있습니다.</li>
+      <li>등장 인물 태그와 감정 태그를 칩 형태로 표시합니다.</li>
+      <li>씬리스트에서 씬을 추가하면 에디터에도 씬 번호 블록이 자동 생성됩니다.</li>
+      <li>씬 클릭 시 에디터에서 해당 씬 위치로 바로 이동합니다.</li>
+      <li>전체화면 모드로 더 넓게 볼 수 있습니다.</li>
+    </ul>
+    <div class="tip">
+      에디터에서 씬 번호 블록을 작성하면 씬리스트에 자동으로 반영됩니다. 씬리스트에서 삭제해도 에디터 블록은 유지되므로 안전하게 편집할 수 있습니다.
+    </div>
+  </div>
+
+  <!-- 05 구조 설계 -->
+  <div class="section" id="structure">
+    <div class="section-header">
+      <span class="section-num">05</span>
+      <span class="section-title">구조 설계</span>
+    </div>
+    <p>대본 전체의 흐름과 구조를 설계하는 페이지입니다.</p>
+
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-label">비트시트</div>
+        <div class="card-title">Save the Cat 구조</div>
+        <div class="card-desc">발단·전개·절정 등 주요 스토리 구조 포인트를 표로 정리합니다.</div>
+      </div>
+      <div class="card">
+        <div class="card-label">씬 카드</div>
+        <div class="card-title">회차별 씬 목록</div>
+        <div class="card-desc">회차 단위로 씬 카드를 모아보며 전체 구성을 점검합니다. 카드에서 에디터로 바로 이동 가능합니다.</div>
+      </div>
+      <div class="card">
+        <div class="card-label">인물 첫 등장</div>
+        <div class="card-title">[첫등장] 뱃지</div>
+        <div class="card-desc">씬 카드에 인물이 처음 등장하는 씬이 자동으로 표시됩니다.</div>
+      </div>
+      <div class="card">
+        <div class="card-label">감정 흐름</div>
+        <div class="card-title">타임라인 컬러바</div>
+        <div class="card-desc">각 씬의 감정 태그 색상이 타임라인 형태로 표시되어 전체 감정 변화를 한눈에 파악합니다.</div>
+      </div>
+      <div class="card">
+        <div class="card-label">시각화</div>
+        <div class="card-title">스토리보드 뷰</div>
+        <div class="card-desc">씬들을 카드 형태로 시각적으로 배열해 전체 흐름을 봅니다.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 06 인물 관리 -->
+  <div class="section" id="character">
+    <div class="section-header">
+      <span class="section-num">06</span>
+      <span class="section-title">인물 관리</span>
+    </div>
+    <p>작품에 등장하는 인물 정보를 체계적으로 관리합니다.</p>
+    <ul>
+      <li>인물마다 <strong>이름, 역할, 성별, 나이, 직업, 소개</strong>를 기록합니다.</li>
+      <li>비중별 구분: <span class="chip">주인공</span> <span class="chip">조연</span> <span class="chip">단역</span></li>
+      <li><strong>인물 관계도</strong> — 인물들 사이의 관계를 시각적으로 정리합니다.</li>
+      <li><strong>인물 이력서</strong> — 인물이 살아온 일생의 주요 사건과 감정 변화를 기록합니다.</li>
+      <li>필요한 정보 항목을 직접 추가할 수 있는 <strong>커스텀 필드</strong>도 지원합니다.</li>
+    </ul>
+  </div>
+
+  <!-- 07 트리트먼트 & 시놉시스 -->
+  <div class="section" id="treatment">
+    <div class="section-header">
+      <span class="section-num">07</span>
+      <span class="section-title">트리트먼트 &amp; 시놉시스</span>
+    </div>
+
+    <p><strong>트리트먼트</strong></p>
+    <p>씬별 내용 요약을 작성하는 공간입니다. 씬리스트와 연동되어 있어 씬 목록을 보며 각 씬의 내용을 요약해 둘 수 있습니다.</p>
+
+    <p><strong>표지 &amp; 시놉시스</strong></p>
+    <p>작품명, 집필자 등 표지 정보를 입력하고, 전체 이야기의 시놉시스를 작성합니다. 출력 시 함께 포함할 수 있습니다.</p>
+  </div>
+
+  <!-- 08 자료 수집 & 메모 -->
+  <div class="section" id="resources">
+    <div class="section-header">
+      <span class="section-num">08</span>
+      <span class="section-title">자료 수집 &amp; 메모</span>
+    </div>
+
+    <p><strong>자료 수집</strong></p>
+    <p>대본 작업에 참고할 자료를 모아두는 공간입니다. 텍스트 메모와 이미지를 카드 형태로 저장할 수 있으며, 그리드 뷰와 목록 뷰 중 편한 형태로 볼 수 있습니다.</p>
+
+    <p><strong>메모 &amp; 체크리스트</strong></p>
+    <p>간단한 메모나 할 일 목록을 작성합니다. 완료된 항목은 체크해서 정리하고, 필요 없는 항목은 삭제할 수 있습니다.</p>
+  </div>
+
+  <!-- 09 출력 -->
+  <div class="section" id="export">
+    <div class="section-header">
+      <span class="section-num">09</span>
+      <span class="section-title">출력 (PDF / DOCX / HWP)</span>
+    </div>
+    <p>완성된 작업물을 파일로 내보낼 수 있습니다. 세 가지 형식을 지원합니다.</p>
+
+    <table class="simple-table">
+      <thead><tr><th>형식</th><th>특징</th></tr></thead>
+      <tbody>
+        <tr><td>PDF</td><td>어디서나 같은 모양으로 열립니다. 제출이나 공유에 적합합니다.</td></tr>
+        <tr><td>DOCX</td><td>Word 호환 파일입니다. 추가 편집이 필요할 때 사용하세요.</td></tr>
+        <tr><td>HWPX</td><td>한글(HWP) 네이티브 파일입니다. 한국 방송사 제출 표준에 맞습니다.</td></tr>
+      </tbody>
+    </table>
+
+    <p><strong>출력 옵션</strong></p>
+    <ul>
+      <li>출력할 섹션 선택: 표지, 시놉시스, 대본, 인물, 이력서, 트리트먼트, 씬리스트</li>
+      <li>폰트, 페이지 크기, 여백, 행간 설정 가능</li>
+      <li>자주 쓰는 설정은 <strong>스타일 프리셋</strong>으로 저장해 두면 다음에 바로 불러올 수 있습니다.</li>
+      <li>출력 전 <strong>미리보기</strong>로 최종 모양을 확인할 수 있습니다.</li>
+    </ul>
+
+    <div class="tip">
+      <strong>한글(HWP) 뷰어 참고</strong><br>
+      HWPX 파일은 Chrome 또는 Adobe Reader에서 미리 볼 때 가장 안정적으로 열립니다. 일부 환경에서 한글 뷰어로 열면 레이아웃이 다를 수 있습니다.
+    </div>
+  </div>
+
+  <!-- 10 검토 링크 공유 -->
+  <div class="section" id="share">
+    <div class="section-header">
+      <span class="section-num">10</span>
+      <span class="section-title">검토 링크 공유</span>
+    </div>
+    <p>대본을 다른 사람과 공유하고 피드백을 받을 수 있습니다.</p>
+
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div><div class="step-text">공유 버튼을 눌러 단축 링크를 생성합니다. 링크는 <strong>7일간 유효</strong>합니다.</div></div>
+      <div class="step"><div class="step-num">2</div><div class="step-text">링크를 받은 사람은 별도 로그인 없이 대본을 열람할 수 있습니다.</div></div>
+      <div class="step"><div class="step-num">3</div><div class="step-text">검토자가 피드백 패널에 코멘트를 남기면 작가도 확인할 수 있습니다.</div></div>
+    </div>
+
+    <div class="tip">
+      <strong>감독 전달 모드</strong><br>
+      별도 감독 전달 뷰를 통해 대본을 전달하고, 감독의 피드백 노트를 연동해서 받아볼 수 있습니다.
+    </div>
+  </div>
+
+  <!-- 11 환경 설정 -->
+  <div class="section" id="settings">
+    <div class="section-header">
+      <span class="section-num">11</span>
+      <span class="section-title">환경 설정 &amp; 마이페이지</span>
+    </div>
+    <p>마이페이지에서 개인 설정과 작업 통계를 확인할 수 있습니다.</p>
+
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-label">테마</div>
+        <div class="card-title">다크 / 라이트</div>
+        <div class="card-desc">눈에 편한 화면 모드를 선택하세요.</div>
+      </div>
+      <div class="card">
+        <div class="card-label">작업 통계</div>
+        <div class="card-title">시간 &amp; 세션 기록</div>
+        <div class="card-desc">오늘까지 얼마나 작업했는지 시간과 세션 통계를 확인합니다.</div>
+      </div>
+      <div class="card">
+        <div class="card-label">공지 &amp; 업데이트</div>
+        <div class="card-title">새 기능 안내</div>
+        <div class="card-desc">앱 업데이트 내역과 공지사항을 확인합니다.</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Q&amp;A</div>
+        <div class="card-title">FAQ &amp; 오류 제보</div>
+        <div class="card-desc">자주 묻는 질문을 확인하고, 버그나 불편 사항을 제보할 수 있습니다.</div>
+      </div>
+    </div>
+
+    <p style="margin-top: 1.25rem;"><strong>화면 레이아웃</strong></p>
+    <ul>
+      <li><strong>데스크톱 (1280px 이상)</strong> — 3패널 구성. 좌우 패널 너비를 드래그로 조절할 수 있습니다.</li>
+      <li><strong>태블릿 (768~1279px)</strong> — 중간 레이아웃으로 자동 전환됩니다.</li>
+      <li><strong>모바일 (768px 미만)</strong> — 하단 탭으로 각 패널을 전환합니다. 키보드가 올라와도 에디터가 가려지지 않도록 자동 대응됩니다.</li>
+    </ul>
+  </div>
+
+</div><!-- /.page -->
+
+<!-- Footer -->
+<footer class="site-footer">
+  <p>대본 작업실 — 드라마 작가를 위한 무료 대본 편집기</p>
+  <p>
+    <a href="/notice.html">공지사항</a> ·
+    <a href="/changelog.html">업데이트 내역</a> ·
+    <a href="/help.html">사용 설명서</a> ·
+    <a href="/">홈으로</a>
+  </p>
+  <p style="margin-top: 8px; font-size: 11px;">작가님의 이야기를 응원합니다</p>
+</footer>
+
+</body>
+</html>
