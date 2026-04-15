@@ -1582,7 +1582,7 @@ function WebViewModal({ onClose }) {
         </div>
         <p style={{ fontSize: 13, color: '#555', lineHeight: 1.7, margin: '0 0 24px' }}>
           카카오톡·인스타그램 등 앱에서는 Google 로그인이 제한됩니다.<br />
-          상단 메뉴(···)에서 <strong>'외부 브라우저로 열기'</strong>를 선택 후 다시 시도해주세요.
+          브라우저 메뉴(···)에서 <strong>'외부 브라우저로 열기'</strong>를 선택 후 다시 시도해주세요.
         </p>
         <button
           onClick={onClose}
