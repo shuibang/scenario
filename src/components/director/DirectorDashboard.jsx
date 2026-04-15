@@ -2329,14 +2329,25 @@ function StoryboardPanel({ isGuest, isMobile = false, mobilePreSelected = null, 
     if (!selected) return;
     setLoading(true); setError('');
     try {
-      if (!isTokenValid()) {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.provider_token) throw new Error('Drive 권한이 없습니다. 다시 로그인해주세요.');
-        setAccessToken(session.provider_token, session.expires_in ?? 3600);
+      let scriptBlocks;
+
+      if (selected._isLocal) {
+        // 로컬 텍스트 대본: textToAppState로 대본작업실과 동일한 파싱 규칙 적용
+        if (!selected.text) throw new Error('저장된 텍스트가 없습니다.');
+        const appState = textToAppState(selected.text, selected.title, selected.id);
+        scriptBlocks = appState.scriptBlocks;
+      } else {
+        // 클라우드 대본: Drive에서 로드
+        if (!isTokenValid()) {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session?.provider_token) throw new Error('Drive 권한이 없습니다. 다시 로그인해주세요.');
+          setAccessToken(session.provider_token, session.expires_in ?? 3600);
+        }
+        const saved = await loadDirectorScript(selected.drive_file_id);
+        const data  = saved?.data ?? saved;
+        scriptBlocks = data.scriptBlocks || [];
       }
-      const saved = await loadDirectorScript(selected.drive_file_id);
-      const data  = saved?.data ?? saved;
-      const scriptBlocks = data.scriptBlocks || [];
+
       const generated = attachDirectorNotes(
         parseScriptBlocksForDirector(scriptBlocks),
         selected.id
