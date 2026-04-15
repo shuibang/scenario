@@ -1603,11 +1603,18 @@ function parseScriptBlocksForDirector(blocks) {
         currentChar = text; currentCharId = block.id;
       } else if (role === 'dialogue') {
         current.annotatedBlocks.push({ blockId: block.id, role: 'dialogue', text, charName: currentChar, note: null });
+        // 대사/나레이션 칸 자동 연동: "캐릭터: 대사" 형식으로 누적
+        const line = currentChar ? `${currentChar}: ${text}` : text;
+        current.dialogue = current.dialogue ? `${current.dialogue}\n${line}` : line;
         currentChar = ''; currentCharId = null;
       } else if (role === 'parenthetical') {
         if (text) current.annotatedBlocks.push({ blockId: block.id, role: 'parenthetical', text, note: null });
       } else if (role === 'action') {
-        if (text) current.annotatedBlocks.push({ blockId: block.id, role: 'action', text, note: null });
+        if (text) {
+          current.annotatedBlocks.push({ blockId: block.id, role: 'action', text, note: null });
+          // 액션/연출 지시 칸 자동 연동
+          current.action = current.action ? `${current.action}\n${text}` : text;
+        }
       } else if (role === 'transition') {
         if (text) {
           current.transition = text.includes('페이드') ? 'Fade Out' : text.includes('디졸브') ? 'Dissolve' : 'Cut';
