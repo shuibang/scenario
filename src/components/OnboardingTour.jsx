@@ -63,7 +63,7 @@ const STEPS = [
     title: '체크리스트 & 메모',
     desc: (
       <>
-        <Tag color="green">체크리스트 패널</Tag>에 현재 화면 관련 작업 항목과<br/>
+        <Tag>체크리스트 패널</Tag>에 현재 화면 관련 작업 항목과<br/>
         메모가 표시됩니다. 탭을 전환하면 구조 참고 자료도 확인할 수 있습니다.<br/>
         <span style={{ fontSize: 11, color: 'var(--c-text5)' }}>
           모바일 : 화면 하단 탭바 <Tag color="blue">메모</Tag> 버튼
@@ -103,7 +103,8 @@ const PAGE_HINTS = {
     desc: (
       <>
         <Tag>S#</Tag> <Tag>지문</Tag> <Tag>대사</Tag> 버튼으로 블록 유형을 전환하며 작성하세요.<br/>
-        데스크톱 단축키: <Tag color="blue">Ctrl+1</Tag> 씬번호 · <Tag color="blue">Ctrl+2</Tag> 지문 · <Tag color="blue">Ctrl+3</Tag> 대사<br/>
+        단축키: <Tag color="blue">Ctrl+Shift+1</Tag> 씬번호 · <Tag color="blue">Ctrl+Shift+2</Tag> 지문 · <Tag color="blue">Ctrl+Shift+3</Tag> 대사<br/>
+        씬번호 줄에서 <Tag color="blue">Space×2</Tag> → 구분자 자동 삽입<br/>
         <span style={{ fontSize: 11, color: 'var(--c-text5)' }}>
           모바일 : 키보드가 올라오면 화면 하단에 입력 버튼이 나타납니다.
         </span>
@@ -127,8 +128,11 @@ const PAGE_HINTS = {
     title: '씬리스트',
     desc: (
       <>
-        <Tag>씬리스트</Tag>에서 회차별 씬을 한눈에 정리하고 순서를 구성하세요.<br/>
-        씬 설명을 작성하면 대본 작성 시 참고할 수 있습니다.
+        <Tag>씬리스트</Tag>에서 회차별 씬을 표 형태로 한눈에 관리하세요.<br/>
+        장소·세부장소·시간대·내용·등장인물·비고를 정리할 수 있습니다.<br/>
+        <span style={{ fontSize: 11, color: 'var(--c-text5)' }}>
+          대본과 양방향 동기화 — 씬리스트 수정 시 대본 씬번호가 자동으로 업데이트됩니다.
+        </span>
       </>
     ),
     tourId: 'center-panel',
