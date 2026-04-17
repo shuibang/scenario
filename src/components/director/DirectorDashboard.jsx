@@ -64,13 +64,21 @@ const LOCAL_SELECTIONS = { cover: false, synopsis: false, episodes: {}, chars: f
 const RETURN_HASH_KEY = 'drama_pending_return_hash';
 
 // AppContext 없이 독립적으로 동작하는 광고 배너
-const DirectorAdBanner = memo(function DirectorAdBanner({ height = 20 }) {
+const _IS_DEV = import.meta.env.DEV;
+const DirectorAdBanner = memo(function DirectorAdBanner({ height = 20, slot = 'director' }) {
   const ref = useRef(null);
   const pushed = useRef(false);
   useEffect(() => {
-    if (pushed.current || !ref.current) return;
+    if (_IS_DEV || pushed.current || !ref.current) return;
     try { (window.adsbygoogle = window.adsbygoogle || []).push({}); pushed.current = true; } catch {}
   }, []);
+  if (_IS_DEV) {
+    return (
+      <div style={{ height, overflow: 'hidden', background: 'rgba(253,224,71,0.35)', border: '1px dashed #ca8a04', display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box' }}>
+        <span style={{ fontSize: 10, color: '#92400e', fontWeight: 600 }}>AD {slot}</span>
+      </div>
+    );
+  }
   return (
     <div ref={ref} style={{ height, overflow: 'hidden' }}>
       <ins className="adsbygoogle"
@@ -710,7 +718,7 @@ export default function DirectorDashboard({ session, onBack, isGuest = false }) 
           overflow: 'hidden',
           transition: 'width 0.22s cubic-bezier(0.4,0,0.2,1)',
         }}>
-          <div style={{ width: 220, padding: '20px 0', display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <div style={{ width: 220, flex: 1, padding: '20px 0', display: 'flex', flexDirection: 'column', gap: 2 }}>
             <SideSection label="작품" />
             <SideItem icon="📄" label="작품 목록" active={activeMenu === 'projects'} onClick={() => setActiveMenu('projects')} />
             <div style={{ margin: '12px 0 0', height: 1, background: D.border }} />
@@ -718,6 +726,10 @@ export default function DirectorDashboard({ session, onBack, isGuest = false }) 
             <SideItem icon="📝" label="연출노트"   active={activeMenu === 'notes'}      onClick={() => setActiveMenu('notes')} />
             <SideItem icon="📋" label="씬리스트"   active={activeMenu === 'scenelist'}  onClick={() => setActiveMenu('scenelist')} />
             <SideItem icon="🎞" label="스토리보드" active={activeMenu === 'storyboard'} onClick={() => setActiveMenu('storyboard')} />
+          </div>
+          <div style={{ width: 220, padding: '0 12px 12px', display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
+            <DirectorAdBanner height={120} slot="director-sidebar" />
+            <DirectorAdBanner height={120} slot="director-sidebar" />
           </div>
         </aside>
 
@@ -1232,7 +1244,7 @@ function SendButton({ scriptRow, viewing }) {
 
       if (error) throw new Error(error.message);
 
-      const url = `${window.location.origin}${window.location.pathname}#delivery=${data.id}`;
+      const url = `${window.location.origin}/app#delivery=${data.id}`;
       try { await navigator.clipboard.writeText(url); }
       catch {
         const el = document.createElement('input');

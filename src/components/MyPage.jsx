@@ -121,7 +121,7 @@ async function buildLogShareUrl(logs, projects) {
     logs,
   };
   const id = await saveLogPayload(payload);
-  return `${window.location.origin}${window.location.pathname}#log=${id}`;
+  return `${window.location.origin}/app#log=${id}`;
 }
 
 // ─── LogItem ─────────────────────────────────────────────────────────────────

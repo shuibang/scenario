@@ -348,7 +348,7 @@ export async function buildReviewURL(state, selections) {
     selections,
   };
   const id = await saveReviewPayload(payload);
-  return `${window.location.origin}${window.location.pathname}#review=${id}`;
+  return `${window.location.origin}/app#review=${id}`;
 }
 
 // ─── Realtime clock ───────────────────────────────────────────────────────────

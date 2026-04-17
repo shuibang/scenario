@@ -423,7 +423,7 @@ export default function SceneListPage() {
     // URL 인코딩 (크로스 디바이스 공유)
     try {
       const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(shareData))));
-      const url = `${window.location.origin}${window.location.pathname}#sl=${encoded}`;
+      const url = `${window.location.origin}/app#sl=${encoded}`;
       navigator.clipboard.writeText(url).catch(() => {
         const el = document.createElement('input');
         el.value = url; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el);
