@@ -1,10 +1,10 @@
 {
-  "cleanUrls": true,
   "redirects": [
     { "source": "/landing.html",  "destination": "/",          "permanent": true },
     { "source": "/help.html",     "destination": "/help",      "permanent": true },
     { "source": "/notice.html",   "destination": "/notice",    "permanent": true },
     { "source": "/changelog.html","destination": "/changelog", "permanent": true },
+    { "source": "/template.html", "destination": "/template",  "permanent": true },
     { "source": "/devlog-1.html", "destination": "/devlog-1",  "permanent": true },
     { "source": "/devlog-2.html", "destination": "/devlog-2",  "permanent": true },
     { "source": "/devlog-3.html", "destination": "/devlog-3",  "permanent": true }
