@@ -10,9 +10,16 @@
     { "source": "/devlog-3.html", "destination": "/devlog-3",  "permanent": true }
   ],
   "rewrites": [
-    { "source": "/", "destination": "/landing.html" },
-    { "source": "/app", "destination": "/index.html" },
-    { "source": "/app/(.*)", "destination": "/index.html" }
+    { "source": "/",          "destination": "/landing.html"  },
+    { "source": "/help",      "destination": "/help.html"     },
+    { "source": "/notice",    "destination": "/notice.html"   },
+    { "source": "/changelog", "destination": "/changelog.html"},
+    { "source": "/template",  "destination": "/template.html" },
+    { "source": "/devlog-1",  "destination": "/devlog-1.html" },
+    { "source": "/devlog-2",  "destination": "/devlog-2.html" },
+    { "source": "/devlog-3",  "destination": "/devlog-3.html" },
+    { "source": "/app",       "destination": "/index.html"    },
+    { "source": "/app/(.*)",  "destination": "/index.html"    }
   ],
   "headers": [
     {
