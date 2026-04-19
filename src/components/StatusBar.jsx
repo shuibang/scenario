@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../store/AppContext';
 import { getBlockPlainText } from '../utils/findReplace';
+import { getLayoutMetrics } from '../print/LineTokenizer';
 
 function Divider() {
   return (
@@ -8,36 +9,28 @@ function Divider() {
   );
 }
 
-const BLOCK_TYPE_LABEL = {
-  scene_number:  '씬',
-  action:        '지문',
-  dialogue:      '대사',
-  character:     '인물',
-  parenthetical: '괄호',
-};
+function stripHtml(html) {
+  return (html || '').replace(/<[^>]+>/g, '').replace(/&[a-z]+;/gi, ' ');
+}
 
 export default function StatusBar({ hidden }) {
   const { state } = useApp();
-  const { scriptBlocks, activeEpisodeId, scenes } = state;
+  const {
+    scriptBlocks, activeEpisodeId, scenes,
+    activeDoc, activeProjectId, stylePreset,
+    coverDocs, synopsisDocs, characters, episodes,
+  } = state;
 
   const [activeBlockId, setActiveBlockId] = useState(null);
-  const [activeBlockType, setActiveBlockType] = useState(null);
 
-  // 에디터 내 커서 위치를 document.selectionchange로 추적
   useEffect(() => {
     const handler = () => {
       const sel = window.getSelection();
       if (!sel?.rangeCount) return;
       let node = sel.getRangeAt(0).startContainer;
-      // TextNode → Element로 올라가기
       if (node.nodeType !== 1) node = node.parentElement;
-      // [data-block-id] 조상 찾기
       while (node) {
-        if (node.dataset?.blockId) {
-          setActiveBlockId(node.dataset.blockId);
-          setActiveBlockType(node.dataset.blockType || null);
-          return;
-        }
+        if (node.dataset?.blockId) { setActiveBlockId(node.dataset.blockId); return; }
         node = node.parentElement;
       }
     };
@@ -45,43 +38,81 @@ export default function StatusBar({ hidden }) {
     return () => document.removeEventListener('selectionchange', handler);
   }, []);
 
+  const metrics = useMemo(() => getLayoutMetrics(stylePreset), [stylePreset]);
+
   const stats = useMemo(() => {
-    const epBlocks = activeEpisodeId
-      ? scriptBlocks.filter(b => b.episodeId === activeEpisodeId)
-      : scriptBlocks;
+    const lpp = metrics.linesPerPage || 37;
 
-    let charCount = 0;
-    let wordCount = 0;
-    epBlocks.forEach(b => {
-      const text = getBlockPlainText(b);
-      charCount += text.length;
-      if (text.trim()) wordCount += text.trim().split(/\s+/).filter(Boolean).length;
-    });
+    // ── 회차 대본
+    if (activeDoc === 'script' && activeEpisodeId) {
+      const epBlocks = scriptBlocks.filter(b => b.episodeId === activeEpisodeId);
+      let charCount = 0;
+      epBlocks.forEach(b => { charCount += getBlockPlainText(b).length; });
 
-    // 현재 블록 인덱스 (씬 순번용)
-    const activeIdx = activeBlockId
-      ? epBlocks.findIndex(b => b.id === activeBlockId)
-      : -1;
+      const activeIdx = activeBlockId ? epBlocks.findIndex(b => b.id === activeBlockId) : -1;
+      const totalLines = epBlocks.length;
+      const currentLine = activeIdx >= 0 ? activeIdx + 1 : totalLines;
 
-    // 현재 씬 순번: activeIdx까지 scene_number 블록 수
-    let currentSceneNum = 0;
-    const upTo = activeIdx >= 0 ? activeIdx : epBlocks.length - 1;
-    for (let i = 0; i <= upTo; i++) {
-      if (epBlocks[i]?.type === 'scene_number') currentSceneNum++;
+      const totalScenes = scenes.filter(s => s.episodeId === activeEpisodeId).length;
+      let currentSceneNum = 0;
+      const upTo = activeIdx >= 0 ? activeIdx : epBlocks.length - 1;
+      for (let i = 0; i <= upTo; i++) {
+        if (epBlocks[i]?.type === 'scene_number') currentSceneNum++;
+      }
+
+      const totalPages = Math.max(1, Math.ceil(totalLines / lpp));
+      const currentPage = Math.max(1, Math.ceil(currentLine / lpp));
+
+      return {
+        left: [
+          `페이지 ${currentPage}/${totalPages}`,
+          `씬 ${currentSceneNum || 1}/${totalScenes || 1}`,
+          `줄 ${currentLine}/${totalLines}`,
+        ],
+        right: `글자 ${charCount.toLocaleString()}`,
+      };
     }
 
-    const totalLines = epBlocks.length;
-    const currentLine = activeIdx >= 0 ? activeIdx + 1 : totalLines;
-    const totalScenes = activeEpisodeId
-      ? scenes.filter(s => s.episodeId === activeEpisodeId).length
-      : scenes.length;
+    // ── 표지
+    if (activeDoc === 'cover') {
+      const coverDoc = coverDocs.find(d => d.projectId === activeProjectId);
+      if (!coverDoc) return null;
+      const allFields = [...(coverDoc.fields || []), ...(coverDoc.customFields || [])].filter(f => f.value);
+      const charCount = allFields.reduce((s, f) => s + stripHtml(f.value).length, 0);
+      const lineCount = allFields.length;
+      return {
+        left: [`페이지 1/1`, `줄 ${lineCount}`],
+        right: `글자 ${charCount.toLocaleString()}`,
+      };
+    }
 
-    return { currentLine, totalLines, currentSceneNum, totalScenes, wordCount, charCount };
-  }, [scriptBlocks, activeEpisodeId, activeBlockId, scenes]);
+    // ── 시놉시스
+    if (activeDoc === 'synopsis') {
+      const synDoc = synopsisDocs.find(d => d.projectId === activeProjectId);
+      const text = synDoc
+        ? [synDoc.genre, synDoc.theme, synDoc.intent, synDoc.story || synDoc.content]
+            .filter(Boolean).map(stripHtml).join('\n')
+        : '';
+      const charCount = text.replace(/\s/g, '').length;
+      const lineCount = text.split('\n').filter(l => l.trim()).length;
+      const totalPages = Math.max(1, Math.ceil(lineCount / lpp));
+      return {
+        left: [`페이지 1/${totalPages}`, `줄 ${lineCount}`],
+        right: `글자 ${charCount.toLocaleString()}`,
+      };
+    }
 
-  if (hidden) return null;
+    // ── 등장인물: 숨김
+    if (activeDoc === 'characters') {
+      return null;
+    }
 
-  const blockLabel = BLOCK_TYPE_LABEL[activeBlockType] || null;
+    // ── 그 외 (resources 등)
+    return null;
+  }, [activeDoc, activeEpisodeId, activeBlockId, scriptBlocks, scenes, stylePreset,
+      coverDocs, synopsisDocs, characters, activeProjectId, metrics]);
+
+  if (hidden || !stats) return null;
 
   return (
     <div
@@ -101,24 +132,16 @@ export default function StatusBar({ hidden }) {
         letterSpacing: '-0.01em',
       }}
     >
-      {/* 왼쪽: 위치 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span>줄 {stats.currentLine}/{stats.totalLines}</span>
-        <Divider />
-        <span>씬 {stats.currentSceneNum || 1}{stats.totalScenes > 0 ? `/${stats.totalScenes}` : ''}</span>
-        {blockLabel && (
-          <>
-            <Divider />
-            <span>{blockLabel}</span>
-          </>
-        )}
+        {stats.left.map((item, i) => (
+          <React.Fragment key={i}>
+            {i > 0 && <Divider />}
+            <span>{item}</span>
+          </React.Fragment>
+        ))}
       </div>
-
-      {/* 오른쪽: 집계 */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span>단어 {stats.wordCount.toLocaleString()}</span>
-        <Divider />
-        <span>문자 {stats.charCount.toLocaleString()}</span>
+      <div>
+        <span>{stats.right}</span>
       </div>
     </div>
   );

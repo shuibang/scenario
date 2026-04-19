@@ -71,6 +71,7 @@ function normalizeBlock(block, characters) {
     charName,
     sceneId:    block.sceneId,
     refSceneId: block.refSceneId || '',
+    alignment:  block.alignment || undefined,
   };
 }
 
@@ -192,6 +193,11 @@ export function buildPrintModel(appState, selections, preset) {
       });
     });
   }
+
+  // 2회 이상일 때만 회차 제목 표시
+  const epSections = sections.filter(s => s.type === 'episode');
+  const showEpisodeTitle = epSections.length >= 2;
+  epSections.forEach(s => { s.showEpisodeTitle = showEpisodeTitle; });
 
   return {
     sections,

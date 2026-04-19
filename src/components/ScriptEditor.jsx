@@ -3,6 +3,7 @@ import React, {
   forwardRef, useImperativeHandle,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { AlignLeft, AlignCenter, AlignRight, AlignJustify } from 'lucide-react';
 import DOMPurify from 'dompurify';
 import { useApp } from '../store/AppContext';
 import { genId, now } from '../store/db';
@@ -17,6 +18,7 @@ import { ALL_EMOTIONS as EMOTION_ALL, getRecommendedTag } from '../data/emotionT
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const CHAR_SUGGEST_KEY = 'drama_charSuggestInAction';
+const isMac = /Mac/.test(navigator.platform);
 
 const DEFAULT_SYMBOLS = ['(E)', '(F)', 'Flashback', 'Insert', 'Ins.', 'Subtitle)', 'S.T.', '(N)', 'N.A.'];
 
@@ -441,6 +443,112 @@ function PageCounter({ blocks, stylePreset, scrollRef }) {
   );
 }
 
+// ─── CustomScrollbar ──────────────────────────────────────────────────────────
+function CustomScrollbar({ scrollRef }) {
+  const trackRef = useRef(null);
+  const thumbRef = useRef(null);
+  const [thumb, setThumb] = useState({ top: 0, height: 0, visible: false });
+  const draggingRef = useRef(false);
+
+  const update = useCallback(() => {
+    const el = scrollRef?.current;
+    if (!el) return;
+    const { scrollTop, scrollHeight, clientHeight } = el;
+    if (scrollHeight <= clientHeight + 2) { setThumb(s => ({ ...s, visible: false })); return; }
+    const thumbH = Math.max(36, (clientHeight / scrollHeight) * clientHeight);
+    const thumbTop = (scrollTop / (scrollHeight - clientHeight)) * (clientHeight - thumbH);
+    setThumb({ top: thumbTop, height: thumbH, visible: true });
+  }, [scrollRef]);
+
+  useEffect(() => {
+    const el = scrollRef?.current;
+    if (!el) return;
+    el.addEventListener('scroll', update, { passive: true });
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    update();
+    return () => { el.removeEventListener('scroll', update); ro.disconnect(); };
+  }, [scrollRef, update]);
+
+  // 공통 드래그 시작 — 트랙 클릭과 썸 드래그 모두 이 함수로 처리
+  const startDrag = (e, initialScrollTop) => {
+    e.preventDefault();
+    const el = scrollRef?.current;
+    if (!el) return;
+    draggingRef.current = true;
+    if (thumbRef.current) {
+      thumbRef.current.style.background = 'rgba(128,128,128,0.85)';
+      thumbRef.current.style.cursor = 'grabbing';
+    }
+    document.body.style.userSelect = 'none';
+
+    const startY = e.clientY;
+    const startTop = initialScrollTop ?? el.scrollTop;
+    const trackH = el.clientHeight;
+    const thumbH = thumbRef.current?.offsetHeight || 36;
+    const ratio = (el.scrollHeight - el.clientHeight) / Math.max(1, trackH - thumbH);
+
+    const onMove = (ev) => { el.scrollTop = startTop + (ev.clientY - startY) * ratio; };
+    const onUp = () => {
+      draggingRef.current = false;
+      document.body.style.userSelect = '';
+      if (thumbRef.current) {
+        thumbRef.current.style.background = 'rgba(128,128,128,0.4)';
+        thumbRef.current.style.cursor = 'grab';
+      }
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  };
+
+  const handleTrackDown = (e) => {
+    if (e.target === thumbRef.current) return;
+    const el = scrollRef?.current;
+    if (!el) return;
+    // 클릭 위치에 썸 중심 정렬 후 드래그 시작
+    const { top } = trackRef.current.getBoundingClientRect();
+    const thumbH = Math.max(36, (el.clientHeight / el.scrollHeight) * el.clientHeight);
+    const trackUsable = el.clientHeight - thumbH;
+    const ratio = Math.max(0, Math.min(1, (e.clientY - top - thumbH / 2) / trackUsable));
+    const newScrollTop = ratio * (el.scrollHeight - el.clientHeight);
+    el.scrollTop = newScrollTop;
+    startDrag(e, newScrollTop);
+  };
+
+  const handleThumbDown = (e) => {
+    e.stopPropagation();
+    startDrag(e);
+  };
+
+  if (!thumb.visible) return null;
+  return (
+    <div
+      ref={trackRef}
+      onMouseDown={handleTrackDown}
+      style={{
+        position: 'absolute', right: 2, top: 0, bottom: 0,
+        width: 10, zIndex: 20, cursor: 'pointer',
+      }}
+    >
+      <div
+        ref={thumbRef}
+        onMouseDown={handleThumbDown}
+        style={{
+          position: 'absolute', right: 0, width: 6, borderRadius: 3,
+          background: 'rgba(128,128,128,0.4)',
+          top: thumb.top, height: thumb.height,
+          cursor: 'grab',
+          userSelect: 'none',
+        }}
+        onMouseEnter={e => { if (!draggingRef.current) e.currentTarget.style.background = 'rgba(128,128,128,0.7)'; }}
+        onMouseLeave={e => { if (!draggingRef.current) e.currentTarget.style.background = 'rgba(128,128,128,0.4)'; }}
+      />
+    </div>
+  );
+}
+
 // ─── syncLabels ───────────────────────────────────────────────────────────────
 function syncLabels(blocks) {
   let seq = 0;
@@ -521,23 +629,25 @@ function blocksToHtml(blocks) {
     const dcRaw = b.sceneRefs?.length ? buildRichHtml(displayContent, b.sceneRefs) : isRichBlock ? displayContent : esc(displayContent);
     // 빈 블록에 <br> 삽입 — 브라우저가 화살표 키 caret stop으로 인식하도록
     const dc = dcRaw || '<br>';
+    const alignAttr  = b.alignment ? ` data-alignment="${esc(b.alignment)}"` : '';
+    const alignStyle = b.alignment ? ` style="text-align:${b.alignment}"` : '';
     switch (b.type) {
       case 'scene_number': {
         const label = esc(b.label || '');
         const sceneId = esc(b.sceneId || '');
-        return `<div data-block-id="${id}" data-block-type="scene_number" data-label="${label}" data-scene-id="${sceneId}" class="ce-block ce-scene">${dc}</div>`;
+        return `<div data-block-id="${id}" data-block-type="scene_number" data-label="${label}" data-scene-id="${sceneId}"${alignAttr} class="ce-block ce-scene"${alignStyle}>${dc}</div>`;
       }
       case 'dialogue': {
         const cn = esc(b.characterName || b.charName || '');
         const ci = esc(b.characterId || '');
-        return `<div data-block-id="${id}" data-block-type="dialogue" data-char-name="${cn}" data-char-id="${ci}" class="ce-block ce-dialogue">${dc}</div>`;
+        return `<div data-block-id="${id}" data-block-type="dialogue" data-char-name="${cn}" data-char-id="${ci}"${alignAttr} class="ce-block ce-dialogue"${alignStyle}>${dc}</div>`;
       }
       case 'scene_ref': {
         const refId = esc(b.refSceneId || '');
-        return `<div data-block-id="${id}" data-block-type="scene_ref" data-ref-scene-id="${refId}" class="ce-block ce-scene_ref">${dc}</div>`;
+        return `<div data-block-id="${id}" data-block-type="scene_ref" data-ref-scene-id="${refId}"${alignAttr} class="ce-block ce-scene_ref"${alignStyle}>${dc}</div>`;
       }
       default:
-        return `<div data-block-id="${id}" data-block-type="${b.type}" class="ce-block ce-${b.type}">${dc}</div>`;
+        return `<div data-block-id="${id}" data-block-type="${b.type}"${alignAttr} class="ce-block ce-${b.type}"${alignStyle}>${dc}</div>`;
     }
   }).join('');
 }
@@ -550,6 +660,20 @@ function findBlockEl(node, surface) {
     el = el.parentElement;
   }
   return null;
+}
+
+function getSelectedBlockIds(surface) {
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount || !surface) return [];
+  const range = sel.getRangeAt(0);
+  if (range.collapsed) {
+    const el = findBlockEl(range.startContainer, surface);
+    return el ? [el.dataset.blockId] : [];
+  }
+  return [...surface.querySelectorAll('[data-block-id]')]
+    .filter(el => range.intersectsNode(el))
+    .map(el => el.dataset.blockId)
+    .filter(Boolean);
 }
 
 function blockText(el) {
@@ -687,6 +811,7 @@ function parseSurface(surface, metaRef, epId, projId) {
       rawText, // internal cache for change detection
       sceneRefs,
       emotionTag: prev.emotionTag || null,
+      alignment: div.dataset.alignment || prev.alignment || undefined,
     };
     if (type === 'scene_number') {
       // rawText는 DOM 표시용(라벨 제거된 값)이므로 parsed는 순수 내용
@@ -1521,7 +1646,7 @@ const EditorSurface = forwardRef(function EditorSurface({
     const sel = window.getSelection();
     if (sel?.rangeCount) {
       const blockEl = findBlockEl(sel.getRangeAt(0).startContainer, el);
-      onSelectionChange?.(blockEl?.dataset.blockType || null);
+      onSelectionChange?.(blockEl?.dataset.blockType || null, blockEl?.dataset.alignment || null);
     }
   }, [onBlocksChange, syncMeta, onSelectionChange]);
 
@@ -1804,8 +1929,9 @@ const EditorSurface = forwardRef(function EditorSurface({
       }
     }
 
-    // Ctrl+Shift+1/2/3/4 는 window 레벨 핸들러에서 처리 (포커스 무관하게 동작)
-    if (ctrl && e.shiftKey && ['Digit1','Digit2','Digit3','Digit4'].includes(e.code)) {
+    // Mac: Cmd+Option+1~7 / Win: Ctrl+Shift+1~7 — window 레벨에서 처리
+    const _blockModifier = isMac ? (ctrl && e.altKey && !e.shiftKey) : (ctrl && e.shiftKey && !e.altKey);
+    if (_blockModifier && ['Digit1','Digit2','Digit3','Digit4','Digit5','Digit6','Digit7'].includes(e.code)) {
       e.preventDefault();
       return;
     }
@@ -2128,6 +2254,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   const sceneItemsRef = useRef([]); // render마다 갱신 — keydown 핸들러에서 참조
   const [pendingBlockType, setPendingBlockType] = useState(null); // for mobile / no-focus toolbar clicks
   const [activeBlockType, setActiveBlockType] = useState(null);  // 현재 커서의 블록 타입 (툴바 하이라이트)
+  const [activeAlignment, setActiveAlignment] = useState(null);  // 현재 커서 블록의 정렬 (툴바 하이라이트)
   const [charCheckPicker, setCharCheckPicker] = useState(null); // { sceneId, top, left, mobile }
   const [symbolPickerCloseToken, setSymbolPickerCloseToken] = useState(0);
   const [slashPalette, setSlashPalette] = useState(null); // null | { blockEl, query, x, y, selectedIdx }
@@ -2239,6 +2366,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   scenesRef.current = scenes;
 
   const episode = state.episodes.find(e => e.id === activeEpisodeId);
+
   const projectChars = useMemo(
     () => characters.filter(c => c.projectId === activeProjectId),
     [characters, activeProjectId],
@@ -2248,6 +2376,38 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     () => scenes.filter(s => s.episodeId === activeEpisodeId).sort((a, b) => a.sceneSeq - b.sceneSeq),
     [scenes, activeEpisodeId],
   );
+
+  const [mobileCurrentPage, setMobileCurrentPage] = useState(1);
+  const mobileStats = useMemo(() => {
+    if (!isMobile) return null;
+    let charCount = 0;
+    blocks.forEach(b => {
+      charCount += (b.content || '').replace(/<[^>]+>/g, '').length;
+    });
+    const totalScenes = episodeScenes.length;
+    const lpp = getLayoutMetrics(stylePreset).linesPerPage || 37;
+    const totalPages = Math.max(1, Math.ceil(blocks.length / lpp));
+    const epLabel = episode
+      ? `${episode.number}회${episode.title ? ' ' + episode.title : ''}`
+      : '';
+    return { epLabel, totalPages, totalScenes, charCount };
+  }, [isMobile, blocks, episodeScenes, stylePreset, episode]);
+
+  useEffect(() => {
+    if (!isMobile || !mobileStats) return;
+    const el = editorScrollRef.current;
+    if (!el) return;
+    const update = () => {
+      const { scrollTop, scrollHeight, clientHeight } = el;
+      const ratio = scrollHeight > clientHeight
+        ? scrollTop / (scrollHeight - clientHeight)
+        : 0;
+      setMobileCurrentPage(Math.max(1, Math.ceil((ratio * mobileStats.totalPages) || 1)));
+    };
+    el.addEventListener('scroll', update, { passive: true });
+    update();
+    return () => el.removeEventListener('scroll', update);
+  }, [isMobile, mobileStats, editorScrollRef]);
 
   // ── Load blocks when episode changes
   useEffect(() => {
@@ -2293,7 +2453,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeEpisodeId, initialized]);
 
-  // ── External block injection (e.g. IMPORT_TREATMENT_TO_SCRIPT)
+  // ── External block injection (e.g. IMPORT_TREATMENT_TO_SCRIPT, HWPX/DOCX import)
   useEffect(() => {
     if (!pendingScriptReload || pendingScriptReload !== activeEpisodeId) return;
     const epBlocksRaw = scriptBlocks.filter(b => b.episodeId === activeEpisodeId);
@@ -2357,7 +2517,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
       });
       dispatch({ type: 'SET_BLOCKS', episodeId: activeEpisodeId, payload: currentBlocks });
       if (updatedScenes.length > 0) {
-        dispatch({ type: 'SYNC_SCENES', episodeId: activeEpisodeId, payload: updatedScenes });
+        dispatch({ type: 'SYNC_SCENES', episodeId: activeEpisodeId, payload: updatedScenes, removeOrphans: true });
       }
       dispatch({ type: 'SET_SAVE_STATUS', payload: 'saved' });
       lastSavedBlocks.current = serialized;
@@ -2396,7 +2556,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
       });
       dispatch({ type: 'SET_BLOCKS', episodeId: epId, payload: currentBlocks });
       if (updatedScenes.length > 0) {
-        dispatch({ type: 'SYNC_SCENES', episodeId: epId, payload: updatedScenes });
+        dispatch({ type: 'SYNC_SCENES', episodeId: epId, payload: updatedScenes, removeOrphans: true });
       }
       dispatch({ type: 'SET_SAVE_STATUS', payload: 'saved' });
       lastSavedBlocks.current = serialized;
@@ -2559,6 +2719,20 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
       return updates.type === 'scene_number' || prev.find(b => b.id === id)?.type === 'scene_number'
         ? syncLabels(next) : next;
     });
+  }, []);
+
+  const applyAlignment = useCallback((alignment) => {
+    const surface = document.querySelector('[data-editor-surface]');
+    const ids = getSelectedBlockIds(surface);
+    if (!ids.length) return;
+    ids.forEach(id => {
+      const el = surface.querySelector(`[data-block-id="${id}"]`);
+      if (!el) return;
+      el.dataset.alignment = alignment;
+      el.style.textAlign = alignment;
+    });
+    setBlocks(prev => prev.map(b => ids.includes(b.id) ? { ...b, alignment, updatedAt: now() } : b));
+    setActiveAlignment(alignment);
   }, []);
 
   // ── Badge click: show char picker
@@ -2811,7 +2985,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
       };
     });
     dispatch({ type: 'SET_BLOCKS', episodeId: activeEpisodeId, payload: blocks });
-    dispatch({ type: 'SYNC_SCENES', episodeId: activeEpisodeId, payload: updatedScenes });
+    dispatch({ type: 'SYNC_SCENES', episodeId: activeEpisodeId, payload: updatedScenes, removeOrphans: true });
     dispatch({ type: 'SET_SAVE_STATUS', payload: 'saved' });
     lastSavedBlocks.current = JSON.stringify(blocks);
   }, [activeEpisodeId, activeProjectId, blocks, scenes, dispatch]);
@@ -2975,11 +3149,14 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     setSlashSymbolPos({ top: rect.bottom + 4, left: rect.left });
   }, []);
 
-  // ── Ctrl+Shift+1/2/3/4 단축키 + 상단바 저장 버튼 이벤트
+  // ── Mac: Cmd+Option+1~7 / Win: Ctrl+Shift+1~7 단축키 + 상단바 저장 버튼 이벤트
   useEffect(() => {
     const blockTypeMap = { 'Digit1': 'scene_number', 'Digit2': 'action', 'Digit3': 'dialogue' };
     const onKey = (e) => {
-      if (!(e.ctrlKey || e.metaKey) || !e.shiftKey) return;
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) return;
+      const modifierMatch = isMac ? (e.altKey && !e.shiftKey) : (e.shiftKey && !e.altKey);
+      if (!modifierMatch) return;
       const type = blockTypeMap[e.code];
       if (type) {
         e.preventDefault();
@@ -3167,7 +3344,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     const nDialogue  = newBlocks.filter(b => b.type === 'dialogue').length;
     const nAction    = newBlocks.filter(b => b.type === 'action').length;
     const nUnknown   = nAction; // 지문으로 분류된 것 중 인식 불확실
-    setPasteToast(`붙여넣기 완료 — 씬 ${nScenes}, 대사 ${nDialogue}, 지문 ${nAction}${nUnknown ? ' (지문은 Ctrl+Shift+1/2/3으로 형식 변경)' : ''}`);
+    setPasteToast(`붙여넣기 완료 — 씬 ${nScenes}, 대사 ${nDialogue}, 지문 ${nAction}${nUnknown ? ` (지문은 ${isMac ? '⌘⌥1/2/3' : 'Ctrl+Shift+1/2/3'}으로 형식 변경)` : ''}`);
     setTimeout(() => setPasteToast(null), 4000);
   }, [activeEpisodeId, activeProjectId, projectChars, setBlocks]);
 
@@ -3232,10 +3409,11 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     };
   }, []);
 
+  const _sk = (n) => isMac ? `⌘⌥${n}` : `Ctrl+Shift+${n}`;
   const BLOCK_TYPE_BTNS = [
-    { type: 'scene_number', label: getScenePrefix().trim() || 'S#', title: '씬번호 (Ctrl+Shift+1)' },
-    { type: 'action',       label: '지문', title: '지문 (Ctrl+Shift+2)' },
-    { type: 'dialogue',     label: '대사', title: '대사 (Ctrl+Shift+3)' },
+    { type: 'scene_number', label: getScenePrefix().trim() || 'S#', title: `씬번호 (${_sk(1)})` },
+    { type: 'action',       label: '지문', title: `지문 (${_sk(2)})` },
+    { type: 'dialogue',     label: '대사', title: `대사 (${_sk(3)})` },
   ];
   const BTN_W = 40; // px — 상단 툴바 버튼 통일 너비
 
@@ -3277,7 +3455,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
             })}
             <button
               ref={charCheckBtnRef}
-              title="등장 — 현재 씬 등장인물 추가 (Ctrl+Shift+4)"
+              title={`등장 — 현재 씬 등장인물 추가 (${_sk(4)})`}
               onMouseDown={e => { e.preventDefault(); handleCharCheck(); }}
               style={{
                 flexShrink: 0, width: BTN_W, textAlign: 'center',
@@ -3288,7 +3466,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
               }}
             >등장</button>
             <button
-              title="연결 — 현재 위치에 다른 씬 참조 삽입 (Ctrl+Shift+5)"
+              title={`연결 — 현재 위치에 다른 씬 참조 삽입 (${_sk(5)})`}
               onMouseDown={e => {
                 e.preventDefault();
                 setCharCheckPicker(null);
@@ -3327,7 +3505,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
             />
             <button
               onMouseDown={e => { e.preventDefault(); openEmotionPickerOnCursor(); }}
-              title="태그 (Ctrl+Shift+7)"
+              title={`태그 (${_sk(7)})`}
               style={{
                 flexShrink: 0, width: BTN_W, textAlign: 'center',
                 fontSize: 'clamp(10px, 2.8vw, 13px)', color: 'var(--c-text4)',
@@ -3361,41 +3539,16 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
         </div>
       )}
 
-      {/* Toolbar — 2행: 회차 정보 + 페이지수 + 저장됨 (항상 표시) */}
-      <div className="px-4 py-1 flex items-center gap-2 text-xs shrink-0" style={{ borderBottom: '1px solid var(--c-border2)' }}>
-        {/* 왼쪽: 회차·제목·쪽수·저장됨 */}
-        <span style={{ color: 'var(--c-text3)', flexShrink: 0 }}>{episode?.number}회 {episode?.title || ''}</span>
-        {brokenSceneRefs.length > 0 && (
+      {/* S# 참조 끊김 알림 — 있을 때만 표시 */}
+      {brokenSceneRefs.length > 0 && (
+        <div className="px-3 py-1 shrink-0" style={{ borderBottom: '1px solid var(--c-border2)' }}>
           <button
             onClick={() => { setReconnectIdx(0); setReconnectTarget(brokenSceneRefs[0]); }}
             className="text-xs px-1.5 py-0.5 rounded"
             style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', cursor: 'pointer' }}
           >⚠ S# 참조 {brokenSceneRefs.length}개 끊김</button>
-        )}
-        <PageCounter blocks={blocks} stylePreset={stylePreset} scrollRef={editorScrollRef} />
-        <span style={{ color: 'var(--c-border3)' }}>● 저장됨</span>
-        {/* 오른쪽: 집중 버튼 — 모바일 2행 */}
-        {isMobile && setFocusMode && (
-          <button
-            title="집중 작업 모드"
-            onMouseDown={e => {
-              e.preventDefault();
-              const entering = !focusMode;
-              setFocusMode(entering);
-              if (entering) {
-                document.documentElement.requestFullscreen?.().catch(() => {});
-              } else if (document.fullscreenElement) {
-                document.exitFullscreen?.().catch(() => {});
-              }
-            }}
-            style={{
-              marginLeft: 'auto', flexShrink: 0, padding: '3px 8px', borderRadius: 6, fontSize: 11,
-              border: '1px solid var(--c-border3)', background: 'transparent',
-              color: 'var(--c-text5)', cursor: 'pointer',
-            }}
-          >집중</button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Reconnect panel */}
       {reconnectTarget && (
@@ -3448,10 +3601,44 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
         </div>
       )}
 
+      {/* 모바일 상단 정보 바 */}
+      {isMobile && mobileStats && (
+        <div
+          className="no-print select-none shrink-0"
+          style={{
+            borderBottom: '1px solid var(--c-border2)',
+            background: 'var(--c-panel)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '0 12px',
+            height: 24,
+            fontSize: 11,
+            color: 'var(--c-text5)',
+            fontVariantNumeric: 'tabular-nums',
+            letterSpacing: '-0.01em',
+            overflow: 'hidden',
+          }}
+        >
+          {mobileStats.epLabel && (
+            <span style={{ fontWeight: 600, color: 'var(--c-text3)', flexShrink: 0 }}>
+              {mobileStats.epLabel}
+            </span>
+          )}
+          {mobileStats.epLabel && <span style={{ color: 'var(--c-border3)' }}>·</span>}
+          <span>{mobileCurrentPage}/{mobileStats.totalPages}p</span>
+          <span style={{ color: 'var(--c-border3)' }}>·</span>
+          <span>씬 {mobileStats.totalScenes}</span>
+          <span style={{ color: 'var(--c-border3)' }}>·</span>
+          <span>글자 {mobileStats.charCount.toLocaleString()}</span>
+        </div>
+      )}
+
       {/* Editor */}
+      <div className="flex-1 min-h-0 relative">
       <div
         ref={editorScrollRef}
-        className="flex-1 min-h-0 overflow-y-auto relative"
+        className="absolute inset-0 overflow-y-auto ce-editor-scroll"
         style={{ overflowX: 'hidden' }}
         onClick={(e) => {
           const inSurface = !!e.target.closest('[data-editor-surface]');
@@ -3509,7 +3696,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
             onBlocksChange={setBlocks}
             onBadgeClick={handleBadgeClick}
             onCharSuggest={handleCharSuggest}
-            onSelectionChange={setActiveBlockType}
+            onSelectionChange={(blockType, alignment) => { setActiveBlockType(blockType); setActiveAlignment(alignment || null); }}
             dialogueGap={dialogueGap}
             fontFamily={editorFontFamily}
             fontSize={editorFontSize}
@@ -3568,6 +3755,8 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
             </div>
           );
         })()}
+      </div>
+      <CustomScrollbar scrollRef={editorScrollRef} />
       </div>
 
       {/* Slash Command Palette */}

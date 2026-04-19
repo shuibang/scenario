@@ -190,8 +190,8 @@ function xmlContentHpf(title) {
 function xmlHeader(fontName, fallbackFontName, fontSizePt, dialogueTabHwp) {
   // HWPX height unit = 1/100 pt
   const normalH  = Math.round(fontSizePt * 100);
-  const titleH   = Math.round(fontSizePt * 140);
-  const headingH = Math.round(fontSizePt * 110);
+  const titleH   = normalH;
+  const headingH = normalH;
 
   const fontLangs = ['HANGUL','LATIN','HANJA','JAPANESE','OTHER','SYMBOL','USER'];
 
@@ -285,7 +285,7 @@ ${charPr(6, normalH,  '\n        <hh:underline type="BOTTOM" shape="SOLID" color
         <hh:tabItem pos="${dialogueTabHwp}" type="LEFT" leader="NONE" unit="HWPUNIT"/>
       </hh:tabPr>
     </hh:tabProperties>
-    <hh:paraProperties itemCnt="8">
+    <hh:paraProperties itemCnt="10">
 ${paraPr(0, 'JUSTIFY', 0,   0,   0)}
 ${paraPr(1, 'CENTER',  300, 100, 0)}
 ${paraPr(2, 'JUSTIFY', 0,   0,   0)}
@@ -294,6 +294,8 @@ ${paraPr(4, 'JUSTIFY', 0,   0,   0, 2268)}
 ${paraPr(5, 'JUSTIFY', 0,   0,   0, dialogueTabHwp)}
 ${paraPr(6, 'RIGHT',   0,   0,   0)}
 ${paraPr(7, 'JUSTIFY', 0,   0,   0, 0, 0, 1)}
+${paraPr(8, 'LEFT',    0,   0,   0)}
+${paraPr(9, 'CENTER',  0,   0,   0)}
     </hh:paraProperties>
     <hh:styles itemCnt="4">
       <hh:style id="0" type="PARA" name="바탕글" engName="Normal"
@@ -452,7 +454,10 @@ function xmlSection(printModel, margins) {
         break;
       }
       case 'episode': {
-        head(`${sec.episodeNumber}회${sec.episodeTitle ? ' ' + sec.episodeTitle : ''}`);
+        if (sec.showEpisodeTitle) {
+          head(`${sec.episodeNumber}회${sec.episodeTitle ? ' ' + sec.episodeTitle : ''}`);
+          empty();
+        }
         const CONTENT_TYPES = new Set(['action', 'dialogue', 'parenthetical']);
         let prevBlock = null;
         for (const block of sec.blocks) {
@@ -461,20 +466,22 @@ function xmlSection(printModel, margins) {
               && !(CONTENT_TYPES.has(prevBlock.type) && CONTENT_TYPES.has(block.type))) {
             empty();
           }
+          // alignment → paraPrIDRef: left=8, center=9, right=6, justify=0 (default)
+          const alignParId = { left: 8, center: 9, right: 6, justify: 0 }[block.alignment] ?? null;
           switch (block.type) {
             case 'scene_number':
-              head(`${block.label || ''} ${block.content || ''}`.trim());
+              paras.push(para(`${block.label || ''} ${block.content || ''}`.trim(), { cid: 2, parid: alignParId ?? 2, sid: 2 }));
               break;
             case 'action':
               splitOnBr(block.content || '').forEach(l =>
-                paras.push(para(l, { cid: 0, parid: 4, html: true }))
+                paras.push(para(l, { cid: 0, parid: alignParId ?? 4, html: true }))
               );
               break;
             case 'dialogue': {
               const speechLines = splitOnBr(block.content || '');
               dialogue(block.charName, speechLines[0] ?? '');
               for (let i = 1; i < speechLines.length; i++) {
-                paras.push(para(speechLines[i], { cid: 0, parid: 5, html: true }));
+                paras.push(para(speechLines[i], { cid: 0, parid: alignParId ?? 5, html: true }));
               }
               break;
             }
@@ -485,12 +492,12 @@ function xmlSection(printModel, margins) {
               break;
             case 'transition':
               splitOnBr(block.content || '').forEach(l => {
-                if (l !== '') transition(l); else empty();
+                if (l !== '') paras.push(para(l, { cid: 0, parid: alignParId ?? 6 })); else empty();
               });
               break;
             default:
               splitOnBr(block.content || '').forEach(l => {
-                if (l !== '') normal(l); else empty();
+                if (l !== '') paras.push(para(l, { cid: 0, parid: alignParId ?? 0 })); else empty();
               });
           }
           prevBlock = block;
@@ -541,20 +548,24 @@ ${paras.join('\n')}
  * buildHwpx(appState, selections) → Promise<Blob>
  * Returns a Blob with MIME type application/hwp+zip.
  */
-// CSS 폰트 패밀리명 → HWP가 인식하는 실제 폰트 face 이름 매핑
-// (HWP는 TTF 내부 name 테이블의 영문 패밀리명을 기준으로 인식)
+// CSS 폰트 패밀리명 → HWP 서체 face 이름 매핑
+// HWP는 font face 속성에 한글 서체명을 기준으로 인식
+// '함초롱바탕'(롱) 키는 구버전 저장 데이터 하위호환을 위해 유지
 const CSS_TO_HWPX_FONT = {
-  '함초롱바탕':    'HCRBatang',
-  'HCR Batang':   'HCRBatang',
-  'HCRBatang':    'HCRBatang',
-  '함초롱돋움':    'HCRDotum',
-  'HCR Dotum':    'HCRDotum',
+  '함초롬바탕':    '함초롬바탕',
+  '함초롱바탕':    '함초롬바탕',  // 구버전 오기 호환
+  'HCR Batang':   '함초롬바탕',
+  'HCRBatang':    '함초롬바탕',
+  '함초롬돋움':    '함초롬돋움',
+  '함초롱돋움':    '함초롬돋움',  // 구버전 오기 호환
+  'HCR Dotum':    '함초롬돋움',
+  'HCRDotum':     '함초롬돋움',
   '맑은 고딕':     '맑은 고딕',
   'Malgun Gothic': '맑은 고딕',
 };
 
 function toHwpxFontName(cssFontFamily) {
-  return CSS_TO_HWPX_FONT[cssFontFamily] ?? cssFontFamily ?? 'HCRBatang';
+  return CSS_TO_HWPX_FONT[cssFontFamily] ?? '함초롬바탕';
 }
 
 export async function buildHwpx(appState, selections) {

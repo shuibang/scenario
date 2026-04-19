@@ -104,8 +104,11 @@ function renderEpisode(section, dialogueGap, isFirst) {
     }
   }).filter(Boolean).join('\n');
 
+  const titleHtml = section.showEpisodeTitle
+    ? `<div class="ep-title">${esc(epLabel)}</div>\n  <div class="blank-line">&nbsp;</div>`
+    : '';
   return `<div class="${breakClass.trim() || 'block'}">
-  <div class="ep-title">${esc(epLabel)}</div>
+  ${titleHtml}
   ${blocksHtml}
 </div>`;
 }

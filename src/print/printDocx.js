@@ -118,12 +118,15 @@ function para(text, dp, opts = {}) {
   const children = opts.html
     ? htmlToRuns(text, dp, { bold: opts.bold || false, italics: opts.italic || false })
     : [baseRun(text, { bold: opts.bold || false, italics: opts.italic || false }, dp)];
+  const alignMap = { left: AlignmentType.LEFT, center: AlignmentType.CENTER, right: AlignmentType.RIGHT, justify: AlignmentType.BOTH };
+  const alignment = opts.alignment ? (alignMap[opts.alignment] ?? AlignmentType.BOTH)
+    : opts.center    ? AlignmentType.CENTER
+    : opts.right     ? AlignmentType.RIGHT
+    : opts.noJustify ? AlignmentType.LEFT
+    : AlignmentType.BOTH;
   return new Paragraph({
     children,
-    alignment: opts.center ? AlignmentType.CENTER
-             : opts.right  ? AlignmentType.RIGHT
-             : opts.noJustify ? AlignmentType.LEFT
-             : AlignmentType.BOTH,
+    alignment,
     spacing: lineSpacing(dp),
     indent: opts.indent ? { left: convertMillimetersToTwip(opts.indent) } : undefined,
   });
@@ -267,8 +270,11 @@ function buildDocxSections(printModel, dp, { hancom = false } = {}) {
     }
 
     else if (section.type === 'episode') {
-      const epTitle = `${section.episodeNumber}회 ${section.episodeTitle}`.trim();
-      paras.push(para(epTitle, dp, { bold: true, center: true }));
+      if (section.showEpisodeTitle) {
+        const epTitle = `${section.episodeNumber}회 ${section.episodeTitle}`.trim();
+        paras.push(para(epTitle, dp, { bold: true, center: true }));
+        paras.push(blankPara(dp));
+      }
 
       let prevBlock = null;
       for (const block of section.blocks) {
@@ -280,28 +286,28 @@ function buildDocxSections(printModel, dp, { hancom = false } = {}) {
         }
         switch (block.type) {
           case 'scene_number':
-            paras.push(para(`${block.label} ${block.content}`.trim(), dp, { bold: true, noJustify: true }));
+            paras.push(para(`${block.label} ${block.content}`.trim(), dp, { bold: true, noJustify: !block.alignment, alignment: block.alignment }));
             break;
           case 'action':
             splitOnBr(block.content || '').forEach(l =>
-              paras.push(para(l, dp, { indent: 8, html: true }))
+              paras.push(para(l, dp, { indent: block.alignment ? 0 : 8, html: true, alignment: block.alignment }))
             );
             break;
           case 'dialogue': {
             const dLines = splitOnBr(block.content || '');
             paras.push(dialoguePara(block.charName, dLines[0] ?? '', dp));
             for (let i = 1; i < dLines.length; i++)
-              paras.push(para(dLines[i], dp, { html: true }));
+              paras.push(para(dLines[i], dp, { html: true, alignment: block.alignment }));
             break;
           }
           case 'parenthetical':
             paras.push(parenPara(block.content, dp));
             break;
           case 'transition':
-            paras.push(para((block.content || '').toUpperCase(), dp, { right: true }));
+            paras.push(para((block.content || '').toUpperCase(), dp, { right: !block.alignment, alignment: block.alignment }));
             break;
           default:
-            paras.push(para(block.content || '', dp));
+            paras.push(para(block.content || '', dp, { alignment: block.alignment }));
         }
         prevBlock = block;
       }

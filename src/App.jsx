@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { FileText, Undo2, Redo2, Sun, Moon, User, Clapperboard, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react';
+import { FileText, Undo2, Redo2, Sun, Moon, User, Clapperboard, ExternalLink, ChevronLeft, ChevronRight, AlignLeft, AlignCenter, AlignRight, AlignJustify } from 'lucide-react';
 import LandingPage from './components/LandingPage';
 import { logShareSchema } from './utils/urlSchemas';
 import { getTimelineColor } from './utils/color';
@@ -38,7 +38,7 @@ import MobileBottomPanel from './components/mobile/MobileBottomPanel';
 // ─── v2: shared utilities ─────────────────────────────────────────────────────
 import { mobileTbtnStyle } from './styles/tokens';
 import UpdateBanner from './components/UpdateBanner';
-import { applyInlineFormat, stripHtml } from './utils/textFormat';
+import { applyInlineFormat, applyBlockAlignment, stripHtml } from './utils/textFormat';
 import * as findReplaceUtils from './utils/findReplace';
 import FindReplaceMobileModal from './components/FindReplaceMobileModal';
 import SnapshotPanel from './components/SnapshotPanel';
@@ -158,7 +158,9 @@ function TimelineStrip({ scrollEl }) {
           total += 1 + 12 / lineHpt;
           break;
         case 'action': {
-          const lines = Math.max(1, Math.ceil((stripHtml(b.content)?.length || 0) / (charsPerLine - 2)));
+          const content = stripHtml(b.content);
+          if (!content?.trim()) break;
+          const lines = Math.max(1, Math.ceil(content.length / (charsPerLine - 2)));
           total += lines * (1 + 1 / lineHpt);
           break;
         }
@@ -662,6 +664,23 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
   const [fontAvailability, setFontAvail] = useState(null);
   useEffect(() => { checkFontsAvailability().then(setFontAvail); }, []);
 
+  const [activeAlignment, setActiveAlignment] = useState(null);
+  useEffect(() => {
+    const handler = () => {
+      const sel = window.getSelection();
+      if (!sel?.rangeCount) return;
+      let node = sel.getRangeAt(0).startContainer;
+      if (node.nodeType === Node.TEXT_NODE) node = node.parentElement;
+      const surface = document.querySelector('[data-editor-surface]');
+      while (node && node !== surface) {
+        if (node.dataset?.blockId) { setActiveAlignment(node.dataset.alignment || null); return; }
+        node = node.parentElement;
+      }
+    };
+    document.addEventListener('selectionchange', handler);
+    return () => document.removeEventListener('selectionchange', handler);
+  }, []);
+
   const handleFontSize   = (e) => dispatch({ type: 'SET_STYLE_PRESET', payload: { fontSize: Number(e.target.value) } });
   const handleFontFamily = (e) => dispatch({ type: 'SET_STYLE_PRESET', payload: { fontFamily: e.target.value } });
 
@@ -881,23 +900,6 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
 
       {/* ── Row 3: 포맷 툴바 ── */}
       <div className="flex items-center h-10 px-3 gap-1" style={{ overflowX: 'auto', scrollbarWidth: 'none', borderBottom: '1px solid var(--c-border2)' }}>
-        {/* B / I / U */}
-        {[
-          { label: 'B', title: '굵게 (Ctrl+B)',   tag: 'bold',      cls: 'font-bold' },
-          { label: 'I', title: '기울임 (Ctrl+I)', tag: 'italic',    cls: 'italic' },
-          { label: 'U', title: '밑줄 (Ctrl+U)',   tag: 'underline', cls: 'underline' },
-        ].map(({ label, title, tag, cls }) => (
-          <button key={tag} title={title}
-            onMouseDown={e => { e.preventDefault(); applyInlineFormat(tag); }}
-            className={`flex items-center justify-center shrink-0 rounded ${cls}`}
-            style={{ ...iconBtnStyle }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-hover)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
-          >{label}</button>
-        ))}
-
-        {sep}
-
         {/* Undo / Redo */}
         <button onClick={() => window.dispatchEvent(new CustomEvent('script:undo'))} disabled={!canUndo} title="되돌리기 (Ctrl+Z)"
           className="flex items-center justify-center shrink-0 rounded"
@@ -915,8 +917,7 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
         {sep}
 
         {/* 글꼴 */}
-        <span style={{ fontSize: 11, color: 'var(--c-text5)', flexShrink: 0, letterSpacing: '-0.01em' }}>글꼴</span>
-        <select value={stylePreset?.fontFamily ?? '함초롱바탕'} onChange={handleFontFamily} style={{ ...selectStyle, maxWidth: 110 }}>
+        <select value={stylePreset?.fontFamily ?? '함초롬바탕'} onChange={handleFontFamily} style={{ ...selectStyle, maxWidth: 110 }}>
           <optgroup label="내장 글꼴">
             {FONTS.filter(f => f.sourceType === 'bundled').map(f => {
               const status = getFontPdfStatus(f.id, fontAvailability);
@@ -932,13 +933,47 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
         </select>
         {fontStatusBadge}
 
-        <span style={{ fontSize: 11, color: 'var(--c-text5)', marginLeft: 4, flexShrink: 0, letterSpacing: '-0.01em' }}>크기</span>
+        {/* 크기 */}
         <select value={stylePreset?.fontSize ?? 11} onChange={handleFontSize} style={selectStyle}>
           {[9,10,11,12,13,14,16,18].map(s => <option key={s} value={s}>{s}pt</option>)}
         </select>
 
         {sep}
 
+        {/* B / I / U */}
+        {[
+          { label: 'B', title: '굵게 (Ctrl+B)',   tag: 'bold',      cls: 'font-bold' },
+          { label: 'I', title: '기울임 (Ctrl+I)', tag: 'italic',    cls: 'italic' },
+          { label: 'U', title: '밑줄 (Ctrl+U)',   tag: 'underline', cls: 'underline' },
+        ].map(({ label, title, tag, cls }) => (
+          <button key={tag} title={title}
+            onMouseDown={e => { e.preventDefault(); applyInlineFormat(tag); }}
+            className={`flex items-center justify-center shrink-0 rounded ${cls}`}
+            style={{ ...iconBtnStyle }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-hover)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+          >{label}</button>
+        ))}
+
+        {/* 정렬 버튼: 양쪽 왼쪽 가운데 오른쪽 */}
+        {[
+          { align: 'justify', Icon: AlignJustify, title: '양쪽 정렬' },
+          { align: 'left',    Icon: AlignLeft,    title: '왼쪽 정렬' },
+          { align: 'center',  Icon: AlignCenter,  title: '가운데 정렬' },
+          { align: 'right',   Icon: AlignRight,   title: '오른쪽 정렬' },
+        ].map(({ align, Icon, title }) => (
+          <button key={align} title={title}
+            onMouseDown={e => { e.preventDefault(); applyBlockAlignment(align); setActiveAlignment(align); }}
+            className="flex items-center justify-center shrink-0 rounded"
+            style={{ ...iconBtnStyle, color: activeAlignment === align ? 'var(--c-accent)' : 'var(--c-text3)', border: `1px solid ${activeAlignment === align ? 'var(--c-accent)' : 'transparent'}` }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-hover)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+          ><Icon size={14} strokeWidth={2} /></button>
+        ))}
+
+        {sep}
+
+        {/* 인물대사 간격 */}
         <span style={{ fontSize: 11, color: 'var(--c-text5)', flexShrink: 0, letterSpacing: '-0.01em' }}>간격</span>
         <input type="range" min="4" max="14" step="0.5"
           value={parseFloat(stylePreset?.dialogueGap ?? '7')}
@@ -1338,13 +1373,13 @@ function Shell({ authUser, setAuthUser }) {
 
   const menuCheckedItems = useMemo(() => {
     const sp = activeProject?.stylePreset || {};
-    const fontFamily  = sp.fontFamily  ?? '함초롱바탕';
+    const fontFamily  = sp.fontFamily  ?? '함초롬바탕';
     const fontSize    = sp.fontSize    ?? 11;
     const lineHeightPct = Math.round((sp.lineHeight ?? 1.6) * 100);
     const dgap        = Math.round(parseFloat(sp.dialogueGap ?? '7'));
     return {
       ...viewCheckedItems,
-      'font-hamcho':     fontFamily === '함초롱바탕',
+      'font-hamcho':     fontFamily === '함초롬바탕',
       'font-noto-serif': fontFamily === 'Noto Serif KR',
       'font-noto-sans':  fontFamily === 'Noto Sans KR',
       'font-malgun':     fontFamily === 'Malgun Gothic',
@@ -1545,6 +1580,7 @@ function Shell({ authUser, setAuthUser }) {
         projects={state.projects}
         activeProjectId={state.activeProjectId}
         onSelect={id => dispatch({ type: 'SET_ACTIVE_PROJECT', id })}
+        onDelete={id => dispatch({ type: 'DELETE_PROJECT', id })}
       />
       <SaveAsModal
         open={saveAsOpen}
@@ -1790,13 +1826,11 @@ function Shell({ authUser, setAuthUser }) {
         {!focusMode && <StatusBar />}
 
         <div style={{ overflow: 'hidden', height: focusMode ? 0 : 'auto' }}>
-          <AdBanner
-            slot="bottom-fixed"
-            mobileHide={false}
-            height={48}
-            className="no-print"
-            style={{ margin: '0 8px 6px', borderRadius: 6 }}
-          />
+          <div className="no-print" style={{ display: 'flex', gap: 6, margin: '0 8px 6px' }}>
+            <AdBanner slot="bottom-fixed-1" mobileHide={false} height={48} style={{ flex: 1, borderRadius: 6, margin: 0 }} />
+            <AdBanner slot="bottom-fixed-2" mobileHide={false} height={48} style={{ flex: 1, borderRadius: 6, margin: 0 }} />
+            <AdBanner slot="bottom-fixed-3" mobileHide={false} height={48} style={{ flex: 1, borderRadius: 6, margin: 0 }} />
+          </div>
         </div>
 
         {modals}
@@ -1886,13 +1920,12 @@ function Shell({ authUser, setAuthUser }) {
       {!focusMode && <StatusBar />}
 
       <div style={{ overflow: 'hidden', height: focusMode ? 0 : 'auto' }}>
-        <AdBanner
-          slot="bottom-fixed"
-          mobileHide={false}
-          height={48}
-          className="no-print"
-          style={{ margin: '0 8px 6px', borderRadius: 6 }}
-        />
+        <div className="no-print" style={{ display: 'flex', gap: 6, margin: '0 8px 6px' }}>
+          <AdBanner slot="bottom-fixed-1" mobileHide={false} height={48} style={{ flex: 1, borderRadius: 6, margin: 0 }} />
+          <AdBanner slot="bottom-fixed-2" mobileHide={false} height={48} style={{ flex: 1, borderRadius: 6, margin: 0 }} />
+          <AdBanner slot="bottom-fixed-3" mobileHide={false} height={48} style={{ flex: 1, borderRadius: 6, margin: 0 }} />
+          <AdBanner slot="bottom-fixed-4" mobileHide={false} height={48} style={{ flex: 1, borderRadius: 6, margin: 0 }} />
+        </div>
       </div>
 
       {modals}

@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { FileText } from 'lucide-react';
+import { FileText, AlignLeft, AlignCenter, AlignRight, AlignJustify } from 'lucide-react';
 import { useApp } from '../../store/AppContext';
 import { FONTS } from '../../print/FontRegistry';
 import AdBanner from '../AdBanner';
 import { mobileTbtnStyle } from '../../styles/tokens';
-import { applyInlineFormat } from '../../utils/textFormat';
+import { applyInlineFormat, applyBlockAlignment } from '../../utils/textFormat';
 import { clearAccessToken, loadFromDrive, isTokenValid } from '../../store/googleDrive';
 import { isPublicPcMode } from '../../store/db';
 import { supabaseSignOut, refreshDriveToken } from '../../store/supabaseClient';
@@ -18,6 +18,23 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
   const menuRef = useRef(null);
   const [driveStatus, setDriveStatus] = useState('none');
   const syncingRef = useRef(false);
+  const [activeAlignment, setActiveAlignment] = useState(null);
+
+  useEffect(() => {
+    const handler = () => {
+      const sel = window.getSelection();
+      if (!sel?.rangeCount) return;
+      let node = sel.getRangeAt(0).startContainer;
+      if (node.nodeType === Node.TEXT_NODE) node = node.parentElement;
+      const surface = document.querySelector('[data-editor-surface]');
+      while (node && node !== surface) {
+        if (node.dataset?.blockId) { setActiveAlignment(node.dataset.alignment || null); return; }
+        node = node.parentElement;
+      }
+    };
+    document.addEventListener('selectionchange', handler);
+    return () => document.removeEventListener('selectionchange', handler);
+  }, []);
   const timerSaveRef = useRef(null); // WorkTimer의 autoSave 연결
 
   // Drive 동기화 — Supabase provider_token 사용 (모바일은 자동 적용, 충돌 UI 없음)
@@ -264,32 +281,13 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
         borderTop: '1px solid var(--c-border2)',
         overflowX: 'auto', scrollbarWidth: 'none',
       }}>
-        <button
-          title="되돌리기"
-          onMouseDown={e => { e.preventDefault(); window.dispatchEvent(new Event('script:undo')); }}
-          style={mobileTbtnStyle}
-        >↩</button>
-        <button
-          title="다시하기"
-          onMouseDown={e => { e.preventDefault(); dispatch({ type: 'REDO' }); }}
-          style={mobileTbtnStyle}
-        >↪</button>
-        {[
-          { label: 'B', title: '굵게', tag: 'bold', fw: 'bold' },
-          { label: 'I', title: '기울임', tag: 'italic', fs: 'italic' },
-          { label: 'U', title: '밑줄', tag: 'underline', td: 'underline' },
-        ].map(({ label, title, tag, fw, fs, td }) => (
-          <button
-            key={tag}
-            title={title}
-            onMouseDown={e => { e.preventDefault(); applyInlineFormat(tag); }}
-            style={{ ...mobileTbtnStyle, fontWeight: fw, fontStyle: fs, textDecoration: td }}
-          >{label}</button>
-        ))}
+        {/* undo / redo */}
+        <button title="되돌리기" onMouseDown={e => { e.preventDefault(); window.dispatchEvent(new Event('script:undo')); }} style={mobileTbtnStyle}>↩</button>
+        <button title="다시하기" onMouseDown={e => { e.preventDefault(); dispatch({ type: 'REDO' }); }} style={mobileTbtnStyle}>↪</button>
         <div style={{ width: 1, height: 16, background: 'var(--c-border3)', margin: '0 2px', flexShrink: 0 }} />
-        <span style={{ fontSize: 'clamp(9px, 2.4vw, 11px)', color: 'var(--c-text6)', flexShrink: 0 }}>글꼴</span>
+        {/* 글씨체 */}
         <select
-          value={stylePreset?.fontFamily ?? '함초롱바탕'}
+          value={stylePreset?.fontFamily ?? '함초롬바탕'}
           onChange={e => dispatch({ type: 'SET_STYLE_PRESET', payload: { fontFamily: e.target.value } })}
           style={{ ...mobileTbtnStyle, padding: '2px 4px', maxWidth: 90 }}
         >
@@ -300,11 +298,39 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
             <option key={f.id} value={f.cssFamily}>{f.displayName}</option>
           ))}
         </select>
-        <span style={{ fontSize: 'clamp(9px, 2.4vw, 11px)', color: 'var(--c-text6)', flexShrink: 0 }}>크기</span>
+        {/* 글씨크기 */}
         <button style={mobileTbtnStyle} onMouseDown={e => { e.preventDefault(); dispatch({ type: 'SET_STYLE_PRESET', payload: { fontSize: Math.max(9, (stylePreset?.fontSize ?? 11) - 1) } }); }}>−</button>
         <span style={{ fontSize: 'clamp(9px, 2.4vw, 11px)', color: 'var(--c-text4)', flexShrink: 0, minWidth: 24, textAlign: 'center' }}>{stylePreset?.fontSize ?? 11}pt</span>
         <button style={mobileTbtnStyle} onMouseDown={e => { e.preventDefault(); dispatch({ type: 'SET_STYLE_PRESET', payload: { fontSize: Math.min(18, (stylePreset?.fontSize ?? 11) + 1) } }); }}>+</button>
-        <span style={{ fontSize: 'clamp(9px, 2.4vw, 11px)', color: 'var(--c-text6)', flexShrink: 0 }}>간격</span>
+        {/* B / I / U */}
+        {[
+          { label: 'B', title: '굵게', tag: 'bold', fw: 'bold' },
+          { label: 'I', title: '기울임', tag: 'italic', fs: 'italic' },
+          { label: 'U', title: '밑줄', tag: 'underline', td: 'underline' },
+        ].map(({ label, title, tag, fw, fs, td }) => (
+          <button key={tag} title={title}
+            onMouseDown={e => { e.preventDefault(); applyInlineFormat(tag); }}
+            style={{ ...mobileTbtnStyle, fontWeight: fw, fontStyle: fs, textDecoration: td }}
+          >{label}</button>
+        ))}
+        {/* 정렬: 양쪽 왼쪽 가운데 오른쪽 */}
+        {[
+          { align: 'justify', Icon: AlignJustify, title: '양쪽 정렬' },
+          { align: 'left',    Icon: AlignLeft,    title: '왼쪽 정렬' },
+          { align: 'center',  Icon: AlignCenter,  title: '가운데 정렬' },
+          { align: 'right',   Icon: AlignRight,   title: '오른쪽 정렬' },
+        ].map(({ align, Icon, title }) => (
+          <button key={align} title={title}
+            onMouseDown={e => { e.preventDefault(); applyBlockAlignment(align); setActiveAlignment(align); }}
+            style={{
+              ...mobileTbtnStyle,
+              color: activeAlignment === align ? 'var(--c-accent)' : undefined,
+              border: `1px solid ${activeAlignment === align ? 'var(--c-accent)' : 'transparent'}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          ><Icon size={13} /></button>
+        ))}
+        {/* 인물대사 간격 */}
         <button style={mobileTbtnStyle} onMouseDown={e => { e.preventDefault(); const v = Math.max(4, parseFloat(stylePreset?.dialogueGap ?? '7') - 0.5); dispatch({ type: 'SET_STYLE_PRESET', payload: { dialogueGap: `${v}em` } }); }}>−</button>
         <span style={{ fontSize: 'clamp(9px, 2.4vw, 11px)', color: 'var(--c-text4)', flexShrink: 0, minWidth: 28, textAlign: 'center' }}>{stylePreset?.dialogueGap ?? '7em'}</span>
         <button style={mobileTbtnStyle} onMouseDown={e => { e.preventDefault(); const v = Math.min(14, parseFloat(stylePreset?.dialogueGap ?? '7') + 0.5); dispatch({ type: 'SET_STYLE_PRESET', payload: { dialogueGap: `${v}em` } }); }}>+</button>

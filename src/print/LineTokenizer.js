@@ -51,7 +51,7 @@ export function getLayoutMetrics(preset) {
   const m = (preset?.dialogueGap || '7em').match(/^([\d.]+)em$/);
   if (m) dialogueGapPt = parseFloat(m[1]) * fontSize;
 
-  // 함초롱바탕 한글 평균 자폭 ≈ fontSize * 0.55 (실측 기준)
+  // 함초롬바탕 한글 평균 자폭 ≈ fontSize * 0.55 (실측 기준)
   const avgCharPt      = fontSize * 0.55;
   const charsPerLine   = Math.floor(contentWpt / avgCharPt);
   const speechWpt      = contentWpt - dialogueGapPt;
@@ -196,11 +196,20 @@ export function tokenizeSection(section, metrics) {
 
   // ── Episode
   if (section.type === 'episode') {
-    const epTitle = `${section.episodeNumber}회 ${section.episodeTitle}`.trim();
-    tokens.push(T('ep_title', epTitle, { bold: true, center: true }));
+    if (section.showEpisodeTitle) {
+      const epTitle = `${section.episodeNumber}회 ${section.episodeTitle}`.trim();
+      tokens.push(T('ep_title', epTitle, { bold: true, center: true }));
+      tokens.push(T('blank', ''));
+    }
 
+    const CONTENT_TYPES = new Set(['action', 'dialogue', 'parenthetical']);
     let prevBlock = null;
     for (const block of section.blocks) {
+      if (prevBlock !== null && prevBlock.type !== block.type
+          && prevBlock.type !== 'scene_number'
+          && !(CONTENT_TYPES.has(prevBlock.type) && CONTENT_TYPES.has(block.type))) {
+        tokens.push(B());
+      }
 
       switch (block.type) {
         case 'scene_number': {
@@ -210,6 +219,7 @@ export function tokenizeSection(section, metrics) {
         }
         case 'action': {
           const plainA = stripHtml(block.content);
+          if (!plainA.trim()) { tokens.push(B()); break; }
           const rawHtmlA = block.content || '';
           const hasHtmlA = rawHtmlA !== plainA;
           const wrappedA = wrapText(plainA, charsPerLine - 2);
@@ -226,6 +236,7 @@ export function tokenizeSection(section, metrics) {
         }
         case 'dialogue': {
           const plainD = stripHtml(block.content);
+          if (!plainD.trim() && !block.charName) { tokens.push(B()); break; }
           const rawHtmlD = block.content || '';
           const hasHtmlD = rawHtmlD !== plainD;
           const wrappedD = wrapText(plainD, charsInSpeech);
