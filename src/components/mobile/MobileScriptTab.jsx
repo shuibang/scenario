@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useApp } from '../../store/AppContext';
 import { genId, now } from '../../store/db';
+import { isMultiEpisode } from '../../utils/projectTypes';
 
 export default function MobileScriptTab({ onClose }) {
   const { state, dispatch } = useApp();
@@ -183,7 +184,7 @@ export default function MobileScriptTab({ onClose }) {
                       onTouchStart={e => handleTouchStart(ep.id, e)}
                       onTouchEnd={e => handleTouchEnd(ep.id, e)}
                     >
-                      {project.projectType !== 'single' && (
+                      {isMultiEpisode(project.projectType) && (
                         <span className="m-text-xs" style={{ flexShrink: 0 }}>{ep.number}회</span>
                       )}
                       {isEditing ? (
@@ -227,7 +228,7 @@ export default function MobileScriptTab({ onClose }) {
                   dispatch({ type: 'ADD_EPISODE', payload: ep });
                   dispatch({ type: 'SET_ACTIVE_EPISODE', id: ep.id });
                 }}
-              >{project.projectType === 'single' ? '+ 추가' : '+ 회차 추가'}</div>
+              >{isMultiEpisode(project.projectType) ? '+ 회차 추가' : '+ 추가'}</div>
             </>}
           </div>
         );

@@ -268,8 +268,9 @@ function ProgressBar({ answers }) {
     answers.q9, answers.q10, answers.q11.length > 0, answers.q12,
     answers.q13, answers.q14, answers.q15, answers.q16.length > 0,
     answers.q17, answers.q18, answers.q19, answers.q20Email,
+    answers.qType, answers.qUi,
   ].filter(Boolean).length;
-  const pct = Math.round((filled / 20) * 100);
+  const pct = Math.round((filled / 22) * 100);
 
   return (
     <div style={{
@@ -304,6 +305,7 @@ export default function SurveyPage() {
     q7: 0, q8: '', q9: '', q9Detail: '', q10: '', q10Detail: '',
     q11: [], q11Other: '', q12: '', q13: '', q14: 0, q15: '',
     q16: [], q17: '', q18: '', q19: '', q20Email: '',
+    qType: '', qUi: '',
   });
   const [errors, setErrors]       = useState({});
   const [submitted, setSubmitted] = useState(() => !!localStorage.getItem('survey_submitted'));
@@ -377,6 +379,8 @@ export default function SurveyPage() {
           q18:        skipQ18Q19 ? null : (answers.q18 || null),
           q19:        skipQ18Q19 ? null : (answers.q19 || null),
           q20_email:  answers.q20Email || null,
+          q_type:     answers.qType   || null,
+          q_ui:       answers.qUi     || null,
         }]);
         if (error) throw error;
       }
@@ -491,6 +495,23 @@ export default function SurveyPage() {
             </div>
           </Card>
 
+          <Card>
+            <div id="qType">
+              <QuestionLabel>대본 작업 툴은 어떤 형태를 선호하시나요?<Optional /></QuestionLabel>
+              <SingleSelect
+                name="qType"
+                options={[
+                  '설치형 프로그램 (한글·파이널드래프트처럼)',
+                  '브라우저형 웹앱 (현재 대본 작업실처럼)',
+                  '모바일 앱 (iOS/Android)',
+                  '복합형 (PC + 모바일 연동)',
+                ]}
+                value={answers.qType}
+                onChange={v => set('qType', v)}
+              />
+            </div>
+          </Card>
+
           {/* ══════════════════════════════════════════
               섹션 2: 기능 평가
           ══════════════════════════════════════════ */}
@@ -544,6 +565,24 @@ export default function SurveyPage() {
                 rightLabel="아주 쉬웠어요"
               />
               {errors.q7 && errMsg}
+            </div>
+          </Card>
+
+          <Card>
+            <div id="qUi">
+              <QuestionLabel>최근 바뀐 UI(디자인·레이아웃)에 대해 어떻게 느끼셨나요?<Optional /></QuestionLabel>
+              <SingleSelect
+                name="qUi"
+                options={[
+                  '훨씬 좋아졌어요',
+                  '자연스럽게 적응됐어요',
+                  '큰 차이를 못 느꼈어요',
+                  '오히려 더 어색해요',
+                  '이전 UI를 경험하지 못해 모르겠어요',
+                ]}
+                value={answers.qUi}
+                onChange={v => set('qUi', v)}
+              />
             </div>
           </Card>
 

@@ -1,16 +1,11 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { FileText, Undo2, Redo2, Sun, Moon, User, Clapperboard, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react';
 import LandingPage from './components/LandingPage';
 import { logShareSchema } from './utils/urlSchemas';
 import { getTimelineColor } from './utils/color';
 import { loadLogPayload, isShortReviewId as isUUID } from './utils/reviewShare';
 import { AppProvider, useApp } from './store/AppContext';
-import {
-  FONTS,
-  FONT_STATUS,
-  checkFontsAvailability,
-  getFontPdfStatus,
-  getFontByCssFamily,
-} from './print/FontRegistry';
+import { FONTS, FONT_STATUS, checkFontsAvailability, getFontPdfStatus, getFontByCssFamily } from './print/FontRegistry';
 import { getItem, setItem, setAll, DB_KEYS, clearDramaStorage, isPublicPcMode, genId, now } from './store/db';
 import { setAccessToken, clearAccessToken, loadFromDrive, isTokenValid, saveSnapshot } from './store/googleDrive';
 import { supabase, signInWithGoogle, supabaseSignOut, extractUserData, refreshDriveToken } from './store/supabaseClient';
@@ -44,12 +39,33 @@ import MobileBottomPanel from './components/mobile/MobileBottomPanel';
 import { mobileTbtnStyle } from './styles/tokens';
 import UpdateBanner from './components/UpdateBanner';
 import { applyInlineFormat, stripHtml } from './utils/textFormat';
+import * as findReplaceUtils from './utils/findReplace';
+import FindReplaceMobileModal from './components/FindReplaceMobileModal';
 import SnapshotPanel from './components/SnapshotPanel';
+import SplitViewPanel from './components/SplitViewPanel';
+import StatusBar from './components/StatusBar';
 import { getLayoutMetrics } from './print/LineTokenizer';
 import { saveReviewPayload } from './utils/reviewShare';
 import SyncConflictModal from './components/SyncConflictModal';
 import { usePageTracking } from './hooks/usePageTracking';
 import { guardedSignInWithGoogle } from './utils/guardedSignIn';
+import Menubar from './components/Menubar/Menubar';
+import useKeyboardShortcuts from './hooks/useKeyboardShortcuts';
+import OpenProjectModal  from './components/Modals/OpenProjectModal';
+import SaveAsModal       from './components/Modals/SaveAsModal';
+import ShareLinkModal    from './components/Modals/ShareLinkModal';
+import ProjectInfoModal  from './components/Modals/ProjectInfoModal';
+import WordCountModal    from './components/Modals/WordCountModal';
+import NewProjectModal   from './components/Modals/NewProjectModal';
+import ImportDocxModal       from './components/Modals/ImportDocxModal';
+import ImportHwpxModal       from './components/Modals/ImportHwpxModal';
+import StyleSettingsModal    from './components/Modals/StyleSettingsModal';
+import SceneFormatModal      from './components/Modals/SceneFormatModal';
+import UserSettingsModal     from './components/Modals/UserSettingsModal';
+import TagManageModal        from './components/Modals/TagManageModal';
+import AppSettingsModal      from './components/Modals/AppSettingsModal';
+import NoticesModal          from './components/Modals/NoticesModal';
+import QnAModal              from './components/Modals/QnAModal';
 
 // ─── Panel width persistence ───────────────────────────────────────────────────
 const PANEL_WIDTHS_KEY = 'panelWidths';
@@ -541,15 +557,87 @@ function LoginModal({ onClose }) {
 // ─── Drive 동기화 중복 방지 ────────────────────────────────────────────────────
 let _driveSyncing = false;
 
+// ─── DropdownMenu ─────────────────────────────────────────────────────────────
+function DropdownMenu({ label, items, disabled }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+
+  const menuBtnBase = {
+    padding: '3px 10px',
+    fontSize: 13,
+    background: 'transparent',
+    border: 'none',
+    borderRadius: 4,
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    color: disabled ? 'var(--c-text5)' : 'var(--c-text3)',
+    whiteSpace: 'nowrap',
+    transition: 'background 0.1s',
+  };
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        onClick={() => !disabled && setOpen(v => !v)}
+        style={{ ...menuBtnBase, background: open ? 'var(--c-hover)' : 'transparent' }}
+        onMouseEnter={e => { if (!disabled) e.currentTarget.style.background = 'var(--c-hover)'; }}
+        onMouseLeave={e => { if (!open) e.currentTarget.style.background = 'transparent'; }}
+      >
+        {label}
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, zIndex: 1000,
+          background: 'var(--c-card)', border: '1px solid var(--c-border)',
+          borderRadius: 6, boxShadow: '0 6px 20px rgba(0,0,0,0.25)',
+          minWidth: 200, padding: '4px 0', marginTop: 2,
+        }}>
+          {items.map((item, i) => item === '---' ? (
+            <div key={i} style={{ height: 1, background: 'var(--c-border2)', margin: '3px 0' }} />
+          ) : (
+            <button
+              key={i}
+              disabled={item.disabled}
+              onClick={() => { if (!item.disabled) { item.onClick(); setOpen(false); } }}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                width: '100%', padding: '6px 14px', fontSize: 13,
+                background: 'transparent',
+                color: item.disabled ? 'var(--c-text5)' : 'var(--c-text2)',
+                border: 'none', cursor: item.disabled ? 'not-allowed' : 'pointer',
+                textAlign: 'left', gap: 28,
+              }}
+              onMouseEnter={e => { if (!item.disabled) e.currentTarget.style.background = 'var(--c-hover)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+            >
+              <span>{item.label}</span>
+              {item.shortcut && <span style={{ fontSize: 11, color: 'var(--c-text5)', flexShrink: 0 }}>{item.shortcut}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── MenuBar ──────────────────────────────────────────────────────────────────
-function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, authUser, setAuthUser, onSyncConflict }) {
+function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, authUser, setAuthUser, onSyncConflict, onMenuAction, recentProjects, menuCheckedItems }) {
   const { state, dispatch, loadFromDriveData } = useApp();
   const { saveStatus, saveErrorMsg, activeProjectId, stylePreset, undoStack, redoStack, savedAt } = state;
   const canUndo = undoStack?.length > 0 || !!activeProjectId;
   const [scriptCanRedo, setScriptCanRedo] = useState(false);
-  const timerSaveRef = useRef(null); // WorkTimer의 autoSave 연결
+  const timerSaveRef = useRef(null);
 
-  // 자동 저장 상대 시각 ("방금 저장됨" / "N분 전")
+  const activeProject = state.projects.find(p => p.id === activeProjectId);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState('');
+
   const [savedLabel, setSavedLabel] = useState('');
   useEffect(() => {
     const update = () => {
@@ -563,17 +651,33 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
     const id = setInterval(update, 30_000);
     return () => clearInterval(id);
   }, [savedAt, activeProjectId]);
+
   const canRedo = redoStack?.length > 0 || scriptCanRedo;
   useEffect(() => {
     const handler = (e) => setScriptCanRedo(e.detail?.canRedo ?? false);
     window.addEventListener('scriptundostate', handler);
     return () => window.removeEventListener('scriptundostate', handler);
   }, []);
-  const [fontAvailability, setFontAvail] = useState(null);
-  const [loginOpen, setLoginOpen]        = useState(false);
-  const [driveStatus, setDriveStatus]    = useState('none'); // 'none'|'syncing'|'synced'|'error'
 
-  // Drive 동기화 — Supabase provider_token 사용
+  const [fontAvailability, setFontAvail] = useState(null);
+  useEffect(() => { checkFontsAvailability().then(setFontAvail); }, []);
+
+  const handleFontSize   = (e) => dispatch({ type: 'SET_STYLE_PRESET', payload: { fontSize: Number(e.target.value) } });
+  const handleFontFamily = (e) => dispatch({ type: 'SET_STYLE_PRESET', payload: { fontFamily: e.target.value } });
+
+
+  const fontStatusBadge = useMemo(() => {
+    const font   = getFontByCssFamily(stylePreset?.fontFamily);
+    const status = getFontPdfStatus(font?.id, fontAvailability);
+    if (status === FONT_STATUS.SYSTEM)      return <span className="text-[9px] px-1 rounded" style={{ background: '#e8f0fe', color: '#3367d6' }}>화면 전용</span>;
+    if (status === FONT_STATUS.UNAVAILABLE) return <span className="text-[9px] px-1 rounded" style={{ background: '#fce8e6', color: '#c5221f' }}>PDF ✗</span>;
+    if (status === FONT_STATUS.PARTIAL)     return <span className="text-[9px] px-1 rounded" style={{ background: '#fff3e0', color: '#e37400' }}>PDF △</span>;
+    return null;
+  }, [stylePreset?.fontFamily, fontAvailability]);
+
+  const [loginOpen, setLoginOpen]        = useState(false);
+  const [driveStatus, setDriveStatus]    = useState('none');
+
   const runDriveSync = useCallback(async () => {
     if (_driveSyncing || !isTokenValid()) return;
     _driveSyncing = true;
@@ -588,7 +692,6 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
         } catch { return false; }
       })();
       const driveHasData = (driveData?.projects?.length ?? 0) > 0;
-
       if (!driveData?.savedAt || !driveHasData) {
         setDriveStatus('synced');
       } else if (!hasLocalData) {
@@ -606,204 +709,214 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
         const newToken = await refreshDriveToken();
         if (newToken) { _driveSyncing = false; runDriveSync(); return; }
       }
-      if (e.message?.includes('403')) {
-        setDriveStatus('reauth');
-      } else {
-        setDriveStatus('error');
-      }
+      if (e.message?.includes('403')) setDriveStatus('reauth');
+      else setDriveStatus('error');
       console.warn('[Drive] 불러오기 실패:', e);
     } finally {
       _driveSyncing = false;
     }
   }, [loadFromDriveData, onSyncConflict]);
 
-  // 로그인 후 토큰이 유효하면 Drive 동기화 실행
   useEffect(() => {
-    if (authUser && isTokenValid() && driveStatus === 'none') {
-      runDriveSync();
-    }
+    if (authUser && isTokenValid() && driveStatus === 'none') runDriveSync();
   }, [authUser]);
 
-  useEffect(() => {
-    checkFontsAvailability().then(setFontAvail);
-  }, []);
-
-
-  const handleFontSize   = (e) => dispatch({ type: 'SET_STYLE_PRESET', payload: { fontSize: Number(e.target.value) } });
-  const handleFontFamily = (e) => dispatch({ type: 'SET_STYLE_PRESET', payload: { fontFamily: e.target.value } });
-
-  const selectStyle = {
-    background: 'var(--c-input)',
-    color: 'var(--c-text2)',
-    border: '1px solid var(--c-border3)',
-    padding: '1px 4px',
-    fontSize: '12px',
-    borderRadius: '0.25rem',
-    outline: 'none',
+  const commitTitle = () => {
+    if (activeProject && titleDraft.trim()) {
+      dispatch({ type: 'UPDATE_PROJECT', payload: { ...activeProject, title: titleDraft.trim() } });
+    }
+    setEditingTitle(false);
   };
 
-  const fontStatusBadge = useMemo(() => {
-    const font   = getFontByCssFamily(stylePreset?.fontFamily);
-    const status = getFontPdfStatus(font?.id, fontAvailability);
-    if (status === FONT_STATUS.SYSTEM)      return <span className="text-[9px] px-1 rounded" style={{ background: '#e8f0fe', color: '#3367d6' }}>화면 전용</span>;
-    if (status === FONT_STATUS.UNAVAILABLE) return <span className="text-[9px] px-1 rounded" style={{ background: '#fce8e6', color: '#c5221f' }}>PDF ✗</span>;
-    if (status === FONT_STATUS.PARTIAL)     return <span className="text-[9px] px-1 rounded" style={{ background: '#fff3e0', color: '#e37400' }}>PDF △</span>;
-    return null;
-  }, [stylePreset?.fontFamily, fontAvailability]);
+  const sep = <div style={{ width: 1, height: 16, background: 'var(--c-border3)', margin: '0 4px', flexShrink: 0 }} />;
 
-  const sep = <div className="h-4 w-px mx-1 shrink-0" style={{ background: 'var(--c-border3)' }} />;
+  const iconBtnStyle = {
+    width: 28, height: 28, borderRadius: 6, flexShrink: 0,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    fontSize: 13, color: 'var(--c-text3)',
+    background: 'transparent', border: 'none', cursor: 'pointer',
+  };
+
+  const selectStyle = {
+    height: 28, background: 'var(--c-header)', color: 'var(--c-text2)',
+    border: '1px solid var(--c-border3)', padding: '0 6px',
+    fontSize: 12, borderRadius: 6, outline: 'none',
+  };
 
   return (
-    <div data-tour-id="menubar" className="shrink-0 no-print" style={{ background: 'var(--c-header)', borderBottom: '1px solid var(--c-border)' }}>
+    <div data-tour-id="menubar" className="shrink-0 no-print" style={{ background: 'var(--c-header)', borderBottom: '1px solid var(--c-border2)' }}>
       {loginOpen && <LoginModal onClose={() => setLoginOpen(false)} />}
 
-      {/* ── Row 1: [left: login/mypage] [center: brand] [right: clock/timer] ── */}
-      <div className="h-9 flex items-center px-4" style={{ borderBottom: '1px solid var(--c-border2)' }}>
-        {/* Left: 로그인/마이페이지 */}
-        <div className="flex items-center gap-2" style={{ flex: 1 }}>
+      {/* ── Row 1: 헤더 — 로고 | 제목 | 우측 액션 ── */}
+      <div className="flex items-center h-11 px-3 gap-2" style={{ borderBottom: '1px solid var(--c-border2)' }}>
+
+        {/* 로고 */}
+        <button
+          onClick={() => { window.location.hash = '#landing'; }}
+          title="홈으로"
+          className="flex items-center gap-1.5 shrink-0 rounded px-2 py-1"
+          style={{ background: 'transparent', border: 'none', cursor: 'pointer', transition: 'background 120ms' }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-hover)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+        >
+          <FileText size={15} strokeWidth={2} style={{ color: 'var(--c-accent)', flexShrink: 0 }} />
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-text2)', letterSpacing: '-0.015em', whiteSpace: 'nowrap' }}>대본 작업실</span>
+        </button>
+
+        {/* 구분선 */}
+        <div style={{ width: 1, height: 14, background: 'var(--c-border3)', flexShrink: 0, margin: '0 2px' }} />
+
+        {/* 연출 작업실 바로가기 */}
+        <a
+          href="#director"
+          onClick={e => { e.preventDefault(); window.location.hash = '#director'; }}
+          title="연출 작업실으로 이동"
+          className="flex items-center gap-1 shrink-0 rounded px-2 py-1"
+          style={{
+            textDecoration: 'none', color: 'var(--c-text4)', fontSize: 12,
+            background: 'transparent', transition: 'background 120ms, color 120ms',
+            lineHeight: 1,
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-hover)'; e.currentTarget.style.color = 'var(--c-text2)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--c-text4)'; }}
+        >
+          <Clapperboard size={13} strokeWidth={1.75} style={{ flexShrink: 0 }} />
+          <span style={{ whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>연출 작업실</span>
+          <ExternalLink size={10} strokeWidth={2} style={{ flexShrink: 0, opacity: 0.6 }} />
+        </a>
+
+        {/* 로고 - 제목 구분선 */}
+        <div style={{ width: 1, height: 16, background: 'var(--c-border3)', flexShrink: 0 }} />
+
+        {/* 대본 제목 */}
+        {editingTitle ? (
+          <input
+            autoFocus
+            value={titleDraft}
+            onChange={e => setTitleDraft(e.target.value)}
+            onBlur={commitTitle}
+            onKeyDown={e => { if (e.key === 'Enter') commitTitle(); if (e.key === 'Escape') setEditingTitle(false); }}
+            style={{
+              background: 'var(--c-input)', color: 'var(--c-text)',
+              border: '1px solid var(--c-border3)', borderRadius: 6,
+              padding: '3px 10px', fontSize: 13, outline: 'none',
+              boxShadow: '0 0 0 2px var(--c-active)',
+              width: 240, flexShrink: 0,
+            }}
+          />
+        ) : (
+          <button
+            onClick={() => { if (activeProjectId) { setTitleDraft(activeProject?.title || ''); setEditingTitle(true); } }}
+            title={activeProjectId ? '클릭하여 제목 편집' : undefined}
+            style={{
+              background: 'transparent', border: 'none', borderRadius: 6,
+              color: activeProjectId ? 'var(--c-text2)' : 'var(--c-text5)',
+              fontSize: 13, fontWeight: 400, letterSpacing: '-0.01em',
+              cursor: activeProjectId ? 'text' : 'default',
+              padding: '3px 8px', maxWidth: 300,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0,
+              transition: 'background 120ms',
+            }}
+            onMouseEnter={e => { if (activeProjectId) e.currentTarget.style.background = 'var(--c-hover)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+          >
+            {activeProject?.title || '제목 없는 대본'}
+          </button>
+        )}
+
+        {/* 오른쪽: 상태 + 저장/내보내기 + 사용자 */}
+        <div className="flex items-center gap-2 shrink-0" style={{ marginLeft: 'auto' }}>
+          {/* 상태 인디케이터 */}
+          {saveStatus === 'saving' && <span style={{ fontSize: 11, color: 'var(--c-text5)', letterSpacing: '-0.01em' }}>저장 중…</span>}
+          {saveStatus === 'saved' && savedLabel && <span style={{ fontSize: 11, color: 'var(--c-text5)', letterSpacing: '-0.01em' }}>{savedLabel}</span>}
+          {saveStatus === 'error' && <span style={{ fontSize: 11, color: 'var(--c-error)' }} title={saveErrorMsg}>저장 실패</span>}
+          {driveStatus === 'syncing' && <span style={{ fontSize: 11, color: 'var(--c-text5)' }}>동기화 중…</span>}
+          {driveStatus === 'synced'  && <span style={{ fontSize: 11, color: 'var(--c-success)' }}>Drive ✓</span>}
+          {driveStatus === 'error'   && (
+            <span style={{ fontSize: 11, color: '#f87171', cursor: 'pointer' }} onClick={async () => { setDriveStatus('none'); const t = await refreshDriveToken(); if (t) runDriveSync(); else guardedSignInWithGoogle(); }}>Drive 오류</span>
+          )}
+          {driveStatus === 'reauth' && (
+            <span style={{ fontSize: 11, color: '#f6ad55', cursor: 'pointer' }} onClick={() => guardedSignInWithGoogle()}>재연결 필요</span>
+          )}
+          <RealtimeClock />
+          {activeProjectId && <WorkTimer key={activeProjectId} projectId={activeProjectId} documentId={state.activeEpisodeId || state.activeDoc} saveRef={timerSaveRef} />}
+
+
+          <div style={{ width: 1, height: 16, background: 'var(--c-border3)', flexShrink: 0 }} />
+
+          {/* 사용자 */}
           {authUser ? (
             <div className="flex items-center gap-1.5">
-              {authUser.picture && <img src={authUser.picture} alt="" className="w-5 h-5 rounded-full" />}
-              <span className="text-xs" style={{ color: 'var(--c-text3)' }}>{authUser.name}</span>
-              {driveStatus === 'syncing' && (
-                <span className="text-[10px]" style={{ color: 'var(--c-text5)' }}>동기화 중…</span>
-              )}
-              {driveStatus === 'synced' && (
-                <span className="text-[10px]" style={{ color: '#4ade80' }}>저장됨</span>
-              )}
-              {driveStatus === 'error' && (
-                <span
-                  className="text-[10px] cursor-pointer"
-                  style={{ color: '#f87171' }}
-                  title="Drive 연동 실패. 클릭해서 재시도"
-                  onClick={async () => {
-                    setDriveStatus('none');
-                    const newToken = await refreshDriveToken();
-                    if (newToken) runDriveSync();
-                    else guardedSignInWithGoogle();
-                  }}
-                >Drive 오류 (재시도)</span>
-              )}
-              {driveStatus === 'reauth' && (
-                <span
-                  className="text-[10px] cursor-pointer"
-                  style={{ color: '#f6ad55' }}
-                  title="Google Drive 권한이 없습니다. 클릭해서 재로그인"
-                  onClick={() => guardedSignInWithGoogle()}
-                >구글 드라이브 재연결이 필요해요</span>
-              )}
-              <button onClick={async () => {
-                  timerSaveRef.current?.();
-                  if (isPublicPcMode()) clearDramaStorage();
-                  await supabaseSignOut();
-                  clearAccessToken();
-                  setDriveStatus('none');
-                  setAuthUser(null);
-                }}
-                style={{ padding: '3px 10px', borderRadius: 4, fontSize: 11, background: 'transparent', border: '1px solid var(--c-border3)', color: 'var(--c-text6)', cursor: 'pointer' }}>
+              {authUser.picture && <img src={authUser.picture} alt="" style={{ width: 22, height: 22, borderRadius: 4 }} />}
+              <span style={{ fontSize: 12, color: 'var(--c-text4)', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{authUser.name}</span>
+              <button onClick={async () => { timerSaveRef.current?.(); if (isPublicPcMode()) clearDramaStorage(); await supabaseSignOut(); clearAccessToken(); setDriveStatus('none'); setAuthUser(null); }}
+                style={{ height: 24, padding: '0 8px', fontSize: 11, background: 'transparent', border: '1px solid var(--c-border3)', borderRadius: 4, color: 'var(--c-text5)', cursor: 'pointer' }}>
                 로그아웃
               </button>
             </div>
           ) : (
-            <>
-              <button onClick={() => setLoginOpen(true)}
-                style={{ padding: '3px 10px', borderRadius: 4, fontSize: 11, background: 'transparent', border: '1px solid var(--c-border3)', color: 'var(--c-text4)', cursor: 'pointer' }}>
-                로그인
-              </button>
-              <button onClick={() => setLoginOpen(true)}
-                style={{ padding: '3px 10px', borderRadius: 4, fontSize: 11, background: 'var(--c-accent)', color: '#fff', border: 'none', cursor: 'pointer' }}>
-                회원가입
-              </button>
-            </>
+            <div className="flex items-center gap-1">
+              <button onClick={() => setLoginOpen(true)} style={{ height: 28, padding: '0 10px', fontSize: 12, background: 'transparent', border: '1px solid var(--c-border3)', borderRadius: 6, color: 'var(--c-text3)', cursor: 'pointer' }}>로그인</button>
+              <button onClick={() => setLoginOpen(true)} style={{ height: 28, padding: '0 10px', fontSize: 12, background: 'var(--c-accent)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 500 }}>회원가입</button>
+            </div>
           )}
-          <button
-            onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'mypage' })}
-            style={{ padding: '3px 10px', borderRadius: 4, fontSize: 11, background: 'transparent', border: '1px solid var(--c-border3)', color: 'var(--c-text4)', cursor: 'pointer' }}
+          <button onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'mypage' })}
+            title="마이페이지"
+            className="flex items-center justify-center rounded"
+            style={{ ...iconBtnStyle }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-hover)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
           >
-            마이페이지
+            <User size={14} strokeWidth={2} />
           </button>
-        </div>
-
-        {/* Center: brand */}
-        <button
-          onClick={() => { window.location.hash = '#landing'; }}
-          className="text-xs font-bold tracking-wider"
-          style={{ color: 'var(--c-accent)', flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-        >
-          대본 작업실
-        </button>
-
-        {/* Right: clock + timer */}
-        <div className="flex items-center gap-3" style={{ flex: 1, justifyContent: 'flex-end' }}>
-          <RealtimeClock />
-          {activeProjectId && <WorkTimer key={activeProjectId} projectId={activeProjectId} documentId={state.activeEpisodeId || state.activeDoc} saveRef={timerSaveRef} />}
         </div>
       </div>
 
-      {/* ── Row 2: actions + format + font ── */}
-      <div className="h-8 flex items-center px-4 gap-1 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-        <MenuButton
-          label={saveStatus === 'saving' ? '저장 중…' : saveStatus === 'error' ? '저장 실패' : '저장'}
-          onClick={onSave}
-          disabled={!activeProjectId}
-          fixedWidth="5rem"
-          title={saveStatus === 'error' && saveErrorMsg ? saveErrorMsg : undefined}
-          style={saveStatus === 'error' ? { color: '#c00', borderColor: '#f99' } : undefined}
-        />
-        {saveStatus === 'saved' && savedLabel && (
-          <span style={{ fontSize: 10, color: 'var(--c-text6)', whiteSpace: 'nowrap', opacity: 0.85 }}>
-            {savedLabel}
-          </span>
-        )}
-        <MenuButton label="출력" onClick={onPrintPreview} disabled={!activeProjectId} accent />
+      {/* ── Row 2: Radix 메뉴바 ── */}
+      <Menubar
+        onAction={onMenuAction}
+        recentProjects={recentProjects}
+        checkedItems={menuCheckedItems}
+      />
 
-        {sep}
-
-        <MenuButton label="백업/복원" onClick={onSnapshot} />
-
-        {sep}
-
-        {/* Undo / Redo */}
-        <button
-          onClick={() => window.dispatchEvent(new CustomEvent('script:undo'))}
-          disabled={!canUndo}
-          title="되돌리기 (Ctrl+Z)"
-          className="w-6 h-6 rounded text-xs flex items-center justify-center shrink-0"
-          style={{ color: canUndo ? 'var(--c-text3)' : 'var(--c-border3)', border: '1px solid var(--c-border3)', background: 'transparent', cursor: canUndo ? 'pointer' : 'not-allowed' }}
-        >↩</button>
-        <button
-          onClick={() => window.dispatchEvent(new CustomEvent('script:redo'))}
-          disabled={!canRedo}
-          title="다시하기 (Ctrl+Shift+Z / Ctrl+Y)"
-          className="w-6 h-6 rounded text-xs flex items-center justify-center shrink-0"
-          style={{ color: canRedo ? 'var(--c-text3)' : 'var(--c-border3)', border: '1px solid var(--c-border3)', background: 'transparent', cursor: canRedo ? 'pointer' : 'not-allowed' }}
-        >↪</button>
-
-        {sep}
-
-        {/* Inline format buttons */}
+      {/* ── Row 3: 포맷 툴바 ── */}
+      <div className="flex items-center h-10 px-3 gap-1" style={{ overflowX: 'auto', scrollbarWidth: 'none', borderBottom: '1px solid var(--c-border2)' }}>
+        {/* B / I / U */}
         {[
-          { label: 'B', title: '굵게', tag: 'bold', cls: 'font-bold' },
-          { label: 'I', title: '기울임', tag: 'italic', cls: 'italic' },
-          { label: 'U', title: '밑줄', tag: 'underline', cls: 'underline' },
+          { label: 'B', title: '굵게 (Ctrl+B)',   tag: 'bold',      cls: 'font-bold' },
+          { label: 'I', title: '기울임 (Ctrl+I)', tag: 'italic',    cls: 'italic' },
+          { label: 'U', title: '밑줄 (Ctrl+U)',   tag: 'underline', cls: 'underline' },
         ].map(({ label, title, tag, cls }) => (
-          <button
-            key={tag}
-            title={title}
+          <button key={tag} title={title}
             onMouseDown={e => { e.preventDefault(); applyInlineFormat(tag); }}
-            className={`w-6 h-6 rounded text-xs flex items-center justify-center shrink-0 ${cls}`}
-            style={{ color: 'var(--c-text3)', border: '1px solid var(--c-border3)', background: 'transparent' }}
-          >
-            {label}
-          </button>
+            className={`flex items-center justify-center shrink-0 rounded ${cls}`}
+            style={{ ...iconBtnStyle }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-hover)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+          >{label}</button>
         ))}
 
         {sep}
 
-        <label className="text-[11px] shrink-0" style={{ color: 'var(--c-text6)' }}>글꼴</label>
-        <select value={stylePreset?.fontFamily ?? '함초롱바탕'} onChange={handleFontFamily}
-          style={{ ...selectStyle, maxWidth: '110px' }}
-        >
+        {/* Undo / Redo */}
+        <button onClick={() => window.dispatchEvent(new CustomEvent('script:undo'))} disabled={!canUndo} title="되돌리기 (Ctrl+Z)"
+          className="flex items-center justify-center shrink-0 rounded"
+          style={{ ...iconBtnStyle, opacity: canUndo ? 1 : 0.3, cursor: canUndo ? 'pointer' : 'not-allowed' }}
+          onMouseEnter={e => { if (canUndo) e.currentTarget.style.background = 'var(--c-hover)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+        ><Undo2 size={14} strokeWidth={2} /></button>
+        <button onClick={() => window.dispatchEvent(new CustomEvent('script:redo'))} disabled={!canRedo} title="다시하기 (Ctrl+Y)"
+          className="flex items-center justify-center shrink-0 rounded"
+          style={{ ...iconBtnStyle, opacity: canRedo ? 1 : 0.3, cursor: canRedo ? 'pointer' : 'not-allowed' }}
+          onMouseEnter={e => { if (canRedo) e.currentTarget.style.background = 'var(--c-hover)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+        ><Redo2 size={14} strokeWidth={2} /></button>
+
+        {sep}
+
+        {/* 글꼴 */}
+        <span style={{ fontSize: 11, color: 'var(--c-text5)', flexShrink: 0, letterSpacing: '-0.01em' }}>글꼴</span>
+        <select value={stylePreset?.fontFamily ?? '함초롱바탕'} onChange={handleFontFamily} style={{ ...selectStyle, maxWidth: 110 }}>
           <optgroup label="내장 글꼴">
             {FONTS.filter(f => f.sourceType === 'bundled').map(f => {
               const status = getFontPdfStatus(f.id, fontAvailability);
@@ -819,32 +932,29 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
         </select>
         {fontStatusBadge}
 
-        <label className="text-[11px] ml-1 shrink-0" style={{ color: 'var(--c-text6)' }}>크기</label>
+        <span style={{ fontSize: 11, color: 'var(--c-text5)', marginLeft: 4, flexShrink: 0, letterSpacing: '-0.01em' }}>크기</span>
         <select value={stylePreset?.fontSize ?? 11} onChange={handleFontSize} style={selectStyle}>
           {[9,10,11,12,13,14,16,18].map(s => <option key={s} value={s}>{s}pt</option>)}
         </select>
 
         {sep}
 
-        <label className="text-[11px] shrink-0" style={{ color: 'var(--c-text6)' }}>인물/대사 간격</label>
-        <input
-          type="range" min="4" max="14" step="0.5"
+        <span style={{ fontSize: 11, color: 'var(--c-text5)', flexShrink: 0, letterSpacing: '-0.01em' }}>간격</span>
+        <input type="range" min="4" max="14" step="0.5"
           value={parseFloat(stylePreset?.dialogueGap ?? '7')}
           onChange={e => dispatch({ type: 'SET_STYLE_PRESET', payload: { dialogueGap: `${e.target.value}em` } })}
-          className="w-16 shrink-0"
-          style={{ accentColor: 'var(--c-accent)', cursor: 'pointer' }}
+          style={{ width: 60, accentColor: 'var(--c-accent)', cursor: 'pointer', flexShrink: 0 }}
         />
-        <span className="text-[11px] shrink-0" style={{ color: 'var(--c-text5)', minWidth: '2.5rem' }}>
-          {stylePreset?.dialogueGap ?? '7em'}
-        </span>
+        <span style={{ fontSize: 11, color: 'var(--c-text4)', minWidth: '2.5rem', flexShrink: 0 }}>{stylePreset?.dialogueGap ?? '7em'}</span>
 
-        <div className="ml-auto shrink-0">
-          <button
-            onClick={onToggleTheme}
-            style={{ padding: '3px 10px', borderRadius: 4, fontSize: 11, background: 'transparent', border: '1px solid var(--c-border3)', color: 'var(--c-text3)', cursor: 'pointer' }}
-            title={isDark ? '라이트 모드로 전환' : '다크 모드로 전환'}
+        <div className="flex items-center shrink-0" style={{ marginLeft: 'auto' }}>
+          <button onClick={onToggleTheme} title={isDark ? '라이트 모드' : '다크 모드'}
+            className="flex items-center justify-center rounded"
+            style={{ ...iconBtnStyle }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-hover)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
           >
-            {isDark ? '☀ 라이트' : '🌙 다크'}
+            {isDark ? <Sun size={14} strokeWidth={2} /> : <Moon size={14} strokeWidth={2} />}
           </button>
         </div>
       </div>
@@ -878,49 +988,51 @@ function MenuButton({ label, onClick, disabled, accent, fixedWidth, title, style
 
 // ─── CollapseButton ───────────────────────────────────────────────────────────
 function CollapseButton({ side, collapsed, onToggle }) {
-  const isOpen = !collapsed;
-  // 왼쪽 패널: 열림=‹ 닫힘=›  /  오른쪽 패널: 열림=› 닫힘=‹
-  const icon = side === 'left'
-    ? (isOpen ? '‹' : '›')
-    : (isOpen ? '›' : '‹');
+  const [hovered, setHovered] = React.useState(false);
+  const isLeft = side === 'left';
+  // 왼쪽: 열림=ChevronLeft(접기), 닫힘=ChevronRight(펼치기)
+  // 오른쪽: 열림=ChevronRight(접기), 닫힘=ChevronLeft(펼치기)
+  const Icon = isLeft
+    ? (collapsed ? ChevronRight : ChevronLeft)
+    : (collapsed ? ChevronLeft  : ChevronRight);
 
   return (
     <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
-        width: '18px', flexShrink: 0, position: 'relative',
-        display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
-        paddingTop: '40px', zIndex: 10,
+        width: 10, flexShrink: 0, position: 'relative',
+        display: 'flex', alignItems: 'stretch',
+        cursor: 'pointer', zIndex: 10,
       }}
+      onClick={onToggle}
+      title={collapsed ? '패널 열기' : '패널 닫기'}
     >
-      <button
-        onClick={onToggle}
-        title={collapsed ? '패널 열기' : '패널 닫기'}
-        style={{
-          width: '20px', height: '52px',
-          border: '1px solid var(--c-border2)',
-          borderRadius: '10px',
-          background: 'var(--c-card)',
-          color: 'var(--c-text2)',
-          cursor: 'pointer',
+      {/* 얇은 세로 바 */}
+      <div style={{
+        width: '1.5px', margin: '0 auto',
+        background: hovered ? 'var(--c-accent)' : 'var(--c-border3)',
+        transition: 'background 150ms',
+        borderRadius: 2,
+      }} />
+
+      {/* 호버 시 나타나는 pill 버튼 */}
+      {hovered && (
+        <div style={{
+          position: 'absolute',
+          top: '50%', transform: 'translateY(-50%)',
+          [isLeft ? 'right' : 'left']: -3,
+          width: 20, height: 56,
+          background: 'var(--c-accent)',
+          borderRadius: isLeft ? '6px 0 0 6px' : '0 6px 6px 0',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '13px', fontWeight: 600, lineHeight: 1,
-          transition: 'background 0.15s, color 0.15s, border-color 0.15s',
-          boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
-          padding: 0,
-        }}
-        onMouseEnter={e => {
-          e.currentTarget.style.background = 'var(--c-accent)';
-          e.currentTarget.style.color = '#fff';
-          e.currentTarget.style.borderColor = 'var(--c-accent)';
-        }}
-        onMouseLeave={e => {
-          e.currentTarget.style.background = 'var(--c-panel)';
-          e.currentTarget.style.color = 'var(--c-text4)';
-          e.currentTarget.style.borderColor = 'var(--c-border3)';
-        }}
-      >
-        {icon}
-      </button>
+          boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+          color: '#fff',
+          pointerEvents: 'none',
+        }}>
+          <Icon size={12} strokeWidth={2.5} />
+        </div>
+      )}
     </div>
   );
 }
@@ -956,20 +1068,32 @@ function Shell({ authUser, setAuthUser }) {
   const isMobile = windowWidth < 768;
   const isTablet = windowWidth >= 768 && windowWidth < 1280;
 
+  // ── Dev: findReplace 브라우저 콘솔 테스트용 (개발 중에만 사용)
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      window.__findReplace = findReplaceUtils;
+      window.__getBlocks = () => state.scriptBlocks;
+      window.__debugBlocks = state.scriptBlocks;
+      window.__debugChars  = state.characters;
+    }
+  });
+
   // ── Tablet panel collapse state
   const [leftCollapsed,  setLeftCollapsed]  = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
 
   // ── Focus mode
   const [focusMode, setFocusMode] = useState(false);
+  const focusModeRef = useRef(false);
+  useEffect(() => { focusModeRef.current = focusMode; }, [focusMode]);
+
   useEffect(() => {
-    // 진입은 ScriptEditor 버튼 핸들러에서 동기 호출 (제스처 컨텍스트 유지)
-    // 여기서는 focusMode 해제 시 fullscreen 종료만 담당
+    // focusMode 해제 시 fullscreen도 종료
     if (!focusMode && document.fullscreenElement) {
       document.exitFullscreen?.().catch(() => {});
     }
   }, [focusMode]);
-  // 브라우저 자체 ESC로 fullscreen 해제 시 focusMode도 같이 해제
+  // 브라우저 ESC로 fullscreen 해제 시 focusMode도 같이 해제
   useEffect(() => {
     const onFsChange = () => {
       if (!document.fullscreenElement) setFocusMode(false);
@@ -1039,6 +1163,10 @@ function Shell({ authUser, setAuthUser }) {
     });
   }, []);
 
+  const updateSplitWidth = useCallback((delta) => {
+    setSplitViewWidth(prev => Math.min(700, Math.max(240, prev - delta)));
+  }, []);
+
   // Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y — only when not in a text input/textarea/contenteditable
   useEffect(() => {
     const onKey = (e) => {
@@ -1062,7 +1190,7 @@ function Shell({ authUser, setAuthUser }) {
   // Apply theme on mount and whenever isDark changes
   useEffect(() => {
     const theme = isDark ? 'dark' : 'light';
-    document.getElementById('root').dataset.theme = theme;
+    document.documentElement.dataset.theme = theme;
   }, [isDark]);
 
   const toggleTheme = useCallback(() => {
@@ -1183,21 +1311,277 @@ function Shell({ authUser, setAuthUser }) {
     }
   }, [contextSceneId, dispatch]);
 
+  // ── 메뉴바 모달 상태 ────────────────────────────────────────────────────────
+  const [newProjectOpen,  setNewProjectOpen]  = useState(false);
+  const [openProjectOpen, setOpenProjectOpen] = useState(false);
+  const [saveAsOpen,      setSaveAsOpen]      = useState(false);
+  const [shareLinkOpen,   setShareLinkOpen]   = useState(false);
+  const [projectInfoOpen, setProjectInfoOpen] = useState(false);
+  const [findPanelMode,   setFindPanelMode]   = useState(null); // null | 'find' | 'replace'
+  const [wordCountOpen,   setWordCountOpen]   = useState(false);
+  const [importDocxOpen,       setImportDocxOpen]       = useState(false);
+  const [importHwpxOpen,       setImportHwpxOpen]       = useState(false);
+  const [styleSettingsOpen,    setStyleSettingsOpen]    = useState(false);
+  const [sceneFormatOpen,      setSceneFormatOpen]      = useState(false);
+  const [userSettingsOpen,     setUserSettingsOpen]     = useState(false);
+  const [tagManageOpen,        setTagManageOpen]        = useState(false);
+  const [appSettingsOpen,      setAppSettingsOpen]      = useState(false);
+  const [noticesOpen,          setNoticesOpen]          = useState(false);
+  const [qaOpen,               setQaOpen]               = useState(false);
+  const [exportDefaultFormat, setExportDefaultFormat] = useState('pdf');
+
+  const activeProject = state.projects.find(p => p.id === state.activeProjectId);
+
+  // 메뉴바 토글 상태 (보기 > 프로젝트 탐색기 등)
+  const [viewCheckedItems, setViewCheckedItems] = useState({ 'toggle-explorer': true, 'toggle-topbar': true, 'focus-mode': false, 'split-view': false });
+  const toggleMenuCheck = (id) => setViewCheckedItems(prev => ({ ...prev, [id]: !prev[id] }));
+
+  const menuCheckedItems = useMemo(() => {
+    const sp = activeProject?.stylePreset || {};
+    const fontFamily  = sp.fontFamily  ?? '함초롱바탕';
+    const fontSize    = sp.fontSize    ?? 11;
+    const lineHeightPct = Math.round((sp.lineHeight ?? 1.6) * 100);
+    const dgap        = Math.round(parseFloat(sp.dialogueGap ?? '7'));
+    return {
+      ...viewCheckedItems,
+      'font-hamcho':     fontFamily === '함초롱바탕',
+      'font-noto-serif': fontFamily === 'Noto Serif KR',
+      'font-noto-sans':  fontFamily === 'Noto Sans KR',
+      'font-malgun':     fontFamily === 'Malgun Gothic',
+      'font-nanum':      fontFamily === '나눔명조',
+      [`fontsize-${fontSize}`]: true,
+      [`lh-${lineHeightPct}`]:  true,
+      [`dgap-${dgap}`]:         true,
+    };
+  }, [viewCheckedItems, activeProject?.stylePreset]);
+
+  // 최근 프로젝트 (최신순 5개)
+  const recentProjects = useMemo(
+    () => [...state.projects].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 5),
+    [state.projects]
+  );
+
+  // 메뉴 명령 실행 시 포커스를 돌려줄 마지막 에디터 추적
+  const lastEditorRef = useRef(null);
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.target?.contentEditable === 'true') lastEditorRef.current = e.target;
+    };
+    document.addEventListener('focusin', handler);
+    return () => document.removeEventListener('focusin', handler);
+  }, []);
+
+  const getEditor = () =>
+    document.querySelector('[contenteditable="true"]:focus')
+    || lastEditorRef.current
+    || document.querySelector('[data-editor-surface] [contenteditable="true"]');
+
+  // ── 메뉴 액션 핸들러 ────────────────────────────────────────────────────────
+  const handleMenuAction = useCallback((action) => {
+    // ── 파일 ──
+    if (action === 'file:new') { setNewProjectOpen(true); return; }
+    if (action === 'file:openList')    { setOpenProjectOpen(true); return; }
+    if (action === 'file:openFile')    { setOpenProjectOpen(true); return; }
+    if (action === 'file:save')        { handleSave(); return; }
+    if (action === 'file:saveAs')      { setSaveAsOpen(true); return; }
+    if (action === 'file:share')       { setShareLinkOpen(true); return; }
+    if (action === 'file:projectInfo')  { setProjectInfoOpen(true); return; }
+    if (action === 'file:importDocx')   { setImportDocxOpen(true); return; }
+    if (action === 'file:importHwpx')   { setImportHwpxOpen(true); return; }
+    if (action === 'file:snapshot')     { setSnapshotOpen(true); return; }
+
+    // 내보내기 — PrintPreviewModal 직접 오픈
+    if (action === 'file:export') { setExportDefaultFormat('pdf'); window.dispatchEvent(new CustomEvent('editor:flush')); setPrintPreviewOpen(true); return; }
+
+    // 최근 작품
+    if (action?.startsWith('file:openRecent:')) {
+      dispatch({ type: 'SET_ACTIVE_PROJECT', id: action.slice('file:openRecent:'.length) });
+      return;
+    }
+
+    // ── 편집 ──
+    if (action === 'edit:undo') { window.dispatchEvent(new CustomEvent('script:undo')); return; }
+    if (action === 'edit:redo') { window.dispatchEvent(new CustomEvent('script:redo')); return; }
+    if (action === 'edit:find')    { window.dispatchEvent(new CustomEvent('editor:flush')); setFindPanelMode('find');    if (!isMobile) setLeftCollapsed(false); return; }
+    if (action === 'edit:replace') { window.dispatchEvent(new CustomEvent('editor:flush')); setFindPanelMode('replace'); if (!isMobile) setLeftCollapsed(false); return; }
+    if (action === 'edit:cut') {
+      const el = getEditor(); if (el) el.focus();
+      document.execCommand('cut');
+      return;
+    }
+    if (action === 'edit:copy') {
+      const el = getEditor(); if (el) el.focus();
+      document.execCommand('copy');
+      return;
+    }
+    if (action === 'edit:paste') {
+      const el = getEditor();
+      if (!el) return;
+      el.focus();
+      navigator.clipboard.readText().then(text => {
+        const dt = new DataTransfer();
+        dt.setData('text/plain', text);
+        el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+      }).catch(() => { document.execCommand('paste'); });
+      return;
+    }
+    if (action === 'edit:selectAll') {
+      const el = getEditor();
+      if (!el) return;
+      el.focus();
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      return;
+    }
+
+    // ── 보기 ──
+    if (action === 'view:toggleExplorer') { setLeftCollapsed(v => !v); toggleMenuCheck('toggle-explorer'); return; }
+    if (action === 'view:toggleTopbar')  { toggleMenuCheck('toggle-topbar'); return; }
+    if (action === 'view:splitView')     { toggleMenuCheck('split-view'); return; }
+    if (action === 'view:focusMode') {
+      const entering = !focusModeRef.current;
+      setFocusMode(entering);
+      toggleMenuCheck('focus-mode');
+      if (entering) {
+        document.documentElement.requestFullscreen?.().catch(() => {});
+      } else {
+        document.exitFullscreen?.().catch(() => {});
+      }
+      return;
+    }
+    if (action === 'view:fullscreen') { if (document.fullscreenElement) document.exitFullscreen?.(); else document.documentElement.requestFullscreen?.(); return; }
+
+    // ── 삽입 ──
+    if (action === 'insert:charCheck') { window.dispatchEvent(new CustomEvent('script:charCheck'));    return; }
+    if (action === 'insert:sceneRef')  { window.dispatchEvent(new CustomEvent('script:openSceneRef')); return; }
+    if (action === 'insert:symbol')    { window.dispatchEvent(new CustomEvent('script:openSymbol'));   return; }
+    if (action === 'insert:tag')       { window.dispatchEvent(new CustomEvent('script:openTag'));      return; }
+    if (action?.startsWith('insert:')) {
+      const typeMap = { scene: 'scene_number', action: 'action', dialogue: 'dialogue', transition: 'transition' };
+      const raw = action.slice(7);
+      window.dispatchEvent(new CustomEvent('script:setBlockType', { detail: { type: typeMap[raw] || raw } }));
+      return;
+    }
+
+    // ── 서식 ──
+    if (action === 'format:bold')          { applyInlineFormat('bold');      return; }
+    if (action === 'format:italic')        { applyInlineFormat('italic');    return; }
+    if (action === 'format:underline')     { applyInlineFormat('underline'); return; }
+    if (action === 'format:styleSettings') { setStyleSettingsOpen(true);    return; }
+    if (action === 'format:sceneFormat')   { setSceneFormatOpen(true);      return; }
+    if (action === 'format:userSettings')  { setUserSettingsOpen(true);     return; }
+    if (action === 'format:tagManage')     { setTagManageOpen(true);        return; }
+    if (action?.startsWith('format:type:')) { window.dispatchEvent(new CustomEvent('script:setBlockType', { detail: { type: action.slice(12) } })); return; }
+    if (action?.startsWith('format:font:')) { dispatch({ type: 'SET_STYLE_PRESET', payload: { fontFamily: action.slice('format:font:'.length) } }); return; }
+    if (action?.startsWith('format:fontSize:')) { dispatch({ type: 'SET_STYLE_PRESET', payload: { fontSize: Number(action.slice('format:fontSize:'.length)) } }); return; }
+    if (action?.startsWith('format:lineHeight:')) { dispatch({ type: 'SET_STYLE_PRESET', payload: { lineHeight: Number(action.slice('format:lineHeight:'.length)) / 100 } }); return; }
+    if (action?.startsWith('format:dialogueGap:')) { dispatch({ type: 'SET_STYLE_PRESET', payload: { dialogueGap: action.slice('format:dialogueGap:'.length) + 'em' } }); return; }
+
+    // ── 도구 ──
+    if (action === 'tools:settings')  { setAppSettingsOpen(true); return; }
+    if (action === 'tools:wordcount') { setWordCountOpen(true); return; }
+
+    // ── 도움말 ──
+    if (action === 'help:manual')  { window.open('/help.html', '_blank', 'noopener,noreferrer'); return; }
+    if (action === 'help:about')   { window.open('/changelog.html', '_blank', 'noopener,noreferrer'); return; }
+    if (action === 'help:notices') { setNoticesOpen(true); return; }
+    if (action === 'help:qa')      { setQaOpen(true); return; }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handleSave, dispatch, setFocusMode]);
+
+  // 메뉴바 전용 신규 단축키 (기존 Ctrl+S/Z/Y/B/I/U 는 각자 핸들러에서 처리)
+  useKeyboardShortcuts({
+    'ctrl+alt+n': () => handleMenuAction('file:new'),
+    'ctrl+o':     () => setOpenProjectOpen(true),
+    'ctrl+alt+s': () => setSaveAsOpen(true),
+    'ctrl+alt+l': () => setShareLinkOpen(true),
+    'ctrl+alt+1': () => handleMenuAction('view:toggleExplorer'),
+    'ctrl+alt+2': () => handleMenuAction('view:splitView'),
+    'ctrl+f':     () => handleMenuAction('edit:find'),
+    'ctrl+h':     () => handleMenuAction('edit:replace'),
+  });
+
   const menuBar = (
     <MenuBar
       isDark={isDark}
       onToggleTheme={toggleTheme}
-      onPrintPreview={() => { window.dispatchEvent(new CustomEvent('editor:flush')); setPrintPreviewOpen(true); }}
+      onPrintPreview={() => { setExportDefaultFormat('pdf'); window.dispatchEvent(new CustomEvent('editor:flush')); setPrintPreviewOpen(true); }}
       onSave={handleSave}
       onSnapshot={() => setSnapshotOpen(true)}
       authUser={authUser}
       setAuthUser={setAuthUser}
       onSyncConflict={setSyncConflict}
+      onMenuAction={handleMenuAction}
+      recentProjects={recentProjects}
+      menuCheckedItems={menuCheckedItems}
     />
   );
   const modals = (
     <>
-      {printPreviewOpen && <PrintPreviewModal onClose={() => { console.trace('[Modal] setPrintPreviewOpen(false) 호출'); setPrintPreviewOpen(false); }} />}
+      {/* ── Radix 기반 모달들 ── */}
+      <NewProjectModal
+        open={newProjectOpen}
+        onClose={() => setNewProjectOpen(false)}
+        onCommit={({ title, projectType, totalEpisodes, createEpisodes, totalMins, climaxStart, climaxEnd }) => {
+          const p = { id: genId(), title, genre: '', status: 'draft', projectType, totalEpisodes, totalMins, climaxStart, climaxEnd, createdAt: now(), updatedAt: now() };
+          dispatch({ type: 'ADD_PROJECT', payload: p });
+          dispatch({ type: 'SET_ACTIVE_PROJECT', id: p.id });
+          const count = Math.max(1, createEpisodes);
+          const eps = Array.from({ length: count }, (_, i) => ({
+            id: genId(), projectId: p.id, number: i + 1,
+            title: '', majorEpisodes: '', summaryItems: [],
+            status: 'draft', createdAt: now(), updatedAt: now(),
+          }));
+          eps.forEach(ep => dispatch({ type: 'ADD_EPISODE', payload: ep }));
+          dispatch({ type: 'SET_ACTIVE_EPISODE', id: eps[0].id });
+        }}
+      />
+      <OpenProjectModal
+        open={openProjectOpen}
+        onClose={() => setOpenProjectOpen(false)}
+        projects={state.projects}
+        activeProjectId={state.activeProjectId}
+        onSelect={id => dispatch({ type: 'SET_ACTIVE_PROJECT', id })}
+      />
+      <SaveAsModal
+        open={saveAsOpen}
+        onClose={() => setSaveAsOpen(false)}
+        projectTitle={activeProject?.title}
+        onExport={(format, filename) => console.log('[stub] export', format, filename)}
+      />
+      <ShareLinkModal
+        open={shareLinkOpen}
+        onClose={() => setShareLinkOpen(false)}
+      />
+      <WordCountModal  open={wordCountOpen}  onClose={() => setWordCountOpen(false)} />
+      <ImportDocxModal    open={importDocxOpen}    onClose={() => setImportDocxOpen(false)} />
+      <ImportHwpxModal    open={importHwpxOpen}    onClose={() => setImportHwpxOpen(false)} />
+      <StyleSettingsModal open={styleSettingsOpen} onClose={() => setStyleSettingsOpen(false)} />
+      <SceneFormatModal   open={sceneFormatOpen}   onClose={() => setSceneFormatOpen(false)} />
+      <UserSettingsModal   open={userSettingsOpen} onClose={() => setUserSettingsOpen(false)} />
+      <TagManageModal      open={tagManageOpen}    onClose={() => setTagManageOpen(false)} />
+      <AppSettingsModal    open={appSettingsOpen}  onClose={() => setAppSettingsOpen(false)} />
+      <NoticesModal        open={noticesOpen}      onClose={() => setNoticesOpen(false)} />
+      <QnAModal            open={qaOpen}           onClose={() => setQaOpen(false)} />
+      <ProjectInfoModal
+        open={projectInfoOpen}
+        onClose={() => setProjectInfoOpen(false)}
+        project={activeProject}
+        onSave={(patch) => {
+          if (activeProject) dispatch({ type: 'UPDATE_PROJECT', payload: { ...activeProject, ...patch } });
+        }}
+      />
+
+      <FindReplaceMobileModal
+        open={isMobile && !!findPanelMode}
+        initialMode={findPanelMode}
+        onClose={() => setFindPanelMode(null)}
+      />
+
+      {printPreviewOpen && <PrintPreviewModal onClose={() => setPrintPreviewOpen(false)} defaultFormat={exportDefaultFormat} />}
       {syncConflict && (
         <SyncConflictModal
           localSavedAt={syncConflict.localSavedAt}
@@ -1304,11 +1688,14 @@ function Shell({ authUser, setAuthUser }) {
         <div style={{ display: focusMode ? 'none' : 'contents' }}>
           <MobileMenuBar
             onSave={handleSave}
-            onPrintPreview={() => { window.dispatchEvent(new CustomEvent('editor:flush')); setPrintPreviewOpen(true); }}
+            onPrintPreview={() => { setExportDefaultFormat('pdf'); window.dispatchEvent(new CustomEvent('editor:flush')); setPrintPreviewOpen(true); }}
             onSnapshot={() => setSnapshotOpen(true)}
             WorkTimer={WorkTimer}
             authUser={authUser}
             onLogout={() => setAuthUser(null)}
+            onMenuAction={handleMenuAction}
+            recentProjects={recentProjects}
+            checkedItems={menuCheckedItems}
           />
           <UpdateBanner />
         </div>
@@ -1346,34 +1733,61 @@ function Shell({ authUser, setAuthUser }) {
           <UpdateBanner />
         </div>
         <div className="flex flex-1 min-h-0">
-          <div style={{ display: focusMode ? 'none' : 'contents' }}>
-            <CollapseButton side="left" collapsed={leftCollapsed} onToggle={() => setLeftCollapsed(v => !v)} />
-            {!leftCollapsed && (
-              <>
-                <div data-tour-id="left-panel" style={{ width: panelWidths.left, flexShrink: 0, overflow: 'hidden' }}>
-                  <LeftPanel />
-                </div>
-                <DragHandle onDrag={updateLeftWidth} isLeft />
-              </>
-            )}
-          </div>
+          {!viewCheckedItems['split-view'] && (
+            <div style={{ display: focusMode ? 'none' : 'contents' }}>
+              <CollapseButton side="left" collapsed={leftCollapsed} onToggle={() => setLeftCollapsed(v => !v)} />
+              {!leftCollapsed && (
+                <>
+                  <div data-tour-id="left-panel" style={{ width: panelWidths.left, flexShrink: 0, overflow: 'hidden' }}>
+                    <LeftPanel findMode={findPanelMode} onFindClose={() => setFindPanelMode(null)} />
+                  </div>
+                  <DragHandle onDrag={updateLeftWidth} isLeft />
+                </>
+              )}
+            </div>
+          )}
 
-          <div data-tour-id="center-panel" className="flex-1 min-w-0 overflow-hidden" style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
-            <CenterPanel scrollToSceneId={scrollToSceneId} onScrollHandled={() => setScrollToSceneId(null)} focusMode={focusMode} setFocusMode={setFocusMode} />
-          </div>
-
-          <div style={{ display: focusMode ? 'none' : 'contents' }}>
-            <CollapseButton side="right" collapsed={rightCollapsed} onToggle={() => setRightCollapsed(v => !v)} />
-            {!rightCollapsed && (
-              <>
-                <DragHandle onDrag={updateRightWidth} />
-                <div data-tour-id="right-panel" style={{ width: panelWidths.right, flexShrink: 0, overflow: 'clip' }}>
-                  <RightPanel onScrollToScene={id => setScrollToSceneId(id)} />
-                </div>
-              </>
-            )}
-          </div>
+          {viewCheckedItems['split-view'] && !focusMode ? (
+            <>
+              <div style={{ display: focusMode ? 'none' : 'contents' }}>
+                <CollapseButton side="left" collapsed={leftCollapsed} onToggle={() => setLeftCollapsed(v => !v)} />
+                {!leftCollapsed && (
+                  <>
+                    <div data-tour-id="left-panel" style={{ width: panelWidths.left, flexShrink: 0, overflow: 'hidden' }}>
+                      <LeftPanel findMode={findPanelMode} onFindClose={() => setFindPanelMode(null)} />
+                    </div>
+                    <DragHandle onDrag={updateLeftWidth} isLeft />
+                  </>
+                )}
+              </div>
+              <SplitViewPanel
+                defaultTab="main"
+                centerPanelNode={<CenterPanel scrollToSceneId={scrollToSceneId} onScrollHandled={() => setScrollToSceneId(null)} focusMode={focusMode} setFocusMode={setFocusMode} />}
+                borderRight
+              />
+              <SplitViewPanel defaultTab="characters" />
+            </>
+          ) : (
+            <>
+              <div data-tour-id="center-panel" className="flex-1 min-w-0 overflow-hidden" style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
+                <CenterPanel scrollToSceneId={scrollToSceneId} onScrollHandled={() => setScrollToSceneId(null)} focusMode={focusMode} setFocusMode={setFocusMode} />
+              </div>
+              <div style={{ display: focusMode ? 'none' : 'contents' }}>
+                <CollapseButton side="right" collapsed={rightCollapsed} onToggle={() => setRightCollapsed(v => !v)} />
+                {!rightCollapsed && (
+                  <>
+                    <DragHandle onDrag={updateRightWidth} />
+                    <div data-tour-id="right-panel" style={{ width: panelWidths.right, flexShrink: 0, overflow: 'clip' }}>
+                      <RightPanel onScrollToScene={id => setScrollToSceneId(id)} />
+                    </div>
+                  </>
+                )}
+              </div>
+            </>
+          )}
         </div>
+
+        {!focusMode && <StatusBar />}
 
         <div style={{ overflow: 'hidden', height: focusMode ? 0 : 'auto' }}>
           <AdBanner
@@ -1396,40 +1810,80 @@ function Shell({ authUser, setAuthUser }) {
       className="w-screen flex flex-col overflow-hidden"
       style={{ background: 'var(--c-bg)', position: 'fixed', top: 0, right: 0, bottom: 0, left: 0 }}
     >
-      <div style={{ display: focusMode ? 'none' : 'contents' }}>
+      <div style={{ display: (focusMode || !viewCheckedItems['toggle-topbar']) ? 'none' : 'contents' }}>
         {menuBar}
         <UpdateBanner />
       </div>
 
       <div className="flex flex-1 min-h-0">
-        <div style={{ display: focusMode ? 'none' : 'contents' }}>
-          <div data-tour-id="left-panel" style={{ width: panelWidths.left, flexShrink: 0, overflow: 'hidden' }}>
-            <LeftPanel />
-          </div>
-          <DragHandle onDrag={updateLeftWidth} isLeft />
-        </div>
+        {viewCheckedItems['split-view'] && !focusMode ? (
+          /* ── 분할 보기: 좌패널 유지, 중앙을 50/50 분할 ── */
+          <>
+            <div style={{ display: 'contents' }}>
+              <CollapseButton side="left" collapsed={leftCollapsed} onToggle={() => setLeftCollapsed(v => !v)} />
+              {!leftCollapsed && (
+                <>
+                  <div data-tour-id="left-panel" style={{ width: panelWidths.left, flexShrink: 0, overflow: 'hidden' }}>
+                    <LeftPanel findMode={findPanelMode} onFindClose={() => setFindPanelMode(null)} />
+                  </div>
+                  <DragHandle onDrag={updateLeftWidth} isLeft />
+                </>
+              )}
+            </div>
+            <SplitViewPanel
+              defaultTab="main"
+              centerPanelNode={
+                <CenterPanel
+                  scrollToSceneId={scrollToSceneId}
+                  onScrollHandled={() => setScrollToSceneId(null)}
+                  focusMode={focusMode}
+                  setFocusMode={setFocusMode}
+                />
+              }
+              borderRight
+            />
+            <SplitViewPanel defaultTab="characters" />
+          </>
+        ) : (
+          /* ── 일반 보기 ── */
+          <>
+            <div style={{ display: focusMode ? 'none' : 'contents' }}>
+              <CollapseButton side="left" collapsed={leftCollapsed} onToggle={() => setLeftCollapsed(v => !v)} />
+              {!leftCollapsed && (
+                <>
+                  <div data-tour-id="left-panel" style={{ width: panelWidths.left, flexShrink: 0, overflow: 'hidden' }}>
+                    <LeftPanel findMode={findPanelMode} onFindClose={() => setFindPanelMode(null)} />
+                  </div>
+                  <DragHandle onDrag={updateLeftWidth} isLeft />
+                </>
+              )}
+            </div>
 
-        <div data-tour-id="center-panel" className="flex-1 min-w-0 overflow-hidden" style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
-          <CenterPanel
-            scrollToSceneId={scrollToSceneId}
-            onScrollHandled={() => setScrollToSceneId(null)}
-            focusMode={focusMode}
-            setFocusMode={setFocusMode}
-          />
-        </div>
+            <div data-tour-id="center-panel" className="flex-1 min-w-0 overflow-hidden" style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
+              <CenterPanel
+                scrollToSceneId={scrollToSceneId}
+                onScrollHandled={() => setScrollToSceneId(null)}
+                focusMode={focusMode}
+                setFocusMode={setFocusMode}
+              />
+            </div>
 
-        <div style={{ display: focusMode ? 'none' : 'contents' }}>
-          <CollapseButton side="right" collapsed={rightCollapsed} onToggle={() => setRightCollapsed(v => !v)} />
-          {!rightCollapsed && (
-            <>
-              <DragHandle onDrag={updateRightWidth} />
-              <div data-tour-id="right-panel" style={{ width: panelWidths.right, flexShrink: 0, overflow: 'clip' }}>
-                <RightPanel onScrollToScene={id => setScrollToSceneId(id)} />
-              </div>
-            </>
-          )}
-        </div>
+            <div style={{ display: focusMode ? 'none' : 'contents' }}>
+              <CollapseButton side="right" collapsed={rightCollapsed} onToggle={() => setRightCollapsed(v => !v)} />
+              {!rightCollapsed && (
+                <>
+                  <DragHandle onDrag={updateRightWidth} />
+                  <div data-tour-id="right-panel" style={{ width: panelWidths.right, flexShrink: 0, overflow: 'clip' }}>
+                    <RightPanel onScrollToScene={id => setScrollToSceneId(id)} />
+                  </div>
+                </>
+              )}
+            </div>
+          </>
+        )}
       </div>
+
+      {!focusMode && <StatusBar />}
 
       <div style={{ overflow: 'hidden', height: focusMode ? 0 : 'auto' }}>
         <AdBanner
@@ -1548,7 +2002,7 @@ function LogShareView() {
 function LandingPreview() {
   useEffect(() => {
     const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    document.getElementById('root').dataset.theme = isDark ? 'dark' : 'light';
+    document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
   }, []);
   return (
     <LandingPage

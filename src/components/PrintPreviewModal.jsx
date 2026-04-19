@@ -15,7 +15,7 @@ import {
 
 
 // ─── PrintPreviewModal ────────────────────────────────────────────────────────
-export default function PrintPreviewModal({ onClose }) {
+export default function PrintPreviewModal({ onClose, defaultFormat }) {
   const { state } = useApp();
   const {
     episodes, activeProjectId, stylePreset,
@@ -39,7 +39,7 @@ export default function PrintPreviewModal({ onClose }) {
     return { cover: true, synopsis: true, episodes: episodesMap, chars: true, biography: false, treatment: false };
   });
 
-  const [format, setFormat]       = useState('pdf');
+  const [format, setFormat]       = useState(defaultFormat || 'pdf');
   const [exporting, setExporting] = useState(false);
   const [shareMsg, setShareMsg]   = useState('');
   const [sharing, setSharing]     = useState(false);
@@ -215,22 +215,6 @@ export default function PrintPreviewModal({ onClose }) {
             <Checkbox label="인물관계도" checked={false}          onChange={() => {}} indent disabled />
             <Checkbox label="자료수집"   checked={false}          onChange={() => {}} indent disabled />
           </Section>
-
-          {/* Share button — 출력 형식 위 */}
-          <button
-            onClick={handleShare}
-            disabled={sharing}
-            className="w-full py-2 rounded-lg text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
-            style={{
-              background: 'transparent',
-              border: '1px solid var(--c-border3)',
-              color: 'var(--c-text3)',
-              marginBottom: '0.5rem',
-              cursor: sharing ? 'default' : 'pointer',
-            }}
-          >
-            {shareMsg || '검토 링크 공유'}
-          </button>
 
           {/* Format */}
           <Section title="출력 형식">

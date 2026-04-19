@@ -21,12 +21,14 @@ function resolveConfig(slot) {
   return SLOT_CONFIG[slot] ?? { adSlot: '3846187377', format: 'horizontal' };
 }
 
+const IS_DEV = import.meta.env.DEV;
+
 export default function AdBanner({ slot, mobileHide = true, height = 56, style = {}, className = '' }) {
   const { state } = useApp();
   const pushed = useRef(false);
 
   useEffect(() => {
-    if (state.isPro || pushed.current) return;
+    if (IS_DEV || state.isPro || pushed.current) return;
     try {
       (window.adsbygoogle = window.adsbygoogle || []).push({});
       pushed.current = true;
@@ -37,6 +39,22 @@ export default function AdBanner({ slot, mobileHide = true, height = 56, style =
 
   const { adSlot, format } = resolveConfig(slot);
   const visibilityClass = mobileHide ? 'hidden md:block' : 'block';
+
+  if (IS_DEV) {
+    return (
+      <div
+        className={`${visibilityClass} shrink-0 ${className}`}
+        style={{
+          ...style, minHeight: height, maxHeight: height,
+          background: 'rgba(253,224,71,0.35)', border: '1px dashed #ca8a04',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxSizing: 'border-box',
+        }}
+      >
+        <span style={{ fontSize: 10, color: '#92400e', fontWeight: 600 }}>AD {slot}</span>
+      </div>
+    );
+  }
 
   return (
     <div

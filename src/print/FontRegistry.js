@@ -35,7 +35,7 @@ export const FONTS = [
       italic:     null,
       boldItalic: null,
     },
-    docxFontName: '함초롱바탕',
+    docxFontName: '함초롬바탕',
     cssFallback:  "'HCR Batang', 'Noto Serif KR', serif",
   },
 

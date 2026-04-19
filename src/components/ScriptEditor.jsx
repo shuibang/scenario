@@ -8,6 +8,7 @@ import { useApp } from '../store/AppContext';
 import { genId, now } from '../store/db';
 import { resolveSceneLabel, parseSceneContent, SCENE_PREFIX_STRIP_RE } from '../utils/sceneResolver';
 import { buildSceneLabel, getScenePrefix } from '../utils/scenePrefix';
+import { parseScriptText } from '../utils/parseScriptText';
 import { getSceneFormat } from '../utils/sceneFormat';
 import { resolveFont } from '../print/FontRegistry';
 import { getLayoutMetrics } from '../print/LineTokenizer';
@@ -254,6 +255,7 @@ function SymbolPicker({ mobile = false, closeToken = 0, onOpen, forceOpen = null
     sel.removeAllRanges();
     sel.addRange(r);
     surface.dispatchEvent(new Event('input', { bubbles: true }));
+    requestAnimationFrame(() => { surface.focus(); });
   };
 
   return (
@@ -294,7 +296,7 @@ function SymbolPicker({ mobile = false, closeToken = 0, onOpen, forceOpen = null
       {open && createPortal(
         <div
           ref={dropRef}
-          onPointerDown={e => { if (e.target.closest('button, input, [data-sym-item]')) return; e.preventDefault(); e.stopPropagation(); }} // 포털 전체: 에디터 커서 이동 차단 (버튼·input·단축어 아이템 제외)
+          onPointerDown={e => { if (e.target.closest('button, input')) return; e.preventDefault(); e.stopPropagation(); }} // 포털 전체: 에디터 커서 이동 차단 (아이템 자체가 stopPropagation 처리)
           style={{
             position: 'fixed',
             top: dropPos.top,
@@ -326,7 +328,7 @@ function SymbolPicker({ mobile = false, closeToken = 0, onOpen, forceOpen = null
               <div
                 key={sym + i}
                 data-sym-item="1"
-                onClick={e => { if (!editMode) { e.preventDefault(); e.stopPropagation(); insertSymbol(sym); } }}
+                onPointerDown={e => { if (!editMode) { e.preventDefault(); e.stopPropagation(); insertSymbol(sym); } }}
                 onMouseEnter={() => !editMode && setActiveIdx(i)}
                 onMouseLeave={() => setActiveIdx(-1)}
                 style={{
@@ -1235,8 +1237,8 @@ function NextTypePickerOverlay({ anchor, onSelect, onClose, excludeType }) {
 }
 
 // ─── CharPickerOverlay ────────────────────────────────────────────────────────
-function CharPickerOverlay({ anchor, projectChars, onSelect, onClose, onAddNew, onSkip, mobile = false }) {
-  const [query, setQuery] = useState('');
+function CharPickerOverlay({ anchor, projectChars, onSelect, onClose, onAddNew, onSkip, initialQuery = '', mobile = false }) {
+  const [query, setQuery] = useState(initialQuery);
   const [activeIdx, setActiveIdx] = useState(-1);
   const inputRef = useRef(null);
   const listRef = useRef(null);
@@ -1268,12 +1270,47 @@ function CharPickerOverlay({ anchor, projectChars, onSelect, onClose, onAddNew, 
     : projectChars
   ).slice(0, 10);
 
+  // 미등록 행이 표시되는 조건
+  const showUnreg = filtered.length === 0 && query.trim();
+  // 방향키 인덱스 최대값: 등록 목록 또는 미등록 행(그대로=0, 인물추가=1)
+  const maxIdx = showUnreg ? (onAddNew ? 1 : 0) : filtered.length - 1;
+
   // Scroll active item into view
   useEffect(() => {
     if (activeIdx < 0 || !listRef.current) return;
     const items = listRef.current.querySelectorAll('[data-char-item]');
     items[activeIdx]?.scrollIntoView({ block: 'nearest' });
   }, [activeIdx]);
+
+  const handleKeyNav = (e) => {
+    if (e.nativeEvent.isComposing) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveIdx(i => Math.min(i + 1, maxIdx));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveIdx(i => Math.max(i - 1, -1));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (!showUnreg) {
+        // 등록 인물 목록
+        if (activeIdx >= 0 && filtered[activeIdx]) {
+          onSelect(filtered[activeIdx]);
+        } else if (onSkip) {
+          onSkip();
+        } else {
+          onClose();
+        }
+      } else {
+        // 미등록 행: 0=그대로 사용, 1=인물 추가
+        if (activeIdx === 1 && onAddNew) {
+          onAddNew(query.trim());
+        } else {
+          onSelect({ id: undefined, name: query.trim(), givenName: query.trim() });
+        }
+      }
+    }
+  };
 
   return createPortal(
     <div
@@ -1296,25 +1333,7 @@ function CharPickerOverlay({ anchor, projectChars, onSelect, onClose, onAddNew, 
           ref={inputRef}
           value={query}
           onChange={e => { setQuery(e.target.value); setActiveIdx(-1); }}
-          onKeyDown={e => {
-            if (e.nativeEvent.isComposing) return;
-            if (e.key === 'ArrowDown') {
-              e.preventDefault();
-              setActiveIdx(i => Math.min(i + 1, filtered.length - 1));
-            } else if (e.key === 'ArrowUp') {
-              e.preventDefault();
-              setActiveIdx(i => Math.max(i - 1, -1));
-            } else if (e.key === 'Enter') {
-              e.preventDefault();
-              if (activeIdx >= 0 && filtered[activeIdx]) {
-                onSelect(filtered[activeIdx]);
-              } else if (onSkip) {
-                onSkip();
-              } else {
-                onClose();
-              }
-            }
-          }}
+          onKeyDown={handleKeyNav}
           placeholder="인물명 검색"
           className="w-full text-sm px-1 outline-none bg-transparent"
           style={{ color: 'var(--c-text)', caretColor: 'var(--c-accent)' }}
@@ -1335,24 +1354,25 @@ function CharPickerOverlay({ anchor, projectChars, onSelect, onClose, onAddNew, 
             {c.surname && c.givenName && <span className="ml-2 text-[10px]" style={{ color: 'var(--c-text6)' }}>{c.surname}{c.givenName}</span>}
           </div>
         ))}
-        {filtered.length === 0 && query.trim() && (
-          <div className="flex items-center gap-1 px-2 py-1">
+        {showUnreg && (
+          <>
             <div
+              data-char-item
               onMouseDown={e => { e.preventDefault(); onSelect({ id: undefined, name: query.trim(), givenName: query.trim() }); }}
-              className="flex-1 px-2 py-1 text-sm cursor-pointer rounded"
-              style={{ color: 'var(--c-accent2)' }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-active)'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+              onMouseEnter={() => setActiveIdx(0)}
+              className="px-3 py-1.5 text-sm cursor-pointer"
+              style={{ color: 'var(--c-accent2)', background: activeIdx === 0 ? 'var(--c-active)' : 'transparent' }}
             >"{query}" 그대로 사용</div>
             {onAddNew && (
-              <button
+              <div
+                data-char-item
                 onMouseDown={e => { e.preventDefault(); onAddNew(query.trim()); }}
-                className="shrink-0 text-xs px-2 py-1 rounded"
-                style={{ background: 'var(--c-accent)', color: '#fff', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}
-                title="인물 페이지에 자동 추가"
-              >+ 인물 추가</button>
+                onMouseEnter={() => setActiveIdx(1)}
+                className="px-3 py-1.5 text-sm cursor-pointer"
+                style={{ color: 'var(--c-text)', background: activeIdx === 1 ? 'var(--c-active)' : 'transparent' }}
+              >+ 인물 추가</div>
             )}
-          </div>
+          </>
         )}
         {projectChars.length === 0 && !query && (
           <div className="px-3 py-2 text-xs" style={{ color: 'var(--c-text6)' }}>등록된 인물 없음</div>
@@ -1824,6 +1844,30 @@ const EditorSurface = forwardRef(function EditorSurface({
       return;
     }
 
+    // ── action/dialogue 더블스페이스: 괄호 자동 삽입 + 커서 괄호 안으로
+    if (e.key === ' ' && (type === 'action' || type === 'dialogue') && lastKeyRef.current === ' ' && !ctrl && !e.shiftKey && !composingRef.current) {
+      e.preventDefault();
+      lastKeyRef.current = null;
+      // 앞 스페이스 하나 제거
+      const selPre = window.getSelection();
+      if (selPre?.rangeCount) {
+        const rPre = selPre.getRangeAt(0).cloneRange();
+        if (rPre.startOffset > 0) {
+          rPre.setStart(rPre.startContainer, rPre.startOffset - 1);
+          if (rPre.toString() === ' ') rPre.deleteContents();
+        }
+      }
+      // '(' 삽입 후 커서 위치 저장, ')' 삽입 후 커서 복원
+      document.execCommand('insertText', false, '(');
+      const selParen = window.getSelection();
+      const insidePos = selParen.getRangeAt(0).cloneRange();
+      document.execCommand('insertText', false, ')');
+      selParen.removeAllRanges();
+      selParen.addRange(insidePos);
+      doParse();
+      return;
+    }
+
     // ── 씬번호 블록 더블스페이스: 구분자 자동 삽입
     if (e.key === ' ' && type === 'scene_number' && lastKeyRef.current === ' ' && !ctrl && !e.shiftKey && !composingRef.current) {
       e.preventDefault();
@@ -1877,8 +1921,8 @@ const EditorSurface = forwardRef(function EditorSurface({
       doParse();
       return;
     }
-    // 직전 키 기록 (Space 여부만 추적)
-    lastKeyRef.current = (e.key === ' ' && type === 'scene_number') ? ' ' : null;
+    // 직전 키 기록 (Space 여부만 추적 — scene_number, action, dialogue)
+    lastKeyRef.current = (e.key === ' ' && (type === 'scene_number' || type === 'action' || type === 'dialogue')) ? ' ' : null;
 
     // ── Enter: split block at caret
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -2079,6 +2123,9 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   const [suggestEnabled, setSuggestEnabled] = useState(() => localStorage.getItem(CHAR_SUGGEST_KEY) !== 'off');
   const [pasteToast, setPasteToast] = useState(null);
   const [sceneRefPicker, setSceneRefPicker] = useState(null); // { top, left, insertAfterId, mobile }
+  const [sceneRefActiveIdx, setSceneRefActiveIdx] = useState(-1);
+  const sceneRefActiveIdxRef = useRef(-1);
+  const sceneItemsRef = useRef([]); // render마다 갱신 — keydown 핸들러에서 참조
   const [pendingBlockType, setPendingBlockType] = useState(null); // for mobile / no-focus toolbar clicks
   const [activeBlockType, setActiveBlockType] = useState(null);  // 현재 커서의 블록 타입 (툴바 하이라이트)
   const [charCheckPicker, setCharCheckPicker] = useState(null); // { sceneId, top, left, mobile }
@@ -2093,7 +2140,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   const slashPaletteRef = useRef(null);
   slashPaletteRef.current = slashPalette; // executeSlashAction 클로저에서 최신 query 접근용
   const hasKeyboard = !!keyboardUp; // App.jsx에서 내려온 키보드 감지값 사용
-  const [shortcutHintOpen, setShortcutHintOpen] = useState(true);
+  // shortcutHintOpen 제거 — 항상 펼쳐진 상태로 표시
   const charCheckBtnRef = useRef(null);
   const editorScrollRef = useRef(null);
   useEffect(() => { if (onScrollRefReady) onScrollRefReady(editorScrollRef); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -2261,9 +2308,10 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
       }
       return b;
     });
-    lastSavedBlocks.current = JSON.stringify(epBlocks);
-    setBlocks(epBlocks);
-    requestAnimationFrame(() => surfaceApiRef.current?.loadBlocks(epBlocks));
+    const labelledBlocks = syncLabels(epBlocks);
+    lastSavedBlocks.current = JSON.stringify(labelledBlocks);
+    setBlocks(labelledBlocks);
+    requestAnimationFrame(() => surfaceApiRef.current?.loadBlocks(labelledBlocks));
     dispatch({ type: 'CLEAR_PENDING_RELOAD' });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingScriptReload]);
@@ -2514,9 +2562,9 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   }, []);
 
   // ── Badge click: show char picker
-  const handleBadgeClick = useCallback((blockId, blockEl) => {
+  const handleBadgeClick = useCallback((blockId, blockEl, initialQuery = '') => {
     const rect = blockEl.getBoundingClientRect();
-    setCharPickerState({ blockId, top: rect.bottom + 4, left: rect.left });
+    setCharPickerState({ blockId, top: rect.bottom + 4, left: rect.left, initialQuery });
   }, []);
 
   // ── CharSuggest: action block content looks like a char name
@@ -2817,21 +2865,75 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
 
   const sceneRefPickerRef = useRef(null);
 
-  // ── 씬연결 피커: Esc/외부클릭으로 닫기
+  // ── 씬연결 피커: Esc/외부클릭/방향키/Enter 처리
   useEffect(() => {
+    sceneRefActiveIdxRef.current = -1;
+    setSceneRefActiveIdx(-1);
     if (!sceneRefPicker) return;
+
     const onKey = (e) => {
-      if (e.key === 'Escape') { e.preventDefault(); setSceneRefPicker(null); }
+      if (e.key === 'Escape') { e.preventDefault(); setSceneRefPicker(null); return; }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const next = Math.min(sceneRefActiveIdxRef.current + 1, sceneItemsRef.current.length - 1);
+        sceneRefActiveIdxRef.current = next;
+        setSceneRefActiveIdx(next);
+        requestAnimationFrame(() => {
+          sceneRefPickerRef.current?.querySelector(`[data-scene-ref-item="${next}"]`)?.scrollIntoView({ block: 'nearest' });
+        });
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const next = Math.max(sceneRefActiveIdxRef.current - 1, 0);
+        sceneRefActiveIdxRef.current = next;
+        setSceneRefActiveIdx(next);
+        requestAnimationFrame(() => {
+          sceneRefPickerRef.current?.querySelector(`[data-scene-ref-item="${next}"]`)?.scrollIntoView({ block: 'nearest' });
+        });
+        return;
+      }
+      if (e.key === 'Enter' && sceneRefActiveIdxRef.current >= 0) {
+        e.preventDefault();
+        e.stopPropagation(); // 에디터 줄바꿈 차단
+        const scene = sceneItemsRef.current[sceneRefActiveIdxRef.current];
+        if (!scene) return;
+        const getDisplay = (s) => s.content || resolveSceneLabel({ ...s, label: '' }) || s.label;
+        const label = scene.label || '';
+        const sceneText = getDisplay(scene);
+        const rawText = label ? `${label} ${sceneText}` : sceneText;
+        const displayText = `(${rawText})`;
+        const { savedRange } = sceneRefPicker;
+        setSceneRefPicker(null);
+        requestAnimationFrame(() => {
+          const surface = document.querySelector('[data-editor-surface]');
+          surface?.focus();
+          const sel = window.getSelection();
+          if (savedRange && sel) { sel.removeAllRanges(); sel.addRange(savedRange.cloneRange()); }
+          const range = sel?.rangeCount ? sel.getRangeAt(0) : null;
+          if (!range) return;
+          const span = document.createElement('span');
+          span.contentEditable = 'false';
+          span.dataset.refSceneId = scene.id;
+          span.className = 'scene-ref-chip';
+          span.textContent = displayText;
+          range.insertNode(span);
+          range.setStartAfter(span);
+          range.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(range);
+        });
+      }
     };
     const onMouseDown = (e) => {
       if (sceneRefPickerRef.current && !sceneRefPickerRef.current.contains(e.target)) {
         setSceneRefPicker(null);
       }
     };
-    window.addEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey, true); // capture: 에디터 onKeyDown보다 먼저 실행
     const t = setTimeout(() => document.addEventListener('mousedown', onMouseDown), 0);
     return () => {
-      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keydown', onKey, true);
       clearTimeout(t);
       document.removeEventListener('mousedown', onMouseDown);
     };
@@ -3020,72 +3122,12 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
 
     e.preventDefault();
 
-    // ── 패턴 정의
-    const SCENE_RE = /^(S#\d+\.?|s#\d+\.?|씬\s*\d+\.?|\d+씬\.?|#\d+\.?|\d+\.\s)/i;
-    const PAREN_RE = /^\s*\(.*\)\s*$/;
-
-    const charNameSet = new Set(projectChars.flatMap(c =>
-      [c.name, c.givenName, c.surname ? (c.surname + c.givenName) : null].filter(Boolean)
-    ));
-
-    // 대사 감지: 탭/콜론/"이름  대사" 형식
-    const detectDialogue = (line) => {
-      const s = line.trim();
-      // 탭 구분: "이름\t대사"
-      const tabM = s.match(/^([^\t]+)\t(.+)$/);
-      if (tabM) return { name: tabM[1].trim(), text: tabM[2].trim() };
-      // 콜론 구분: "이름: 대사" (이름 6자 이하)
-      const colonM = s.match(/^([가-힣A-Za-z·\s]{1,8})\s*[：:]\s*(.+)$/);
-      if (colonM) return { name: colonM[1].trim(), text: colonM[2].trim() };
-      // 등록된 인물명 + 2칸 이상 공백: "이름  대사"
-      for (const name of charNameSet) {
-        if (s.startsWith(name) && s.length > name.length) {
-          const after = s.slice(name.length);
-          if (/^\s{2,}/.test(after)) return { name, text: after.trim() };
-        }
-      }
-      return null;
-    };
-
-    const makeBase = (sceneId) => ({
-      id: genId(), episodeId: activeEpisodeId, projectId: activeProjectId,
-      label: '', sceneId: sceneId || genId(), createdAt: now(), updatedAt: now(),
+    // ── parseScriptText 유틸로 블록 생성 (HWPX/DOCX 가져오기와 동일한 파서)
+    const newBlocks = parseScriptText(text, {
+      episodeId: activeEpisodeId,
+      projectId: activeProjectId,
+      characters: projectChars,
     });
-
-    // ── 씬 안에서 공유할 sceneId (씬번호 블록 생성 시 갱신)
-    let currentSceneId = genId();
-    const newBlocks = nonEmpty.map(line => {
-      const s = line.trim();
-      if (!s) return null;
-
-      if (SCENE_RE.test(s)) {
-        currentSceneId = genId();
-        const content = s.replace(SCENE_RE, '').trim();
-        return { ...makeBase(currentSceneId), type: 'scene_number', content };
-      }
-
-      if (PAREN_RE.test(s)) {
-        return { ...makeBase(currentSceneId), type: 'parenthetical',
-          content: s.replace(/^\s*\(|\)\s*$/g, '').trim() };
-      }
-
-      const diag = detectDialogue(line);
-      if (diag) {
-        const char = projectChars.find(c =>
-          [c.name, c.givenName, c.surname ? c.surname + c.givenName : null]
-            .filter(Boolean).includes(diag.name)
-        );
-        return { ...makeBase(currentSceneId), type: 'dialogue',
-          content: diag.text,
-          characterId: char?.id || '',
-          characterName: char?.givenName || char?.name || diag.name,
-          charName:      char?.givenName || char?.name || diag.name,
-        };
-      }
-
-      // 인식 안된 부분 → 지문으로 보존 (Ctrl+Shift+1/2/3으로 수동 변경 가능)
-      return { ...makeBase(currentSceneId), type: 'action', content: s };
-    }).filter(Boolean);
 
     if (!newBlocks.length) return;
 
@@ -3645,6 +3687,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
         <CharPickerOverlay
           anchor={{ top: charPickerState.top, left: charPickerState.left }}
           projectChars={projectChars}
+          initialQuery={charPickerState.initialQuery || ''}
           onSelect={(char) => {
             surfaceApiRef.current?.updateBlockChar(
               charPickerState.blockId,
@@ -3743,6 +3786,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
             .map(b => b.sceneId)
         );
         const sceneItems = episodeScenes.filter(s => seenSceneIds.has(s.id)).slice(0, 8);
+        sceneItemsRef.current = sceneItems;
         const handleSceneSelect = (scene) => {
           const label = scene.label || '';
           const sceneText = getDisplay(scene);
@@ -3751,6 +3795,8 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
           const { savedRange } = sceneRefPicker;
           setSceneRefPicker(null);
           requestAnimationFrame(() => {
+            const surface = document.querySelector('[data-editor-surface]');
+            surface?.focus();
             const sel = window.getSelection();
             if (savedRange && sel) {
               sel.removeAllRanges();
@@ -3798,16 +3844,18 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
             <div style={{ maxHeight: '192px', overflowY: 'auto' }}>
               {sceneItems.length === 0 ? (
                 <div className="px-3 py-2 text-xs" style={{ color: 'var(--c-text6)' }}>씬 없음</div>
-              ) : sceneItems.map(s => {
+              ) : sceneItems.map((s, i) => {
                 const display = getDisplay(s);
+                const isActive = i === sceneRefActiveIdx;
                 return (
                   <div
                     key={s.id}
+                    data-scene-ref-item={i}
                     onMouseDown={e => { e.preventDefault(); handleSceneSelect(s); }}
+                    onMouseEnter={() => { sceneRefActiveIdxRef.current = i; setSceneRefActiveIdx(i); }}
+                    onMouseLeave={() => { sceneRefActiveIdxRef.current = -1; setSceneRefActiveIdx(-1); }}
                     className="px-3 py-1.5 text-xs cursor-pointer"
-                    style={{ color: 'var(--c-text2)' }}
-                    onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-active)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                    style={{ color: 'var(--c-text2)', background: isActive ? 'var(--c-active)' : 'transparent' }}
                   >
                     {display || <span style={{ color: 'var(--c-text6)', fontStyle: 'italic' }}>{s.label} (미입력)</span>}
                   </div>
@@ -3832,41 +3880,6 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
         </div>
       )}
 
-      {/* Shortcuts hint — 터치 기기(소프트 키보드)에서는 숨김 */}
-      {!hasKeyboard && !('ontouchstart' in window) && (
-        <div style={{ borderTop: '1px solid var(--c-border)', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start' }}>
-            <button
-              onMouseDown={e => { e.preventDefault(); setShortcutHintOpen(o => !o); }}
-              title={shortcutHintOpen ? '단축키 숨기기' : '단축키 보기'}
-              style={{
-                flexShrink: 0, padding: '4px 6px', background: 'transparent', border: 'none',
-                color: 'var(--c-dim)', cursor: 'pointer', fontSize: 9, lineHeight: 1,
-                transform: shortcutHintOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
-                transition: 'transform 0.15s',
-              }}
-            >▼</button>
-            {shortcutHintOpen && (
-              <div className="py-2 flex gap-4 text-[11px] flex-wrap" style={{ color: 'var(--c-dim)', paddingRight: 8 }}>
-                <span>Ctrl+Shift+1 씬번호</span>
-                <span>Ctrl+Shift+2 지문</span>
-                <span>Ctrl+Shift+3 대사</span>
-                <span>Ctrl+Shift+4 등장인물</span>
-                <span>Ctrl+Shift+5 씬연결</span>
-                <span>Ctrl+Shift+6 기타</span>
-                <span>Ctrl+Shift+7 태그</span>
-                <span>Ctrl+S 저장</span>
-                <span>Ctrl+Z / Ctrl+Y Undo/Redo</span>
-                <span>Enter 다음 블록</span>
-                <span>Ctrl+Enter 형식 선택 후 새 블록</span>
-                <span>Shift+Enter 줄바꿈</span>
-                <span>Backspace 빈 블록 삭제</span>
-                <span>씬번호 줄에서 Space×2 구분자 자동 삽입</span>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* 저장 상태 — 우하단 fixed 토스트 */}
       {(saveStatus === 'saving' || saveStatus === 'error') && (

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useApp } from '../store/AppContext';
 import { genId, now } from '../store/db';
 import { parseSceneContent } from '../utils/sceneResolver';
+import { isMultiEpisode } from '../utils/projectTypes';
 
 // ─── Import status ────────────────────────────────────────────────────────────
 const STATUS_COLOR = { imported: 'var(--c-accent2)', modified: '#f59e0b', deleted: '#ef4444' };
@@ -38,7 +39,7 @@ export default function TreatmentPage() {
   const { episodes, scriptBlocks, scenes, projects, activeProjectId, activeEpisodeId } = state;
 
   const activeProject = projects?.find(p => p.id === activeProjectId);
-  const isSeries = activeProject?.projectType === 'series';
+  const isSeries = isMultiEpisode(activeProject?.projectType);
   const totalEpisodes = activeProject?.totalEpisodes || 0;
 
   const projectEpisodes = episodes

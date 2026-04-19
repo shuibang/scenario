@@ -1,6 +1,94 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useApp } from '../store/AppContext';
 import { genId, now } from '../store/db';
+import {
+  findMatches, replaceInSelectedBlocks,
+  findInSynopsisDoc, replaceInSynopsisDoc,
+  findInCharacterIntro, replaceInCharacterIntro,
+  findInEpisodeSummary, replaceInEpisodeSummary,
+  findInCoverDoc, replaceInCoverDoc,
+} from '../utils/findReplace';
+import { generateRenamePairs } from '../utils/characterRename';
+import RenameConfirmDialog from './Modals/RenameConfirmDialog';
+import RenamePreviewDialog from './Modals/RenamePreviewDialog';
+
+// ─── 페어별 검색 결과 그룹핑 헬퍼 ────────────────────────────────────────────
+function buildPairResult(pair, pairIdx, { projectBlocks, synopsisDoc, projectChars, projectEpisodes, coverDoc, scope, opts }) {
+  // 1. 대본 블록
+  const allBlockMatches = findMatches(projectBlocks, pair.oldText, { ...opts, searchScope: pair.searchScope });
+  const blockMap = new Map();
+  allBlockMatches.forEach(m => {
+    if (!blockMap.has(m.blockId)) {
+      blockMap.set(m.blockId, { blockId: m.blockId, blockType: m.blockType, count: 1, contexts: [m.context], hasCharName: m.matchField === 'charName' });
+    } else {
+      const g = blockMap.get(m.blockId);
+      g.count++;
+      g.contexts.push(m.context);
+      if (m.matchField === 'charName') g.hasCharName = true;
+    }
+  });
+  let blockGroups = Array.from(blockMap.values());
+  if (scope === 'character') {
+    blockGroups = blockGroups.filter(g => g.hasCharName);
+  } else if (scope === 'character_dialogue') {
+    blockGroups = blockGroups.filter(g => g.hasCharName || g.blockType === 'dialogue');
+  }
+
+  // 2. 시놉시스 (scope=all에서만)
+  const synopsisGroups = [];
+  if (scope === 'all' && synopsisDoc) {
+    const sm = new Map();
+    findInSynopsisDoc(synopsisDoc, pair.oldText, opts).forEach(m => {
+      if (!sm.has(m.field)) sm.set(m.field, { field: m.field, fieldLabel: m.fieldLabel, count: 1, contexts: [m.context] });
+      else { const g = sm.get(m.field); g.count++; g.contexts.push(m.context); }
+    });
+    synopsisGroups.push(...sm.values());
+  }
+
+  // 3. 인물 소개 (scope=all에서만)
+  const charIntroGroups = [];
+  if (scope === 'all') {
+    projectChars.forEach(char => {
+      const ms = findInCharacterIntro(char, pair.oldText, opts);
+      if (ms.length > 0) charIntroGroups.push({ charId: char.id, charName: char.givenName || char.name || '', count: ms.length, contexts: ms.map(m => m.context) });
+    });
+  }
+
+  // 4. 에피소드 트리트먼트 (scope=all에서만)
+  const episodeGroups = [];
+  if (scope === 'all') {
+    projectEpisodes.forEach(ep => {
+      const ms = findInEpisodeSummary(ep, pair.oldText, opts);
+      if (ms.length > 0) {
+        const itemIds = [...new Set(ms.map(m => m.itemId))];
+        episodeGroups.push({ episodeId: ep.id, epNum: ep.number, epTitle: ep.title || '', itemIds, count: ms.length, contexts: ms.map(m => m.context).slice(0, 3) });
+      }
+    });
+  }
+
+  // 5. 표지 (scope=all에서만)
+  const coverGroups = [];
+  const coverCustomGroups = [];
+  if (scope === 'all' && coverDoc) {
+    const fm = new Map(), cm = new Map();
+    findInCoverDoc(coverDoc, pair.oldText, opts).forEach(m => {
+      if (m.source === 'coverDoc') {
+        if (!fm.has(m.field)) fm.set(m.field, { field: m.field, fieldLabel: m.fieldLabel, count: 1, contexts: [m.context] });
+        else { const g = fm.get(m.field); g.count++; g.contexts.push(m.context); }
+      } else {
+        if (!cm.has(m.fieldId)) cm.set(m.fieldId, { fieldId: m.fieldId, fieldLabel: m.fieldLabel, count: 1, contexts: [m.context] });
+        else { const g = cm.get(m.fieldId); g.count++; g.contexts.push(m.context); }
+      }
+    });
+    coverGroups.push(...fm.values());
+    coverCustomGroups.push(...cm.values());
+  }
+
+  const hasAny = blockGroups.length || synopsisGroups.length || charIntroGroups.length || episodeGroups.length || coverGroups.length || coverCustomGroups.length;
+  if (!hasAny) return null;
+
+  return { pairIdx, label: pair.label, oldText: pair.oldText, newText: pair.newText, searchScope: pair.searchScope, blockGroups, synopsisGroups, charIntroGroups, episodeGroups, coverGroups, coverCustomGroups };
+}
 
 const ROLE_LABELS = { lead: '주인공', support: '조연', extra: '단역' };
 
@@ -140,11 +228,13 @@ function CharacterUsage({ char, episodes, scenes, scriptBlocks }) {
   const name = charDisplayName(char);
   const fullName = charFullName(char);
 
-  // Dialogue blocks for this character
-  const dialogueBlocks = scriptBlocks.filter(b =>
-    b.type === 'dialogue' &&
-    b.charName && (b.charName === name || b.charName === fullName)
-  );
+  // Dialogue blocks for this character (characterId primary, charName text fallback)
+  const dialogueBlocks = scriptBlocks.filter(b => {
+    if (b.type !== 'dialogue') return false;
+    if (b.characterId && b.characterId === char.id) return true;
+    if (!b.characterId && b.charName && (b.charName === name || b.charName === fullName)) return true;
+    return false;
+  });
 
   // Scene number blocks (for label lookup)
   const sceneNumberBlocks = scriptBlocks.filter(b => b.type === 'scene_number');
@@ -365,12 +455,15 @@ function CharacterDetail({ char, onEdit, onDelete, episodes, scenes, scriptBlock
 // ─── CharacterPanel ────────────────────────────────────────────────────────────
 export default function CharacterPanel() {
   const { state, dispatch } = useApp();
-  const { activeProjectId, characters, selectedCharacterId, episodes, scenes, scriptBlocks } = state;
+  const { activeProjectId, characters, selectedCharacterId, episodes, scenes, scriptBlocks, synopsisDocs, coverDocs } = state;
 
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [search, setSearch] = useState('');
   const [helpOpen, setHelpOpen] = useState(false);
+  const [renameDialog, setRenameDialog] = useState({ open: false, oldName: '', newName: '' });
+  const [previewDialog, setPreviewDialog] = useState({ open: false, pairs: [] });
+  const [pendingRename, setPendingRename] = useState(null); // { characterId, oldChar, form }
   const helpRef = useRef(null);
   useEffect(() => {
     if (!helpOpen) return;
@@ -403,9 +496,208 @@ export default function CharacterPanel() {
   };
 
   const handleEdit = (form) => {
-    dispatch({ type: 'UPDATE_CHARACTER', payload: { id: editingId, ...form } });
+    const oldChar = projectChars.find(c => c.id === editingId);
     setEditingId(null);
+
+    // ── DEBUG ──────────────────────────────────────────────────────────────────
+    console.log('[RENAME] handleEdit', {
+      oldChar: oldChar ? { id: oldChar.id, surname: oldChar.surname, givenName: oldChar.givenName, name: oldChar.name } : null,
+      newForm: { surname: form.surname, givenName: form.givenName, name: form.name },
+    });
+    // ──────────────────────────────────────────────────────────────────────────
+
+    const pairs = oldChar
+      ? generateRenamePairs(oldChar, { surname: form.surname, givenName: form.givenName })
+      : [];
+
+    console.log('[RENAME] generated pairs:', JSON.stringify(pairs));
+
+    if (pairs.length === 0) {
+      console.log('[RENAME] no pairs → UPDATE_CHARACTER immediately, no rename dialog');
+      dispatch({ type: 'UPDATE_CHARACTER', payload: { id: editingId, ...form } });
+      return;
+    }
+
+    setPendingRename({ characterId: editingId, oldChar, form });
+    const oldDisplayName = charFullName(oldChar) || charDisplayName(oldChar);
+    const newDisplayName = [form.surname, form.givenName].filter(Boolean).join('') || form.givenName;
+    setRenameDialog({ open: true, oldName: oldDisplayName, newName: newDisplayName });
   };
+
+  const handleRenameSkip = useCallback(() => {
+    if (pendingRename) {
+      dispatch({ type: 'UPDATE_CHARACTER', payload: { id: pendingRename.characterId, ...pendingRename.form } });
+      setPendingRename(null);
+    }
+    setRenameDialog(prev => ({ ...prev, open: false }));
+  }, [pendingRename, dispatch]);
+
+  const handleRenameConfirm = useCallback((scope) => {
+    setRenameDialog(prev => ({ ...prev, open: false }));
+    if (!pendingRename) return;
+
+    const { characterId, oldChar, form } = pendingRename;
+    const pairs = generateRenamePairs(oldChar, { surname: form.surname, givenName: form.givenName });
+    const opts = { caseSensitive: true };
+    const projectBlocks    = scriptBlocks.filter(b => b.projectId === activeProjectId);
+    const projectChars     = characters.filter(c => c.projectId === activeProjectId);
+    const projectEpisodes  = episodes.filter(e => e.projectId === activeProjectId);
+    const synopsisDoc      = (synopsisDocs || []).find(d => d.projectId === activeProjectId) || null;
+    const coverDoc         = (coverDocs    || []).find(d => d.projectId === activeProjectId) || null;
+
+    const pairResults = pairs
+      .map((pair, pairIdx) => buildPairResult(pair, pairIdx, {
+        projectBlocks, synopsisDoc, projectChars, projectEpisodes, coverDoc, scope, opts,
+      }))
+      .filter(Boolean);
+
+    if (pairResults.length === 0) {
+      alert(`본문에서 변경할 내용을 찾을 수 없습니다.`);
+      dispatch({ type: 'UPDATE_CHARACTER', payload: { id: characterId, ...form } });
+      setPendingRename(null);
+      return;
+    }
+
+    setPreviewDialog({ open: true, pairResults });
+  }, [pendingRename, scriptBlocks, characters, episodes, synopsisDocs, coverDocs, activeProjectId, dispatch]);
+
+  const handlePreviewClose = useCallback(() => {
+    if (pendingRename) {
+      dispatch({ type: 'UPDATE_CHARACTER', payload: { id: pendingRename.characterId, ...pendingRename.form } });
+      setPendingRename(null);
+    }
+    setPreviewDialog(prev => ({ ...prev, open: false }));
+  }, [pendingRename, dispatch]);
+
+  const handlePreviewConfirm = useCallback((checkedKeys) => {
+    setPreviewDialog(prev => ({ ...prev, open: false }));
+    if (!pendingRename) return;
+
+    const { characterId, form } = pendingRename;
+    const { pairResults } = previewDialog;
+    const opts            = { caseSensitive: true };
+    const projectBlocks   = scriptBlocks.filter(b => b.projectId === activeProjectId);
+    const synopsisDoc     = (synopsisDocs || []).find(d => d.projectId === activeProjectId) || null;
+    const coverDoc        = (coverDocs    || []).find(d => d.projectId === activeProjectId) || null;
+
+    // 키 파싱: `${pairIdx}::${source}::${unitId}`
+    const blocksMap      = new Map(); // pairIdx -> Set<blockId>
+    const synopsisMap    = new Map(); // pairIdx -> Set<field>
+    const charIntroMap   = new Map(); // pairIdx -> Set<charId>
+    const episodeMap     = new Map(); // pairIdx -> Set<episodeId>
+    const coverMap       = new Map(); // pairIdx -> { fields: Set, customFieldIds: Set }
+
+    [...checkedKeys].forEach(key => {
+      const firstSep  = key.indexOf('::');
+      const pairIdx   = parseInt(key.slice(0, firstSep));
+      const rest      = key.slice(firstSep + 2);
+      const secondSep = rest.indexOf('::');
+      const source    = rest.slice(0, secondSep);
+      const unitId    = rest.slice(secondSep + 2);
+
+      switch (source) {
+        case 'block':
+          if (!blocksMap.has(pairIdx)) blocksMap.set(pairIdx, new Set());
+          blocksMap.get(pairIdx).add(unitId);
+          break;
+        case 'synopsis':
+          if (!synopsisMap.has(pairIdx)) synopsisMap.set(pairIdx, new Set());
+          synopsisMap.get(pairIdx).add(unitId);
+          break;
+        case 'charIntro':
+          if (!charIntroMap.has(pairIdx)) charIntroMap.set(pairIdx, new Set());
+          charIntroMap.get(pairIdx).add(unitId);
+          break;
+        case 'episode':
+          if (!episodeMap.has(pairIdx)) episodeMap.set(pairIdx, new Set());
+          episodeMap.get(pairIdx).add(unitId);
+          break;
+        case 'cover':
+          if (!coverMap.has(pairIdx)) coverMap.set(pairIdx, { fields: new Set(), customFieldIds: new Set() });
+          coverMap.get(pairIdx).fields.add(unitId);
+          break;
+        case 'coverCustom':
+          if (!coverMap.has(pairIdx)) coverMap.set(pairIdx, { fields: new Set(), customFieldIds: new Set() });
+          coverMap.get(pairIdx).customFieldIds.add(unitId);
+          break;
+        default: break;
+      }
+    });
+
+    let patchedSelfIntro = null; // 당사자 intro 치환 결과 (마지막 dispatch에 합산)
+
+    pairResults.forEach(pair => {
+      const { pairIdx, oldText, newText, searchScope, episodeGroups } = pair;
+      const pOpts = { ...opts, searchScope };
+
+      // 1. 대본 블록
+      const selectedBlockIds = blocksMap.get(pairIdx);
+      if (selectedBlockIds?.size > 0) {
+        let updated = replaceInSelectedBlocks(projectBlocks, oldText, newText, pOpts, selectedBlockIds);
+        const epIds = [...new Set(updated.map(b => b.episodeId).filter(Boolean))];
+        epIds.forEach(epId => {
+          const payload  = updated.filter(b => b.episodeId === epId);
+          const original = projectBlocks.filter(b => b.episodeId === epId);
+          if (payload.some((b, i) => b !== original[i])) {
+            dispatch({ type: 'SET_BLOCKS', episodeId: epId, payload, _record: true });
+          }
+        });
+      }
+
+      // 2. 시놉시스
+      const selectedSynopsisFields = synopsisMap.get(pairIdx);
+      if (selectedSynopsisFields?.size > 0 && synopsisDoc) {
+        const newDoc = replaceInSynopsisDoc(synopsisDoc, oldText, newText, opts, selectedSynopsisFields);
+        if (newDoc !== synopsisDoc) dispatch({ type: 'SET_SYNOPSIS', payload: newDoc });
+      }
+
+      // 3. 인물 소개 — 당사자(characterId)는 dispatch 보류, 마지막 UPDATE_CHARACTER에 합산
+      const selectedCharIds = charIntroMap.get(pairIdx);
+      if (selectedCharIds?.size > 0) {
+        characters
+          .filter(c => c.projectId === activeProjectId && selectedCharIds.has(c.id))
+          .forEach(char => {
+            const newChar = replaceInCharacterIntro(char, oldText, newText, opts);
+            if (newChar !== char) {
+              if (char.id === characterId) {
+                patchedSelfIntro = newChar.intro;
+              } else {
+                dispatch({ type: 'UPDATE_CHARACTER', payload: { id: char.id, intro: newChar.intro } });
+              }
+            }
+          });
+      }
+
+      // 4. 에피소드 트리트먼트
+      const selectedEpIds = episodeMap.get(pairIdx);
+      if (selectedEpIds?.size > 0) {
+        selectedEpIds.forEach(epId => {
+          const ep      = episodes.find(e => e.id === epId);
+          const epGroup = (episodeGroups || []).find(g => g.episodeId === epId);
+          if (!ep || !epGroup) return;
+          const newEp = replaceInEpisodeSummary(ep, oldText, newText, opts, new Set(epGroup.itemIds));
+          if (newEp !== ep) dispatch({ type: 'UPDATE_EPISODE', payload: { id: ep.id, summaryItems: newEp.summaryItems } });
+        });
+      }
+
+      // 5. 표지
+      const coverSel = coverMap.get(pairIdx);
+      if (coverSel && coverDoc) {
+        const newDoc = replaceInCoverDoc(coverDoc, oldText, newText, opts, coverSel);
+        if (newDoc !== coverDoc) dispatch({ type: 'SET_COVER', payload: newDoc });
+      }
+    });
+
+    dispatch({
+      type: 'UPDATE_CHARACTER',
+      payload: {
+        id: characterId,
+        ...form,
+        ...(patchedSelfIntro !== null ? { intro: patchedSelfIntro } : {}),
+      },
+    });
+    setPendingRename(null);
+  }, [pendingRename, previewDialog, scriptBlocks, characters, episodes, synopsisDocs, coverDocs, activeProjectId, dispatch]);
 
   const handleSelect = (charId) => {
     setAdding(false);
@@ -504,6 +796,20 @@ export default function CharacterPanel() {
           </div>
         )}
       </div>
+
+      <RenameConfirmDialog
+        open={renameDialog.open}
+        onClose={handleRenameSkip}
+        oldName={renameDialog.oldName}
+        newName={renameDialog.newName}
+        onConfirm={handleRenameConfirm}
+      />
+      <RenamePreviewDialog
+        open={previewDialog.open}
+        onClose={handlePreviewClose}
+        pairResults={previewDialog.pairResults || []}
+        onConfirm={handlePreviewConfirm}
+      />
     </div>
   );
 }

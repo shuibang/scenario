@@ -32,7 +32,11 @@ const PLAN_DOCS = [
 ];
 
 function FeedbackTabContent({ dispatch, onClose }) {
-  const [deliveries] = useState(() => getReceivedDeliveries());
+  const { state } = useApp();
+  const activeProjectId = state.activeProjectId;
+  const [deliveries] = useState(() =>
+    getReceivedDeliveries().filter(d => !d.projectId || d.projectId === activeProjectId)
+  );
 
   if (deliveries.length === 0) {
     return (

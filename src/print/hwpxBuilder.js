@@ -36,13 +36,23 @@ let _pid = 0;
 function resetIds() { _pid = 0; }
 
 /**
+ * HTML 콘텐츠를 <br>과 \n 경계로 분리 → 문자열 배열 반환
+ * 각 항목은 htmlToRuns로 처리 가능한 단일 줄 HTML 조각
+ */
+function splitOnBr(html) {
+  if (!html) return [''];
+  return html.split(/<br\s*\/?>/gi).flatMap(part => part.split('\n'));
+}
+
+/**
  * HTML → 여러 hp:run 배열 (볼드/이탤릭/밑줄 인라인 서식 지원)
  * charPr IDs: 0=일반, 4=볼드, 5=이탤릭, 6=밑줄
+ * ※ 호출 전 splitOnBr()로 <br> 분리를 완료한 단일 줄 HTML을 전달할 것
  */
 function htmlToRuns(html, baseCid = 0) {
   if (!html) return `    <hp:run charPrIDRef="${baseCid}"><hp:t/></hp:run>`;
-  // <br> → 줄바꿈 문자 (HWPX는 hp:t 안에서 newline 지원 안 함 → 무시)
-  const text = html.replace(/<br\s*\/?>/gi, ' ');
+  // <br>은 splitOnBr()로 상위에서 처리됨 — 여기서는 제거
+  const text = html.replace(/<br\s*\/?>/gi, '');
   // b/i/u 태그가 없으면 단일 run
   if (!/<[biu][\s>]/i.test(text)) {
     const plain = stripHtml(text);
@@ -185,11 +195,11 @@ function xmlHeader(fontName, fallbackFontName, fontSizePt, dialogueTabHwp) {
 
   const fontLangs = ['HANGUL','LATIN','HANJA','JAPANESE','OTHER','SYMBOL','USER'];
 
-  // charPr: 참조 파일 구조 기반 (fontRef hangul="1" = 지정 폰트 사용)
+  // charPr: fontRef id="0" = fontface 배열의 기본 폰트(사용자 선택), id="1" = fallback
   // extra: 볼드/이탤릭/밑줄 자식 요소
   const charPr = (id, height, extra = '') => `      <hh:charPr id="${id}" height="${height}" textColor="#000000" shadeColor="none"
           useFontSpace="0" useKerning="0" symMark="NONE" borderFillIDRef="1">
-        <hh:fontRef hangul="1" latin="1" hanja="1" japanese="1" other="1" symbol="1" user="1"/>
+        <hh:fontRef hangul="0" latin="0" hanja="0" japanese="0" other="0" symbol="0" user="0"/>
         <hh:ratio hangul="100" latin="100" hanja="100" japanese="100" other="100" symbol="100" user="100"/>
         <hh:spacing hangul="0" latin="0" hanja="0" japanese="0" other="0" symbol="0" user="0"/>
         <hh:relSz hangul="100" latin="100" hanja="100" japanese="100" other="100" symbol="100" user="100"/>
@@ -456,21 +466,32 @@ function xmlSection(printModel, margins) {
               head(`${block.label || ''} ${block.content || ''}`.trim());
               break;
             case 'action':
-              if (block.content) block.content.split('\n').forEach(l =>
+              splitOnBr(block.content || '').forEach(l =>
                 paras.push(para(l, { cid: 0, parid: 4, html: true }))
               );
               break;
-            case 'dialogue':
-              dialogue(block.charName, block.content);
+            case 'dialogue': {
+              const speechLines = splitOnBr(block.content || '');
+              dialogue(block.charName, speechLines[0] ?? '');
+              for (let i = 1; i < speechLines.length; i++) {
+                paras.push(para(speechLines[i], { cid: 0, parid: 5, html: true }));
+              }
               break;
+            }
             case 'parenthetical':
-              if (block.content) paren(block.content);
+              splitOnBr(block.content || '').forEach(l => {
+                if (l !== '') paren(stripHtml(l)); else empty();
+              });
               break;
             case 'transition':
-              if (block.content) transition(block.content);
+              splitOnBr(block.content || '').forEach(l => {
+                if (l !== '') transition(l); else empty();
+              });
               break;
             default:
-              if (block.content) normal(block.content);
+              splitOnBr(block.content || '').forEach(l => {
+                if (l !== '') normal(l); else empty();
+              });
           }
           prevBlock = block;
         }

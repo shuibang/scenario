@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
 import { now, genId } from '../store/db';
+import { supabase } from '../store/supabaseClient';
 import { CoverPreview } from './CoverEditor';
 import { charDisplayName } from './CharacterPanel';
 import { resolveSceneLabel, TIME_OF_DAY_OPTIONS } from '../utils/sceneResolver';
@@ -401,8 +402,8 @@ function CoverMiniPreview() {
 }
 
 // ─── DocMemo ──────────────────────────────────────────────────────────────────
-// Internal (non-printable) memo per page. Stored in localStorage per project+page.
-function DocMemo({ projectId, docKey }) {
+// Internal (non-printable) memo per page.
+function DocMemo({ projectId, docKey, grow = false }) {
   const storageKey = `drama_docMemo_${projectId}_${docKey}`;
   const [memo, setMemo] = useState(() => {
     try { return localStorage.getItem(storageKey) || ''; } catch { return ''; }
@@ -418,25 +419,29 @@ function DocMemo({ projectId, docKey }) {
     }, 400);
   };
 
+  const panelStyle = grow
+    ? { borderTop: '1px solid var(--c-border)', padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minHeight: 0 }
+    : { borderTop: '1px solid var(--c-border)', padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 };
+
   return (
-    <div className="px-3 py-2 flex-1 flex flex-col min-h-0" style={{ borderTop: '1px solid var(--c-border)' }}>
-      <div className="text-[10px] uppercase tracking-widest mb-1 shrink-0" style={{ color: 'var(--c-text6)' }}>메모</div>
-      <textarea
-        value={memo}
-        onChange={handleChange}
-        placeholder="메모 입력..."
-        className="flex-1 w-full text-xs rounded outline-none resize-none"
-        style={{
-          background: 'var(--c-input)',
-          color: 'var(--c-text2)',
-          border: '1px solid var(--c-border3)',
-          padding: '4px 6px',
-          lineHeight: 1.5,
-          fontFamily: 'inherit',
-          minHeight: '60px',
-        }}
-      />
-    </div>
+    <>
+      <div style={panelStyle}>
+        <div className="text-[10px] uppercase tracking-widest" style={{ color: 'var(--c-text6)' }}>메모</div>
+        <textarea
+          value={memo}
+          onChange={handleChange}
+          placeholder="메모 입력..."
+          style={{
+            width: '100%', background: 'var(--c-input)', color: 'var(--c-text2)',
+            border: '1px solid var(--c-border3)', borderRadius: 4,
+            padding: '4px 6px', fontSize: 11, lineHeight: 1.5,
+            fontFamily: 'inherit', resize: 'none', outline: 'none',
+            ...(grow ? { flex: 1, minHeight: 40 } : { height: 52 }),
+            boxSizing: 'border-box',
+          }}
+        />
+      </div>
+    </>
   );
 }
 
@@ -534,52 +539,44 @@ export default function RightPanel({ onScrollToScene }) {
   // 그 외: 문맥 + 체크리스트 탭
 
   // Determine the context content
-  const withMemo = (children, docKey) => (
+  const withMemo = (children, docKey, grow = false) => (
     <>
       {children}
-      {activeProjectId && <DocMemo projectId={activeProjectId} docKey={docKey} />}
+      {activeProjectId && <DocMemo projectId={activeProjectId} docKey={docKey} grow={grow} />}
     </>
+  );
+
+  // 2개 광고 + 메모 채움 레이아웃 (7개 패널 공통)
+  const twoAdPanel = (slot, docKey) => withMemo(
+    <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <AdBanner slot={slot} mobileHide={false} height={120} style={{ width: '100%' }} />
+      <AdBanner slot={slot} mobileHide={false} height={120} style={{ width: '100%' }} />
+    </div>,
+    docKey,
+    true
   );
 
   let contextContent = null;
   if (activeDoc === 'cover') {
-    contextContent = withMemo(<CoverMiniPreview />, 'cover');
+    contextContent = twoAdPanel('cover-panel', 'cover');
   } else if (activeDoc === 'synopsis') {
-    contextContent = withMemo(<CoverMiniPreview />, 'synopsis');
+    contextContent = twoAdPanel('synopsis-panel', 'synopsis');
   } else if (activeDoc === 'biography') {
-    contextContent = withMemo(
-      <div className="flex flex-col items-center justify-center" style={{ padding: '12px', flex: 1 }}>
-        <AdBanner slot="biography-panel" mobileHide={false} height={120} style={{ width: '100%' }} />
-      </div>,
-      'biography'
-    );
+    contextContent = twoAdPanel('biography-panel', 'biography');
   } else if (activeDoc === 'relationships') {
-    contextContent = withMemo(
-      <div className="flex flex-col items-center justify-center" style={{ padding: '12px', flex: 1 }}>
-        <AdBanner slot="relationships-panel" mobileHide={false} height={120} style={{ width: '100%' }} />
-      </div>,
-      'relationships'
-    );
+    contextContent = twoAdPanel('relationships-panel', 'relationships');
   } else if (activeDoc === 'resources') {
-    contextContent = withMemo(
-      <div className="flex flex-col items-center justify-center" style={{ padding: '12px', flex: 1 }}>
-        <AdBanner slot="resources-panel" mobileHide={false} height={120} style={{ width: '100%' }} />
-      </div>,
-      'resources'
-    );
+    contextContent = twoAdPanel('resources-panel', 'resources');
   } else if (activeDoc === 'treatment') {
-    contextContent = withMemo(
-      <div className="flex flex-col items-center justify-center" style={{ padding: '12px', flex: 1 }}>
-        <AdBanner slot="treatment-panel" mobileHide={false} height={120} style={{ width: '100%' }} />
-      </div>,
-      'treatment'
-    );
+    contextContent = twoAdPanel('treatment-panel', 'treatment');
   } else if (activeDoc === 'scenelist') {
     contextContent = withMemo(
-      <div className="flex flex-col items-center justify-center" style={{ padding: '12px', flex: 1 }}>
+      <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <AdBanner slot="scenelist-panel" mobileHide={false} height={120} style={{ width: '100%' }} />
         <AdBanner slot="scenelist-panel" mobileHide={false} height={120} style={{ width: '100%' }} />
       </div>,
-      'scenelist'
+      'scenelist',
+      true
     );
   } else if (activeDoc === 'structure') {
     contextContent = withMemo(
@@ -596,18 +593,15 @@ export default function RightPanel({ onScrollToScene }) {
       'structure'
     );
   } else if (isCharView) {
-    contextContent = withMemo(
-      <div className="flex flex-col items-center justify-center" style={{ padding: '12px', flex: 1 }}>
-        <AdBanner slot="characters-panel" mobileHide={false} height={120} style={{ width: '100%' }} />
-      </div>,
-      'characters'
-    );
+    contextContent = twoAdPanel('characters-panel', 'characters');
   } else if (activeDoc === 'mypage') {
     contextContent = withMemo(
-      <div className="flex flex-col items-center justify-center" style={{ padding: '12px', flex: 1 }}>
+      <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <AdBanner slot="settings-panel" mobileHide={false} height={120} style={{ width: '100%' }} />
         <AdBanner slot="settings-panel" mobileHide={false} height={120} style={{ width: '100%' }} />
       </div>,
-      'mypage'
+      'mypage',
+      true
     );
   } else if (isScriptView) {
     contextContent = <SceneOutlineContent />;

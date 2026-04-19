@@ -488,17 +488,16 @@ export default function StoryboardPage() {
   const [cardView, setCardView] = useState("card"); // "card" | "row"
   const [toast, setToast] = useState("");
 
-  // 테마 감지: #root의 data-theme 변경을 MutationObserver로 추적
+  // 테마 감지: <html>의 data-theme 변경을 MutationObserver로 추적
   const [isLight, setIsLight] = useState(
-    () => document.getElementById("root")?.dataset.theme === "light"
+    () => document.documentElement.dataset.theme === "light"
   );
   useEffect(() => {
-    const root = document.getElementById("root");
-    if (!root) return;
+    const html = document.documentElement;
     const observer = new MutationObserver(() => {
-      setIsLight(root.dataset.theme === "light");
+      setIsLight(html.dataset.theme === "light");
     });
-    observer.observe(root, { attributes: true, attributeFilter: ["data-theme"] });
+    observer.observe(html, { attributes: true, attributeFilter: ["data-theme"] });
     return () => observer.disconnect();
   }, []);
 

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { FileText } from 'lucide-react';
 import { useApp } from '../../store/AppContext';
 import { FONTS } from '../../print/FontRegistry';
 import AdBanner from '../AdBanner';
@@ -8,8 +9,9 @@ import { clearAccessToken, loadFromDrive, isTokenValid } from '../../store/googl
 import { isPublicPcMode } from '../../store/db';
 import { supabaseSignOut, refreshDriveToken } from '../../store/supabaseClient';
 import { guardedSignInWithGoogle } from '../../utils/guardedSignIn';
+import Menubar from '../Menubar/Menubar';
 
-export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, WorkTimer, authUser, onLogout }) {
+export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, WorkTimer, authUser, onLogout, onMenuAction, recentProjects = [], checkedItems = {} }) {
   const { state, dispatch } = useApp();
   const { activeProjectId, stylePreset } = state;
   const [menuOpen, setMenuOpen] = useState(false);
@@ -91,22 +93,22 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
   };
 
   return (
-    <div className="shrink-0 no-print" style={{ background: 'var(--c-header)', borderBottom: '1px solid var(--c-border)' }}>
-      {/* Row 1: ☰ | 대본 작업실 | time+기록 */}
+    <div className="shrink-0 no-print" style={{ background: 'var(--c-header)', borderBottom: '1px solid var(--c-border2)' }}>
+      {/* Row 1: ☰ | 대본 작업실 🎬 | timer */}
       <div style={{
-        height: 'clamp(36px, 9vw, 44px)',
-        display: 'grid', gridTemplateColumns: '1fr auto 1fr',
-        alignItems: 'center',
-        paddingLeft: 'max(14px, env(safe-area-inset-left, 14px))',
-        paddingRight: 'max(14px, env(safe-area-inset-right, 14px))',
+        height: 44,
+        display: 'flex', alignItems: 'center', gap: 4,
+        paddingLeft: 'max(8px, env(safe-area-inset-left, 8px))',
+        paddingRight: 'max(8px, env(safe-area-inset-right, 8px))',
+        borderBottom: '1px solid var(--c-border2)',
       }}>
         {/* Left: hamburger + dropdown */}
-        <div style={{ position: 'relative' }} ref={menuRef} data-tour-id="mobile-hamburger">
+        <div style={{ position: 'relative', flexShrink: 0 }} ref={menuRef} data-tour-id="mobile-hamburger">
           <button
             onClick={() => setMenuOpen(v => !v)}
             style={{
               background: 'none', border: 'none',
-              color: 'var(--c-text4)', fontSize: 'clamp(15px, 5vw, 20px)',
+              color: 'var(--c-text4)', fontSize: 18,
               cursor: 'pointer', padding: '6px 8px', lineHeight: 1,
               WebkitTapHighlightColor: 'transparent',
             }}
@@ -181,10 +183,9 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
               <div style={{ height: 1, background: 'var(--c-border)', margin: '4px 0' }} />
 
               {[
-                { icon: '📢', label: '공지사항', tab: 'notices' },
-                { icon: '👤', label: '마이페이지', tab: 'stats' },
-                { icon: '💬', label: 'Q&A',       tab: 'qa' },
-                { icon: '🐞', label: '오류 보고',  tab: 'errors' },
+                { icon: '👤', label: '작업현황', tab: 'stats' },
+                { icon: '🐞', label: '오류보고',  tab: 'errors' },
+                { icon: '⭐', label: '멤버십',    tab: 'membership' },
               ].map(({ icon, label, tab }) => (
                 <button
                   key={tab}
@@ -205,16 +206,37 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
           )}
         </div>
 
-        {/* Center: brand */}
+        {/* 브랜드: FileText 아이콘 + 대본 작업실 */}
         <button
           onClick={() => { window.location.hash = '#landing'; }}
-          style={{ fontSize: 'clamp(13px, 4vw, 17px)', fontWeight: 700, color: 'var(--c-accent)', letterSpacing: '0.05em', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 5,
+            background: 'transparent', border: 'none', cursor: 'pointer',
+            borderRadius: 6, padding: '4px 6px', flexShrink: 0,
+            WebkitTapHighlightColor: 'transparent',
+          }}
         >
-          대본 작업실
+          <FileText size={15} strokeWidth={2} style={{ color: 'var(--c-accent)', flexShrink: 0 }} />
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-text2)', letterSpacing: '-0.015em', whiteSpace: 'nowrap' }}>대본 작업실</span>
         </button>
 
-        {/* Right: work timer */}
-        <div data-tour-id="mobile-timer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
+        {/* 연출 작업실 바로가기 */}
+        <button
+          onClick={() => { window.location.hash = '#director'; }}
+          title="연출 작업실"
+          style={{
+            width: 26, height: 26, padding: 0, border: 'none', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 13, borderRadius: 6, flexShrink: 0,
+            background: '#e8b84b',
+            boxShadow: '0 0 6px #e8b84b66',
+            WebkitTapHighlightColor: 'transparent',
+          }}
+        >🎬</button>
+
+        {/* 오른쪽 spacer + timer */}
+        <div style={{ flex: 1 }} />
+        <div data-tour-id="mobile-timer" style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
           {activeProjectId && WorkTimer && (
             <WorkTimer
               key={activeProjectId}
@@ -226,7 +248,13 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
         </div>
       </div>
 
-      {/* Row 2: mobile toolbar */}
+      {/* Row 2: 메뉴바 — 좌우 균등 배치 */}
+      <div style={{ borderTop: '1px solid var(--c-border2)' }} className="mobile-menubar-row">
+        <Menubar onAction={onMenuAction} recentProjects={recentProjects} checkedItems={checkedItems} />
+      </div>
+
+      {/* Row 3: mobile toolbar */}
+      <div style={{ position: 'relative' }}>
       <div data-tour-id="mobile-toolbar" style={{
         height: 'clamp(32px, 9vw, 42px)',
         display: 'flex', alignItems: 'center',
@@ -236,13 +264,6 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
         borderTop: '1px solid var(--c-border2)',
         overflowX: 'auto', scrollbarWidth: 'none',
       }}>
-        <button onClick={onSave} style={mobileTbtnStyle}>저장</button>
-        <button
-          onClick={onPrintPreview}
-          style={{ ...mobileTbtnStyle, color: 'var(--c-accent)', borderColor: 'var(--c-accent)' }}
-        >출력</button>
-        <button onClick={onSnapshot} style={mobileTbtnStyle}>백업/복원</button>
-        <div style={{ width: 1, height: 16, background: 'var(--c-border3)', margin: '0 2px', flexShrink: 0 }} />
         <button
           title="되돌리기"
           onMouseDown={e => { e.preventDefault(); window.dispatchEvent(new Event('script:undo')); }}
@@ -287,6 +308,12 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
         <button style={mobileTbtnStyle} onMouseDown={e => { e.preventDefault(); const v = Math.max(4, parseFloat(stylePreset?.dialogueGap ?? '7') - 0.5); dispatch({ type: 'SET_STYLE_PRESET', payload: { dialogueGap: `${v}em` } }); }}>−</button>
         <span style={{ fontSize: 'clamp(9px, 2.4vw, 11px)', color: 'var(--c-text4)', flexShrink: 0, minWidth: 28, textAlign: 'center' }}>{stylePreset?.dialogueGap ?? '7em'}</span>
         <button style={mobileTbtnStyle} onMouseDown={e => { e.preventDefault(); const v = Math.min(14, parseFloat(stylePreset?.dialogueGap ?? '7') + 0.5); dispatch({ type: 'SET_STYLE_PRESET', payload: { dialogueGap: `${v}em` } }); }}>+</button>
+      </div>
+        <div style={{
+          position: 'absolute', top: 0, right: 0, bottom: 0, width: 32,
+          background: 'linear-gradient(to right, transparent, var(--c-header))',
+          pointerEvents: 'none',
+        }} />
       </div>
     </div>
   );

@@ -9,14 +9,18 @@ import { useState, useEffect } from 'react';
 import { getReceivedDeliveries } from './DirectorDeliveryView';
 import DirectorScriptViewer from './director/DirectorScriptViewer';
 import { getBlockPosition, scrollToBlock } from '../utils/blockPosition';
-
-const DELIVERY_STORAGE_KEY = 'director_deliveries_received';
+import { useApp } from '../store/AppContext';
 
 export default function DirectorNotesPage() {
-  const [deliveries, setDeliveries] = useState(() => getReceivedDeliveries());
+  const { state } = useApp();
+  const activeProjectId = state.activeProjectId;
+
+  const getFiltered = () => getReceivedDeliveries().filter(d => !d.projectId || d.projectId === activeProjectId);
+
+  const [deliveries, setDeliveries] = useState(() => getFiltered());
   const [selected,   setSelected]   = useState(() => {
     const id = localStorage.getItem('drama_active_delivery_id');
-    const list = getReceivedDeliveries();
+    const list = getFiltered();
     return (id && list.find(d => d.id === id)) || list[0] || null;
   });
   const [panelOpen,  setPanelOpen]  = useState(true);
@@ -24,7 +28,7 @@ export default function DirectorNotesPage() {
   // 좌측 패널 피드백 목록에서 선택 변경 시 동기화
   useEffect(() => {
     const handler = () => {
-      const list = getReceivedDeliveries();
+      const list = getFiltered();
       setDeliveries(list);
       const id = localStorage.getItem('drama_active_delivery_id');
       if (id) setSelected(list.find(d => d.id === id) || list[0] || null);
@@ -32,7 +36,7 @@ export default function DirectorNotesPage() {
     };
     window.addEventListener('drama_delivery_changed', handler);
     return () => window.removeEventListener('drama_delivery_changed', handler);
-  }, []);
+  }, [activeProjectId]);
 
   if (deliveries.length === 0) {
     return (

@@ -236,8 +236,6 @@ function SceneListRow({ scene, idx, blockLabel, autoCharacters, projectChars, on
 }
 
 // ─── SceneListPage ────────────────────────────────────────────────────────────
-const RECEIVED_SL_KEY = 'director_received_scenelists';
-
 export default function SceneListPage() {
   const { state, dispatch } = useApp();
   const { scenes, scriptBlocks, episodes, characters, activeProjectId, activeEpisodeId, projects } = state;
@@ -389,49 +387,6 @@ export default function SceneListPage() {
 
   const [downloading, setDownloading] = useState(false);
   const [dlMsg, setDlMsg] = useState('');
-  const [shareMsg, setShareMsg] = useState('');
-
-  const handleShare = () => {
-    if (!epScenes.length) { setShareMsg('씬이 없습니다'); setTimeout(() => setShareMsg(''), 2000); return; }
-    const currentEpObj = projectEpisodes.find(e => e.id === epId);
-    const project = projects.find(p => p.id === activeProjectId);
-    const shareData = {
-      id: genId(),
-      title: [project?.title, currentEpObj ? `${currentEpObj.number}회${currentEpObj.title ? ' ' + currentEpObj.title : ''}` : ''].filter(Boolean).join(' '),
-      savedAt: new Date().toISOString(),
-      isReceived: true,
-      scenes: epScenes.map((scene, idx) => {
-        // 레거시 데이터: location이 비어있으면 content에서 파싱
-        const meta = (!scene.location && scene.content) ? parseWithFormat(scene.content, getSceneFormat()) : null;
-        return {
-          sn: blockLabelMap.get(scene.id) || `S#${idx + 1}.`,
-          loc: scene.location || meta?.location || '',
-          sub: scene.subLocation || meta?.subLocation || '',
-          tod: scene.timeOfDay || meta?.timeOfDay || '',
-          chars: sceneCharacters[scene.id] || '',
-          content: scene.sceneListContent || '',
-        };
-      }),
-    };
-    // 로컬 저장 (본인 디바이스 직접 테스트용)
-    try {
-      const existing = JSON.parse(localStorage.getItem(RECEIVED_SL_KEY) || '[]');
-      if (!existing.some(s => s.id === shareData.id)) {
-        localStorage.setItem(RECEIVED_SL_KEY, JSON.stringify([shareData, ...existing]));
-      }
-    } catch {}
-    // URL 인코딩 (크로스 디바이스 공유)
-    try {
-      const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(shareData))));
-      const url = `${window.location.origin}/app#sl=${encoded}`;
-      navigator.clipboard.writeText(url).catch(() => {
-        const el = document.createElement('input');
-        el.value = url; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el);
-      });
-      setShareMsg('링크 복사됨 ✓');
-    } catch { setShareMsg('공유 실패'); }
-    setTimeout(() => setShareMsg(''), 3000);
-  };
 
   const currentEp = useMemo(() => projectEpisodes.find(e => e.id === epId), [projectEpisodes, epId]);
 
@@ -570,19 +525,13 @@ export default function SceneListPage() {
         </select>
         <span className="text-xs" style={{ color: 'var(--c-text6)' }}>{epScenes.length}개 씬</span>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          {(importMsg || dlMsg || shareMsg) && <span className="text-xs" style={{ color: shareMsg.includes('✓') ? 'var(--c-accent)' : 'var(--c-accent2)' }}>{importMsg || dlMsg || shareMsg}</span>}
+          {(importMsg || dlMsg) && <span className="text-xs" style={{ color: 'var(--c-accent2)' }}>{importMsg || dlMsg}</span>}
           <button
             onClick={handleDownload}
             disabled={downloading || !epScenes.length}
             title="엑셀(XLSX)로 다운로드"
             style={{ padding: '3px 10px', borderRadius: 4, fontSize: 11, background: 'transparent', color: 'var(--c-text3)', border: '1px solid var(--c-border3)', cursor: downloading ? 'default' : 'pointer', opacity: downloading ? 0.5 : 1 }}
           >XLSX</button>
-          <button
-            onClick={handleShare}
-            disabled={!epScenes.length}
-            title="연출자에게 씬리스트 공유"
-            style={{ padding: '3px 10px', borderRadius: 4, fontSize: 11, background: 'transparent', color: 'var(--c-accent)', border: '1px solid var(--c-accent)', cursor: !epScenes.length ? 'default' : 'pointer', opacity: !epScenes.length ? 0.5 : 1 }}
-          >씬리스트 공유</button>
           <button
             onClick={() => setImporting(true)}
             style={{ padding: '3px 10px', borderRadius: 4, fontSize: 11, background: 'transparent', color: 'var(--c-text3)', border: '1px solid var(--c-border3)', cursor: 'pointer' }}

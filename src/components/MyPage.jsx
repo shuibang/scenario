@@ -266,7 +266,6 @@ function StatsTab() {
 
   return (
     <div>
-      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--c-text3)', marginBottom: 20, paddingBottom: 10, borderBottom: '1px solid var(--c-border)' }}>작업통계</div>
       {workTimeLogs.length > 0 && (
         <div className="flex items-center gap-2 mb-6">
           <button onClick={handlePdfExport}
@@ -553,46 +552,10 @@ function FontManagementSection() {
   );
 }
 
-function SettingsTab() {
-  const { state, dispatch } = useApp();
-  const preset = state.stylePreset || {};
-  const margins = preset.pageMargins || { top: 35, right: 30, bottom: 30, left: 30 };
-  const isLoggedIn = !!localStorage.getItem('drama_auth_user');
-
-  const setPreset = (key, val) => dispatch({ type: 'SET_STYLE_PRESET', payload: { [key]: val } });
-  const setMargin = (side, val) => dispatch({ type: 'SET_STYLE_PRESET', payload: { pageMargins: { ...margins, [side]: Number(val) } } });
-
-  const [symInput, setSymInput] = useState('');
-  const customSymbols = preset.customSymbols || [];
-  const addSymbol = () => {
-    const s = symInput.trim();
-    if (s && !customSymbols.includes(s)) setPreset('customSymbols', [...customSymbols, s]);
-    setSymInput('');
-  };
-
+export function SettingsTab() {
   const [publicPc, setPublicPc] = useState(() => localStorage.getItem(PUBLIC_PC_KEY) === 'true');
   const [designTool, setDesignTool]       = useState(() => localStorage.getItem(DESIGN_TOOL_KEY) || 'treatment');
-  const [treatmentSync, setTreatmentSync] = useState(() => localStorage.getItem(TREATMENT_SYNC_KEY) || 'sync');
   const [scenelistSync, setScenelistSync] = useState(() => localStorage.getItem(SCENELIST_SYNC_KEY) || 'sync');
-  const [scenePrefix, setScenePrefixState] = useState(() => getScenePrefix());
-  const [sceneFormat, setSceneFormatState] = useState(() => getSceneFormat());
-  const [customLocSepInput, setCustomLocSepInput] = useState(() => {
-    const fmt = getSceneFormat();
-    return isCustomLocSep(fmt.locSep) ? fmt.locSep : '';
-  });
-  const [customTimeOpenInput,  setCustomTimeOpenInput]  = useState(() => getSceneFormat().customTimeOpen  ?? ' ');
-  const [customTimeCloseInput, setCustomTimeCloseInput] = useState(() => getSceneFormat().customTimeClose ?? '');
-
-  const handleScenePrefix = (val) => {
-    setScenePrefixState(val);
-    setScenePrefix(val, supabase || null);
-  };
-
-  const handleSceneFormat = (patch) => {
-    const next = { ...sceneFormat, ...patch };
-    setSceneFormatState(next);
-    setSceneFormat(next);
-  };
 
   const togglePublicPc = () => {
     const next = !publicPc;
@@ -605,24 +568,11 @@ function SettingsTab() {
     localStorage.setItem(DESIGN_TOOL_KEY, val);
   };
 
-  const toggleSync = (tool) => {
-    if (tool === 'treatment') {
-      const next = treatmentSync === 'sync' ? 'off' : 'sync';
-      setTreatmentSync(next);
-      localStorage.setItem(TREATMENT_SYNC_KEY, next);
-    } else {
-      const next = scenelistSync === 'sync' ? 'off' : 'sync';
-      setScenelistSync(next);
-      localStorage.setItem(SCENELIST_SYNC_KEY, next);
-    }
+  const toggleSync = () => {
+    const next = scenelistSync === 'sync' ? 'off' : 'sync';
+    setScenelistSync(next);
+    localStorage.setItem(SCENELIST_SYNC_KEY, next);
   };
-
-  const inputStyle = {
-    background: 'var(--c-input)', color: 'var(--c-text3)',
-    border: '1px solid var(--c-border3)', borderRadius: '0.25rem',
-    padding: '3px 8px', fontSize: '12px', outline: 'none', width: '100%',
-  };
-  const labelStyle = { fontSize: '11px', color: 'var(--c-text5)', marginBottom: '2px', display: 'block' };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -733,7 +683,7 @@ function SettingsTab() {
                   </div>
                   {tool === 'scenelist' && (
                     <button
-                      onClick={() => toggleSync('scenelist')}
+                      onClick={toggleSync}
                       className="w-9 h-5 rounded-full relative shrink-0"
                       style={{ background: isSynced ? 'var(--c-accent)' : 'var(--c-border3)', border: 'none', cursor: 'pointer' }}
                     >
@@ -750,254 +700,6 @@ function SettingsTab() {
           })}
         </div>
       </div>
-
-      {/* 씬번호 형식 */}
-      <div className="rounded-lg" style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)', padding: '12px 16px' }}>
-        <div className="text-sm font-medium mb-1" style={{ color: 'var(--c-text)' }}>씬번호 형식</div>
-        <div className="text-xs mb-3" style={{ color: 'var(--c-text5)' }}>
-          새로 입력하는 씬번호에 적용됩니다. 기존 씬번호는 변경되지 않습니다.
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {SCENE_PREFIX_OPTIONS.map(opt => (
-            <label
-              key={opt.value}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
-                padding: '7px 10px', borderRadius: 7,
-                border: `1px solid ${scenePrefix === opt.value ? 'var(--c-accent)' : 'var(--c-border3)'}`,
-                background: scenePrefix === opt.value ? 'color-mix(in srgb, var(--c-accent) 8%, transparent)' : 'transparent',
-              }}
-            >
-              <input
-                type="radio"
-                name="scenePrefix"
-                value={opt.value}
-                checked={scenePrefix === opt.value}
-                onChange={() => handleScenePrefix(opt.value)}
-                style={{ accentColor: 'var(--c-accent)', cursor: 'pointer' }}
-              />
-              <span style={{ fontSize: 12, color: 'var(--c-text)', flex: 1 }}>{opt.label}</span>
-              <span style={{
-                fontSize: 11, fontFamily: 'monospace', fontWeight: 600,
-                color: scenePrefix === opt.value ? 'var(--c-accent)' : 'var(--c-text5)',
-                background: 'var(--c-input)', borderRadius: 4, padding: '1px 7px',
-              }}>{opt.example}</span>
-            </label>
-          ))}
-        </div>
-      </div>
-
-      {/* 씬 헤더 형식 */}
-      <div className="rounded-lg" style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)', padding: '12px 16px' }}>
-        <div className="text-sm font-medium mb-1" style={{ color: 'var(--c-text)' }}>씬 헤더 형식</div>
-        <div className="text-xs mb-3" style={{ color: 'var(--c-text5)' }}>
-          씬리스트와 대본 씬 헤더의 장소·시간대 구분 방식을 설정합니다.<br />
-          <span style={{ color: 'var(--c-accent2)' }}>씬리스트 자동감지 시 이 형식을 기준으로 파싱됩니다.</span><br />
-          <span style={{ color: 'var(--c-text5)' }}>씬번호 줄에서 스페이스를 두 번 누르면 구분자가 순서대로 자동 입력됩니다.</span>
-        </div>
-
-        {/* 미리보기 */}
-        <div style={{ marginBottom: 14, padding: '7px 12px', borderRadius: 6, background: 'var(--c-input)', border: '1px solid var(--c-border3)', fontSize: 13, fontWeight: 600, color: 'var(--c-accent)', letterSpacing: '0.01em' }}>
-          {previewFormat(sceneFormat) || <span style={{ color: 'var(--c-text6)', fontWeight: 400 }}>미리보기</span>}
-        </div>
-
-        {/* 장소↔세부장소 구분자 */}
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: 11, color: 'var(--c-text5)', marginBottom: 5 }}>장소 ↔ 세부장소 구분자</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-            {LOC_SEP_PRESETS.map(opt => (
-              <label key={opt.value} style={{
-                display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
-                padding: '6px 10px', borderRadius: 6,
-                border: `1px solid ${sceneFormat.locSep === opt.value ? 'var(--c-accent)' : 'var(--c-border3)'}`,
-                background: sceneFormat.locSep === opt.value ? 'color-mix(in srgb, var(--c-accent) 8%, transparent)' : 'transparent',
-              }}>
-                <input type="radio" name="locSep" value={opt.value}
-                  checked={sceneFormat.locSep === opt.value}
-                  onChange={() => handleSceneFormat({ locSep: opt.value })}
-                  style={{ accentColor: 'var(--c-accent)', cursor: 'pointer' }} />
-                <span style={{ fontSize: 12, color: 'var(--c-text)', flex: 1 }}>{opt.label}</span>
-                <span style={{ fontSize: 11, color: 'var(--c-text5)', fontFamily: 'monospace' }}>{opt.example}</span>
-              </label>
-            ))}
-            {/* 직접 입력 */}
-            <label style={{
-              display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
-              padding: '6px 10px', borderRadius: 6,
-              border: `1px solid ${isCustomLocSep(sceneFormat.locSep) ? 'var(--c-accent)' : 'var(--c-border3)'}`,
-              background: isCustomLocSep(sceneFormat.locSep) ? 'color-mix(in srgb, var(--c-accent) 8%, transparent)' : 'transparent',
-            }}>
-              <input type="radio" name="locSep" value="custom"
-                checked={isCustomLocSep(sceneFormat.locSep)}
-                onChange={() => handleSceneFormat({ locSep: customLocSepInput || ' ' })}
-                style={{ accentColor: 'var(--c-accent)', cursor: 'pointer' }} />
-              <span style={{ fontSize: 12, color: 'var(--c-text)' }}>직접 입력</span>
-              <input
-                value={customLocSepInput}
-                onChange={e => {
-                  const v = e.target.value;
-                  setCustomLocSepInput(v);
-                  if (isCustomLocSep(sceneFormat.locSep)) handleSceneFormat({ locSep: v || ' ' });
-                }}
-                onFocus={() => { if (!isCustomLocSep(sceneFormat.locSep)) handleSceneFormat({ locSep: customLocSepInput || ' ' }); }}
-                placeholder="구분자 입력"
-                style={{
-                  flex: 1, minWidth: 0, fontSize: 12, padding: '2px 7px', borderRadius: 4,
-                  background: 'var(--c-input)', color: 'var(--c-text)',
-                  border: '1px solid var(--c-border3)', outline: 'none', fontFamily: 'monospace',
-                }}
-              />
-            </label>
-          </div>
-        </div>
-
-        {/* 시간대 표기 방식 */}
-        <div>
-          <div style={{ fontSize: 11, color: 'var(--c-text5)', marginBottom: 5 }}>시간대 표기 방식</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-            {TIME_FMT_PRESETS.map(opt => (
-              <label key={opt.value} style={{
-                display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
-                padding: '6px 10px', borderRadius: 6,
-                border: `1px solid ${sceneFormat.timeFmt === opt.value ? 'var(--c-accent)' : 'var(--c-border3)'}`,
-                background: sceneFormat.timeFmt === opt.value ? 'color-mix(in srgb, var(--c-accent) 8%, transparent)' : 'transparent',
-              }}>
-                <input type="radio" name="timeFmt" value={opt.value}
-                  checked={sceneFormat.timeFmt === opt.value}
-                  onChange={() => handleSceneFormat({ timeFmt: opt.value })}
-                  style={{ accentColor: 'var(--c-accent)', cursor: 'pointer' }} />
-                <span style={{ fontSize: 12, color: 'var(--c-text)', flex: 1 }}>{opt.label}</span>
-                <span style={{ fontSize: 11, color: 'var(--c-text5)', fontFamily: 'monospace' }}>{opt.example}</span>
-              </label>
-            ))}
-            {/* 직접 입력 */}
-            <label style={{
-              display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer',
-              padding: '6px 10px', borderRadius: 6,
-              border: `1px solid ${sceneFormat.timeFmt === 'custom' ? 'var(--c-accent)' : 'var(--c-border3)'}`,
-              background: sceneFormat.timeFmt === 'custom' ? 'color-mix(in srgb, var(--c-accent) 8%, transparent)' : 'transparent',
-            }}>
-              <input type="radio" name="timeFmt" value="custom"
-                checked={sceneFormat.timeFmt === 'custom'}
-                onChange={() => handleSceneFormat({ timeFmt: 'custom', customTimeOpen: customTimeOpenInput ?? ' ', customTimeClose: customTimeCloseInput ?? '' })}
-                style={{ accentColor: 'var(--c-accent)', cursor: 'pointer', flexShrink: 0 }} />
-              <span style={{ fontSize: 12, color: 'var(--c-text)', flexShrink: 0 }}>직접 입력</span>
-              <input
-                value={customTimeOpenInput}
-                onChange={e => {
-                  const v = e.target.value;
-                  setCustomTimeOpenInput(v);
-                  if (sceneFormat.timeFmt === 'custom') handleSceneFormat({ timeFmt: 'custom', customTimeOpen: v, customTimeClose: customTimeCloseInput ?? '' });
-                }}
-                onFocus={() => { if (sceneFormat.timeFmt !== 'custom') handleSceneFormat({ timeFmt: 'custom', customTimeOpen: customTimeOpenInput ?? ' ', customTimeClose: customTimeCloseInput ?? '' }); }}
-                placeholder="앞"
-                style={{ width: 44, fontSize: 12, padding: '2px 6px', borderRadius: 4, background: 'var(--c-input)', color: 'var(--c-text)', border: '1px solid var(--c-border3)', outline: 'none', fontFamily: 'monospace', textAlign: 'center' }}
-              />
-              <span style={{ fontSize: 11, color: 'var(--c-text5)', flexShrink: 0 }}>시간대</span>
-              <input
-                value={customTimeCloseInput}
-                onChange={e => {
-                  const v = e.target.value;
-                  setCustomTimeCloseInput(v);
-                  if (sceneFormat.timeFmt === 'custom') handleSceneFormat({ timeFmt: 'custom', customTimeOpen: customTimeOpenInput ?? ' ', customTimeClose: v });
-                }}
-                onFocus={() => { if (sceneFormat.timeFmt !== 'custom') handleSceneFormat({ timeFmt: 'custom', customTimeOpen: customTimeOpenInput ?? ' ', customTimeClose: customTimeCloseInput ?? '' }); }}
-                placeholder="뒤"
-                style={{ width: 44, fontSize: 12, padding: '2px 6px', borderRadius: 4, background: 'var(--c-input)', color: 'var(--c-text)', border: '1px solid var(--c-border3)', outline: 'none', fontFamily: 'monospace', textAlign: 'center' }}
-              />
-            </label>
-          </div>
-        </div>
-      </div>
-
-      {/* 스타일 설정 */}
-      <div className="rounded-lg" style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)', padding: '12px 16px' }}>
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-sm font-semibold" style={{ color: 'var(--c-text)' }}>스타일 설정</div>
-          {!isLoggedIn && (
-            <span className="text-[10px]" style={{ color: 'var(--c-text5)' }}>
-              로그인 시 저장됩니다
-            </span>
-          )}
-        </div>
-        <div className="text-[10px] mb-3" style={{ color: '#ef4444' }}>
-          공모전 등 정확한 지침이 있는 경우, 규격에 맞는지 직접 확인하시길 권장합니다.
-        </div>
-        <div className="space-y-4">
-          {/* 기본 스타일 */}
-          <div>
-            <div className="text-xs font-semibold mb-2" style={{ color: 'var(--c-accent2)' }}>기본 스타일</div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label style={labelStyle}>글씨 크기 (pt)</label>
-                <input type="number" min="8" max="20" value={preset.fontSize ?? 11}
-                  onChange={e => setPreset('fontSize', Number(e.target.value))} style={inputStyle} />
-              </div>
-              <div>
-                <label style={labelStyle}>줄간격 (%)</label>
-                <input type="number" min="100" max="300" step="10"
-                  value={Math.round((preset.lineHeight ?? 1.6) * 100)}
-                  onChange={e => setPreset('lineHeight', Number(e.target.value) / 100)} style={inputStyle} />
-              </div>
-              <div>
-                <label style={labelStyle}>장평 (%)</label>
-                <input type="number" min="50" max="200" step="5"
-                  value={preset.characterWidth ?? 100}
-                  onChange={e => setPreset('characterWidth', Number(e.target.value))} style={inputStyle} />
-              </div>
-              <div>
-                <label style={labelStyle}>인물/대사 간격 (em)</label>
-                <input type="number" min="4" max="14" step="0.5"
-                  value={parseFloat(preset.dialogueGap ?? '7')}
-                  onChange={e => setPreset('dialogueGap', `${e.target.value}em`)} style={inputStyle} />
-              </div>
-            </div>
-          </div>
-
-          {/* 여백 */}
-          <div>
-            <div className="text-xs font-semibold mb-2" style={{ color: 'var(--c-accent2)' }}>여백 (mm)</div>
-            <div className="grid grid-cols-2 gap-3">
-              {[['top','위'], ['bottom','아래'], ['left','왼쪽'], ['right','오른쪽']].map(([side, label]) => (
-                <div key={side}>
-                  <label style={labelStyle}>{label}</label>
-                  <input type="number" min="5" max="60" value={margins[side] ?? 30}
-                    onChange={e => setMargin(side, e.target.value)} style={inputStyle} />
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* 나의 태그 */}
-          <div>
-            <div className="text-xs font-semibold mb-1" style={{ color: 'var(--c-accent2)' }}>나의 태그</div>
-            <div className="text-[10px] mb-2" style={{ color: 'var(--c-text6)' }}>
-              예) 클라이막스, 초목표, 도전 — 대본 씬에 붙일 나만의 태그를 추가하세요.
-            </div>
-            <div className="flex flex-wrap gap-1 mb-2">
-              {customSymbols.map(s => (
-                <span key={s} className="text-[11px] px-2 py-0.5 rounded flex items-center gap-1"
-                  style={{ background: 'var(--c-tag)', color: 'var(--c-text3)', border: '1px solid var(--c-border3)' }}>
-                  {s}
-                  <button onClick={() => setPreset('customSymbols', customSymbols.filter(x => x !== s))}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--c-text6)', lineHeight: 1 }}>×</button>
-                </span>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <input value={symInput} onChange={e => setSymInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') addSymbol(); }}
-                placeholder="태그 입력 후 Enter (예: 클라이막스)"
-                style={{ ...inputStyle, width: 'auto', flex: 1 }} />
-              <button onClick={addSymbol} className="px-3 py-1 rounded text-xs"
-                style={{ background: 'var(--c-accent)', color: '#fff', border: 'none', cursor: 'pointer' }}>추가</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 사용자 폰트 관리 */}
-      <FontManagementSection />
 
       {/* 법적 주의 문구 */}
       <div className="rounded-lg" style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)', padding: '12px 16px' }}>
@@ -1057,7 +759,7 @@ function AnnounceCard({ item, autoOpen }) {
 }
 
 // ─── NoticesTab ───────────────────────────────────────────────────────────────
-function NoticesTab() {
+export function NoticesTab() {
   const [sub, setSub] = useState('notices');
   const [openAnnouncementId, setOpenAnnouncementId] = useState(() => {
     try {
@@ -1138,57 +840,6 @@ function SupportCard() {
   );
 }
 
-// ─── SceneFormatCard ──────────────────────────────────────────────────────────
-const SCENE_FORMAT_EXAMPLES = [
-  { label: '기본형',       example: 'S#1. 카페 내부, 낮' },
-  { label: '점 구분자',    example: 'S#1. 카페 내부. 낮' },
-  { label: '슬래시 구분자', example: 'S#1/ 카페 내부/ 낮' },
-  { label: '대시 구분자',  example: 'S#1 - 카페 내부 - 낮' },
-  { label: '괄호 시간대',  example: 'S#1. 카페 내부 (낮)' },
-  { label: '특수상황',     example: 'S#1. 회상) 카페 내부 - 세부장소 (낮)' },
-  { label: '시간대 연결',  example: 'S#1, 카페 내부, 낮~밤' },
-  { label: 'D/N 표기',    example: 'S#1. 카페 내부 - 세부장소, D->N' },
-];
-
-function SceneFormatCard({ onReportClick }) {
-  return (
-    <div style={{ marginBottom: 8 }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--c-text3)', marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid var(--c-border)' }}>
-        씬번호 인식 형식
-      </div>
-      <div style={{ fontSize: 11, color: 'var(--c-text5)', marginBottom: 12 }}>
-        아래 형식들은 모두 자동으로 인식됩니다. 구분자로 <code style={{ background: 'var(--c-input)', padding: '1px 4px', borderRadius: 3 }}>. / , -</code> 를 사용할 수 있고,
-        시간대는 괄호 없이도 인식됩니다.
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 90, overflowY: 'auto', paddingRight: 4 }}>
-        {SCENE_FORMAT_EXAMPLES.map(({ label, example }) => (
-          <div key={label} style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexShrink: 0 }}>
-            <span style={{ fontSize: 10, color: 'var(--c-text6)', minWidth: 76, flexShrink: 0 }}>{label}</span>
-            <code style={{
-              fontSize: 12, color: 'var(--c-text2)', background: 'var(--c-input)',
-              padding: '2px 8px', borderRadius: 4, fontFamily: 'monospace', letterSpacing: '0.02em',
-            }}>{example}</code>
-          </div>
-        ))}
-      </div>
-      <div style={{ marginTop: 6, fontSize: 10, color: 'var(--c-text6)' }}>
-        시간대 키워드: 낮 / 밤 / 아침 / 오전 / 오후 / 저녁 / 새벽 / 점심 / D / N
-        &nbsp;— 두 값을 <code style={{ background: 'var(--c-input)', padding: '1px 3px', borderRadius: 3 }}>~</code> 또는 <code style={{ background: 'var(--c-input)', padding: '1px 3px', borderRadius: 3 }}>-&gt;</code> 로 연결 가능 (예: 낮~밤, D-&gt;N)
-      </div>
-      <button
-        onClick={onReportClick}
-        style={{
-          marginTop: 16, width: '100%', padding: '10px 14px', borderRadius: 8,
-          border: '1px dashed var(--c-border3)', background: 'transparent',
-          fontSize: 12, color: 'var(--c-text4)', cursor: 'pointer', textAlign: 'center',
-        }}
-      >
-        인식 안 되는 형식 제보하기 →
-      </button>
-    </div>
-  );
-}
-
 // ─── ErrorReportTab ───────────────────────────────────────────────────────────
 const ERROR_TYPES = [
   { id: 'bug',     label: '🐞 버그',       desc: '기능이 작동하지 않아요' },
@@ -1251,11 +902,7 @@ function ErrorReportTab() {
 
   return (
     <div className="flex flex-col gap-6" style={{ maxWidth: 480 }}>
-      {/* 씬번호 인식 형식 안내 */}
-      <SceneFormatCard onReportClick={() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })} />
-
       <div ref={formRef}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--c-text3)', marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid var(--c-border)' }}>오류 제출</div>
         <div className="text-xs" style={{ color: 'var(--c-text5)' }}>불편한 점이나 개선 아이디어를 알려주세요.</div>
       </div>
 
@@ -1370,12 +1017,9 @@ function PlaceholderTab({ icon, title, desc }) {
 
 // ─── MyPage — 마이페이지 ───────────────────────────────────────────────────────
 const TABS = [
-  { id: 'stats',      label: '작업통계' },
-  { id: 'settings',  label: '설정' },
-  { id: 'notices',   label: '공지사항' },
-  { id: 'qa',        label: 'Q&A' },
-  { id: 'errors',    label: '오류제출' },
-  { id: 'membership',label: '멤버십' },
+  { id: 'stats',      label: '작업현황' },
+  { id: 'errors',     label: '오류제출' },
+  { id: 'membership', label: '멤버십' },
 ];
 
 export default function MyPage() {
@@ -1398,16 +1042,12 @@ export default function MyPage() {
   const tabLabel = TABS.find(t => t.id === activeTab)?.label || '';
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col overflow-hidden" style={{ background: 'var(--c-bg)', padding: isMobile ? 0 : 10 }}>
-      {isMobile && ['stats', 'settings', 'membership'].includes(activeTab) ? (
-        /* 모바일: 마이페이지 주요 탭 바 */
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden" style={{ background: 'var(--c-bg)' }}>
+      {/* 탭바 — 데스크톱만 표시 (모바일은 햄버거로 진입) */}
+      {!isMobile && (
         <div style={{ flexShrink: 0, borderBottom: '1px solid var(--c-border)', background: 'var(--c-panel)' }}>
           <div style={{ display: 'flex', alignItems: 'center', padding: '8px 16px 0' }}>
-            {[
-              { id: 'stats',      label: '작업통계' },
-              { id: 'settings',   label: '설정' },
-              { id: 'membership', label: '멤버십' },
-            ].map(t => (
+            {TABS.map(t => (
               <button
                 key={t.id}
                 onClick={() => setActiveTab(t.id)}
@@ -1423,52 +1063,19 @@ export default function MyPage() {
             ))}
           </div>
         </div>
-      ) : null}
+      )}
 
-      <div className="flex flex-1 min-h-0 overflow-hidden">
-        {/* 사이드바 — 데스크톱 전용 */}
-        {!isMobile && (
-          <div
-            className="w-24 shrink-0 flex flex-col pt-8 pb-4"
-            style={{ borderRight: '1px solid var(--c-border)', background: 'var(--c-panel)' }}
-          >
-            <div className="px-3 mb-4 text-[10px] font-bold" style={{ color: 'var(--c-text4)', letterSpacing: '0.05em' }}>마이페이지</div>
-            {TABS.map(t => (
-              <button
-                key={t.id}
-                onClick={() => setActiveTab(t.id)}
-                className="w-full text-left px-3 py-2 text-xs"
-                style={{
-                  background: activeTab === t.id ? 'var(--c-active)' : 'transparent',
-                  color: activeTab === t.id ? 'var(--c-accent)' : 'var(--c-text4)',
-                  border: 'none',
-                  borderLeft: activeTab === t.id ? '2px solid var(--c-accent)' : '2px solid transparent',
-                  cursor: 'pointer',
-                  fontWeight: activeTab === t.id ? 600 : 400,
-                }}
-              >{t.label}</button>
-            ))}
-          </div>
-        )}
-
-        {/* 콘텐츠 */}
-        <div className="flex-1 overflow-y-auto">
-          <div className={isMobile ? '' : 'max-w-2xl mx-auto'}
-               style={isMobile ? { padding: '24px 20px', paddingBottom: 'calc((clamp(52px, 14vw, 64px) + 46dvh + 16px) / 4)' } : { padding: '24px 20px' }}>
-            {activeTab === 'stats'      && <StatsTab />}
-            {activeTab === 'settings'   && <SettingsTab />}
-            {activeTab === 'notices'    && <NoticesTab />}
-            {activeTab === 'qa'         && <QnATab />}
-            {activeTab === 'errors'     && <ErrorReportTab />}
-            {activeTab === 'membership' && (
-              <div className="flex flex-col items-center gap-8">
-                <div style={{ width: '100%', fontSize: 13, fontWeight: 700, color: 'var(--c-text3)', marginBottom: 8, paddingBottom: 10, borderBottom: '1px solid var(--c-border)' }}>멤버십</div>
-                <PlaceholderTab icon="⭐" title="멤버십" desc="멤버십 기능은 준비 중입니다." />
-                {/* SupportCard 일시 비활성화 — 추후 복원 예정 */}
-                {false && <SupportCard />}
-              </div>
-            )}
-          </div>
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-2xl mx-auto"
+             style={isMobile ? { padding: '24px 20px', paddingBottom: 'calc((clamp(52px, 14vw, 64px) + 46dvh + 16px) / 4)' } : { padding: '24px 20px' }}>
+          {activeTab === 'stats'      && <StatsTab />}
+          {activeTab === 'errors'     && <ErrorReportTab />}
+          {activeTab === 'membership' && (
+            <div className="flex flex-col items-center gap-8">
+              <PlaceholderTab icon="⭐" title="멤버십" desc="멤버십 기능은 준비 중입니다." />
+              {false && <SupportCard />}
+            </div>
+          )}
         </div>
       </div>
     </div>

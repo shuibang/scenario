@@ -535,8 +535,11 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
         paddingRight: 'max(14px, env(safe-area-inset-right, 14px))',
         gap: 8, borderBottom: `1px solid ${D.border}`, background: D.sidebar,
       }}>
-        <button onClick={onBack} style={{ fontSize: 18, color: D.text3, background: 'none', border: 'none', cursor: 'pointer', padding: '0 4px', lineHeight: 1 }}>←</button>
-        <button onClick={onBack} style={{ fontSize: 'clamp(13px, 4vw, 16px)', fontWeight: 700, color: D.accent, letterSpacing: '0.03em', flex: 1, background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left' }}>🎬 연출 작업실</button>
+        <button onClick={onBack} title="대본 작업실" style={{ fontSize: 16, color: D.text3, background: 'none', border: `1px solid ${D.border}`, borderRadius: 6, cursor: 'pointer', padding: '2px 7px', lineHeight: 1, flexShrink: 0 }}>📝</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
+          <span style={{ fontSize: 'clamp(13px, 4vw, 15px)', fontWeight: 700, color: D.accent, letterSpacing: '-0.015em' }}>연출 작업실</span>
+          <div style={{ width: 22, height: 22, borderRadius: 5, background: D.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, boxShadow: `0 0 6px ${D.accent}55` }}>🎬</div>
+        </div>
         {isGuest ? (
           <button onClick={loginWithReturnHash} style={{ fontSize: 12, color: D.accent, background: 'none', border: `1px solid ${D.accent}`, borderRadius: 4, padding: '4px 10px', cursor: 'pointer' }}>로그인</button>
         ) : (
@@ -681,11 +684,20 @@ export default function DirectorDashboard({ session, onBack, isGuest = false }) 
           title={sidebarCollapsed ? '메뉴 열기' : '메뉴 닫기'}
           style={{ background: 'none', border: 'none', color: D.text3, fontSize: 16, cursor: 'pointer', padding: '4px 6px', lineHeight: 1, borderRadius: 4, flexShrink: 0 }}
         >{sidebarCollapsed ? '☰' : '✕'}</button>
-        <button onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: 10, marginRight: 8, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-          <div style={{ width: 28, height: 28, borderRadius: 6, background: D.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>🎬</div>
-          <span style={{ fontWeight: 700, fontSize: 15, color: D.text, letterSpacing: '-0.02em' }}>연출 작업실</span>
-          <span style={{ fontSize: 9, fontWeight: 600, color: D.sidebar, background: D.accent, borderRadius: 3, padding: '2px 5px', letterSpacing: '0.05em' }}>DIRECTOR</span>
-        </button>
+        {/* 대본 작업실 바로가기 */}
+        <button
+          onClick={onBack}
+          title="대본 작업실"
+          style={{ width: 28, height: 28, borderRadius: 6, background: 'none', border: `1px solid ${D.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, fontSize: 13, color: D.text3, transition: 'background 120ms' }}
+          onMouseEnter={e => { e.currentTarget.style.background = D.card; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
+        >📝</button>
+
+        {/* 연출 작업실 로고 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginRight: 8 }}>
+          <span style={{ fontWeight: 700, fontSize: 13, color: D.accent, letterSpacing: '-0.015em' }}>연출 작업실</span>
+          <div style={{ width: 26, height: 26, borderRadius: 6, background: D.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, boxShadow: `0 0 8px ${D.accent}55` }}>🎬</div>
+        </div>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {user?.avatar

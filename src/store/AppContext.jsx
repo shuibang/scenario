@@ -16,8 +16,16 @@ export const DEFAULT_STYLE_PRESET = {
   pageMargins: { top: 35, right: 30, bottom: 30, left: 30 },
   structureGuidelines: '',     // 구조 지침 (사용자 입력)
   customSymbols: [],           // 기타 기호 목록 (사용자 추가)
+  customStructureTags: [],     // 사용자 추가 구조태그 (문자열 배열)
+  customEmotionTags: [],       // 사용자 추가 감정태그 ([{ word, color }])
   pageNumberFormat: '-{n}-',
   pageNumberOffsetBottomMm: 15,
+  blockStyles: {
+    sceneNumber: { bold: true,  italic: false, underline: false, uppercase: false },
+    action:      { bold: false, italic: false, underline: false },
+    dialogue:    { bold: false, italic: false, underline: false },
+  },
+  dialogueLayout: 'korean',    // 'korean' | 'hollywood'
   fontWeightRules: {
     sceneNumber: 'bold',
     characterName: 'bold',
@@ -165,6 +173,7 @@ function reducer(state, action) {
         ),
       };
 
+
     // Atomic import: multiple ADD_SCENE + SET_BLOCKS collapsed into one undo step
     case 'IMPORT_TREATMENT_TO_SCRIPT': {
       const { episodeId, newScenes, labelled, updatedSummaryItems } = action.payload;
@@ -187,6 +196,8 @@ function reducer(state, action) {
 
     case 'CLEAR_PENDING_RELOAD':
       return { ...state, pendingScriptReload: null };
+    case 'SET_PENDING_RELOAD':
+      return { ...state, pendingScriptReload: action.episodeId };
 
     case 'SET_COVER':
       return {
@@ -509,11 +520,15 @@ export function AppProvider({ children }) {
     state.stylePreset,
   ]);
 
+  // 초기 로드 시에만 자동 복원 (사용자가 직접 닫은 경우는 복원하지 않음)
+  const didAutoRestore = useRef(false);
   useEffect(() => {
-    if (state.initialized && !state.activeProjectId && state.projects.length > 0) {
+    if (state.initialized && !state.activeProjectId && state.projects.length > 0 && !didAutoRestore.current) {
+      didAutoRestore.current = true;
       dispatch({ type: 'SET_ACTIVE_PROJECT', id: state.projects[0].id });
     }
-  }, [state.initialized, state.activeProjectId, state.projects]);
+    if (state.initialized) didAutoRestore.current = true;
+  }, [state.initialized]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 상태 변경마다 URL 동기화
   useEffect(() => {

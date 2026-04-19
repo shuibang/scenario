@@ -9,6 +9,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../store/supabaseClient';
 import DirectorScriptViewer from './director/DirectorScriptViewer';
 import { getBlockPosition, scrollToBlock } from '../utils/blockPosition';
+import { getAll } from '../store/db';
 
 const DELIVERY_STORAGE_KEY = 'director_deliveries_received';
 
@@ -28,6 +29,11 @@ export default function DirectorDeliveryView() {
   const [saved,        setSaved]        = useState(false);
   const [panelOpen,    setPanelOpen]    = useState(true);
 
+  // 작품 선택 다이얼로그
+  const [pickerOpen,   setPickerOpen]   = useState(false);
+  const [projects,     setProjects]     = useState([]);
+  const [pickedProjId, setPickedProjId] = useState('');
+
   const deliveryId = window.location.hash.slice('#delivery='.length);
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -46,10 +52,20 @@ export default function DirectorDeliveryView() {
       });
   }, [deliveryId]);
 
-  const handleSave = () => {
+  const openPicker = async () => {
     if (!delivery) return;
     const existing = getReceivedDeliveries();
     if (existing.some(d => d.id === delivery.id)) { setAlreadySaved(true); return; }
+    const list = await getAll('projects');
+    setProjects(list || []);
+    setPickedProjId(list?.[0]?.id || '');
+    setPickerOpen(true);
+  };
+
+  const handleConfirmSave = () => {
+    if (!delivery) return;
+    const existing = getReceivedDeliveries();
+    if (existing.some(d => d.id === delivery.id)) { setAlreadySaved(true); setPickerOpen(false); return; }
     saveReceived([{
       id:        delivery.id,
       title:     delivery.script_snapshot?.projects?.[0]?.title || '연출노트',
@@ -57,9 +73,12 @@ export default function DirectorDeliveryView() {
       createdAt: delivery.created_at,
       appState:  delivery.script_snapshot,
       notes:     delivery.notes_snapshot || [],
+      projectId: pickedProjId || null,
     }, ...existing]);
+    window.dispatchEvent(new Event('drama_delivery_changed'));
     setSaved(true);
     setAlreadySaved(true);
+    setPickerOpen(false);
   };
 
   if (bad) return (
@@ -99,7 +118,7 @@ export default function DirectorDeliveryView() {
         <span style={{ fontWeight: 700, fontSize: 14, color: '#111' }}>{title} — 연출노트</span>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
           {saved && <span style={{ fontSize: 12, color: '#4caf50' }}>저장됨 ✓</span>}
-          <button onClick={handleSave} disabled={alreadySaved}
+          <button onClick={openPicker} disabled={alreadySaved}
             style={{
               padding: '5px 14px', borderRadius: 6, border: 'none',
               background: alreadySaved ? '#ccc' : '#1a1a2e',
@@ -173,6 +192,70 @@ export default function DirectorDeliveryView() {
           )}
         </div>
       </div>
+
+      {/* 작품 선택 다이얼로그 */}
+      {pickerOpen && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999,
+        }}>
+          <div style={{
+            background: '#fff', borderRadius: 12, padding: '24px 28px',
+            minWidth: 320, maxWidth: 420, boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+            display: 'flex', flexDirection: 'column', gap: 16,
+          }}>
+            <div style={{ fontWeight: 700, fontSize: 15, color: '#111' }}>어떤 작품의 피드백으로 저장할까요?</div>
+            <div style={{ fontSize: 12, color: '#666', marginTop: -8 }}>
+              선택한 작품의 씬리스트 아래 피드백 노트로 저장됩니다.
+            </div>
+            {projects.length === 0 ? (
+              <div style={{ fontSize: 13, color: '#aaa', textAlign: 'center', padding: '12px 0' }}>
+                저장된 작품이 없습니다.<br />
+                대본 작업실에서 작품을 먼저 만들어주세요.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 220, overflowY: 'auto' }}>
+                {projects.map(p => (
+                  <label key={p.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '8px 12px', borderRadius: 8, cursor: 'pointer',
+                    border: `1px solid ${pickedProjId === p.id ? '#1a1a2e' : '#e0e0e0'}`,
+                    background: pickedProjId === p.id ? '#f0f0f8' : '#fafafa',
+                  }}>
+                    <input
+                      type="radio"
+                      name="pick-project"
+                      value={p.id}
+                      checked={pickedProjId === p.id}
+                      onChange={() => setPickedProjId(p.id)}
+                      style={{ accentColor: '#1a1a2e' }}
+                    />
+                    <span style={{ fontSize: 13, color: '#111', fontWeight: pickedProjId === p.id ? 600 : 400 }}>
+                      {p.title || '(제목 없음)'}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button
+                onClick={() => setPickerOpen(false)}
+                style={{ padding: '6px 16px', borderRadius: 6, border: '1px solid #ddd', background: '#fff', fontSize: 13, cursor: 'pointer', color: '#555' }}
+              >취소</button>
+              <button
+                onClick={handleConfirmSave}
+                disabled={projects.length === 0 || !pickedProjId}
+                style={{
+                  padding: '6px 16px', borderRadius: 6, border: 'none',
+                  background: projects.length === 0 || !pickedProjId ? '#ccc' : '#1a1a2e',
+                  color: '#fff', fontSize: 13, fontWeight: 600,
+                  cursor: projects.length === 0 || !pickedProjId ? 'default' : 'pointer',
+                }}
+              >저장</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

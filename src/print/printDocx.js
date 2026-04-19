@@ -62,11 +62,17 @@ function baseRun(text, props, dp) {
   });
 }
 
+// Shift+Enter로 삽입된 <br>과 \n을 줄 단위로 분리
+function splitOnBr(html) {
+  if (!html) return [''];
+  return html.split(/<br\s*\/?>/gi).flatMap(p => p.split('\n'));
+}
+
 // ─── HTML → TextRun[] (b/i/u 태그만 처리) ─────────────────────────────────────
 function htmlToRuns(html, dp, extraProps = {}) {
   if (!html) return [baseRun('', extraProps, dp)];
-  // Replace <br> with newline
-  const normalized = html.replace(/<br\s*\/?>/gi, '\n');
+  // <br>은 splitOnBr에서 이미 분리되므로 여기서는 제거만
+  const normalized = html.replace(/<br\s*\/?>/gi, '');
   const runs = [];
   // Parse segments: text and <b>/<i>/<u> spans
   // We iterate with a simple state stack
@@ -277,15 +283,17 @@ function buildDocxSections(printModel, dp, { hancom = false } = {}) {
             paras.push(para(`${block.label} ${block.content}`.trim(), dp, { bold: true, noJustify: true }));
             break;
           case 'action':
-            // HTML 서식 포함 가능 — 줄 단위로 분리하되 각 줄을 html 모드로 렌더
-            (block.content || '').split('\n').forEach(l =>
+            splitOnBr(block.content || '').forEach(l =>
               paras.push(para(l, dp, { indent: 8, html: true }))
             );
             break;
-          case 'dialogue':
-            // First line: charName + speech together
-            paras.push(dialoguePara(block.charName, block.content, dp));
+          case 'dialogue': {
+            const dLines = splitOnBr(block.content || '');
+            paras.push(dialoguePara(block.charName, dLines[0] ?? '', dp));
+            for (let i = 1; i < dLines.length; i++)
+              paras.push(para(dLines[i], dp, { html: true }));
             break;
+          }
           case 'parenthetical':
             paras.push(parenPara(block.content, dp));
             break;
@@ -293,7 +301,7 @@ function buildDocxSections(printModel, dp, { hancom = false } = {}) {
             paras.push(para((block.content || '').toUpperCase(), dp, { right: true }));
             break;
           default:
-            if (block.content) paras.push(para(block.content, dp));
+            paras.push(para(block.content || '', dp));
         }
         prevBlock = block;
       }
