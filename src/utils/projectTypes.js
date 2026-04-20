@@ -1,6 +1,7 @@
 // 작품 유형 프리셋 ─ NewProjectModal과 여러 컴포넌트에서 공유
 export const PROJECT_TYPE_PRESETS = [
   { id: 'movie',     label: '영화',        totalMins: 100, climaxStart: 78, climaxEnd: 95,  isMulti: false },
+  { id: 'single',    label: '단막',        totalMins: 70,  climaxStart: 55, climaxEnd: 65,  isMulti: false },
   { id: 'kdrama',    label: '드라마',      totalMins: 60,  climaxStart: 48, climaxEnd: 58,  isMulti: true  },
   { id: 'webdrama',  label: '웹드라마',    totalMins: 30,  climaxStart: 23, climaxEnd: 28,  isMulti: true  },
   { id: 'shortform', label: '숏폼드라마',  totalMins: 10,  climaxStart: 7,  climaxEnd: 9,   isMulti: true  },
