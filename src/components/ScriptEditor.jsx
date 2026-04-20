@@ -3483,8 +3483,8 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
         </div>
       )}
 
-      {/* Toolbar — 2행: 회차 정보 + 페이지수 + 저장됨 (항상 표시) */}
-      <div className="px-4 py-1 flex items-center gap-2 text-xs shrink-0" style={{ borderBottom: '1px solid var(--c-border2)' }}>
+      {/* Toolbar — 2행: 회차 정보 + 페이지수 + 저장됨 (모바일 전용) */}
+      <div className="md:hidden px-4 py-1 flex items-center gap-2 text-xs shrink-0" style={{ borderBottom: '1px solid var(--c-border2)' }}>
         {/* 왼쪽: 회차·제목·쪽수·저장됨 */}
         <span style={{ color: 'var(--c-text3)', flexShrink: 0 }}>{episode?.number}회 {episode?.title || ''}</span>
         {brokenSceneRefs.length > 0 && (
