@@ -3419,65 +3419,6 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
                 WebkitTapHighlightColor: 'transparent', marginLeft: 4,
               }}
             >태그</button>
-            {/* B / I / U / S + 정렬 — 모바일 전용 (데스크톱은 상단 툴바 Row3) */}
-            {isMobile && (<>
-              <div style={{ width: 1, height: 20, background: 'var(--c-border3)', flexShrink: 0, margin: '0 4px', alignSelf: 'center' }} />
-              {[
-                { label: 'B', title: '굵게 (Ctrl+B)', cmd: 'bold', style: { fontWeight: 700 } },
-                { label: 'I', title: '기울임 (Ctrl+I)', cmd: 'italic', style: { fontStyle: 'italic' } },
-                { label: 'U', title: '밑줄 (Ctrl+U)', cmd: 'underline', style: { textDecoration: 'underline' } },
-                { label: 'S', title: '취소선 (Ctrl+Shift+X)', cmd: 'strikeThrough', style: { textDecoration: 'line-through' } },
-              ].map(({ label, title, cmd, style: labelStyle }) => (
-                <button
-                  key={cmd}
-                  title={title}
-                  onMouseDown={e => {
-                    e.preventDefault();
-                    surfaceApiRef.current?.applyFormat(cmd);
-                  }}
-                  style={{
-                    flexShrink: 0, width: BTN_W, textAlign: 'center',
-                    fontSize: 'clamp(10px, 2.8vw, 13px)', color: 'var(--c-text4)',
-                    padding: '4px 0', border: '1px solid var(--c-border3)',
-                    borderRadius: 6, background: 'transparent', cursor: 'pointer',
-                    WebkitTapHighlightColor: 'transparent',
-                    ...labelStyle,
-                  }}
-                >{label}</button>
-              ))}
-              <div style={{ width: 1, height: 20, background: 'var(--c-border3)', flexShrink: 0, margin: '0 4px', alignSelf: 'center' }} />
-              {[
-                { label: '◀─', title: '왼쪽 정렬', align: 'left' },
-                { label: '─◀─', title: '가운데 정렬', align: 'center' },
-                { label: '─▶', title: '오른쪽 정렬', align: 'right' },
-                { label: '◀▶', title: '양쪽 정렬', align: 'justify' },
-              ].map(({ label, title, align }) => (
-                <button
-                  key={align}
-                  title={title}
-                  onMouseDown={e => {
-                    e.preventDefault();
-                    surfaceApiRef.current?.applyAlignment(align);
-                    requestAnimationFrame(() => {
-                      const el = surfaceRef.current;
-                      const sel = window.getSelection();
-                      if (!el || !sel?.rangeCount) return;
-                      const blockEl = el.querySelector('[data-block-id]') && document.activeElement?.dataset?.blockId
-                        ? el.querySelector(`[data-block-id="${document.activeElement.dataset.blockId}"]`)
-                        : null;
-                      setActiveAlignment(blockEl?.dataset.alignment || null);
-                    });
-                  }}
-                  style={{
-                    flexShrink: 0, width: BTN_W, textAlign: 'center',
-                    fontSize: 'clamp(8px, 2.2vw, 10px)', color: activeAlignment === align ? 'var(--c-accent)' : 'var(--c-text4)',
-                    padding: '4px 0', border: `1px solid ${activeAlignment === align ? 'var(--c-accent)' : 'var(--c-border3)'}`,
-                    borderRadius: 6, background: 'transparent', cursor: 'pointer',
-                    WebkitTapHighlightColor: 'transparent', fontWeight: activeAlignment === align ? 700 : 400,
-                  }}
-                >{label}</button>
-              ))}
-            </>)}
           </div>
         </div>
       )}
