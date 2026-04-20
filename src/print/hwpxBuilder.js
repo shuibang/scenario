@@ -188,7 +188,7 @@ function xmlContentHpf(title) {
 </opf:package>`;
 }
 
-function xmlHeader(fontName, fallbackFontName, fontSizePt, dialogueTabHwp) {
+function xmlHeader(fontName, fallbackFontName, fontSizePt, dialogueTabHwp, actionIndentHwp = 2268) {
   // HWPX height unit = 1/100 pt
   const normalH  = Math.round(fontSizePt * 100);
   const titleH   = Math.round(fontSizePt * 140);
@@ -292,7 +292,7 @@ ${paraPr(0, 'JUSTIFY', 0,   0,   0)}
 ${paraPr(1, 'CENTER',  300, 100, 0)}
 ${paraPr(2, 'JUSTIFY', 0,   0,   0)}
 ${paraPr(3, 'JUSTIFY', 0,   0,   1, 0, -dialogueTabHwp)}
-${paraPr(4, 'JUSTIFY', 0,   0,   0, 2268)}
+${paraPr(4, 'JUSTIFY', 0,   0,   0, actionIndentHwp)}
 ${paraPr(5, 'JUSTIFY', 0,   0,   0, dialogueTabHwp)}
 ${paraPr(6, 'RIGHT',   0,   0,   0)}
 ${paraPr(7, 'JUSTIFY', 0,   0,   0, 0, 0, 1)}
@@ -571,6 +571,8 @@ export async function buildHwpx(appState, selections) {
   // dialogueGap: em → pt → HWP units (1pt = 100 HWP units)
   const dialogueEm     = parseFloat(preset.dialogueGap || '7');
   const dialogueTabHwp = Math.round(dialogueEm * fontSize * 200);
+  const bs             = preset.blockStyles || {};
+  const actionIndentHwp = mmToHwp((bs.action?.indent ?? 1) * 8);
 
   const margins      = preset.pageMargins ?? { top: 35, right: 30, bottom: 30, left: 30 };
   const printModel   = buildPrintModel(appState, selections, preset);
@@ -585,7 +587,7 @@ export async function buildHwpx(appState, selections) {
   zip.file('META-INF/manifest.xml',   xmlManifest());
   zip.file('META-INF/container.xml',  xmlContainer());
   zip.file('Contents/content.hpf',    xmlContentHpf(projectTitle));
-  zip.file('Contents/header.xml',     xmlHeader(fontName, fallbackFont, fontSize, dialogueTabHwp));
+  zip.file('Contents/header.xml',     xmlHeader(fontName, fallbackFont, fontSize, dialogueTabHwp, actionIndentHwp));
   zip.file('Contents/section0.xml',   xmlSection(printModel, margins));
 
   return zip.generateAsync({ type: 'blob', mimeType: 'application/hwp+zip' });

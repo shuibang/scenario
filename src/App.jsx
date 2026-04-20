@@ -61,7 +61,6 @@ import NewProjectModal   from './components/Modals/NewProjectModal';
 import ImportDocxModal       from './components/Modals/ImportDocxModal';
 import ImportHwpxModal       from './components/Modals/ImportHwpxModal';
 import StyleSettingsModal    from './components/Modals/StyleSettingsModal';
-import SceneFormatModal      from './components/Modals/SceneFormatModal';
 import UserSettingsModal     from './components/Modals/UserSettingsModal';
 import TagManageModal        from './components/Modals/TagManageModal';
 import AppSettingsModal      from './components/Modals/AppSettingsModal';
@@ -1348,8 +1347,8 @@ function Shell({ authUser, setAuthUser }) {
   const [importDocxOpen,       setImportDocxOpen]       = useState(false);
   const [importHwpxOpen,       setImportHwpxOpen]       = useState(false);
   const [styleSettingsOpen,    setStyleSettingsOpen]    = useState(false);
-  const [sceneFormatOpen,      setSceneFormatOpen]      = useState(false);
   const [userSettingsOpen,     setUserSettingsOpen]     = useState(false);
+  const [userSettingsTab,      setUserSettingsTab]      = useState('sceneHeader');
   const [tagManageOpen,        setTagManageOpen]        = useState(false);
   const [appSettingsOpen,      setAppSettingsOpen]      = useState(false);
   const [noticesOpen,          setNoticesOpen]          = useState(false);
@@ -1497,8 +1496,7 @@ function Shell({ authUser, setAuthUser }) {
     if (action === 'format:italic')        { applyInlineFormat('italic');    return; }
     if (action === 'format:underline')     { applyInlineFormat('underline'); return; }
     if (action === 'format:styleSettings') { setStyleSettingsOpen(true);    return; }
-    if (action === 'format:sceneFormat')   { setSceneFormatOpen(true);      return; }
-    if (action === 'format:userSettings')  { setUserSettingsOpen(true);     return; }
+    if (action === 'format:userSettings')  { setUserSettingsTab('sceneHeader'); setUserSettingsOpen(true); return; }
     if (action === 'format:tagManage')     { setTagManageOpen(true);        return; }
     if (action?.startsWith('format:type:')) { window.dispatchEvent(new CustomEvent('script:setBlockType', { detail: { type: action.slice(12) } })); return; }
     if (action?.startsWith('format:font:')) { dispatch({ type: 'SET_STYLE_PRESET', payload: { fontFamily: action.slice('format:font:'.length) } }); return; }
@@ -1586,8 +1584,7 @@ function Shell({ authUser, setAuthUser }) {
       <ImportDocxModal    open={importDocxOpen}    onClose={() => setImportDocxOpen(false)} />
       <ImportHwpxModal    open={importHwpxOpen}    onClose={() => setImportHwpxOpen(false)} />
       <StyleSettingsModal open={styleSettingsOpen} onClose={() => setStyleSettingsOpen(false)} />
-      <SceneFormatModal   open={sceneFormatOpen}   onClose={() => setSceneFormatOpen(false)} />
-      <UserSettingsModal   open={userSettingsOpen} onClose={() => setUserSettingsOpen(false)} />
+      <UserSettingsModal open={userSettingsOpen} initialTab={userSettingsTab} onClose={() => setUserSettingsOpen(false)} />
       <TagManageModal      open={tagManageOpen}    onClose={() => setTagManageOpen(false)} />
       <AppSettingsModal    open={appSettingsOpen}  onClose={() => setAppSettingsOpen(false)} />
       <NoticesModal        open={noticesOpen}      onClose={() => setNoticesOpen(false)} />

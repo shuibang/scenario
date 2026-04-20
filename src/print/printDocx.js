@@ -27,6 +27,7 @@ function presetToDocxProps(preset) {
   const fontSize  = preset?.fontSize   ?? 11; // pt
   const lineHeight = preset?.lineHeight ?? 1.6;
   const { fontName: fontFamily } = resolveFont(preset, 'docx');
+  const bs = preset?.blockStyles || {};
 
   const dialogueGapPt = (() => {
     const m = (preset?.dialogueGap || '7em').match(/^([\d.]+)em$/);
@@ -49,6 +50,10 @@ function presetToDocxProps(preset) {
     lineSpacingTwips,
     fontFamily,
     dialogueGapTwips: Math.round(dialogueGapPt * 20), // 1pt = 20 twips
+    bs,
+    actionIndentMm:   (bs.action?.indent   ?? 1) * 8,
+    sceneIndentMm:    (bs.sceneNumber?.indent ?? 0) * 8,
+    dialogueIndentMm: (bs.dialogue?.indent ?? 0) * 8,
   };
 }
 
@@ -116,9 +121,14 @@ function lineSpacing(dp) {
 // ─── Common paragraph builder ─────────────────────────────────────────────────
 // opts.html=true → text is HTML, parse inline formatting
 function para(text, dp, opts = {}) {
+  const runProps = {
+    bold:      opts.bold    || false,
+    italics:   opts.italic  || false,
+    underline: opts.underline ? {} : undefined,
+  };
   const children = opts.html
-    ? htmlToRuns(text, dp, { bold: opts.bold || false, italics: opts.italic || false })
-    : [baseRun(text, { bold: opts.bold || false, italics: opts.italic || false }, dp)];
+    ? htmlToRuns(text, dp, runProps)
+    : [baseRun(text, runProps, dp)];
   const blockAlignMap = { left: AlignmentType.LEFT, center: AlignmentType.CENTER, right: AlignmentType.RIGHT, justify: AlignmentType.BOTH };
   return new Paragraph({
     children,
@@ -146,18 +156,26 @@ function sectionBreak() {
 
 // ─── Dialogue paragraph (character name + speech, tab-based) ──────────────────
 function dialoguePara(charName, speech, dp) {
-  const gapTwips = dp.dialogueGapTwips;
-  const speechRuns = htmlToRuns(speech, dp);
+  const gapTwips     = dp.dialogueGapTwips;
+  const outerIndent  = dp.dialogueIndentMm ? convertMillimetersToTwip(dp.dialogueIndentMm) : 0;
+  const charBs       = dp.bs?.charName || {};
+  const speechRuns   = htmlToRuns(speech, dp);
   return new Paragraph({
     children: [
-      new TextRun({ text: String(charName || ''), bold: true, font: { name: dp.fontFamily }, size: dp.fontSizeHalfPt }),
+      new TextRun({
+        text: String(charName || ''),
+        bold:      charBs.bold !== false,
+        italics:   !!charBs.italic,
+        underline: charBs.underline ? {} : undefined,
+        font: { name: dp.fontFamily }, size: dp.fontSizeHalfPt,
+      }),
       new TextRun({ children: [new Tab()], font: { name: dp.fontFamily }, size: dp.fontSizeHalfPt }),
       ...speechRuns,
     ],
     tabStops: [
-      { type: TabStopType.LEFT, position: gapTwips },
+      { type: TabStopType.LEFT, position: gapTwips + outerIndent },
     ],
-    indent: { left: gapTwips, hanging: gapTwips },
+    indent: { left: gapTwips + outerIndent, hanging: gapTwips },
     alignment: AlignmentType.BOTH,
     spacing: lineSpacing(dp),
   });
@@ -282,14 +300,31 @@ function buildDocxSections(printModel, dp, { hancom = false } = {}) {
           paras.push(blankPara(dp));
         }
         switch (block.type) {
-          case 'scene_number':
-            paras.push(para(`${block.label} ${block.content}`.trim(), dp, { bold: true, noJustify: true }));
+          case 'scene_number': {
+            const snBs = dp.bs?.sceneNumber || {};
+            paras.push(para(`${block.label} ${block.content}`.trim(), dp, {
+              bold:      snBs.bold !== false,
+              italic:    !!snBs.italic,
+              underline: !!snBs.underline,
+              noJustify: true,
+              indent:    dp.sceneIndentMm || 0,
+            }));
             break;
-          case 'action':
+          }
+          case 'action': {
+            const acBs = dp.bs?.action || {};
             splitOnBr(block.content || '').forEach(l =>
-              paras.push(para(l, dp, { indent: 8, html: true, blockAlign: block.alignment }))
+              paras.push(para(l, dp, {
+                indent:    dp.actionIndentMm,
+                bold:      !!acBs.bold,
+                italic:    !!acBs.italic,
+                underline: !!acBs.underline,
+                html: true,
+                blockAlign: block.alignment,
+              }))
             );
             break;
+          }
           case 'dialogue': {
             const dLines = splitOnBr(block.content || '');
             paras.push(dialoguePara(block.charName, dLines[0] ?? '', dp));

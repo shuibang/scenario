@@ -21,9 +21,10 @@ export const DEFAULT_STYLE_PRESET = {
   pageNumberFormat: '-{n}-',
   pageNumberOffsetBottomMm: 15,
   blockStyles: {
-    sceneNumber: { bold: true,  italic: false, underline: false, uppercase: false },
-    action:      { bold: false, italic: false, underline: false },
-    dialogue:    { bold: false, italic: false, underline: false },
+    sceneNumber: { bold: true,  italic: false, underline: false, uppercase: false, indent: 0 },
+    action:      { bold: false, italic: false, underline: false, indent: 1 },
+    charName:    { bold: true,  italic: false, underline: false, indent: 0 },
+    dialogue:    { bold: false, italic: false, underline: false, indent: 0 },
   },
   dialogueLayout: 'korean',    // 'korean' | 'hollywood'
   fontWeightRules: {

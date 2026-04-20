@@ -13,9 +13,9 @@
 export const FORMAT_KEY = 'scene_header_format';
 
 export const LOC_SEP_PRESETS = [
-  { value: ' - ', label: '하이픈',      example: '거실 - 안방' },
-  { value: ' / ', label: '슬래시',      example: '거실 / 안방' },
-  { value: '/',   label: '슬래시 붙임', example: '거실/안방'   },
+  { value: ' - ', label: '하이픈',      example: '집 - 안방' },
+  { value: ' / ', label: '슬래시',      example: '집 / 안방' },
+  { value: '/',   label: '슬래시 붙임', example: '집/안방'   },
 ];
 
 export const TIME_FMT_PRESETS = [

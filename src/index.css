@@ -291,7 +291,10 @@ textarea {
 
 /* Scene number — label shown via ::before */
 .ce-block[data-block-type="scene_number"] {
-  font-weight: bold;
+  font-weight: var(--scene-bold, bold);
+  font-style: var(--scene-italic, normal);
+  text-decoration: var(--scene-underline, none);
+  margin-left: var(--scene-indent, 0);
   margin-top: 1.5em;
   margin-bottom: 0.25em;
   color: var(--c-text);
@@ -318,7 +321,10 @@ textarea {
 
 /* Action */
 .ce-block[data-block-type="action"] {
-  padding-left: 1.5rem;
+  padding-left: var(--action-indent, 8mm);
+  font-weight: var(--action-bold, normal);
+  font-style: var(--action-italic, normal);
+  text-decoration: var(--action-underline, none);
   color: var(--c-text2);
 }
 
@@ -326,6 +332,10 @@ textarea {
 .ce-block[data-block-type="dialogue"] {
   display: block;
   padding-left: var(--dialogue-gap, 7em);
+  margin-left: var(--dialogue-indent, 0);
+  font-weight: var(--dialogue-bold, normal);
+  font-style: var(--dialogue-italic, normal);
+  text-decoration: var(--dialogue-underline, none);
   position: relative;
   color: var(--c-text);
   white-space: pre-wrap;
@@ -337,7 +347,9 @@ textarea {
   left: 0;
   top: 0;
   width: var(--dialogue-gap, 7em);
-  font-weight: bold;
+  font-weight: var(--charname-bold, bold);
+  font-style: var(--charname-italic, normal);
+  text-decoration: var(--charname-underline, none);
   color: var(--c-text);
   cursor: pointer;
   user-select: none;

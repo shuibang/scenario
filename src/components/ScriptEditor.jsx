@@ -1413,6 +1413,7 @@ const EditorSurface = forwardRef(function EditorSurface({
   onSlashSelectCurrent, // () → Tab으로 현재 항목 선택
   onNextTypePick,  // ({ blockId, top, left }) → 대사 블록에서 다음 형식 선택 팝업
   onCloseSceneRef, // () → 타이핑 시 씬연결 피커 자동 닫기
+  blockStyles,
 }, ref) {
   const surfaceRef = useRef(null);
   const metaRef = useRef({});
@@ -2149,7 +2150,22 @@ const EditorSurface = forwardRef(function EditorSurface({
         fontSize,
         lineHeight,
         outline: 'none',
-        '--dialogue-gap': dialogueGap || '7em',
+        '--dialogue-gap':      dialogueGap || '7em',
+        '--action-indent':    `${(blockStyles?.action?.indent    ?? 1) * 8}mm`,
+        '--scene-indent':     `${(blockStyles?.sceneNumber?.indent ?? 0) * 8}mm`,
+        '--dialogue-indent':  `${(blockStyles?.dialogue?.indent   ?? 0) * 8}mm`,
+        '--scene-bold':       blockStyles?.sceneNumber?.bold !== false ? 'bold' : 'normal',
+        '--scene-italic':     blockStyles?.sceneNumber?.italic ? 'italic' : 'normal',
+        '--scene-underline':  blockStyles?.sceneNumber?.underline ? 'underline' : 'none',
+        '--action-bold':      blockStyles?.action?.bold ? 'bold' : 'normal',
+        '--action-italic':    blockStyles?.action?.italic ? 'italic' : 'normal',
+        '--action-underline': blockStyles?.action?.underline ? 'underline' : 'none',
+        '--charname-bold':    blockStyles?.charName?.bold !== false ? 'bold' : 'normal',
+        '--charname-italic':  blockStyles?.charName?.italic ? 'italic' : 'normal',
+        '--charname-underline': blockStyles?.charName?.underline ? 'underline' : 'none',
+        '--dialogue-bold':    blockStyles?.dialogue?.bold ? 'bold' : 'normal',
+        '--dialogue-italic':  blockStyles?.dialogue?.italic ? 'italic' : 'normal',
+        '--dialogue-underline': blockStyles?.dialogue?.underline ? 'underline' : 'none',
         caretColor: 'var(--c-accent)',
       }}
       className="ce-surface"
@@ -3557,6 +3573,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
             onCharSuggest={handleCharSuggest}
             onSelectionChange={setActiveBlockType}
             dialogueGap={dialogueGap}
+            blockStyles={stylePreset?.blockStyles}
             fontFamily={editorFontFamily}
             fontSize={editorFontSize}
             lineHeight={editorLineHeight}

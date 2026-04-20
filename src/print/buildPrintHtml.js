@@ -178,6 +178,10 @@ export function buildPrintHtml(appState, selections) {
   const lineHeight = preset.lineHeight  ?? 1.6;
   const margins    = preset.pageMargins ?? { top: 35, right: 30, bottom: 30, left: 30 };
   const dialogueGap = preset.dialogueGap ?? '7em';
+  const bs = preset.blockStyles || {};
+  const actionIndentMm   = (bs.action?.indent   ?? 1) * 8;
+  const sceneIndentMm    = (bs.sceneNumber?.indent ?? 0) * 8;
+  const dialogueIndentMm = (bs.dialogue?.indent ?? 0) * 8;
 
   const printModel = buildPrintModel(appState, selections, preset);
 
@@ -244,10 +248,10 @@ body {
 
 /* ── Episode blocks ──────────────────────────────── */
 .ep-title      { font-size: ${fontSize + 2}pt; font-weight: 700; text-align: center; margin-bottom: 4pt; }
-.scene-number  { font-weight: 700; margin-top: 10pt; margin-bottom: 2pt; }
-.action        { margin-left: 8mm; margin-bottom: 1pt; text-align: justify; white-space: pre-wrap; }
-.dialogue      { display: flex; align-items: flex-start; margin-bottom: 1pt; break-inside: avoid; }
-.char-col      { font-weight: 700; flex-shrink: 0; }
+.scene-number  { font-weight: ${bs.sceneNumber?.bold !== false ? 700 : 400}; font-style: ${bs.sceneNumber?.italic ? 'italic' : 'normal'}; text-decoration: ${bs.sceneNumber?.underline ? 'underline' : 'none'}; margin-left: ${sceneIndentMm}mm; margin-top: 10pt; margin-bottom: 2pt; }
+.action        { margin-left: ${actionIndentMm}mm; font-weight: ${bs.action?.bold ? 700 : 400}; font-style: ${bs.action?.italic ? 'italic' : 'normal'}; text-decoration: ${bs.action?.underline ? 'underline' : 'none'}; margin-bottom: 1pt; text-align: justify; white-space: pre-wrap; }
+.dialogue      { display: flex; align-items: flex-start; margin-left: ${dialogueIndentMm}mm; margin-bottom: 1pt; break-inside: avoid; }
+.char-col      { font-weight: ${bs.charName?.bold !== false ? 700 : 400}; font-style: ${bs.charName?.italic ? 'italic' : 'normal'}; text-decoration: ${bs.charName?.underline ? 'underline' : 'none'}; flex-shrink: 0; }
 .speech-col    { flex: 1; text-align: justify; white-space: pre-wrap; }
 .parenthetical { font-style: italic; font-size: ${fontSize - 1}pt; margin-bottom: 1pt; }
 .transition    { text-align: right; margin: 4pt 0; }

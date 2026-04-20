@@ -98,7 +98,6 @@ export const menuConfig = [
     altKey: 'o',
     items: [
       { id: 'format-style-settings', label: '기본 스타일…',    action: 'format:styleSettings' },
-      { id: 'format-scene-format',   label: '씬헤더 형식…',    action: 'format:sceneFormat' },
       { id: 'format-user-settings',  label: '사용자 설정…',      action: 'format:userSettings' },
       { id: 'format-tag-manage',     label: '태그 / 기타 단축어…', action: 'format:tagManage' },
     ],
