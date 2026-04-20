@@ -39,7 +39,7 @@ export default function PrintPreviewModal({ onClose, defaultFormat }) {
     return { cover: true, synopsis: true, episodes: episodesMap, chars: true, biography: false, treatment: false };
   });
 
-  const [format, setFormat]       = useState(defaultFormat || 'pdf');
+  const [format, setFormat]       = useState(defaultFormat && defaultFormat !== 'pdf' ? defaultFormat : 'docx');
   const [exporting, setExporting] = useState(false);
   const [shareMsg, setShareMsg]   = useState('');
   const [sharing, setSharing]     = useState(false);
@@ -218,11 +218,7 @@ export default function PrintPreviewModal({ onClose, defaultFormat }) {
 
           {/* Format */}
           <Section title="출력 형식">
-            <p className="text-[10px] mb-2" style={{ color: 'var(--c-text5)', lineHeight: 1.5 }}>
-              💡 PDF 출력이 멈추거나 오래 걸리는 경우 <strong>한글·워드</strong> 출력을 이용해 주세요. (정식 출시 후 개선 예정)
-            </p>
             {[
-              { value: 'pdf',    label: 'PDF (인쇄)' },
               { value: 'docx',   label: '워드 (DOCX)' },
               { value: 'hancom', label: '한글 호환 DOCX' },
               { value: 'hwpx',   label: 'HWPX (한컴 전용)' },
@@ -239,6 +235,12 @@ export default function PrintPreviewModal({ onClose, defaultFormat }) {
                 <span className="text-xs" style={{ color: 'var(--c-text2)' }}>{label}</span>
               </label>
             ))}
+            {/* PDF — 저품질 이슈로 비활성화 */}
+            <div className="flex items-center gap-2 py-1 opacity-40 cursor-not-allowed select-none">
+              <input type="radio" name="format" disabled className="accent-[#5a5af5]" />
+              <span className="text-xs" style={{ color: 'var(--c-text4)' }}>PDF</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'var(--c-tag)', color: 'var(--c-text4)' }}>개선 준비중</span>
+            </div>
           </Section>
 
           {/* Format hints */}
@@ -260,9 +262,9 @@ export default function PrintPreviewModal({ onClose, defaultFormat }) {
 
 
           {/* 기울임체 미지원 경고 */}
-          {(format === 'pdf' || format === 'hwpx') && (
+          {format === 'hwpx' && (
             <div className="mb-3 px-2 py-1.5 rounded text-[10px]" style={{ background: 'var(--c-bg3)', color: 'var(--c-text5)', lineHeight: 1.5 }}>
-              ⚠ 기울임체(이탤릭)는 {format === 'pdf' ? 'PDF' : '한글(HWPX)'} 출력에서 지원되지 않습니다.
+              ⚠ 기울임체(이탤릭)는 한글(HWPX) 출력에서 지원되지 않습니다.
             </div>
           )}
 
@@ -291,7 +293,7 @@ export default function PrintPreviewModal({ onClose, defaultFormat }) {
           >
             {exporting
               ? `${exportStep || '처리'} 중…`
-              : format === 'pdf' ? '인쇄 / PDF 저장' : '파일 다운로드'}
+              : '파일 다운로드'}
           </button>
 
           <AdBanner slot="print-modal-left" mobileHide={false} height={60} style={{ marginTop: 8, borderRadius: 6 }} />
