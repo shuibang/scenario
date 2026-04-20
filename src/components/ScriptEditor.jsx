@@ -3376,27 +3376,6 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
               }}
             >태그</button>
           </div>
-          {/* 집중 버튼 — 데스크톱/태블릿 1행 */}
-          {!isMobile && setFocusMode && (
-            <button
-              title="집중 작업 모드 — 패널 숨기고 대본만 표시 (ESC로 종료)"
-              onMouseDown={e => {
-                e.preventDefault();
-                const entering = !focusMode;
-                setFocusMode(entering);
-                if (entering) {
-                  document.documentElement.requestFullscreen?.().catch(() => {});
-                } else if (document.fullscreenElement) {
-                  document.exitFullscreen?.().catch(() => {});
-                }
-              }}
-              style={{
-                flexShrink: 0, padding: '3px 8px', borderRadius: 6, fontSize: 11,
-                border: '1px solid var(--c-border3)', background: 'transparent',
-                color: 'var(--c-text5)', cursor: 'pointer',
-              }}
-            >집중</button>
-          )}
         </div>
       )}
 
@@ -3413,27 +3392,6 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
         )}
         <PageCounter blocks={blocks} stylePreset={stylePreset} scrollRef={editorScrollRef} />
         <span style={{ color: 'var(--c-border3)' }}>● 저장됨</span>
-        {/* 오른쪽: 집중 버튼 — 모바일 2행 */}
-        {isMobile && setFocusMode && (
-          <button
-            title="집중 작업 모드"
-            onMouseDown={e => {
-              e.preventDefault();
-              const entering = !focusMode;
-              setFocusMode(entering);
-              if (entering) {
-                document.documentElement.requestFullscreen?.().catch(() => {});
-              } else if (document.fullscreenElement) {
-                document.exitFullscreen?.().catch(() => {});
-              }
-            }}
-            style={{
-              marginLeft: 'auto', flexShrink: 0, padding: '3px 8px', borderRadius: 6, fontSize: 11,
-              border: '1px solid var(--c-border3)', background: 'transparent',
-              color: 'var(--c-text5)', cursor: 'pointer',
-            }}
-          >집중</button>
-        )}
       </div>
 
       {/* Reconnect panel */}

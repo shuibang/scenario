@@ -97,10 +97,6 @@ export const menuConfig = [
     label: '서식',
     altKey: 'o',
     items: [
-      { id: 'bold',      label: '굵게',     shortcut: 'Ctrl+B', action: 'format:bold' },
-      { id: 'italic',    label: '기울임',   shortcut: 'Ctrl+I', action: 'format:italic' },
-      { id: 'underline', label: '밑줄',     shortcut: 'Ctrl+U', action: 'format:underline' },
-      'separator',
       { id: 'format-style-settings', label: '기본 스타일…',    action: 'format:styleSettings' },
       { id: 'format-scene-format',   label: '씬헤더 형식…',    action: 'format:sceneFormat' },
       { id: 'format-user-settings',  label: '사용자 설정…',      action: 'format:userSettings' },

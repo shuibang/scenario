@@ -153,6 +153,10 @@ export default function ImportHwpxModal({ open, onClose }) {
             씬 번호·지문·대사를 자동으로 인식합니다.<br />
             서식(굵기·크기)은 무시되며 텍스트만 가져옵니다.
           </p>
+          <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--c-tag)', border: '1px solid var(--c-border)', borderRadius: 8, textAlign: 'left' }}>
+            <p style={{ fontSize: 11, color: 'var(--c-text4)', marginBottom: 4 }}>• <strong>복사/붙여넣기</strong>: 씬·지문·대사·인물을 자동 구분합니다.</p>
+            <p style={{ fontSize: 11, color: 'var(--c-text4)', margin: 0 }}>• <strong>파일 가져오기</strong>: 씬 헤딩만 감지합니다.</p>
+          </div>
           {error && (
             <p style={{ fontSize: 12, color: 'var(--c-danger, #e53e3e)', marginTop: 12 }}>{error}</p>
           )}

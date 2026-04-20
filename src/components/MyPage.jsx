@@ -576,8 +576,6 @@ export function SettingsTab() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--c-text3)', marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid var(--c-border)' }}>설정</div>
-
       {/* 사용 가이드 다시 보기 */}
       <div
         className="flex items-start gap-4 rounded-lg"
