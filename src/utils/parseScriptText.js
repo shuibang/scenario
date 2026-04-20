@@ -31,8 +31,7 @@ function detectDialogue(line, charNameSet) {
  */
 export function parseScriptText(text, { episodeId, projectId, characters = [] }) {
   const lines = text.split(/\r?\n/);
-  const nonEmpty = lines.filter(l => l.trim());
-  if (!nonEmpty.length) return [];
+  if (!lines.some(l => l.trim())) return [];
 
   const charNameSet = new Set(
     characters.flatMap(c =>
@@ -48,9 +47,32 @@ export function parseScriptText(text, { episodeId, projectId, characters = [] })
   let currentSceneId = genId();
   let sceneSeq = 0;
 
-  return nonEmpty.map(line => {
+  // 앞뒤 빈 줄 제거, 중간 빈 줄은 보존 (연속 빈 줄은 1개로 압축)
+  const trimmedLines = (() => {
+    let start = 0;
+    let end = lines.length - 1;
+    while (start <= end && !lines[start].trim()) start++;
+    while (end >= start && !lines[end].trim()) end--;
+    const trimmed = lines.slice(start, end + 1);
+    // 연속 빈 줄 압축
+    const result = [];
+    let lastWasEmpty = false;
+    for (const l of trimmed) {
+      const isEmpty = !l.trim();
+      if (isEmpty && lastWasEmpty) continue;
+      result.push(l);
+      lastWasEmpty = isEmpty;
+    }
+    return result;
+  })();
+
+  return trimmedLines.map(line => {
     const s = line.trim();
-    if (!s) return null;
+
+    // 빈 줄 → 빈 지문 블록 (문단 구분 보존)
+    if (!s) {
+      return { ...makeBase(currentSceneId), type: 'action', content: '' };
+    }
 
     if (SCENE_RE.test(s)) {
       currentSceneId = genId();
@@ -60,7 +82,7 @@ export function parseScriptText(text, { episodeId, projectId, characters = [] })
         ...makeBase(currentSceneId),
         type: 'scene_number',
         content,
-        label: buildSceneLabel(sceneSeq), // syncLabels 역할 — CSS ::before 표시용
+        label: buildSceneLabel(sceneSeq),
       };
     }
 
@@ -89,5 +111,5 @@ export function parseScriptText(text, { episodeId, projectId, characters = [] })
     }
 
     return { ...makeBase(currentSceneId), type: 'action', content: s };
-  }).filter(Boolean);
+  });
 }
