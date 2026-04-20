@@ -1701,11 +1701,23 @@ const EditorSurface = forwardRef(function EditorSurface({
     const sel = window.getSelection();
     const el = surfaceRef.current;
     if (!sel?.rangeCount || !el) return;
+
+    // input/textarea에 포커스가 있으면 슬래시 감지 건너뜀
+    const active = document.activeElement;
+    const tag = active?.tagName?.toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || (active?.isContentEditable && !el.contains(active))) {
+      slashOffsetRef.current = null;
+      onSlashClose?.();
+      return;
+    }
+
     const blockEl = findBlockEl(sel.getRangeAt(0).startContainer, el);
 
     // Slash palette: 커서 앞에 '/'가 있으면 감지 (내용 있는 블록도 지원)
     if (blockEl) {
       const bType = blockEl.dataset.blockType;
+      // 씬헤더에서 '/'는 장소 구분자 — 슬래시 명령 억제
+      if (bType === 'scene_number') { slashOffsetRef.current = null; onSlashClose?.(); return; }
       const speechEl = bType === 'dialogue' ? blockEl.querySelector('.ce-speech') : null;
       const textNode = speechEl || blockEl;
       const rawText = bType === 'dialogue'
