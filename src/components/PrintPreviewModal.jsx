@@ -261,12 +261,6 @@ export default function PrintPreviewModal({ onClose, defaultFormat }) {
           )}
 
 
-          {/* 기울임체 미지원 경고 */}
-          {format === 'hwpx' && (
-            <div className="mb-3 px-2 py-1.5 rounded text-[10px]" style={{ background: 'var(--c-bg3)', color: 'var(--c-text5)', lineHeight: 1.5 }}>
-              ⚠ 기울임체(이탤릭)는 한글(HWPX) 출력에서 지원되지 않습니다.
-            </div>
-          )}
 
           {/* Export error */}
           {error && (
