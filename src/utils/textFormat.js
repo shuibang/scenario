@@ -11,8 +11,8 @@ export function applyInlineFormat(tag) {
 
   // contenteditable div → execCommand
   if (el.isContentEditable) {
-    const cmd = { bold: 'bold', italic: 'italic', underline: 'underline' }[tag];
-    if (cmd) document.execCommand(cmd, false, null);
+    const cmd = { bold: 'bold', italic: 'italic', underline: 'underline', strikethrough: 'strikeThrough' }[tag];
+    if (cmd) { document.execCommand('styleWithCSS', false, false); document.execCommand(cmd, false, null); }
     return;
   }
 

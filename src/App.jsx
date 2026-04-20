@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { FileText, Undo2, Redo2, Sun, Moon, User, Clapperboard, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react';
+import { FileText, Undo2, Redo2, Sun, Moon, User, Clapperboard, ExternalLink, ChevronLeft, ChevronRight, Strikethrough, AlignLeft, AlignCenter, AlignRight, AlignJustify } from 'lucide-react';
 import LandingPage from './components/LandingPage';
 import { logShareSchema } from './utils/urlSchemas';
 import { getTimelineColor } from './utils/color';
@@ -654,6 +654,12 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
   }, [savedAt, activeProjectId]);
 
   const canRedo = redoStack?.length > 0 || scriptCanRedo;
+  const [activeAlignment, setActiveAlignment] = useState(null);
+  useEffect(() => {
+    const handler = (e) => setActiveAlignment(e.detail);
+    window.addEventListener('script:alignment:state', handler);
+    return () => window.removeEventListener('script:alignment:state', handler);
+  }, []);
   useEffect(() => {
     const handler = (e) => setScriptCanRedo(e.detail?.canRedo ?? false);
     window.addEventListener('scriptundostate', handler);
@@ -882,23 +888,6 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
 
       {/* ── Row 3: 포맷 툴바 ── */}
       <div className="flex items-center h-10 px-3 gap-1" style={{ overflowX: 'auto', scrollbarWidth: 'none', borderBottom: '1px solid var(--c-border2)' }}>
-        {/* B / I / U */}
-        {[
-          { label: 'B', title: '굵게 (Ctrl+B)',   tag: 'bold',      cls: 'font-bold' },
-          { label: 'I', title: '기울임 (Ctrl+I)', tag: 'italic',    cls: 'italic' },
-          { label: 'U', title: '밑줄 (Ctrl+U)',   tag: 'underline', cls: 'underline' },
-        ].map(({ label, title, tag, cls }) => (
-          <button key={tag} title={title}
-            onMouseDown={e => { e.preventDefault(); applyInlineFormat(tag); }}
-            className={`flex items-center justify-center shrink-0 rounded ${cls}`}
-            style={{ ...iconBtnStyle }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-hover)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
-          >{label}</button>
-        ))}
-
-        {sep}
-
         {/* Undo / Redo */}
         <button onClick={() => window.dispatchEvent(new CustomEvent('script:undo'))} disabled={!canUndo} title="되돌리기 (Ctrl+Z)"
           className="flex items-center justify-center shrink-0 rounded"
@@ -947,6 +936,42 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
           style={{ width: 60, accentColor: 'var(--c-accent)', cursor: 'pointer', flexShrink: 0 }}
         />
         <span style={{ fontSize: 11, color: 'var(--c-text4)', minWidth: '2.5rem', flexShrink: 0 }}>{stylePreset?.dialogueGap ?? '7em'}</span>
+
+        {sep}
+
+        {/* B / I / U / S */}
+        {[
+          { label: 'B', title: '굵게 (Ctrl+B)',          tag: 'bold',          cls: 'font-bold' },
+          { label: 'I', title: '기울임 (Ctrl+I)',        tag: 'italic',        cls: 'italic' },
+          { label: 'U', title: '밑줄 (Ctrl+U)',          tag: 'underline',     cls: 'underline' },
+          { label: 'S', title: '취소선 (Ctrl+Shift+X)',  tag: 'strikethrough', cls: 'line-through' },
+        ].map(({ label, title, tag, cls }) => (
+          <button key={tag} title={title}
+            onMouseDown={e => { e.preventDefault(); applyInlineFormat(tag); }}
+            className={`flex items-center justify-center shrink-0 rounded ${cls}`}
+            style={{ ...iconBtnStyle }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-hover)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+          >{label}</button>
+        ))}
+
+        {sep}
+
+        {/* 정렬 */}
+        {[
+          { Icon: AlignLeft,    title: '왼쪽 정렬',  align: 'left' },
+          { Icon: AlignCenter,  title: '가운데 정렬', align: 'center' },
+          { Icon: AlignRight,   title: '오른쪽 정렬', align: 'right' },
+          { Icon: AlignJustify, title: '양쪽 정렬',  align: 'justify' },
+        ].map(({ Icon, title, align }) => (
+          <button key={align} title={title}
+            onMouseDown={e => { e.preventDefault(); window.dispatchEvent(new CustomEvent('script:alignment', { detail: align })); }}
+            className="flex items-center justify-center shrink-0 rounded"
+            style={{ ...iconBtnStyle, background: activeAlignment === align ? 'var(--c-active)' : 'transparent', color: activeAlignment === align ? 'var(--c-accent)' : undefined }}
+            onMouseEnter={e => { if (activeAlignment !== align) e.currentTarget.style.background = 'var(--c-hover)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = activeAlignment === align ? 'var(--c-active)' : 'transparent'; }}
+          ><Icon size={14} strokeWidth={2} /></button>
+        ))}
 
         <div className="flex items-center shrink-0" style={{ marginLeft: 'auto' }}>
           <button onClick={onToggleTheme} title={isDark ? '라이트 모드' : '다크 모드'}

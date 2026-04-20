@@ -52,9 +52,26 @@ function stripLiteralTags(str) {
     .trimEnd();                                      // 끝 빈 줄 제거
 }
 
+// action/dialogue/parenthetical 전용: <b>/<i>/<u>/<s> 인라인 서식 태그는 보존하고 나머지만 제거
+function stripDisallowedTags(str) {
+  return (str || '')
+    .replace(/&lt;br\s*\/?&gt;/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<(p|div|li|h[1-6])[^>]*>/gi, '\n')
+    .replace(/<\/(p|div|li|tr|h[1-6])>/gi, '')
+    .replace(/&lt;[^&]*&gt;/g, '')
+    .replace(/<(?!\/?(?:b|i|u|s|strong|em)\b)[^>]+>/gi, '')  // b/i/u/s/strong/em 제외하고 제거
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/^\n+/, '')
+    .trimEnd();
+}
+
 function normalizeBlock(block, characters) {
   const charName = resolveCharName(block, characters);
-  let content = stripLiteralTags(block.content || '');
+  const richTypes = new Set(['action', 'dialogue', 'parenthetical']);
+  let content = richTypes.has(block.type)
+    ? stripDisallowedTags(block.content || '')
+    : stripLiteralTags(block.content || '');
   // scene_number: content에 라벨 prefix(S#n.) 포함된 경우 제거 (에디터 저장 방식 혼용 대응)
   if (block.type === 'scene_number') {
     // resolveSceneLabel로 유저 포맷 재조합 후 label prefix 제거 → body만 추출
@@ -71,6 +88,7 @@ function normalizeBlock(block, characters) {
     label:      stripLiteralTags(block.label || ''),
     content,
     charName,
+    alignment:  block.alignment || undefined,
     sceneId:    block.sceneId,
     refSceneId: block.refSceneId || '',
   };

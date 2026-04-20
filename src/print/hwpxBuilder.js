@@ -60,18 +60,19 @@ function htmlToRuns(html, baseCid = 0) {
     return `    <hp:run charPrIDRef="${baseCid}">${tEl}</hp:run>`;
   }
   // 태그 파싱 → run 분리
-  const tagRe = /<(\/?)([biu])[^>]*>/gi;
-  const stack = { b: 0, i: 0, u: 0 };
+  const tagRe = /<(\/?)([bius])[^>]*>/gi;
+  const stack = { b: 0, i: 0, u: 0, s: 0 };
   const runs = [];
   let last = 0;
   let match;
   const flush = (raw) => {
     const plain = stripHtml(raw);
     if (!plain) return;
-    // 서식 우선순위: 볼드 > 이탤릭 > 밑줄 > 기본
+    // 서식 우선순위: 볼드 > 이탤릭 > 밑줄 > 취소선 > 기본
     const cid = stack.b > 0 ? 4
               : stack.i > 0 ? 5
               : stack.u > 0 ? 6
+              : stack.s > 0 ? 7
               : baseCid;
     runs.push(`    <hp:run charPrIDRef="${cid}"><hp:t xml:space="preserve">${esc(plain)}</hp:t></hp:run>`);
   };
@@ -270,7 +271,7 @@ ${fontLangs.map(lang => `      <hh:fontface lang="${lang}" fontCnt="${fontCnt}">
 ${borderFill(1)}
 ${borderFillTable(2)}
     </hh:borderFills>
-    <hh:charProperties itemCnt="7">
+    <hh:charProperties itemCnt="8">
 ${charPr(0, normalH,  '')}
 ${charPr(1, titleH,   '\n        <hh:bold/>')}
 ${charPr(2, headingH, '\n        <hh:bold/>')}
@@ -278,6 +279,7 @@ ${charPr(3, normalH,  '\n        <hh:bold/>')}
 ${charPr(4, normalH,  '\n        <hh:bold/>')}
 ${charPr(5, normalH,  '\n        <hh:italic/>')}
 ${charPr(6, normalH,  '\n        <hh:underline type="BOTTOM" shape="SOLID" color="#000000"/>')}
+${charPr(7, normalH,  '\n        <hh:strikeout shape="SOLID" color="#000000"/>')}
     </hh:charProperties>
     <hh:tabProperties itemCnt="2">
       <hh:tabPr id="0" autoTabLeft="0" autoTabRight="0"/>
@@ -285,7 +287,7 @@ ${charPr(6, normalH,  '\n        <hh:underline type="BOTTOM" shape="SOLID" color
         <hh:tabItem pos="${dialogueTabHwp}" type="LEFT" leader="NONE" unit="HWPUNIT"/>
       </hh:tabPr>
     </hh:tabProperties>
-    <hh:paraProperties itemCnt="8">
+    <hh:paraProperties itemCnt="10">
 ${paraPr(0, 'JUSTIFY', 0,   0,   0)}
 ${paraPr(1, 'CENTER',  300, 100, 0)}
 ${paraPr(2, 'JUSTIFY', 0,   0,   0)}
@@ -294,6 +296,8 @@ ${paraPr(4, 'JUSTIFY', 0,   0,   0, 2268)}
 ${paraPr(5, 'JUSTIFY', 0,   0,   0, dialogueTabHwp)}
 ${paraPr(6, 'RIGHT',   0,   0,   0)}
 ${paraPr(7, 'JUSTIFY', 0,   0,   0, 0, 0, 1)}
+${paraPr(8, 'LEFT',    0,   0,   0)}
+${paraPr(9, 'CENTER',  0,   0,   0)}
     </hh:paraProperties>
     <hh:styles itemCnt="4">
       <hh:style id="0" type="PARA" name="바탕글" engName="Normal"
@@ -465,11 +469,13 @@ function xmlSection(printModel, margins) {
             case 'scene_number':
               head(`${block.label || ''} ${block.content || ''}`.trim());
               break;
-            case 'action':
+            case 'action': {
+              const alignParid = block.alignment === 'left' ? 8 : block.alignment === 'center' ? 9 : block.alignment === 'right' ? 6 : 4;
               splitOnBr(block.content || '').forEach(l =>
-                paras.push(para(l, { cid: 0, parid: 4, html: true }))
+                paras.push(para(l, { cid: 0, parid: alignParid, html: true }))
               );
               break;
+            }
             case 'dialogue': {
               const speechLines = splitOnBr(block.content || '');
               dialogue(block.charName, speechLines[0] ?? '');

@@ -456,14 +456,16 @@ function esc(s) {
 }
 
 // ─── Inline HTML helpers (B/I/U 서식 저장용) ─────────────────────────────────
-const INLINE_PURIFY_CONFIG = { ALLOWED_TAGS: ['b', 'i', 'u'], ALLOWED_ATTR: [] };
+const INLINE_PURIFY_CONFIG = { ALLOWED_TAGS: ['b', 'i', 'u', 's'], ALLOWED_ATTR: [] };
 function sanitizeInlineHtml(html) {
   if (!html) return '';
   const normalized = html
     .replace(/<strong(\s[^>]*)?>/gi, '<b>').replace(/<\/strong>/gi, '</b>')
     .replace(/<em(\s[^>]*)?>/gi, '<i>').replace(/<\/em>/gi, '</i>')
+    .replace(/<strike(\s[^>]*)?>/gi, '<s>').replace(/<\/strike>/gi, '</s>')
+    .replace(/<del(\s[^>]*)?>/gi, '<s>').replace(/<\/del>/gi, '</s>')
     .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<(?!\/?(b|i|u)(\s[^>]*)?>)[^>]+>/gi, '')
+    .replace(/<(?!\/?(b|i|u|s)(\s[^>]*)?>)[^>]+>/gi, '')
     .replace(/\n$/, '');
   return DOMPurify.sanitize(normalized, INLINE_PURIFY_CONFIG);
 }
@@ -474,7 +476,7 @@ function blockHtml(el) {
   if (!el) return '';
   return sanitizeInlineHtml(el.innerHTML);
 }
-const BLOCK_PURIFY_CONFIG = { ALLOWED_TAGS: ['b', 'i', 'u', 'br'], ALLOWED_ATTR: [] };
+const BLOCK_PURIFY_CONFIG = { ALLOWED_TAGS: ['b', 'i', 'u', 's', 'br'], ALLOWED_ATTR: [] };
 function setBlockHtml(el, html) {
   if (!el) return;
   el.innerHTML = html ? DOMPurify.sanitize(html, BLOCK_PURIFY_CONFIG) : '<br>';
@@ -528,23 +530,24 @@ function blocksToHtml(blocks) {
     const dcRaw = b.sceneRefs?.length ? buildRichHtml(displayContent, b.sceneRefs) : isRichBlock ? displayContent : esc(displayContent);
     // 빈 블록에 <br> 삽입 — 브라우저가 화살표 키 caret stop으로 인식하도록
     const dc = dcRaw || '<br>';
+    const alignAttr = b.alignment ? ` data-alignment="${b.alignment}" style="text-align:${b.alignment}"` : '';
     switch (b.type) {
       case 'scene_number': {
         const label = esc(b.label || '');
         const sceneId = esc(b.sceneId || '');
-        return `<div data-block-id="${id}" data-block-type="scene_number" data-label="${label}" data-scene-id="${sceneId}" class="ce-block ce-scene">${dc}</div>`;
+        return `<div data-block-id="${id}" data-block-type="scene_number" data-label="${label}" data-scene-id="${sceneId}" class="ce-block ce-scene"${alignAttr}>${dc}</div>`;
       }
       case 'dialogue': {
         const cn = esc(b.characterName || b.charName || '');
         const ci = esc(b.characterId || '');
-        return `<div data-block-id="${id}" data-block-type="dialogue" data-char-name="${cn}" data-char-id="${ci}" class="ce-block ce-dialogue">${dc}</div>`;
+        return `<div data-block-id="${id}" data-block-type="dialogue" data-char-name="${cn}" data-char-id="${ci}" class="ce-block ce-dialogue"${alignAttr}>${dc}</div>`;
       }
       case 'scene_ref': {
         const refId = esc(b.refSceneId || '');
-        return `<div data-block-id="${id}" data-block-type="scene_ref" data-ref-scene-id="${refId}" class="ce-block ce-scene_ref">${dc}</div>`;
+        return `<div data-block-id="${id}" data-block-type="scene_ref" data-ref-scene-id="${refId}" class="ce-block ce-scene_ref"${alignAttr}>${dc}</div>`;
       }
       default:
-        return `<div data-block-id="${id}" data-block-type="${b.type}" class="ce-block ce-${b.type}">${dc}</div>`;
+        return `<div data-block-id="${id}" data-block-type="${b.type}" class="ce-block ce-${b.type}"${alignAttr}>${dc}</div>`;
     }
   }).join('');
 }
@@ -694,6 +697,7 @@ function parseSurface(surface, metaRef, epId, projId) {
       rawText, // internal cache for change detection
       sceneRefs,
       emotionTag: prev.emotionTag || null,
+      alignment: div.dataset.alignment || prev.alignment || undefined,
     };
     if (type === 'scene_number') {
       // rawText는 DOM 표시용(라벨 제거된 값)이므로 parsed는 순수 내용
@@ -1447,6 +1451,13 @@ const EditorSurface = forwardRef(function EditorSurface({
           delete div.dataset.emotionWord;
           div.style.removeProperty('--emotion-dot-color');
         }
+        if (b.alignment) {
+          div.dataset.alignment = b.alignment;
+          div.style.textAlign = b.alignment;
+        } else {
+          delete div.dataset.alignment;
+          div.style.textAlign = '';
+        }
       });
     }
   }, []);
@@ -1529,6 +1540,8 @@ const EditorSurface = forwardRef(function EditorSurface({
     if (sel?.rangeCount) {
       const blockEl = findBlockEl(sel.getRangeAt(0).startContainer, el);
       onSelectionChange?.(blockEl?.dataset.blockType || null);
+      setActiveAlignment(blockEl?.dataset.alignment || null);
+      window.dispatchEvent(new CustomEvent('script:alignment:state', { detail: blockEl?.dataset.alignment || null }));
     }
   }, [onBlocksChange, syncMeta, onSelectionChange]);
 
@@ -1625,9 +1638,29 @@ const EditorSurface = forwardRef(function EditorSurface({
       onBlocksChange(preserved);
     },
     applyFormat(format) {
-      // format: 'bold' | 'italic' | 'underline'
+      // format: 'bold' | 'italic' | 'underline' | 'strikeThrough'
       document.execCommand('styleWithCSS', false, false);
       document.execCommand(format, false, null);
+      doParse();
+    },
+    applyAlignment(alignment) {
+      const el = surfaceRef.current;
+      if (!el) return;
+      const sel = window.getSelection();
+      if (!sel?.rangeCount) return;
+      const blockEl = findBlockEl(sel.getRangeAt(0).startContainer, el);
+      if (!blockEl) return;
+      const id = blockEl.dataset.blockId;
+      if (!id) return;
+      const newAlign = blockEl.dataset.alignment === alignment ? undefined : alignment;
+      if (newAlign) {
+        blockEl.dataset.alignment = newAlign;
+        blockEl.style.textAlign = newAlign;
+      } else {
+        delete blockEl.dataset.alignment;
+        blockEl.style.textAlign = '';
+      }
+      if (metaRef.current[id]) metaRef.current[id] = { ...metaRef.current[id], alignment: newAlign };
       doParse();
     },
     updateEmotionTag(blockId, emotionTag) {
@@ -1856,6 +1889,17 @@ const EditorSurface = forwardRef(function EditorSurface({
         const cmdMap = { b: 'bold', i: 'italic', u: 'underline' };
         document.execCommand('styleWithCSS', false, false);
         document.execCommand(cmdMap[e.key], false, null);
+        doParse();
+      }
+      return;
+    }
+
+    // ── Ctrl+Shift+X: 취소선 (action/dialogue 블록에서만)
+    if (ctrl && e.shiftKey && e.key === 'x') {
+      if (type === 'action' || type === 'dialogue') {
+        e.preventDefault();
+        document.execCommand('styleWithCSS', false, false);
+        document.execCommand('strikeThrough', false, null);
         doParse();
       }
       return;
@@ -2155,6 +2199,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   const sceneItemsRef = useRef([]); // render마다 갱신 — keydown 핸들러에서 참조
   const [pendingBlockType, setPendingBlockType] = useState(null); // for mobile / no-focus toolbar clicks
   const [activeBlockType, setActiveBlockType] = useState(null);  // 현재 커서의 블록 타입 (툴바 하이라이트)
+  const [activeAlignment, setActiveAlignment] = useState(null); // 현재 커서 블록의 alignment
   const [charCheckPicker, setCharCheckPicker] = useState(null); // { sceneId, top, left, mobile }
   const [symbolPickerCloseToken, setSymbolPickerCloseToken] = useState(0);
   const [slashPalette, setSlashPalette] = useState(null); // null | { blockEl, query, x, y, selectedIdx }
@@ -3059,11 +3104,14 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     window.addEventListener('script:requestSave', onSave);
     window.addEventListener('script:undo', onUndo);
     window.addEventListener('script:redo', onRedo);
+    const onAlignment = (e) => surfaceApiRef.current?.applyAlignment(e.detail);
+    window.addEventListener('script:alignment', onAlignment);
     return () => {
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('script:requestSave', onSave);
       window.removeEventListener('script:undo', onUndo);
       window.removeEventListener('script:redo', onRedo);
+      window.removeEventListener('script:alignment', onAlignment);
     };
   }, [flushSave, applyBlockType, handleUndo, handleRedo, openEmotionPickerOnCursor, openSymbolPickerOnCursor]);
 
@@ -3375,6 +3423,66 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
                 WebkitTapHighlightColor: 'transparent', marginLeft: 4,
               }}
             >태그</button>
+            {/* 구분선 */}
+            <div style={{ width: 1, height: 20, background: 'var(--c-border3)', flexShrink: 0, margin: '0 4px', alignSelf: 'center' }} />
+            {/* B / I / U / S */}
+            {[
+              { label: 'B', title: '굵게 (Ctrl+B)', cmd: 'bold', style: { fontWeight: 700 } },
+              { label: 'I', title: '기울임 (Ctrl+I)', cmd: 'italic', style: { fontStyle: 'italic' } },
+              { label: 'U', title: '밑줄 (Ctrl+U)', cmd: 'underline', style: { textDecoration: 'underline' } },
+              { label: 'S', title: '취소선 (Ctrl+Shift+X)', cmd: 'strikeThrough', style: { textDecoration: 'line-through' } },
+            ].map(({ label, title, cmd, style: labelStyle }) => (
+              <button
+                key={cmd}
+                title={title}
+                onMouseDown={e => {
+                  e.preventDefault();
+                  surfaceApiRef.current?.applyFormat(cmd);
+                }}
+                style={{
+                  flexShrink: 0, width: BTN_W, textAlign: 'center',
+                  fontSize: 'clamp(10px, 2.8vw, 13px)', color: 'var(--c-text4)',
+                  padding: '4px 0', border: '1px solid var(--c-border3)',
+                  borderRadius: 6, background: 'transparent', cursor: 'pointer',
+                  WebkitTapHighlightColor: 'transparent',
+                  ...labelStyle,
+                }}
+              >{label}</button>
+            ))}
+            {/* 구분선 */}
+            <div style={{ width: 1, height: 20, background: 'var(--c-border3)', flexShrink: 0, margin: '0 4px', alignSelf: 'center' }} />
+            {/* 정렬 */}
+            {[
+              { label: '◀─', title: '왼쪽 정렬', align: 'left' },
+              { label: '─◀─', title: '가운데 정렬', align: 'center' },
+              { label: '─▶', title: '오른쪽 정렬', align: 'right' },
+              { label: '◀▶', title: '양쪽 정렬', align: 'justify' },
+            ].map(({ label, title, align }) => (
+              <button
+                key={align}
+                title={title}
+                onMouseDown={e => {
+                  e.preventDefault();
+                  surfaceApiRef.current?.applyAlignment(align);
+                  requestAnimationFrame(() => {
+                    const el = surfaceRef.current;
+                    const sel = window.getSelection();
+                    if (!el || !sel?.rangeCount) return;
+                    const blockEl = el.querySelector('[data-block-id]') && document.activeElement?.dataset?.blockId
+                      ? el.querySelector(`[data-block-id="${document.activeElement.dataset.blockId}"]`)
+                      : null;
+                    setActiveAlignment(blockEl?.dataset.alignment || null);
+                  });
+                }}
+                style={{
+                  flexShrink: 0, width: BTN_W, textAlign: 'center',
+                  fontSize: 'clamp(8px, 2.2vw, 10px)', color: activeAlignment === align ? 'var(--c-accent)' : 'var(--c-text4)',
+                  padding: '4px 0', border: `1px solid ${activeAlignment === align ? 'var(--c-accent)' : 'var(--c-border3)'}`,
+                  borderRadius: 6, background: 'transparent', cursor: 'pointer',
+                  WebkitTapHighlightColor: 'transparent', fontWeight: activeAlignment === align ? 700 : 400,
+                }}
+              >{label}</button>
+            ))}
           </div>
         </div>
       )}

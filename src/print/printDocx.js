@@ -76,9 +76,9 @@ function htmlToRuns(html, dp, extraProps = {}) {
   const runs = [];
   // Parse segments: text and <b>/<i>/<u> spans
   // We iterate with a simple state stack
-  const tagRe = /<(\/?)([biu])\b[^>]*>/gi;
+  const tagRe = /<(\/?)([bius])\b[^>]*>/gi;
   let last = 0;
-  const stack = { b: 0, i: 0, u: 0 };
+  const stack = { b: 0, i: 0, u: 0, s: 0 };
   let match;
   const flush = (text) => {
     if (!text) return;
@@ -89,6 +89,7 @@ function htmlToRuns(html, dp, extraProps = {}) {
       bold:      (stack.b > 0) || !!extraProps.bold,
       italics:   (stack.i > 0) || !!extraProps.italics,
       underline: (stack.u > 0) ? {} : extraProps.underline,
+      strike:    stack.s > 0,
     }));
   };
   while ((match = tagRe.exec(normalized)) !== null) {
@@ -118,11 +119,13 @@ function para(text, dp, opts = {}) {
   const children = opts.html
     ? htmlToRuns(text, dp, { bold: opts.bold || false, italics: opts.italic || false })
     : [baseRun(text, { bold: opts.bold || false, italics: opts.italic || false }, dp)];
+  const blockAlignMap = { left: AlignmentType.LEFT, center: AlignmentType.CENTER, right: AlignmentType.RIGHT, justify: AlignmentType.BOTH };
   return new Paragraph({
     children,
     alignment: opts.center ? AlignmentType.CENTER
              : opts.right  ? AlignmentType.RIGHT
              : opts.noJustify ? AlignmentType.LEFT
+             : opts.blockAlign ? (blockAlignMap[opts.blockAlign] ?? AlignmentType.BOTH)
              : AlignmentType.BOTH,
     spacing: lineSpacing(dp),
     indent: opts.indent ? { left: convertMillimetersToTwip(opts.indent) } : undefined,
@@ -284,7 +287,7 @@ function buildDocxSections(printModel, dp, { hancom = false } = {}) {
             break;
           case 'action':
             splitOnBr(block.content || '').forEach(l =>
-              paras.push(para(l, dp, { indent: 8, html: true }))
+              paras.push(para(l, dp, { indent: 8, html: true, blockAlign: block.alignment }))
             );
             break;
           case 'dialogue': {

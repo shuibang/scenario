@@ -77,30 +77,32 @@ function renderEpisode(section, dialogueGap, isFirst) {
   const epLabel = `${section.episodeNumber}회${section.episodeTitle ? ' ' + section.episodeTitle : ''}`;
 
   const blocksHtml = section.blocks.map(block => {
-    const content = esc(block.content || '');
+    const richContent = (block.content || '').replace(/\n/g, '<br>');
+    const plainContent = esc(block.content || '');
+    const alignStyle = block.alignment ? ` style="text-align:${block.alignment}"` : '';
     switch (block.type) {
       case 'scene_number': {
         const label = esc(block.label || '');
-        const full  = [label, content].filter(Boolean).join(' ');
+        const full  = [label, plainContent].filter(Boolean).join(' ');
         return `<div class="scene-number">${full}</div>`;
       }
       case 'action':
-        return `<div class="action">${content}</div>`;
+        return `<div class="action"${alignStyle}>${richContent}</div>`;
       case 'dialogue': {
         const charName = esc(block.charName || '');
         return `<div class="dialogue">
           <span class="char-col" style="width:${dialogueGap}">${charName}</span>
-          <span class="speech-col">${content}</span>
+          <span class="speech-col"${alignStyle}>${richContent}</span>
         </div>`;
       }
       case 'parenthetical':
-        return `<div class="parenthetical" style="margin-left:${dialogueGap}">${content}</div>`;
+        return `<div class="parenthetical" style="margin-left:${dialogueGap}">${richContent}</div>`;
       case 'transition':
-        return `<div class="transition">${content}</div>`;
+        return `<div class="transition">${plainContent}</div>`;
       case 'scene_ref':
-        return `<div class="scene-ref">${content}</div>`;
+        return `<div class="scene-ref">${plainContent}</div>`;
       default:
-        return content ? `<div class="body-text">${content}</div>` : '';
+        return plainContent ? `<div class="body-text">${plainContent}</div>` : '';
     }
   }).filter(Boolean).join('\n');
 
