@@ -39,7 +39,7 @@ export default function PrintPreviewModal({ onClose, defaultFormat }) {
     return { cover: true, synopsis: true, episodes: episodesMap, chars: true, biography: false, treatment: false };
   });
 
-  const [format, setFormat]       = useState(defaultFormat && defaultFormat !== 'pdf' ? defaultFormat : 'docx');
+  const [format, setFormat]       = useState(defaultFormat || 'docx');
   const [exporting, setExporting] = useState(false);
   const [shareMsg, setShareMsg]   = useState('');
   const [sharing, setSharing]     = useState(false);
@@ -222,6 +222,7 @@ export default function PrintPreviewModal({ onClose, defaultFormat }) {
               { value: 'docx',   label: '워드 (DOCX)' },
               { value: 'hancom', label: '한글 호환 DOCX' },
               { value: 'hwpx',   label: 'HWPX (한컴 전용)' },
+              { value: 'pdf',    label: 'PDF' },
             ].map(({ value, label }) => (
               <label key={value} className="flex items-center gap-2 py-1 cursor-pointer">
                 <input
@@ -235,12 +236,6 @@ export default function PrintPreviewModal({ onClose, defaultFormat }) {
                 <span className="text-xs" style={{ color: 'var(--c-text2)' }}>{label}</span>
               </label>
             ))}
-            {/* PDF — 저품질 이슈로 비활성화 */}
-            <div className="flex items-center gap-2 py-1 opacity-40 cursor-not-allowed select-none">
-              <input type="radio" name="format" disabled className="accent-[#5a5af5]" />
-              <span className="text-xs" style={{ color: 'var(--c-text4)' }}>PDF</span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'var(--c-tag)', color: 'var(--c-text4)' }}>개선 준비중</span>
-            </div>
           </Section>
 
           {/* Format hints */}

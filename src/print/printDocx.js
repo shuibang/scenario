@@ -158,8 +158,13 @@ function sectionBreak() {
 function dialoguePara(charName, speech, dp) {
   const gapTwips     = dp.dialogueGapTwips;
   const outerIndent  = dp.dialogueIndentMm ? convertMillimetersToTwip(dp.dialogueIndentMm) : 0;
-  const charBs       = dp.bs?.charName || {};
-  const speechRuns   = htmlToRuns(speech, dp);
+  const charBs = dp.bs?.charName  || {};
+  const diagBs = dp.bs?.dialogue  || {};
+  const speechRuns = htmlToRuns(speech, dp, {
+    bold:      !!diagBs.bold,
+    italics:   !!diagBs.italic,
+    underline: diagBs.underline ? {} : undefined,
+  });
   return new Paragraph({
     children: [
       new TextRun({

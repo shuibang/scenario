@@ -6,7 +6,14 @@
       "Bash(node_modules/.bin/vite build:*)",
       "Bash(curl -s \"https://raw.githubusercontent.com/airmang/python-hwpx/master/src/hwpx/section.py\")",
       "Bash(node -e \"const p=require\\('./node_modules/pdfjs-dist/package.json'\\); console.log\\('pdfjs version:', p.version\\)\")",
-      "Bash(node -e ':*)"
+      "Bash(node -e ':*)",
+      "Bash(grep -n \"key.*'/'\\\\\\\\|=== '/'\" \"c:/Users/jiusu/OneDrive/바탕 화면/코딩/star_sky/src/components/ScriptEditor.jsx\")",
+      "Bash(git commit -m ' *)",
+      "Bash(sed -n '2470,2500p' src/components/ScriptEditor.jsx)",
+      "Bash(sed -n '2885,2910p' src/components/ScriptEditor.jsx)",
+      "Bash(git push *)",
+      "Bash(grep -v \"^.*//.*ce-\")",
+      "Bash(git restore *)"
     ]
   }
 }

@@ -116,14 +116,11 @@ ${runs}
  * paraPr 3: hc:left=0 (name flush left on first line), hc:intent=dialogueTabHwp (continuation lines
  *   indent to speech start position). HWP interprets hc:left=first-line pos, hc:intent=continuation offset.
  */
-function dialoguePara(charName, content) {
+function dialoguePara(charName, content, { charNameCid = 3, speechCid = 0 } = {}) {
   const pId = _pid++;
-  // Run 1 (bold): name + TWO tabs inside hp:t — tabs are children of hp:t (verified from real HWPX)
-  // Run 2 (normal): speech text
-  // paraPr 3: hc:left=0 (name flush left), hc:intent=dialogueTabHwp (continuation at speech position)
-  const speechRuns = htmlToRuns(content || '', 0);
+  const speechRuns = htmlToRuns(content || '', speechCid);
   return `  <hp:p id="${pId}" paraPrIDRef="3" styleIDRef="3" pageBreak="0" columnBreak="0" merged="0">
-    <hp:run charPrIDRef="3">
+    <hp:run charPrIDRef="${charNameCid}">
       <hp:t xml:space="preserve">${esc(stripHtml(charName || ''))}<hp:tab leader="0" type="1"/></hp:t>
     </hp:run>
 ${speechRuns}
@@ -188,13 +185,21 @@ function xmlContentHpf(title) {
 </opf:package>`;
 }
 
-function xmlHeader(fontName, fallbackFontName, fontSizePt, dialogueTabHwp, actionIndentHwp = 2268) {
+function xmlHeader(fontName, fallbackFontName, fontSizePt, dialogueTabHwp, actionIndentHwp = 2268, blockStyles = {}) {
   // HWPX height unit = 1/100 pt
   const normalH  = Math.round(fontSizePt * 100);
   const titleH   = Math.round(fontSizePt * 140);
   const headingH = Math.round(fontSizePt * 110);
 
   const fontLangs = ['HANGUL','LATIN','HANJA','JAPANESE','OTHER','SYMBOL','USER'];
+
+  const bsExtra = (bs) => {
+    const parts = [];
+    if (bs?.bold)      parts.push('<hh:bold/>');
+    if (bs?.italic)    parts.push('<hh:italic/>');
+    if (bs?.underline) parts.push('<hh:underline type="BOTTOM" shape="SOLID" color="#000000"/>');
+    return parts.length ? '\n        ' + parts.join('\n        ') : '';
+  };
 
   // charPr: fontRef id="0" = fontface 배열의 기본 폰트(사용자 선택), id="1" = fallback
   // extra: 볼드/이탤릭/밑줄 자식 요소
@@ -271,7 +276,7 @@ ${fontLangs.map(lang => `      <hh:fontface lang="${lang}" fontCnt="${fontCnt}">
 ${borderFill(1)}
 ${borderFillTable(2)}
     </hh:borderFills>
-    <hh:charProperties itemCnt="8">
+    <hh:charProperties itemCnt="12">
 ${charPr(0, normalH,  '')}
 ${charPr(1, titleH,   '\n        <hh:bold/>')}
 ${charPr(2, headingH, '\n        <hh:bold/>')}
@@ -280,6 +285,10 @@ ${charPr(4, normalH,  '\n        <hh:bold/>')}
 ${charPr(5, normalH,  '\n        <hh:italic/>')}
 ${charPr(6, normalH,  '\n        <hh:underline type="BOTTOM" shape="SOLID" color="#000000"/>')}
 ${charPr(7, normalH,  '\n        <hh:strikeout shape="SOLID" color="#000000"/>')}
+${charPr(8, normalH,  bsExtra(blockStyles.sceneNumber))}
+${charPr(9, normalH,  bsExtra(blockStyles.action))}
+${charPr(10, normalH, bsExtra(blockStyles.charName ?? { bold: true }))}
+${charPr(11, normalH, bsExtra(blockStyles.dialogue))}
     </hh:charProperties>
     <hh:tabProperties itemCnt="2">
       <hh:tabPr id="0" autoTabLeft="0" autoTabRight="0"/>
@@ -383,19 +392,25 @@ function secPrPara(margins, { resetPage = false, coverPage = false } = {}) {
 }
 
 // ─── Section (body) XML ──────────────────────────────────────────────────────
-function xmlSection(printModel, margins) {
+function xmlSection(printModel, margins, blockStyles = {}) {
   resetIds();
+
+  // charPr IDs 8-11: block-level styles (B/I/U from blockStyles)
+  const snCid = 8;   // sceneNumber
+  const acCid = 9;   // action
+  const cnCid = 10;  // charName
+  const dgCid = 11;  // dialogue
 
   const paras      = [];
   const empty      = ()       => paras.push(para(''));
   const pageBreak  = ()       => { const pId = _pid++; paras.push(`  <hp:p id="${pId}" paraPrIDRef="0" styleIDRef="0" pageBreak="1" columnBreak="0" merged="0"/>`); };
   const title      = (t)      => paras.push(para(t, { cid: 1, parid: 1, sid: 1 }));
-  const head       = (t)      => paras.push(para(t, { cid: 2, parid: 2, sid: 2 }));
+  const head       = (t)      => paras.push(para(t, { cid: snCid, parid: 2, sid: 2 }));
   const normal     = (t)      => paras.push(para(t));
-  const action     = (t)      => paras.push(para(t, { cid: 0, parid: 4 }));
+  const action     = (t)      => paras.push(para(t, { cid: acCid, parid: 4 }));
   const paren      = (t)      => paras.push(para(`(${t})`, { cid: 0, parid: 5 }));
   const transition = (t)      => paras.push(para(t, { cid: 0, parid: 6 }));
-  const dialogue   = (n, c)   => paras.push(dialoguePara(n, c));
+  const dialogue   = (n, c)   => paras.push(dialoguePara(n, c, { charNameCid: cnCid, speechCid: dgCid }));
 
   const roleLabel = { lead: '주인공', support: '조연', extra: '단역' };
 
@@ -472,7 +487,7 @@ function xmlSection(printModel, margins) {
             case 'action': {
               const alignParid = block.alignment === 'left' ? 8 : block.alignment === 'center' ? 9 : block.alignment === 'right' ? 6 : 4;
               splitOnBr(block.content || '').forEach(l =>
-                paras.push(para(l, { cid: 0, parid: alignParid, html: true }))
+                paras.push(para(l, { cid: acCid, parid: alignParid, html: true }))
               );
               break;
             }
@@ -587,8 +602,8 @@ export async function buildHwpx(appState, selections) {
   zip.file('META-INF/manifest.xml',   xmlManifest());
   zip.file('META-INF/container.xml',  xmlContainer());
   zip.file('Contents/content.hpf',    xmlContentHpf(projectTitle));
-  zip.file('Contents/header.xml',     xmlHeader(fontName, fallbackFont, fontSize, dialogueTabHwp, actionIndentHwp));
-  zip.file('Contents/section0.xml',   xmlSection(printModel, margins));
+  zip.file('Contents/header.xml',     xmlHeader(fontName, fallbackFont, fontSize, dialogueTabHwp, actionIndentHwp, bs));
+  zip.file('Contents/section0.xml',   xmlSection(printModel, margins, bs));
 
   return zip.generateAsync({ type: 'blob', mimeType: 'application/hwp+zip' });
 }
