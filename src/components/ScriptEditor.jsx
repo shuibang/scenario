@@ -2440,9 +2440,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
         };
       });
       dispatch({ type: 'SET_BLOCKS', episodeId: activeEpisodeId, payload: currentBlocks });
-      if (updatedScenes.length > 0) {
-        dispatch({ type: 'SYNC_SCENES', episodeId: activeEpisodeId, payload: updatedScenes });
-      }
+      dispatch({ type: 'SYNC_SCENES', episodeId: activeEpisodeId, payload: updatedScenes, removeOrphans: true });
       dispatch({ type: 'SET_SAVE_STATUS', payload: 'saved' });
       lastSavedBlocks.current = serialized;
       isSavingRef.current = false;
@@ -2479,9 +2477,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
         };
       });
       dispatch({ type: 'SET_BLOCKS', episodeId: epId, payload: currentBlocks });
-      if (updatedScenes.length > 0) {
-        dispatch({ type: 'SYNC_SCENES', episodeId: epId, payload: updatedScenes });
-      }
+      dispatch({ type: 'SYNC_SCENES', episodeId: epId, payload: updatedScenes, removeOrphans: true });
       dispatch({ type: 'SET_SAVE_STATUS', payload: 'saved' });
       lastSavedBlocks.current = serialized;
     };
@@ -2895,7 +2891,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
       };
     });
     dispatch({ type: 'SET_BLOCKS', episodeId: activeEpisodeId, payload: blocks });
-    dispatch({ type: 'SYNC_SCENES', episodeId: activeEpisodeId, payload: updatedScenes });
+    dispatch({ type: 'SYNC_SCENES', episodeId: activeEpisodeId, payload: updatedScenes, removeOrphans: true });
     dispatch({ type: 'SET_SAVE_STATUS', payload: 'saved' });
     lastSavedBlocks.current = JSON.stringify(blocks);
   }, [activeEpisodeId, activeProjectId, blocks, scenes, dispatch]);

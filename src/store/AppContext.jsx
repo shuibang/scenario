@@ -145,14 +145,15 @@ function reducer(state, action) {
     case 'DELETE_SCENE':
       return { ...state, scenes: state.scenes.filter(s => s.id !== action.id) };
     case 'SYNC_SCENES': {
-      // ScriptEditor가 아는 씬만 교체 — 블록 없는 orphan 씬(SceneListPage 전용)은 보존
+      const { removeOrphans = false } = action;
       const syncedIds = new Set(action.payload.map(s => s.id));
+      const otherEpScenes = state.scenes.filter(s => s.episodeId !== action.episodeId);
+      const thisEpScenes  = state.scenes.filter(s => s.episodeId === action.episodeId);
+      // removeOrphans=true (에디터): 블록에 없는 씬 제거 / false (씬리스트·씬보드): 기존 씬 유지
+      const preserved = removeOrphans ? [] : thisEpScenes.filter(s => !syncedIds.has(s.id));
       return {
         ...state,
-        scenes: [
-          ...state.scenes.filter(s => s.episodeId !== action.episodeId || !syncedIds.has(s.id)),
-          ...action.payload,
-        ],
+        scenes: [...otherEpScenes, ...preserved, ...action.payload],
       };
     }
 
