@@ -3205,11 +3205,22 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
 
     e.preventDefault();
 
-    // ── parseScriptText 유틸로 블록 생성 (HWPX/DOCX 가져오기와 동일한 파서)
-    const newBlocks = parseScriptText(text, {
-      episodeId: activeEpisodeId,
-      projectId: activeProjectId,
-      characters: projectChars,
+    // ── 빈 줄 기준으로 단락 분리 → 각 단락을 파서에 전달 → 단락 사이 빈 블록 삽입
+    const ctx = { episodeId: activeEpisodeId, projectId: activeProjectId, characters: projectChars };
+    const segments = text.split(/\r?\n(?:\r?\n)+/); // 1개 이상의 빈 줄로 분할
+    const newBlocks = [];
+    segments.forEach((seg, i) => {
+      if (!seg.trim()) return;
+      const parsed = parseScriptText(seg, ctx);
+      if (i > 0 && newBlocks.length > 0) {
+        const prev = newBlocks[newBlocks.length - 1];
+        newBlocks.push({
+          id: genId(), episodeId: activeEpisodeId, projectId: activeProjectId,
+          type: 'action', content: '', label: '',
+          sceneId: prev.sceneId || genId(), createdAt: now(), updatedAt: now(),
+        });
+      }
+      newBlocks.push(...parsed);
     });
 
     if (!newBlocks.length) return;
