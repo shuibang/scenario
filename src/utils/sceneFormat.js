@@ -46,6 +46,9 @@ export function isCustomLocSep(locSep) {
 
 const TOD_KEYWORDS = ['낮', '밤', '아침', '오전', '오후', '저녁', '새벽', '점심', 'D', 'N'];
 
+// 장소 구분자 — 길이 내림차순으로 시도 (ambiguity 방지)
+const ALL_LOC_SEPS = [' - ', ' / ', '/'];
+
 /** 씬 헤더 텍스트 → 구조화 필드 */
 export function parseWithFormat(text, fmt = DEFAULT_FORMAT) {
   if (!text) return { specialSituation: '', location: '', subLocation: '', timeOfDay: '' };
@@ -148,6 +151,108 @@ export function formatSceneHeader(scene, fmt = DEFAULT_FORMAT) {
   }
 
   return `${spPart}${locFull}${timePart}`;
+}
+
+/**
+ * label + formatSceneHeader 통합 — 모든 뷰의 표시용 단일 API.
+ * block.label이 있으면 앞에 붙임.
+ */
+export function composeSceneHeader(block, fmt = DEFAULT_FORMAT) {
+  const body = formatSceneHeader(block, fmt);
+  if (!body && !block?.label) return '';
+  return block?.label ? `${block.label} ${body}`.trim() : body;
+}
+
+// 모든 씬번호 prefix 형식 인식 (longest-match 순서)
+const SCENE_LABEL_PREFIX_RE = /^(?:Scene #\d+\.|S#\d+\.|씬\d+\.|#\d+\.|INT\.|EXT\.|\d+\.)\s*/i;
+
+/** content에서 씬번호 prefix와 body를 분리 */
+export function splitScenePrefix(content) {
+  if (!content) return { prefix: '', body: '' };
+  const m = content.match(SCENE_LABEL_PREFIX_RE);
+  if (!m) return { prefix: '', body: content };
+  return { prefix: m[0].trimEnd(), body: content.slice(m[0].length).trim() };
+}
+
+/**
+ * 씬 헤더 content를 포맷 정보 없이 유연하게 파싱.
+ * 어떤 형식으로 저장됐든 prefix/location/subLocation/timeOfDay 추출.
+ * block.type === 'scene_number'인 content에만 사용할 것.
+ */
+export function parseSceneHeaderFlexibly(content) {
+  if (!content) return { prefix: '', specialSituation: '', location: '', subLocation: '', timeOfDay: '' };
+
+  // 1. 씬번호 prefix 분리
+  const { prefix, body } = splitScenePrefix(content);
+  let remaining = body;
+  let specialSituation = '';
+  let timeOfDay = '';
+  let subLocation = '';
+
+  // 2. 특수상황: "회상) ..."
+  const spMatch = remaining.match(/^([^()]+)\)\s*(.*)$/);
+  if (spMatch) {
+    specialSituation = spMatch[1].trim();
+    remaining = spMatch[2].trim();
+  }
+
+  // 3. 시간대 — 알려진 모든 형식 순서대로 시도
+  const timePatterns = [
+    /\(([^()]+)\)\s*$/,  // (낮)
+    /\/(\S+)\s*$/,        // /낮
+  ];
+  let timeMatched = false;
+  for (const re of timePatterns) {
+    const m = remaining.match(re);
+    if (m) {
+      timeOfDay = m[1].trim();
+      remaining = remaining.slice(0, m.index).trim();
+      timeMatched = true;
+      break;
+    }
+  }
+  // space 방식: 끝 단어가 TOD 키워드인지
+  if (!timeMatched) {
+    const parts = remaining.split(/\s+/);
+    for (let i = parts.length - 1; i > 0; i--) {
+      if (TOD_KEYWORDS.includes(parts[i])) {
+        timeOfDay = parts[i];
+        parts.splice(i, 1);
+        remaining = parts.join(' ').trim();
+        break;
+      }
+    }
+  }
+
+  // 4. 장소 구분자 — 긴 것부터 시도
+  for (const sep of ALL_LOC_SEPS) {
+    const idx = remaining.indexOf(sep);
+    if (idx !== -1) {
+      subLocation = remaining.slice(idx + sep.length).trim();
+      remaining = remaining.slice(0, idx).trim();
+      break;
+    }
+  }
+
+  return { prefix, specialSituation, location: remaining, subLocation, timeOfDay };
+}
+
+/**
+ * block.content를 현재 포맷으로 재조합.
+ * oldFmt 불필요 — 유연한 파서로 어떤 형식도 인식.
+ * prefix(씬번호)는 원본 그대로 유지, body(장소/시간)만 재조합.
+ */
+export function rebuildSceneContent(content, _oldFmt, newFmt) {
+  if (!content) return content;
+  try {
+    const { prefix, location, subLocation, timeOfDay, specialSituation } = parseSceneHeaderFlexibly(content);
+    if (!location && !timeOfDay && !subLocation && !specialSituation) return content;
+    const newBody = formatSceneHeader({ location, subLocation, timeOfDay, specialSituation }, newFmt);
+    if (!newBody) return content;
+    return prefix ? `${prefix} ${newBody}` : newBody;
+  } catch {
+    return content;
+  }
 }
 
 /** 미리보기 문자열 */

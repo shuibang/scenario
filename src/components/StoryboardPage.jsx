@@ -1,4 +1,7 @@
 import { useState, useRef, useEffect } from "react";
+import { getSceneFormat, formatSceneHeader } from "../utils/sceneFormat";
+import { buildSceneLabel } from "../utils/scenePrefix";
+import { SCENE_PREFIX_STRIP_RE } from "../utils/sceneResolver";
 
 const SHOT_SIZES = ["ELS", "LS", "MS", "MCU", "CU", "ECU", "OTS", "POV", "2-SHOT"];
 const CAMERA_MOVES = ["Static", "Pan →", "Pan ←", "Tilt ↑", "Tilt ↓", "Zoom In", "Zoom Out", "Track", "Dolly", "Handheld", "Crane"];
@@ -32,7 +35,7 @@ function parseScriptBlocks(blocks) {
       shotSize: "MS", cameraMove: "Static", transition: "Cut",
       dialogue: "", action: "", duration: "3",
       sceneNo: String(sceneNo), cutNo: String(cutNo),
-      drawingData: null, _sceneHeading: heading || `씬 ${sceneNo}`,
+      drawingData: null, _sceneHeading: heading ? `${buildSceneLabel(sceneNo)} ${heading}`.trim() : buildSceneLabel(sceneNo),
     };
     currentChar = "";
   };
@@ -42,7 +45,10 @@ function parseScriptBlocks(blocks) {
     const text = (block.content || block.text || "").trim();
 
     if (role === "scene") {
-      newPanel(text);
+      const headBody = (block.location || block.specialSituation)
+        ? formatSceneHeader(block, getSceneFormat())
+        : text.replace(SCENE_PREFIX_STRIP_RE, '').trim();
+      newPanel(headBody);
     } else {
       if (!current) newPanel("");
       if (role === "character") {
@@ -75,6 +81,7 @@ function ImportModal({ onImport, onClose }) {
   const [episodes, setEpisodes] = useState([]);
   const [preview, setPreview] = useState([]);
   const [rawCount, setRawCount] = useState(0);
+  const [rawBlocks, setRawBlocks] = useState([]);
   const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(() => {
@@ -122,6 +129,7 @@ function ImportModal({ onImport, onClose }) {
       if (filtered.length === 0)
         throw new Error("해당 프로젝트에 블록이 없어요.\n대본 내용을 먼저 입력해주세요.");
       setRawCount(filtered.length);
+      setRawBlocks(filtered);
       const panels = parseScriptBlocks(filtered);
       if (panels.length === 0)
         throw new Error("씬 헤더 블록(S# 타입)이 없어서 패널을 나눌 수 없어요.");
@@ -230,7 +238,7 @@ function ImportModal({ onImport, onClose }) {
 
             <div style={{ display:"flex", gap:8 }}>
               <button onClick={onClose} style={{ flex:1, padding:"10px", border:"1px solid var(--c-border)", borderRadius:6, background:"transparent", color:"var(--c-text4)", cursor:"pointer" }}>취소</button>
-              <button onClick={() => onImport(preview)} style={{ flex:2, padding:"10px", border:"none", borderRadius:6, background:"var(--c-accent)", color:"#fff", fontWeight:700, cursor:"pointer", fontSize:13 }}>
+              <button onClick={() => onImport(preview, rawBlocks)} style={{ flex:2, padding:"10px", border:"none", borderRadius:6, background:"var(--c-accent)", color:"#fff", fontWeight:700, cursor:"pointer", fontSize:13 }}>
                 ✅ {preview.length}개 패널로 불러오기
               </button>
             </div>
@@ -370,8 +378,7 @@ function PanelCard({ panel, index, total, onChange, onDelete, onMove, cardView, 
           <span style={{ background:"#e8a020", color:"#000", fontSize:10, fontWeight:700, padding:"2px 6px", borderRadius:3, fontFamily:"monospace", flexShrink:0 }}>
             CUT {panel.cutNo || index+1}
           </span>
-          {panel.sceneNo && <span style={{ border:"1px solid var(--c-border2)", color:"var(--c-text4)", fontSize:10, padding:"2px 6px", borderRadius:3, fontFamily:"monospace", flexShrink:0 }}>S#{panel.sceneNo}</span>}
-          {panel._sceneHeading && <span style={{ color:"var(--c-text3)", fontSize:11, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{panel._sceneHeading}</span>}
+          {panel._sceneHeading && <span style={{ color:"var(--c-text3)", fontSize:11, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontFamily:"monospace" }}>{panel._sceneHeading}</span>}
         </div>
         <div style={{ display:"flex", gap:4, flexShrink:0 }}>
           <button onClick={()=>onMove(index,-1)} disabled={index===0} className="text-xs px-1.5 py-0.5 rounded" style={{ border:"1px solid var(--c-border)", background:"transparent", color:"var(--c-text4)", cursor:"pointer" }}>↑</button>
@@ -415,8 +422,7 @@ function PrintView({ panels, title, onClose, cardView }) {
     const header = (
       <div style={{ padding:"5px 10px", display:"flex", gap:8, alignItems:"center", fontSize:11, fontFamily:"monospace", borderBottom:"1px solid #e0e0e0", color:"#555" }}>
         <span style={{ fontWeight:700, color:"#333" }}>CUT {panel.cutNo||i+1}</span>
-        {panel.sceneNo && <span style={{ color:"#aaa" }}>S#{panel.sceneNo}</span>}
-        {panel._sceneHeading && <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }}>{panel._sceneHeading}</span>}
+        {panel._sceneHeading && <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1, fontFamily:"monospace" }}>{panel._sceneHeading}</span>}
         <span style={{ color:"#bbb", flexShrink:0 }}>{panel.shotSize} · {panel.duration}s</span>
       </div>
     );
@@ -487,6 +493,8 @@ export default function StoryboardPage() {
   const [layout, setLayout] = useState("single");
   const [cardView, setCardView] = useState("card"); // "card" | "row"
   const [toast, setToast] = useState("");
+  // 가져온 씬 블록 보관 → 포맷 변경 시 heading 재생성용
+  const importedSceneBlocksRef = useRef([]);
 
   // 테마 감지: <html>의 data-theme 변경을 MutationObserver로 추적
   const [isLight, setIsLight] = useState(
@@ -510,12 +518,41 @@ export default function StoryboardPage() {
     if(t<0||t>=np.length) return;
     [np[index],np[t]]=[np[t],np[index]]; setPanels(np);
   };
-  const handleImport = (imported) => {
+  const handleImport = (imported, sourceBlocks) => {
+    importedSceneBlocksRef.current = sourceBlocks || [];
     setPanels(imported);
     setNextId(imported.length+1);
     setShowImport(false);
     showToast(`✅ ${imported.length}개 씬을 불러왔어요!`);
   };
+
+  // 포맷 변경 시 _sceneHeading 재생성 (다른 panel 필드는 유지)
+  useEffect(() => {
+    const handler = () => {
+      const sceneBlocks = importedSceneBlocksRef.current;
+      if (!sceneBlocks.length) return;
+      const fmt = getSceneFormat();
+      let sceneIdx = -1;
+      const headings = [];
+      for (const block of sceneBlocks) {
+        if (classifyBlock(block.type) === 'scene') {
+          sceneIdx++;
+          const body = (block.location || block.specialSituation)
+            ? formatSceneHeader(block, fmt)
+            : (block.content || '').trim().replace(SCENE_PREFIX_STRIP_RE, '').trim();
+          const label = buildSceneLabel(sceneIdx + 1);
+          headings[sceneIdx] = body ? `${label} ${body}`.trim() : label;
+        }
+      }
+      if (!headings.length) return;
+      setPanels(prev => prev.map((p, i) => ({
+        ...p,
+        _sceneHeading: headings[i] ?? p._sceneHeading,
+      })));
+    };
+    window.addEventListener('scene_format_changed', handler);
+    return () => window.removeEventListener('scene_format_changed', handler);
+  }, []);
 
   const totalSec = panels.reduce((a,p)=>a+(parseInt(p.duration)||0),0);
 

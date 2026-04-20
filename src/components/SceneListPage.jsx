@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useApp } from '../store/AppContext';
 import { resolveSceneLabel, parseSceneContent, TIME_OF_DAY_OPTIONS } from '../utils/sceneResolver';
 import { buildSceneLabel } from '../utils/scenePrefix';
-import { getSceneFormat, parseWithFormat, formatSceneHeader } from '../utils/sceneFormat';
+import { getSceneFormat, formatSceneHeader } from '../utils/sceneFormat';
 import { now, genId } from '../store/db';
 import { getChipInlineStyle } from '../utils/emotionColor';
 import { exportScenelistXlsx } from '../print/scenelistExport';
@@ -311,14 +311,6 @@ export default function SceneListPage() {
     dispatch({ type: 'UPDATE_SCENE', payload: { id: sceneId, sceneListContent: content, updatedAt: now() }, _record: true });
   };
 
-  // 포맷 설정 변경 감지 (scene_format_changed 이벤트)
-  const [formatVer, setFormatVer] = useState(0);
-  useEffect(() => {
-    const handler = () => setFormatVer(v => v + 1);
-    window.addEventListener('scene_format_changed', handler);
-    return () => window.removeEventListener('scene_format_changed', handler);
-  }, []);
-
   const handleMetaChange = (sceneId, meta) => {
     dispatch({ type: 'UPDATE_SCENE', payload: { id: sceneId, ...meta, updatedAt: now() } });
     // 씬 헤더 블록(scene_number)도 동기화 → 대본 본문에 반영
@@ -329,31 +321,33 @@ export default function SceneListPage() {
       const fmt = getSceneFormat();
       const newContent = formatSceneHeader(merged, fmt);
       const updatedBlocks = epBlocks.map(b =>
-        b.id === block.id ? { ...b, content: newContent, updatedAt: now() } : b
+        b.id === block.id ? {
+          ...b,
+          content: newContent,
+          location: merged.location ?? b.location,
+          subLocation: merged.subLocation ?? b.subLocation,
+          timeOfDay: merged.timeOfDay ?? b.timeOfDay,
+          updatedAt: now(),
+        } : b
       );
       dispatch({ type: 'SET_BLOCKS', episodeId: epId, payload: updatedBlocks });
     }
   };
 
   // 대본 편집기에서 씬 헤더(scene_number 블록)가 바뀌면 scene 객체 필드도 동기화
-  // 포맷 설정이 바뀌어도 재파싱 (formatVer 의존)
+  // 구조화 필드(block.location 등)를 직접 읽어 포맷 독립적
   useEffect(() => {
-    const fmt = getSceneFormat();
     epScenes.forEach(scene => {
       const block = epBlocks.find(b => b.type === 'scene_number' && b.sceneId === scene.id);
-      if (!block?.content) return;
-      // 레이블 prefix(S#1. / 1. / INT. 등) 제거 후 포맷 기반 파싱
-      const raw = block.content.replace(/^(?:S#\d+\.|INT\.|EXT\.|\d+\.)\s*/i, '').trim();
-      if (!raw) return;
-      const parsed = parseWithFormat(raw, fmt);
-      const loc = parsed.location    || '';
-      const sub = parsed.subLocation || '';
-      const tod = parsed.timeOfDay   || '';
+      if (!block) return;
+      const loc = block.location    || '';
+      const sub = block.subLocation || '';
+      const tod = block.timeOfDay   || '';
       if (loc !== (scene.location || '') || sub !== (scene.subLocation || '') || tod !== (scene.timeOfDay || '')) {
         dispatch({ type: 'UPDATE_SCENE', payload: { id: scene.id, location: loc, subLocation: sub, timeOfDay: tod, updatedAt: now() } });
       }
     });
-  }, [epBlocks, formatVer]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [epBlocks]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleCharsChange = (sceneId, characterIds) => {
     dispatch({ type: 'UPDATE_SCENE', payload: { id: sceneId, characterIds, updatedAt: now() } });

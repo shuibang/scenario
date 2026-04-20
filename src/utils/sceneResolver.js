@@ -40,27 +40,24 @@ export const SCENE_PREFIX_STRIP_RE =
 /** 시간대 선택지 (드롭다운·파싱 공용) */
 export const TIME_OF_DAY_OPTIONS = ['낮', '밤', '아침', '오전', '오후', '저녁', '새벽', '점심', 'D', 'N'];
 
+import { getSceneFormat, formatSceneHeader } from './sceneFormat';
+
 /**
  * Resolve a scene's display label.
+ * 유저가 설정한 포맷(getSceneFormat)으로 body를 조합.
  * @param {object} scene - scene or script block (must have label)
  * @returns {string}
  */
 export function resolveSceneLabel(scene) {
   if (!scene) return '';
 
-  const label  = scene.label || '';
-
-  // Structured fields take priority
-  const loc    = scene.location?.trim()         || '';
-  const subLoc = scene.subLocation?.trim()      || '';
-  const time   = scene.timeOfDay?.trim()        || '';
-  const sp     = scene.specialSituation?.trim() || '';
+  const label = scene.label || '';
+  const loc   = scene.location?.trim()         || '';
+  const sp    = scene.specialSituation?.trim() || '';
 
   if (loc || sp) {
-    const timePart = time   ? ` (${time})`         : '';
-    const spPart   = sp     ? `${sp}) `             : '';
-    const locFull  = subLoc ? `${loc} - ${subLoc}` : loc;
-    return `${label} ${spPart}${locFull}${timePart}`.trim();
+    const body = formatSceneHeader(scene, getSceneFormat());
+    return body ? `${label} ${body}`.trim() : label;
   }
 
   // Fallback to legacy content string (content에서 label prefix 제거 후 합침)

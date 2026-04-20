@@ -4,6 +4,8 @@ import { getChipInlineStyle } from '../utils/emotionColor';
 import { getTimelineColor } from '../utils/color';
 import { getLayoutMetrics } from '../print/LineTokenizer';
 import { stripHtml } from '../utils/textFormat';
+import { buildSceneLabel } from '../utils/scenePrefix';
+import { SCENE_PREFIX_STRIP_RE } from '../utils/sceneResolver';
 
 // ─── Built-in guide sets ──────────────────────────────────────────────────────
 export const BUILTIN_GUIDES = [
@@ -386,8 +388,8 @@ function SceneBoardCard({ scene, seqNum, isSelected, isOver, isDragging, onClick
       {/* 씬정보 + 삭제 버튼 */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 }}>
         <div style={{ fontSize: 10, color: 'var(--c-text5)', fontWeight: 600 }}>
-          <span style={{ color: 'var(--c-accent2)', marginRight: 4 }}>S#{seqNum}</span>
-          {scene.content && <span>{scene.content.replace(/^S#\d+\.?\s*/i, '')}</span>}
+          <span style={{ color: 'var(--c-accent2)', marginRight: 4 }}>{buildSceneLabel(seqNum)}</span>
+          {scene.content && <span>{scene.content.replace(SCENE_PREFIX_STRIP_RE, '')}</span>}
         </div>
         {deleteMode && (
           <button
@@ -462,6 +464,13 @@ function SceneBoardTab({ epId, scenes, scriptBlocks, characters, dispatch, onSel
     [scenes, epId]
   );
   const epBlocks = useMemo(() => scriptBlocks.filter(b => b.episodeId === epId), [scriptBlocks, epId]);
+
+  const [, setFormatVer] = useState(0);
+  useEffect(() => {
+    const h = () => setFormatVer(v => v + 1);
+    window.addEventListener('scene_format_changed', h);
+    return () => window.removeEventListener('scene_format_changed', h);
+  }, []);
 
   const activeScenes = useMemo(() => epScenes.filter(s => !s.deleted), [epScenes]);
   const deletedScenes = useMemo(() => epScenes.filter(s => s.deleted), [epScenes]);
@@ -633,7 +642,7 @@ function SceneBoardTab({ epId, scenes, scriptBlocks, characters, dispatch, onSel
                   }}
                 >
                   <div>
-                    <div style={{ fontSize: 10, color: 'var(--c-text6)' }}>S#{scene.sceneSeq}</div>
+                    <div style={{ fontSize: 10, color: 'var(--c-text6)' }}>{buildSceneLabel(scene.sceneSeq)}</div>
                     <div style={{ fontSize: 11, color: 'var(--c-text4)', lineHeight: 1.3 }}>
                       {scene.sceneListContent || scene.content || '(내용 없음)'}
                     </div>

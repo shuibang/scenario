@@ -19,7 +19,7 @@
  *   { id, type, label, content, charName, sceneId }
  */
 
-import { SCENE_PREFIX_STRIP_RE } from '../utils/sceneResolver';
+import { resolveSceneLabel, SCENE_PREFIX_STRIP_RE } from '../utils/sceneResolver';
 
 // ─── Character field compat helpers (new model: surname/givenName/occupation/intro)
 function charFullName(c) {
@@ -57,7 +57,9 @@ function normalizeBlock(block, characters) {
   let content = stripLiteralTags(block.content || '');
   // scene_number: content에 라벨 prefix(S#n.) 포함된 경우 제거 (에디터 저장 방식 혼용 대응)
   if (block.type === 'scene_number') {
-    content = content.replace(SCENE_PREFIX_STRIP_RE, '');
+    // resolveSceneLabel로 유저 포맷 재조합 후 label prefix 제거 → body만 추출
+    const full = resolveSceneLabel({ ...block, label: '' });
+    content = full || content.replace(SCENE_PREFIX_STRIP_RE, '');
   }
   // Migration: old badge-span format stored charName at start of content
   if (block.type === 'dialogue' && charName && content.startsWith(charName)) {

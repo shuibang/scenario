@@ -9,7 +9,7 @@ import { genId, now } from '../store/db';
 import { resolveSceneLabel, parseSceneContent, SCENE_PREFIX_STRIP_RE } from '../utils/sceneResolver';
 import { buildSceneLabel, getScenePrefix } from '../utils/scenePrefix';
 import { parseScriptText } from '../utils/parseScriptText';
-import { getSceneFormat } from '../utils/sceneFormat';
+import { getSceneFormat, formatSceneHeader } from '../utils/sceneFormat';
 import { resolveFont } from '../print/FontRegistry';
 import { getLayoutMetrics } from '../print/LineTokenizer';
 import EmotionTagPicker from './EmotionTagPicker';
@@ -484,7 +484,14 @@ function setBlockHtml(el, html) {
 // For scene_number: strip the "S#n." prefix — label shown via CSS ::before
 // For dialogue: strip charName prefix from content (old format had name embedded in content)
 function blockDisplayContent(b) {
-  if (b.type === 'scene_number') return (b.content || '').replace(SCENE_PREFIX_STRIP_RE, '');
+  if (b.type === 'scene_number') {
+    // 구조화 필드가 있으면 유저 포맷으로 실시간 조합
+    if (b.location || b.specialSituation) {
+      return formatSceneHeader(b, getSceneFormat());
+    }
+    // 폴백: content에서 label prefix 제거
+    return (b.content || '').replace(SCENE_PREFIX_STRIP_RE, '');
+  }
   if (b.type === 'dialogue') {
     const name = b.characterName || b.charName || '';
     const content = b.content || '';
@@ -1604,10 +1611,18 @@ const EditorSurface = forwardRef(function EditorSurface({
       const el = surfaceRef.current;
       if (!el) return;
       el.innerHTML = blocksToHtml(blocks);
-      // sync meta & labels
       const synced = parseSurface(el, metaRef, epIdRef.current, projIdRef.current);
-      syncMeta(synced);
-      onBlocksChange(synced);
+      // parseSurface re-parses display text which may lose structured fields for some timeFmt values
+      // (e.g. space-separated "주막 - 안 낮" cannot be reliably re-parsed). Restore from originals.
+      const origMap = new Map(blocks.map(b => [b.id, b]));
+      const preserved = synced.map(b => {
+        if (b.type !== 'scene_number') return b;
+        const orig = origMap.get(b.id);
+        if (!orig || (!orig.location && !orig.specialSituation)) return b;
+        return { ...b, location: orig.location, subLocation: orig.subLocation, timeOfDay: orig.timeOfDay, specialSituation: orig.specialSituation };
+      });
+      syncMeta(preserved);
+      onBlocksChange(preserved);
     },
     applyFormat(format) {
       // format: 'bold' | 'italic' | 'underline'
@@ -2248,6 +2263,18 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     () => scenes.filter(s => s.episodeId === activeEpisodeId).sort((a, b) => a.sceneSeq - b.sceneSeq),
     [scenes, activeEpisodeId],
   );
+
+  // ── 포맷 변경 시 로컬 blocks 재조합 (에디터 화면 즉시 반영)
+  // SceneFormatSync(App 레벨)가 AppContext를 업데이트하지만,
+  // ScriptEditor는 로컬 state를 가지므로 별도로 rebuild 필요
+  // 포맷 변경 시 loadBlocks 재호출 → blockDisplayContent가 getSceneFormat()으로 즉시 재조합
+  useEffect(() => {
+    const handler = () => {
+      requestAnimationFrame(() => surfaceApiRef.current?.loadBlocks(blocksRef.current));
+    };
+    window.addEventListener('scene_format_changed', handler);
+    return () => window.removeEventListener('scene_format_changed', handler);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Load blocks when episode changes
   useEffect(() => {
