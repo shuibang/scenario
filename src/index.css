@@ -758,6 +758,73 @@ textarea {
 }
 .modal-btn-danger:hover:not(:disabled) { background: #dc2626; }
 
+/* ─── 모달 폼 공통 ──────────────────────────────────────────────────────────── */
+.modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.modal-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.modal-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--c-text5);
+  letter-spacing: 0.03em;
+}
+.modal-input {
+  width: 100%;
+  padding: 7px 10px;
+  font-size: 13px;
+  border-radius: 6px;
+  border: 1px solid var(--c-border3);
+  background: var(--c-input);
+  color: var(--c-text);
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 100ms;
+}
+.modal-input:focus { border-color: var(--c-accent); }
+.modal-input-readonly { cursor: default; opacity: 0.8; }
+
+/* ─── 새 작품 유형 선택 그리드 ──────────────────────────────────────────────── */
+.new-project-type-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+}
+.new-project-type-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 10px 6px;
+  border-radius: 8px;
+  border: 1px solid var(--c-border3);
+  background: var(--c-input);
+  cursor: pointer;
+  transition: border-color 100ms, background 100ms;
+}
+.new-project-type-btn:hover { border-color: var(--c-accent); }
+.new-project-type-btn-active {
+  border-color: var(--c-accent);
+  background: color-mix(in srgb, var(--c-accent) 10%, transparent);
+}
+.new-project-type-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-text2);
+}
+.new-project-type-btn-active .new-project-type-label { color: var(--c-accent); }
+.new-project-type-mins {
+  font-size: 10px;
+  color: var(--c-text5);
+}
+
 /* ─── 찾기/바꾸기 블록 하이라이트 ─────────────────────────────────────────── */
 .find-highlight {
   outline: 2px solid var(--c-accent);
