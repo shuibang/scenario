@@ -237,7 +237,7 @@ export default function SynopsisEditor() {
       </div>
 
       {/* Sections */}
-      <div ref={scrollRef} style={{ flex: '1 1 0', minHeight: 0, overflowY: 'auto' }}>
+      <div ref={scrollRef} data-synopsis-scroll style={{ flex: '1 1 0', minHeight: 0, overflowY: 'auto' }}>
         <div className="space-y-8" style={{ padding: '10px' }}>
           {SECTIONS.map(sec => sec.type === 'input' ? (
             <div key={sec.id} className="space-y-1.5">

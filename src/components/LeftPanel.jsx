@@ -88,7 +88,7 @@ function InlineInput({ placeholder, defaultValue = '', onCommit, onCancel, inden
 
 function ProjectItem({ project, section = 'all', expanded, onToggle }) {
   const { state, dispatch } = useApp();
-  const { episodes, characters, scenes, resources, activeProjectId, activeEpisodeId, activeDoc, synopsisDocs, stylePreset, saveStatus } = state;
+  const { episodes, characters, resources, activeProjectId, activeEpisodeId, activeDoc, saveStatus } = state;
   const isActive = project.id === activeProjectId;
   const [addingEp, setAddingEp] = useState(false);
 
@@ -100,9 +100,6 @@ function ProjectItem({ project, section = 'all', expanded, onToggle }) {
     dispatch({ type: 'SET_ACTIVE_PROJECT', id: project.id });
     onToggle(project.id, true);
   };
-
-  const synopsisDoc = synopsisDocs?.find(d => d.projectId === project.id);
-  const synopsisPages = isActive ? estimateSynopsisPages(synopsisDoc, stylePreset) : 0;
 
   const addEpisode = (title) => {
     const num = epList.length + 1;
@@ -156,7 +153,7 @@ function ProjectItem({ project, section = 'all', expanded, onToggle }) {
       {expanded && (
         <div>
           <NavItem large={large} icon={FileText} label="표지" active={activeDoc === 'cover' && !activeEpisodeId} onClick={() => { dispatch({ type: 'SET_ACTIVE_PROJECT', id: project.id }); dispatch({ type: 'SET_ACTIVE_DOC', payload: 'cover' }); }} indent={2} />
-          <NavItem large={large} icon={ScrollText} label="작품 시놉시스" active={activeDoc === 'synopsis'} onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'synopsis' })} indent={2} badge={synopsisPages > 0 ? `${synopsisPages}p` : null} />
+          <NavItem large={large} icon={ScrollText} label="작품 시놉시스" active={activeDoc === 'synopsis'} onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'synopsis' })} indent={2} />
 
           <div className="mt-1">
             <div style={{ paddingLeft: large ? '32px' : '24px', paddingTop: 2, paddingBottom: 2, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--c-text6)' }}>회차</div>
@@ -219,7 +216,6 @@ function ProjectItem({ project, section = 'all', expanded, onToggle }) {
               <div className="py-0.5 text-[10px] uppercase tracking-wider font-semibold" style={{ paddingLeft: '24px', color: 'var(--c-text5)' }}>설계</div>
               {(() => {
                 const treatCount = epList.reduce((acc, ep) => acc + (ep.summaryItems?.length || 0), 0);
-                const sceneCount = scenes.filter(s => s.projectId === project.id).length;
                 return (<>
                   <NavItem
                     icon={LayoutGrid}
@@ -242,7 +238,6 @@ function ProjectItem({ project, section = 'all', expanded, onToggle }) {
                     active={activeDoc === 'scenelist'}
                     onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'scenelist' })}
                     indent={2}
-                    badge={sceneCount > 0 ? `${sceneCount}씬` : null}
                   />
                 </>);
               })()}
@@ -255,44 +250,10 @@ function ProjectItem({ project, section = 'all', expanded, onToggle }) {
   );
 }
 
-function estimateSynopsisPages(synopsisDoc, preset) {
-  if (!synopsisDoc) return 0;
-  const text = [synopsisDoc.genre, synopsisDoc.theme, synopsisDoc.intent, synopsisDoc.story, synopsisDoc.content]
-    .filter(Boolean).join(' ');
-  if (!text.trim()) return 0;
-  const fontSize = preset?.fontSize ?? 11;
-  const lineHeight = preset?.lineHeight ?? 1.6;
-  const margins = preset?.pageMargins ?? { top: 35, bottom: 30 };
-  const usablePt = 841.89 - (margins.top + margins.bottom) * 2.835;
-  const linesPerPage = Math.floor(usablePt / (fontSize * lineHeight));
-  const charsPerLine = Math.round(50 * (11 / fontSize));
-  const totalLines = Math.ceil(text.length / charsPerLine);
-  return Math.max(1, Math.ceil(totalLines / linesPerPage));
-}
-
-function estimatePages(scriptBlocks, epId, preset) {
-  const blocks = scriptBlocks.filter(b => b.episodeId === epId);
-  if (!blocks.length) return 0;
-  const fontSize = preset?.fontSize ?? 11;
-  const lineHeight = preset?.lineHeight ?? 1.6;
-  const margins = preset?.pageMargins ?? { top: 35, bottom: 30 };
-  const a4HeightPt = 841.89;
-  const usablePt = a4HeightPt - (margins.top + margins.bottom) * 2.835;
-  const linesPerPage = Math.floor(usablePt / (fontSize * lineHeight));
-  let totalLines = 0;
-  for (const b of blocks) {
-    if (b.type === 'scene_number') totalLines += 2;
-    else totalLines += 1 + Math.floor((b.content?.length || 0) / 30);
-  }
-  return Math.max(1, Math.ceil(totalLines / linesPerPage));
-}
-
 function EpisodeItem({ ep, isSingle, large }) {
   const { state, dispatch } = useApp();
-  const { activeEpisodeId, activeDoc, scenes, scriptBlocks, stylePreset } = state;
+  const { activeEpisodeId, activeDoc } = state;
   const isActive = activeEpisodeId === ep.id && activeDoc === 'script';
-  const sceneCount = scenes.filter(s => s.episodeId === ep.id).length;
-  const pageEst = estimatePages(scriptBlocks, ep.id, stylePreset);
   const [confirm, setConfirm] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const [editingMajor, setEditingMajor] = useState(false);
@@ -356,12 +317,6 @@ function EpisodeItem({ ep, isSingle, large }) {
         >
           {ep.title || <span style={{ color: 'var(--c-text6)', fontStyle: 'italic' }}>제목 없음</span>}
         </span>
-        {sceneCount > 0 && (
-          <span className="text-[10px] shrink-0 tabular-nums" style={{ color: 'var(--c-text6)' }}>{sceneCount}씬</span>
-        )}
-        {pageEst > 0 && (
-          <span className="text-[10px] shrink-0 tabular-nums" style={{ color: 'var(--c-text6)' }}>{pageEst}p</span>
-        )}
         {/* 액션 버튼 — hover 시 표시, 모두 stopPropagation */}
         <span className="flex items-center gap-0 opacity-0 group-hover:opacity-100 shrink-0">
           <button

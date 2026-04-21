@@ -13,6 +13,35 @@ import {
   getFontByCssFamily,
 } from '../print/FontRegistry';
 
+const PRINT_SELECTIONS_STORAGE_KEY = 'drama_print_preview_selections_v1';
+
+function readSavedSelections() {
+  try {
+    const raw = localStorage.getItem(PRINT_SELECTIONS_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeSelections(allEpisodes, source) {
+  const savedEpisodes = source?.episodes && typeof source.episodes === 'object' ? source.episodes : {};
+  const episodesMap = {};
+  allEpisodes.forEach(ep => {
+    episodesMap[ep.id] = typeof savedEpisodes[ep.id] === 'boolean' ? savedEpisodes[ep.id] : true;
+  });
+  return {
+    cover: typeof source?.cover === 'boolean' ? source.cover : true,
+    synopsis: typeof source?.synopsis === 'boolean' ? source.synopsis : true,
+    episodes: episodesMap,
+    chars: typeof source?.chars === 'boolean' ? source.chars : true,
+    biography: typeof source?.biography === 'boolean' ? source.biography : false,
+    treatment: typeof source?.treatment === 'boolean' ? source.treatment : false,
+  };
+}
+
 
 // ─── PrintPreviewModal ────────────────────────────────────────────────────────
 export default function PrintPreviewModal({ onClose, defaultFormat }) {
@@ -33,11 +62,7 @@ export default function PrintPreviewModal({ onClose, defaultFormat }) {
   );
 
   // ─── Selection state
-  const [sel, setSel] = useState(() => {
-    const episodesMap = {};
-    allEpisodes.forEach(ep => { episodesMap[ep.id] = true; });
-    return { cover: true, synopsis: true, episodes: episodesMap, chars: true, biography: false, treatment: false };
-  });
+  const [sel, setSel] = useState(() => normalizeSelections(allEpisodes, readSavedSelections()));
 
   const [format, setFormat]       = useState(defaultFormat || 'docx');
   const [exporting, setExporting] = useState(false);
@@ -76,6 +101,16 @@ export default function PrintPreviewModal({ onClose, defaultFormat }) {
   }, []);
 
   // ─── Export
+  useEffect(() => {
+    setSel(prev => normalizeSelections(allEpisodes, prev));
+  }, [allEpisodes]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(PRINT_SELECTIONS_STORAGE_KEY, JSON.stringify(sel));
+    } catch {}
+  }, [sel]);
+
   const handleExport = useCallback(async () => {
     setError(null);
     setExportStep('');

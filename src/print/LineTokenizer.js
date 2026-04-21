@@ -205,7 +205,12 @@ export function tokenizeSection(section, metrics) {
       switch (block.type) {
         case 'scene_number': {
           const sceneText = `${block.label} ${block.content}`.trim();
-          tokens.push(T('scene_number', sceneText, { bold: true }));
+          tokens.push(T('scene_number', sceneText, {
+            bold: true,
+            sourceBlockId: block.id,
+            sourceLineIndex: 0,
+            sourceLineCount: 1,
+          }));
           break;
         }
         case 'action': {
@@ -215,6 +220,9 @@ export function tokenizeSection(section, metrics) {
           const wrappedA = wrapText(plainA, charsPerLine - 2);
           wrappedA.forEach((t, i) =>
             tokens.push(T('action', t, {
+              sourceBlockId: block.id,
+              sourceLineIndex: i,
+              sourceLineCount: wrappedA.length,
               indent: 1,
               isFirstOfBlock: i === 0,
               blockText:      i === 0 ? plainA : undefined,
@@ -231,6 +239,9 @@ export function tokenizeSection(section, metrics) {
           const wrappedD = wrapText(plainD, charsInSpeech);
           wrappedD.forEach((t, i) =>
             tokens.push(T('dialogue', t, {
+              sourceBlockId: block.id,
+              sourceLineIndex: i,
+              sourceLineCount: wrappedD.length,
               charName:       i === 0 ? block.charName : '',
               isFirstLine:    i === 0,
               isFirstOfBlock: i === 0,
@@ -246,6 +257,9 @@ export function tokenizeSection(section, metrics) {
           const wrappedP = wrapText(parenText, charsInSpeech);
           wrappedP.forEach((t, i) =>
             tokens.push(T('parenthetical', t, {
+              sourceBlockId: block.id,
+              sourceLineIndex: i,
+              sourceLineCount: wrappedP.length,
               italic: true, indent: 1,
               isFirstOfBlock: i === 0,
               blockText:      i === 0 ? parenText : undefined,
@@ -255,19 +269,33 @@ export function tokenizeSection(section, metrics) {
           break;
         }
         case 'scene_ref': {
-          tokens.push(T('scene_ref', block.content || ''));
+          tokens.push(T('scene_ref', block.content || '', {
+            sourceBlockId: block.id,
+            sourceLineIndex: 0,
+            sourceLineCount: 1,
+          }));
           break;
         }
         case 'transition': {
-          tokens.push(T('transition', (block.content || '').toUpperCase(), { center: false }));
+          tokens.push(T('transition', (block.content || '').toUpperCase(), {
+            center: false,
+            sourceBlockId: block.id,
+            sourceLineIndex: 0,
+            sourceLineCount: 1,
+          }));
           break;
         }
         case 'tag':
           break; // 태그 블록은 출력 제외
         default:
           if (block.content) {
-            wrapText(stripHtml(block.content), charsPerLine).forEach(t =>
-              tokens.push(T('body', t))
+            const wrapped = wrapText(stripHtml(block.content), charsPerLine);
+            wrapped.forEach((t, i) =>
+              tokens.push(T('body', t, {
+                sourceBlockId: block.id,
+                sourceLineIndex: i,
+                sourceLineCount: wrapped.length,
+              }))
             );
           }
       }
