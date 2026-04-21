@@ -31,11 +31,25 @@ const BUILTIN_GUIDES = [
 ];
 
 // Slash command palette items (간소화 — 자주 쓰는 것만)
+const INSERT_SHORTCUT_HINTS = {
+  scene_number: '1.',
+  action: '/ + 1',
+  dialogue: '/ + 2',
+  charcheck: '/ + 3',
+  sceneref: '/ + 4',
+  symbol: '/ + 5',
+  tag: '/ + 6',
+  scene_separator: 'Space x2',
+  parenthetical: 'Space x2',
+};
+
 const SLASH_COMMANDS = [
-  { type: 'action',        action: 'block',         icon: '지',  label: '지문',    desc: '행동/상황 묘사' },
-  { type: 'dialogue',      action: 'block',         icon: '대',  label: '대사',    desc: '인물 대사' },
-  { type: 'symbol',        action: 'symbol',        icon: '기',  label: '기타',    desc: '특수 기호 삽입' },
-  { type: 'tag',           action: 'unifiedtag',    icon: '태그', label: '태그',   desc: '구조태그·감정태그 검색' },
+  { type: 'action',        action: 'block',      icon: '지', label: '지문',     desc: '행동과 상황 묘사' },
+  { type: 'dialogue',      action: 'block',      icon: '대', label: '대사',     desc: '인물 대사' },
+  { type: 'charcheck',     action: 'charcheck',  icon: '등', label: '등장체크', desc: '현재 씬 등장인물 추가' },
+  { type: 'sceneref',      action: 'sceneref',   icon: '연', label: '씬연결',   desc: '다른 씬 참조 삽입' },
+  { type: 'symbol',        action: 'symbol',     icon: '기', label: '기타',     desc: '특수 기호 삽입' },
+  { type: 'tag',           action: 'unifiedtag', icon: '태', label: '태그',     desc: '구조태그와 감정태그 검색' },
 ];
 
 // ─── Symbol Picker ────────────────────────────────────────────────────────────
@@ -269,6 +283,7 @@ function SymbolPicker({ mobile = false, closeToken = 0, onOpen, forceOpen = null
             onOpen?.();
           }
         }}
+        title={`기타 (${INSERT_SHORTCUT_HINTS.symbol})`}
         style={mobile ? {
           flex: '0 0 auto', width: 44, fontSize: 12, padding: '5px 0',
           borderRadius: 6, textAlign: 'center',
@@ -3447,7 +3462,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     const nDialogue  = newBlocks.filter(b => b.type === 'dialogue').length;
     const nAction    = newBlocks.filter(b => b.type === 'action').length;
     const nUnknown   = nAction; // 지문으로 분류된 것 중 인식 불확실
-    setPasteToast(`붙여넣기 완료 — 씬 ${nScenes}, 대사 ${nDialogue}, 지문 ${nAction}${nUnknown ? ' (지문은 Ctrl+Shift+1/2/3으로 형식 변경)' : ''}`);
+    setPasteToast(`붙여넣기 완료 — 씬 ${nScenes}, 대사 ${nDialogue}, 지문 ${nAction}${nUnknown ? ' (형식은 1. 또는 / + 숫자로 변경)' : ''}`);
     setTimeout(() => setPasteToast(null), 4000);
   }, [activeEpisodeId, activeProjectId, projectChars, setBlocks]);
 
@@ -3513,9 +3528,9 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   }, []);
 
   const BLOCK_TYPE_BTNS = [
-    { type: 'scene_number', label: getScenePrefix().trim() || 'S#', title: '씬번호 (Ctrl+Shift+1)' },
-    { type: 'action',       label: '지문', title: '지문 (Ctrl+Shift+2)' },
-    { type: 'dialogue',     label: '대사', title: '대사 (Ctrl+Shift+3)' },
+    { type: 'scene_number', label: getScenePrefix().trim() || 'S#', title: `씬번호 (${INSERT_SHORTCUT_HINTS.scene_number})` },
+    { type: 'action',       label: '지문', title: `지문 (${INSERT_SHORTCUT_HINTS.action})` },
+    { type: 'dialogue',     label: '대사', title: `대사 (${INSERT_SHORTCUT_HINTS.dialogue})` },
   ];
   const BTN_W = 40; // px — 상단 툴바 버튼 통일 너비
 
@@ -3557,7 +3572,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
             })}
             <button
               ref={charCheckBtnRef}
-              title="등장 — 현재 씬 등장인물 추가 (Ctrl+Shift+4)"
+              title={`등장 — 현재 씬 등장인물 추가 (${INSERT_SHORTCUT_HINTS.charcheck})`}
               onMouseDown={e => { e.preventDefault(); handleCharCheck(); }}
               style={{
                 flexShrink: 0, width: BTN_W, textAlign: 'center',
@@ -3568,7 +3583,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
               }}
             >등장</button>
             <button
-              title="연결 — 현재 위치에 다른 씬 참조 삽입 (Ctrl+Shift+5)"
+              title={`연결 — 현재 위치에 다른 씬 참조 삽입 (${INSERT_SHORTCUT_HINTS.sceneref})`}
               onMouseDown={e => {
                 e.preventDefault();
                 setCharCheckPicker(null);
@@ -3607,7 +3622,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
             />
             <button
               onMouseDown={e => { e.preventDefault(); openEmotionPickerOnCursor(); }}
-              title="태그 (Ctrl+Shift+7)"
+              title={`태그 (${INSERT_SHORTCUT_HINTS.tag})`}
               style={{
                 flexShrink: 0, width: BTN_W, textAlign: 'center',
                 fontSize: 'clamp(10px, 2.8vw, 13px)', color: 'var(--c-text4)',
