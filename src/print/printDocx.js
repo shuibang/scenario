@@ -21,6 +21,41 @@ import { resolveFont } from './FontRegistry';
 
 // ─── Preset → twip/pt helpers ─────────────────────────────────────────────────
 const PT_TO_HALF_PT = 2;  // docx uses half-points for font size
+const DEFAULT_TAB_STEP_TWIPS = 720;
+
+const DOCX_FONT_ALIASES = {
+  '함초롬바탕': {
+    ascii: 'HCR Batang',
+    hAnsi: 'HCR Batang',
+    cs: 'HCR Batang',
+    eastAsia: '함초롬바탕',
+    hint: 'eastAsia',
+  },
+  '맑은 고딕': {
+    ascii: 'Malgun Gothic',
+    hAnsi: 'Malgun Gothic',
+    cs: 'Malgun Gothic',
+    eastAsia: '맑은 고딕',
+    hint: 'eastAsia',
+  },
+};
+
+function getDocxFontSpec(fontFamily) {
+  return DOCX_FONT_ALIASES[fontFamily] ?? {
+    ascii: fontFamily,
+    hAnsi: fontFamily,
+    cs: fontFamily,
+    eastAsia: fontFamily,
+    hint: 'eastAsia',
+  };
+}
+
+function buildDialogueTabStops(firstPos) {
+  return Array.from({ length: 12 }, (_, idx) => ({
+    type: TabStopType.LEFT,
+    position: firstPos + (DEFAULT_TAB_STEP_TWIPS * idx),
+  }));
+}
 
 function presetToDocxProps(preset) {
   const margins   = preset?.pageMargins ?? { top: 35, right: 30, bottom: 30, left: 30 };
@@ -49,6 +84,7 @@ function presetToDocxProps(preset) {
     fontSizeHalfPt: fontSize * PT_TO_HALF_PT,
     lineSpacingTwips,
     fontFamily,
+    fontSpec: getDocxFontSpec(fontFamily),
     dialogueGapTwips: Math.round(dialogueGapPt * 20), // 1pt = 20 twips
     bs,
     actionIndentMm:   (bs.action?.indent   ?? 1) * 8,
@@ -61,7 +97,7 @@ function presetToDocxProps(preset) {
 function baseRun(text, props, dp) {
   return new TextRun({
     text,
-    font:     { name: dp.fontFamily },
+    font:     dp.fontSpec,
     size:     dp.fontSizeHalfPt,
     ...props,
   });
@@ -89,7 +125,7 @@ function htmlToRuns(html, dp, extraProps = {}) {
     if (!text) return;
     runs.push(new TextRun({
       text,
-      font:      { name: dp.fontFamily },
+      font:      dp.fontSpec,
       size:      dp.fontSizeHalfPt,
       bold:      (stack.b > 0) || !!extraProps.bold,
       italics:   (stack.i > 0) || !!extraProps.italics,
@@ -172,14 +208,12 @@ function dialoguePara(charName, speech, dp) {
         bold:      charBs.bold !== false,
         italics:   !!charBs.italic,
         underline: charBs.underline ? {} : undefined,
-        font: { name: dp.fontFamily }, size: dp.fontSizeHalfPt,
+        font: dp.fontSpec, size: dp.fontSizeHalfPt,
       }),
-      new TextRun({ children: [new Tab()], font: { name: dp.fontFamily }, size: dp.fontSizeHalfPt }),
+      new TextRun({ children: [new Tab()], font: dp.fontSpec, size: dp.fontSizeHalfPt }),
       ...speechRuns,
     ],
-    tabStops: [
-      { type: TabStopType.LEFT, position: gapTwips + outerIndent },
-    ],
+    tabStops: buildDialogueTabStops(gapTwips + outerIndent),
     indent: { left: gapTwips + outerIndent, hanging: gapTwips },
     alignment: AlignmentType.BOTH,
     spacing: lineSpacing(dp),
@@ -190,7 +224,7 @@ function dialoguePara(charName, speech, dp) {
 function coverTitlePara(text, dp) {
   const titleSizeHalfPt = (dp.fontSize + 11) * 2;
   return new Paragraph({
-    children: [new TextRun({ text, bold: true, font: { name: dp.fontFamily }, size: titleSizeHalfPt })],
+    children: [new TextRun({ text, bold: true, font: dp.fontSpec, size: titleSizeHalfPt })],
     alignment: AlignmentType.CENTER,
     spacing: { before: 0, after: 120 },
   });
@@ -199,7 +233,7 @@ function coverTitlePara(text, dp) {
 function coverSubtitlePara(text, dp) {
   const subtitleSizeHalfPt = (dp.fontSize + 5) * 2;
   return new Paragraph({
-    children: [new TextRun({ text, font: { name: dp.fontFamily }, size: subtitleSizeHalfPt, color: '555555' })],
+    children: [new TextRun({ text, font: dp.fontSpec, size: subtitleSizeHalfPt, color: '555555' })],
     alignment: AlignmentType.CENTER,
     spacing: { before: 0, after: 240 },
   });
@@ -217,7 +251,7 @@ function parenPara(text, dp) {
 // PageNumber is an enum object (not a class). Page numbers go inside TextRun.children
 // where the string constant PageNumber.CURRENT is handled by the Run constructor.
 function pageNumFooter(dp) {
-  const runOpts = { font: { name: dp.fontFamily }, size: dp.fontSizeHalfPt - 2 };
+  const runOpts = { font: dp.fontSpec, size: dp.fontSizeHalfPt - 2 };
   return new Footer({
     children: [
       new Paragraph({
@@ -412,7 +446,7 @@ export async function exportDocx(appState, selections, { onStep = () => {}, hanc
         default: {
           document: {
             run: {
-              font: { name: dp.fontFamily },
+              font: dp.fontSpec,
               size: dp.fontSizeHalfPt,
             },
           },

@@ -185,13 +185,21 @@ function xmlContentHpf(title) {
 </opf:package>`;
 }
 
-function xmlHeader(fontName, fallbackFontName, fontSizePt, dialogueTabHwp, actionIndentHwp = 2268, blockStyles = {}) {
+function xmlHeader(fontNames, fontSizePt, dialogueTabHwp, actionIndentHwp = 2268, blockStyles = {}) {
   // HWPX height unit = 1/100 pt
   const normalH  = Math.round(fontSizePt * 100);
   const titleH   = Math.round(fontSizePt * 140);
   const headingH = Math.round(fontSizePt * 110);
 
   const fontLangs = ['HANGUL','LATIN','HANJA','JAPANESE','OTHER','SYMBOL','USER'];
+  const resolvedFontNames = (Array.isArray(fontNames) ? fontNames : [fontNames]).filter(Boolean);
+  const fontCnt = String(Math.max(1, resolvedFontNames.length));
+  const fontEls = resolvedFontNames
+    .map((name, idx) => `\n        <hh:font id="${idx}" face="${esc(name)}" type="TTF" isEmbedded="0"/>`)
+    .join('');
+  const dialogueTabItems = Array.from({ length: 12 }, (_, idx) =>
+    `        <hh:tabItem pos="${dialogueTabHwp + (idx * mmToHwp(12.7))}" type="LEFT" leader="NONE" unit="HWPUNIT"/>`
+  ).join('\n');
 
   const bsExtra = (bs) => {
     const parts = [];
@@ -254,12 +262,6 @@ function xmlHeader(fontName, fallbackFontName, fontSizePt, dialogueTabHwp, actio
         <hh:diagonal     type="NONE" width="0.1 mm" color="#000000"/>
       </hh:borderFill>`;
 
-  // 폴백 폰트가 있으면 fontCnt="2"로 두 번째 항목 추가
-  const fontCnt    = fallbackFontName ? '2' : '1';
-  const fallbackEl = fallbackFontName
-    ? `\n        <hh:font id="1" face="${esc(fallbackFontName)}" type="TTF" isEmbedded="0"/>`
-    : '';
-
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <hh:head xmlns:hh="http://www.hancom.co.kr/hwpml/2011/head"
          xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph"
@@ -269,7 +271,7 @@ function xmlHeader(fontName, fallbackFontName, fontSizePt, dialogueTabHwp, actio
   <hh:refList>
     <hh:fontfaces itemCnt="7">
 ${fontLangs.map(lang => `      <hh:fontface lang="${lang}" fontCnt="${fontCnt}">
-        <hh:font id="0" face="${esc(fontName)}" type="TTF" isEmbedded="0"/>${fallbackEl}
+        ${fontEls}
       </hh:fontface>`).join('\n')}
     </hh:fontfaces>
     <hh:borderFills itemCnt="2">
@@ -293,7 +295,7 @@ ${charPr(11, normalH, bsExtra(blockStyles.dialogue))}
     <hh:tabProperties itemCnt="2">
       <hh:tabPr id="0" autoTabLeft="0" autoTabRight="0"/>
       <hh:tabPr id="1" autoTabLeft="0" autoTabRight="0">
-        <hh:tabItem pos="${dialogueTabHwp}" type="LEFT" leader="NONE" unit="HWPUNIT"/>
+${dialogueTabItems}
       </hh:tabPr>
     </hh:tabProperties>
     <hh:paraProperties itemCnt="10">
@@ -574,14 +576,19 @@ const CSS_TO_HWPX_FONT = {
   'Malgun Gothic': '맑은 고딕',
 };
 
-function toHwpxFontName(cssFontFamily) {
-  return CSS_TO_HWPX_FONT[cssFontFamily] ?? cssFontFamily ?? 'HCRBatang';
+const HWPX_SERIF_FALLBACKS = ['Noto Serif KR', 'Apple SD Gothic Neo', 'Malgun Gothic', '맑은 고딕'];
+const HWPX_SANS_FALLBACKS = ['Apple SD Gothic Neo', 'Malgun Gothic', '맑은 고딕', 'Noto Sans KR'];
+
+function toHwpxFontNames(cssFontFamily) {
+  const primary = CSS_TO_HWPX_FONT[cssFontFamily] ?? cssFontFamily ?? 'HCRBatang';
+  const serifFamilies = new Set(['함초롱바탕', 'HCR Batang', 'HCRBatang', 'Noto Serif KR', '나눔명조']);
+  const fallbacks = serifFamilies.has(cssFontFamily) ? HWPX_SERIF_FALLBACKS : HWPX_SANS_FALLBACKS;
+  return Array.from(new Set([primary, cssFontFamily, ...fallbacks])).filter(Boolean);
 }
 
 export async function buildHwpx(appState, selections) {
   const preset          = appState.stylePreset || {};
-  const fontName        = toHwpxFontName(preset.fontFamily);
-  const fallbackFont    = '맑은 고딕';  // HWP 미설치 환경 폴백
+  const fontNames       = toHwpxFontNames(preset.fontFamily);
   const fontSize        = preset.fontSize || 11;
   // dialogueGap: em → pt → HWP units (1pt = 100 HWP units)
   const dialogueEm     = parseFloat(preset.dialogueGap || '7');
@@ -602,7 +609,7 @@ export async function buildHwpx(appState, selections) {
   zip.file('META-INF/manifest.xml',   xmlManifest());
   zip.file('META-INF/container.xml',  xmlContainer());
   zip.file('Contents/content.hpf',    xmlContentHpf(projectTitle));
-  zip.file('Contents/header.xml',     xmlHeader(fontName, fallbackFont, fontSize, dialogueTabHwp, actionIndentHwp, bs));
+  zip.file('Contents/header.xml',     xmlHeader(fontNames, fontSize, dialogueTabHwp, actionIndentHwp, bs));
   zip.file('Contents/section0.xml',   xmlSection(printModel, margins, bs));
 
   return zip.generateAsync({ type: 'blob', mimeType: 'application/hwp+zip' });

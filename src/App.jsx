@@ -137,6 +137,10 @@ function TimelineStrip({ scrollEl }) {
   const { state } = useApp();
   const [scrollTop, setScrollTop] = useState(0);
   const [contentHeight, setContentHeight] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const trackRef = useRef(null);
+  const dragStateRef = useRef(null);
 
   const activeProject = state.projects.find(p => p.id === state.activeProjectId);
   const activeEpisodeId = state.activeEpisodeId;
@@ -179,12 +183,16 @@ function TimelineStrip({ scrollEl }) {
 
   useEffect(() => {
     if (!scrollEl) return;
+    const syncMetrics = () => {
+      setScrollTop(scrollEl.scrollTop);
+      setContentHeight(scrollEl.scrollHeight);
+      setViewportHeight(scrollEl.clientHeight);
+    };
     const onScroll = () => setScrollTop(scrollEl.scrollTop);
-    const ro = new ResizeObserver(() => setContentHeight(scrollEl.scrollHeight));
+    const ro = new ResizeObserver(syncMetrics);
     scrollEl.addEventListener('scroll', onScroll, { passive: true });
     ro.observe(scrollEl);
-    setScrollTop(scrollEl.scrollTop);
-    setContentHeight(scrollEl.scrollHeight);
+    syncMetrics();
     return () => {
       scrollEl.removeEventListener('scroll', onScroll);
       ro.disconnect();
@@ -192,8 +200,21 @@ function TimelineStrip({ scrollEl }) {
   }, [scrollEl]);
 
   // 1장 = 2분 고정, float 유지 → 0.5페이지 = 1.0분
+  useEffect(() => {
+    if (contentHeight <= viewportHeight) {
+      dragStateRef.current = null;
+      setDragging(false);
+    }
+  }, [contentHeight, viewportHeight]);
+
   const totalMins = totalPages * 2;
   const pxPerSec = contentHeight > 0 ? contentHeight / (totalMins * 60) : 0;
+  const maxScrollTop = Math.max(0, contentHeight - viewportHeight);
+  const thumbHeight = maxScrollTop > 0 ? 12 : 10;
+  const thumbTravel = Math.max(0, viewportHeight - thumbHeight);
+  const thumbTop = maxScrollTop > 0 && thumbTravel > 0
+    ? (scrollTop / maxScrollTop) * thumbTravel
+    : 0;
 
   // 눈금 밀도 조절: 간격이 너무 좁으면 세밀한 눈금 생략
   const show1s = pxPerSec >= 3;
@@ -216,6 +237,47 @@ function TimelineStrip({ scrollEl }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pxPerSec, totalSecs, show1s, show5s]);
 
+  const scrollTrackToClientY = useCallback((clientY, dragOffset) => {
+    if (!scrollEl || !trackRef.current) return;
+    const rect = trackRef.current.getBoundingClientRect();
+    if (!rect.height) return;
+    if (maxScrollTop <= 0 || thumbTravel <= 0) {
+      scrollEl.scrollTop = 0;
+      return;
+    }
+    const pointerY = Math.min(Math.max(clientY - rect.top, 0), rect.height);
+    const nextThumbTop = Math.min(Math.max(pointerY - dragOffset, 0), thumbTravel);
+    const ratio = thumbTravel > 0 ? nextThumbTop / thumbTravel : 0;
+    scrollEl.scrollTop = ratio * maxScrollTop;
+  }, [scrollEl, maxScrollTop, thumbTravel]);
+
+  const finishTrackDrag = useCallback((target, pointerId) => {
+    if (!dragStateRef.current || dragStateRef.current.pointerId !== pointerId) return;
+    dragStateRef.current = null;
+    setDragging(false);
+    try { target?.releasePointerCapture?.(pointerId); } catch {}
+  }, []);
+
+  const handleTrackPointerDown = useCallback((e) => {
+    if (!scrollEl || maxScrollTop <= 0 || e.button !== 0) return;
+    const rect = trackRef.current?.getBoundingClientRect();
+    if (!rect?.height) return;
+    const pointerY = Math.min(Math.max(e.clientY - rect.top, 0), rect.height);
+    const clickedThumb = pointerY >= thumbTop && pointerY <= thumbTop + thumbHeight;
+    const dragOffset = clickedThumb ? (pointerY - thumbTop) : (thumbHeight / 2);
+    dragStateRef.current = { pointerId: e.pointerId, dragOffset };
+    setDragging(true);
+    e.preventDefault();
+    try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch {}
+    scrollTrackToClientY(e.clientY, dragOffset);
+  }, [scrollEl, maxScrollTop, thumbHeight, thumbTop, scrollTrackToClientY]);
+
+  const handleTrackPointerMove = useCallback((e) => {
+    if (!dragStateRef.current || dragStateRef.current.pointerId !== e.pointerId) return;
+    e.preventDefault();
+    scrollTrackToClientY(e.clientY, dragStateRef.current.dragOffset);
+  }, [scrollTrackToClientY]);
+
   return (
     <div
       className="shrink-0 select-none no-print"
@@ -225,7 +287,21 @@ function TimelineStrip({ scrollEl }) {
       <div style={{ height: 37, flexShrink: 0, borderBottom: '1px solid var(--c-border2)' }} />
 
       {/* 눈금 영역 — 콘텐츠와 동기 스크롤 */}
-      <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+      <div
+        ref={trackRef}
+        onPointerDown={handleTrackPointerDown}
+        onPointerMove={handleTrackPointerMove}
+        onPointerUp={(e) => finishTrackDrag(e.currentTarget, e.pointerId)}
+        onPointerCancel={(e) => finishTrackDrag(e.currentTarget, e.pointerId)}
+        onLostPointerCapture={(e) => finishTrackDrag(e.currentTarget, e.pointerId)}
+        style={{
+          flex: 1,
+          overflow: 'hidden',
+          position: 'relative',
+          cursor: maxScrollTop > 0 ? (dragging ? 'grabbing' : 'grab') : 'default',
+          touchAction: 'none',
+        }}
+      >
 
         {/* "타임라인" 고정 레이블 — 항상 상단에 표시 */}
         <div style={{
@@ -246,6 +322,7 @@ function TimelineStrip({ scrollEl }) {
           height: contentHeight,
           transform: `translateY(${-scrollTop}px)`,
           willChange: 'transform',
+          pointerEvents: 'none',
         }}>
           {ticks.map(({ s, top, isMin, is10s, is5s, minNum }) => {
             const tickW   = isMin ? 14 : is10s ? 9 : is5s ? 5 : 3;
@@ -273,6 +350,24 @@ function TimelineStrip({ scrollEl }) {
         </div>
 
         {/* 총 분량 레이블 — 하단 고정 */}
+        {viewportHeight > 0 && (
+          <div style={{
+            position: 'absolute',
+            top: thumbTop,
+            left: '50%',
+            width: 8,
+            marginLeft: -4,
+            height: Math.max(thumbHeight, 0),
+            borderRadius: 999,
+            background: dragging ? 'rgba(96, 165, 250, 0.28)' : 'rgba(148, 163, 184, 0.16)',
+            border: dragging ? '1px solid rgba(96, 165, 250, 0.55)' : '1px solid rgba(148, 163, 184, 0.28)',
+            boxShadow: dragging ? '0 0 0 1px rgba(96, 165, 250, 0.15)' : 'none',
+            pointerEvents: 'none',
+            opacity: maxScrollTop > 0 ? 1 : 0.45,
+            transition: dragging ? 'none' : 'background 120ms ease, border-color 120ms ease',
+          }} />
+        )}
+
         <div style={{
           position: 'absolute', bottom: 4, left: 0, right: 0, zIndex: 2,
           display: 'flex', justifyContent: 'center', pointerEvents: 'none',
