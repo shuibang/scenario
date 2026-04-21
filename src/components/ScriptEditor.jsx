@@ -32,10 +32,8 @@ const BUILTIN_GUIDES = [
 
 // Slash command palette items (간소화 — 자주 쓰는 것만)
 const SLASH_COMMANDS = [
-  { type: 'scene_number',  action: 'block',         icon: 'S#',  label: '씬번호',  desc: '새 씬 시작' },
   { type: 'action',        action: 'block',         icon: '지',  label: '지문',    desc: '행동/상황 묘사' },
   { type: 'dialogue',      action: 'block',         icon: '대',  label: '대사',    desc: '인물 대사' },
-  { type: 'parenthetical', action: 'parenthetical', icon: '( )', label: '괄호체',  desc: '행동 지시 괄호체' },
   { type: 'symbol',        action: 'symbol',        icon: '기',  label: '기타',    desc: '특수 기호 삽입' },
   { type: 'tag',           action: 'unifiedtag',    icon: '태그', label: '태그',   desc: '구조태그·감정태그 검색' },
 ];
@@ -783,6 +781,23 @@ function SlashPalette({ commands, position, selectedIdx, onSelect, onClose }) {
                 <div style={{ fontSize: 12, fontWeight: sel ? 700 : 500, color: sel ? '#fff' : 'var(--c-text)' }}>{cmd.label}</div>
                 <div style={{ fontSize: 10, color: sel ? 'rgba(255,255,255,0.75)' : 'var(--c-text5)' }}>{cmd.desc}</div>
               </div>
+              {idx < 9 && (
+                <span style={{
+                  marginLeft: 'auto',
+                  minWidth: 18,
+                  height: 18,
+                  padding: '0 4px',
+                  borderRadius: 999,
+                  border: sel ? '1px solid rgba(255,255,255,0.35)' : '1px solid var(--c-border2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: sel ? '#fff' : 'var(--c-text5)',
+                  flexShrink: 0,
+                }}>{idx + 1}</span>
+              )}
             </div>
           );
         })}
@@ -1420,6 +1435,7 @@ const EditorSurface = forwardRef(function EditorSurface({
   slashOpenRef,    // ref: 팔레트 열림 여부
   onSlashKeyNav,   // (key) → ↑↓ 탐색
   onSlashSelectCurrent, // () → Tab으로 현재 항목 선택
+  onSlashSelectIndex, // (idx) → 숫자키로 항목 선택
   onNextTypePick,  // ({ blockId, top, left }) → 대사 블록에서 다음 형식 선택 팝업
   onCloseSceneRef, // () → 타이핑 시 씬연결 피커 자동 닫기
   blockStyles,
@@ -1827,6 +1843,23 @@ const EditorSurface = forwardRef(function EditorSurface({
     if (!blockEl) return;
     const type = blockEl.dataset.blockType;
 
+    if (!ctrl && !e.altKey && !e.shiftKey && e.key === '.' && sel.isCollapsed && type !== 'scene_number') {
+      const textEl = type === 'dialogue' ? (blockEl.querySelector('.ce-speech') || blockEl) : blockEl;
+      const rawText = blockText(textEl).trim();
+      const caretAtEnd = caretOff(range, textEl) === blockText(textEl).length;
+      if (/^\d+$/.test(rawText) && caretAtEnd) {
+        e.preventDefault();
+        slashOffsetRef.current = null;
+        onSlashClose?.();
+        onCharSuggest?.(null, null);
+        changeBlockTypeEl(blockEl, 'scene_number');
+        setBlockText(blockEl, '');
+        setCaret(blockEl, 0);
+        doParse();
+        return;
+      }
+    }
+
     if (!ctrl && !e.altKey && e.key === '/' && type !== 'scene_number') {
       requestAnimationFrame(() => {
         if (!composingRef.current) syncSlashPalette();
@@ -1880,6 +1913,11 @@ const EditorSurface = forwardRef(function EditorSurface({
         onSlashKeyNav?.(e.key);
         return;
       }
+      if (!e.shiftKey && /^[1-9]$/.test(e.key)) {
+        e.preventDefault();
+        onSlashSelectIndex?.(Number(e.key) - 1);
+        return;
+      }
       if (e.key === 'Tab') {
         e.preventDefault();
         onSlashSelectCurrent?.();
@@ -1887,7 +1925,7 @@ const EditorSurface = forwardRef(function EditorSurface({
       }
       if (e.key === 'Escape') {
         e.preventDefault();
-        onSlashClose?.();
+        onSlashClose?.({ restoreCaret: true, savedRange: range.cloneRange() });
         return;
       }
       if (e.key === 'Enter') {
@@ -2159,7 +2197,7 @@ const EditorSurface = forwardRef(function EditorSurface({
         return;
       }
     }
-  }, [doParse, onBadgeClick, onCharSuggest, syncSlashPalette]);
+  }, [doParse, onBadgeClick, onCharSuggest, onNextTypePick, onSlashClose, onSlashKeyNav, onSlashSelectCurrent, onSlashSelectIndex, onUndo, syncSlashPalette]);
 
   // ── Click: dialogue 블록 클릭 시 인물명(::before 영역) 클릭이면 피커 열기
   const handleClick = useCallback((e) => {
@@ -2237,7 +2275,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   const activeEpisodeIdRef = useRef(null);
   const scenesRef = useRef([]);
   const prevEpisodeIdRef = useRef(null);
-  const [charPickerState, setCharPickerState] = useState(null); // { blockId, top, left, fromDialogue? }
+  const [charPickerState, setCharPickerState] = useState(null); // { blockId, top, left, fromDialogue?, savedRange? }
   const [charPickerNoSel, setCharPickerNoSel] = useState(null); // { top, left } — 선택안함 표시
   const [nextTypePicker, setNextTypePicker] = useState(null); // { blockId, top, left, onSelect } — 다음 형식 선택
   const [charSuggestState, setCharSuggestState] = useState(null); // { blockId, blockEl, charName }
@@ -2262,6 +2300,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   slashOpenRef.current = slashPalette !== null; // 매 렌더마다 ref 동기화
   const slashPaletteRef = useRef(null);
   slashPaletteRef.current = slashPalette; // executeSlashAction 클로저에서 최신 query 접근용
+  const slashSelectionRef = useRef(null);
   const hasKeyboard = !!keyboardUp; // App.jsx에서 내려온 키보드 감지값 사용
   // shortcutHintOpen 제거 — 항상 펼쳐진 상태로 표시
   useEffect(() => {
@@ -2697,11 +2736,29 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     });
   }, []);
 
+  const restoreEditorSelection = useCallback((savedRange) => {
+    const range = savedRange ? (savedRange.cloneRange?.() || savedRange) : null;
+    requestAnimationFrame(() => {
+      const surface = document.querySelector('[data-editor-surface]');
+      if (!surface || !range) return;
+      surface.focus();
+      requestAnimationFrame(() => {
+        try {
+          const sel = window.getSelection();
+          sel?.removeAllRanges();
+          sel?.addRange(range);
+        } catch (_) {}
+      });
+    });
+  }, []);
+
   // ── Badge click: show char picker
   const handleBadgeClick = useCallback((blockId, blockEl, initialQuery = '') => {
     if (performance.now() < suppressCharPickerOpenUntilRef.current) return;
     const rect = blockEl.getBoundingClientRect();
-    setCharPickerState({ blockId, top: rect.bottom + 4, left: rect.left, initialQuery });
+    const sel = window.getSelection();
+    const savedRange = sel?.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
+    setCharPickerState({ blockId, top: rect.bottom + 4, left: rect.left, initialQuery, savedRange });
   }, []);
 
   // ── CharSuggest: action block content looks like a char name
@@ -2743,9 +2800,10 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
         while (node && node !== surface) {
           if (node.dataset?.blockId) {
             const rect = node.getBoundingClientRect();
+            const savedRange = sel?.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
             // rect.bottom <= 60이면 아직 렌더 안 됐거나 툴바 위 → 열지 않음
             if (rect.bottom > 60) {
-              setCharPickerState({ blockId: node.dataset.blockId, top: rect.bottom + 4, left: rect.left, fromDialogue: true });
+              setCharPickerState({ blockId: node.dataset.blockId, top: rect.bottom + 4, left: rect.left, fromDialogue: true, savedRange });
             }
             return;
           }
@@ -2757,6 +2815,8 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
 
   // ── Slash palette handlers
   const handleSlashInput = useCallback(({ blockEl, query }) => {
+    const sel = window.getSelection();
+    slashSelectionRef.current = sel?.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
     const rect = blockEl.getBoundingClientRect();
     const vv = window.visualViewport;
     const vvH = vv?.height ?? window.innerHeight;
@@ -2776,7 +2836,26 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     setSlashPalette({ blockEl, query, x, y, maxH, selectedIdx: 0 });
   }, []);
 
-  const handleSlashClose = useCallback(() => setSlashPalette(null), []);
+  const handleSlashClose = useCallback((opts = {}) => {
+    const savedRangeSource = opts.savedRange || slashSelectionRef.current;
+    const savedRange = savedRangeSource ? (savedRangeSource.cloneRange?.() || savedRangeSource) : null;
+    setSlashPalette(null);
+    if (!opts.keepSelectionRef) slashSelectionRef.current = savedRange;
+    if (!opts.restoreCaret) return;
+    requestAnimationFrame(() => {
+      const surface = document.querySelector('[data-editor-surface]');
+      if (!surface) return;
+      surface.focus();
+      requestAnimationFrame(() => {
+        if (!savedRange) return;
+        try {
+          const sel = window.getSelection();
+          sel?.removeAllRanges();
+          sel?.addRange(savedRange);
+        } catch (_) {}
+      });
+    });
+  }, []);
 
   // 슬래시 팔레트에서 보여줄 항목 필터링
   const getSlashFiltered = useCallback((query) => {
@@ -2922,6 +3001,18 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
       return cmd.label.includes(current.query) || cmd.type.includes(current.query) || cmd.desc.includes(current.query);
     });
     const item = filtered[current.selectedIdx ?? 0];
+    if (item) executeSlashAction(item, current.blockEl);
+  }, [executeSlashAction]);
+
+  const handleSlashSelectIndex = useCallback((idx) => {
+    const current = slashPaletteRef.current;
+    setSlashPalette(null);
+    if (!current) return;
+    const filtered = SLASH_COMMANDS.filter(cmd => {
+      if (!current.query) return true;
+      return cmd.label.includes(current.query) || cmd.type.includes(current.query) || cmd.desc.includes(current.query);
+    });
+    const item = filtered[idx];
     if (item) executeSlashAction(item, current.blockEl);
   }, [executeSlashAction]);
 
@@ -3633,6 +3724,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
             slashOpenRef={slashOpenRef}
             onSlashKeyNav={handleSlashKeyNav}
             onSlashSelectCurrent={handleSlashSelectCurrent}
+            onSlashSelectIndex={handleSlashSelectIndex}
             onNextTypePick={({ blockId, currentType, top, left }) => setNextTypePicker({ blockId, currentType, top, left, mode: 'create' })}
             onCloseSceneRef={() => { if (sceneRefPickerRef.current) setSceneRefPicker(null); }}
           />
@@ -3819,12 +3911,14 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
             });
           }}
           onClose={() => {
+            const { savedRange } = charPickerState;
             if (charPickerState.fromDialogue) {
               const { top, left } = charPickerState;
               setCharPickerNoSel({ top, left });
               setTimeout(() => setCharPickerNoSel(null), 1800);
             }
             setCharPickerState(null);
+            restoreEditorSelection(savedRange);
           }}
           onSkip={() => {
             // 인물 미선택 Enter → 다음 형식 선택 팝업 (기존 새 블록의 타입 변경)
