@@ -1233,21 +1233,38 @@ function Shell({ authUser, setAuthUser }) {
   // ── 새 버전 감지 폴링
   const [newVersionReady, setNewVersionReady] = useState(false);
   const [updatingVersion, setUpdatingVersion] = useState(false);
+  const [availableVersion, setAvailableVersion] = useState(null);
+  const dismissedUpdateVersionRef = useRef(null);
   useEffect(() => {
-    let dismissed = false;
+    const DISMISS_KEY = 'drama_dismissed_update_version';
+    try { dismissedUpdateVersionRef.current = localStorage.getItem(DISMISS_KEY); } catch {}
+    let active = true;
     const currentVersion = import.meta.env.VITE_BUILD_VERSION ?? 'dev';
     const check = async () => {
       try {
         const res = await fetch('/version.json?t=' + Date.now(), { cache: 'no-store' });
         if (!res.ok) return;
         const { version } = await res.json();
-        if (version !== 'dev' && currentVersion !== 'dev' && version !== currentVersion && !dismissed) {
-          setNewVersionReady(true);
+        if (!active) return;
+        if (version === 'dev' || currentVersion === 'dev') return;
+        if (version === currentVersion) {
+          if (dismissedUpdateVersionRef.current === version) {
+            try { localStorage.removeItem(DISMISS_KEY); } catch {}
+            dismissedUpdateVersionRef.current = null;
+          }
+          return;
         }
+        if (dismissedUpdateVersionRef.current === version) return;
+        setAvailableVersion(version);
+        setNewVersionReady(true);
       } catch { /* 무시 */ }
     };
+    check();
     const id = setInterval(check, 5 * 60 * 1000); // 5분마다
-    return () => clearInterval(id);
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
   }, []);
 
   // 10분마다 자동저장 스냅샷
@@ -1663,7 +1680,13 @@ function Shell({ authUser, setAuthUser }) {
           </p>
           <div style={{ display: 'flex', gap: 8 }}>
             <button
-              onClick={() => setNewVersionReady(false)}
+              onClick={() => {
+                if (availableVersion) {
+                  try { localStorage.setItem('drama_dismissed_update_version', availableVersion); } catch {}
+                  dismissedUpdateVersionRef.current = availableVersion;
+                }
+                setNewVersionReady(false);
+              }}
               style={{ fontSize: 13, padding: '6px 16px', borderRadius: 8, border: '1px solid var(--c-border3)', background: 'transparent', color: 'var(--c-text4)', cursor: 'pointer' }}
             >나중에</button>
             <button

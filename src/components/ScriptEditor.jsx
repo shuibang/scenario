@@ -1254,7 +1254,15 @@ function CharPickerOverlay({ anchor, projectChars, onSelect, onClose, onAddNew, 
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
 
-  useEffect(() => { setTimeout(() => inputRef.current?.focus(), 30); }, []);
+  useEffect(() => {
+    const focusInput = () => inputRef.current?.focus({ preventScroll: true });
+    const rafId = requestAnimationFrame(focusInput);
+    const timerId = setTimeout(focusInput, 30);
+    return () => {
+      cancelAnimationFrame(rafId);
+      clearTimeout(timerId);
+    };
+  }, []);
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onCloseRef.current(); };
     const onMouseDown = (e) => {
@@ -1297,6 +1305,7 @@ function CharPickerOverlay({ anchor, projectChars, onSelect, onClose, onAddNew, 
       setActiveIdx(i => Math.max(i - 1, -1));
     } else if (e.key === 'Enter') {
       e.preventDefault();
+      e.stopPropagation();
       if (!showUnreg) {
         // 등록 인물 목록
         if (activeIdx >= 0 && filtered[activeIdx]) {
@@ -1350,7 +1359,7 @@ function CharPickerOverlay({ anchor, projectChars, onSelect, onClose, onAddNew, 
           <div
             key={c.id || c.name}
             data-char-item
-            onMouseDown={e => { e.preventDefault(); onSelect(c); }}
+            onMouseDown={e => { e.preventDefault(); e.stopPropagation(); onSelect(c); }}
             onMouseEnter={() => setActiveIdx(i)}
             className="px-3 py-1.5 text-sm cursor-pointer"
             style={{ color: 'var(--c-text)', background: i === activeIdx ? 'var(--c-active)' : 'transparent' }}
@@ -1363,7 +1372,7 @@ function CharPickerOverlay({ anchor, projectChars, onSelect, onClose, onAddNew, 
           <>
             <div
               data-char-item
-              onMouseDown={e => { e.preventDefault(); onSelect({ id: undefined, name: query.trim(), givenName: query.trim() }); }}
+              onMouseDown={e => { e.preventDefault(); e.stopPropagation(); onSelect({ id: undefined, name: query.trim(), givenName: query.trim() }); }}
               onMouseEnter={() => setActiveIdx(0)}
               className="px-3 py-1.5 text-sm cursor-pointer"
               style={{ color: 'var(--c-accent2)', background: activeIdx === 0 ? 'var(--c-active)' : 'transparent' }}
@@ -1371,7 +1380,7 @@ function CharPickerOverlay({ anchor, projectChars, onSelect, onClose, onAddNew, 
             {onAddNew && (
               <div
                 data-char-item
-                onMouseDown={e => { e.preventDefault(); onAddNew(query.trim()); }}
+                onMouseDown={e => { e.preventDefault(); e.stopPropagation(); onAddNew(query.trim()); }}
                 onMouseEnter={() => setActiveIdx(1)}
                 className="px-3 py-1.5 text-sm cursor-pointer"
                 style={{ color: 'var(--c-text)', background: activeIdx === 1 ? 'var(--c-active)' : 'transparent' }}
@@ -1903,6 +1912,7 @@ const EditorSurface = forwardRef(function EditorSurface({
     // ── Ctrl+Enter: 다음 형식 선택 팝업
     if (ctrl && e.key === 'Enter') {
       e.preventDefault();
+      window.dispatchEvent(new Event('script:closeCharPicker'));
       if (onNextTypePick) {
         const rect = blockEl.getBoundingClientRect();
         onNextTypePick({ blockId: blockEl.dataset.blockId, currentType: type, top: rect.bottom + 4, left: rect.left });
@@ -1993,6 +2003,7 @@ const EditorSurface = forwardRef(function EditorSurface({
     // ── Enter: split block at caret
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
+      window.dispatchEvent(new Event('script:closeCharPicker'));
       // ── Helper: HTML-aware split at current caret ──────────────────────────
       const splitRichBlock = (srcEl, srcRange) => {
         const rangeToEnd = document.createRange();
@@ -2202,6 +2213,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   const [nextTypePicker, setNextTypePicker] = useState(null); // { blockId, top, left, onSelect } — 다음 형식 선택
   const [charSuggestState, setCharSuggestState] = useState(null); // { blockId, blockEl, charName }
   const [suggestEnabled, setSuggestEnabled] = useState(() => localStorage.getItem(CHAR_SUGGEST_KEY) !== 'off');
+  const suppressCharPickerOpenUntilRef = useRef(0);
   const [pasteToast, setPasteToast] = useState(null);
   const [sceneRefPicker, setSceneRefPicker] = useState(null); // { top, left, insertAfterId, mobile }
   const [sceneRefActiveIdx, setSceneRefActiveIdx] = useState(-1);
@@ -2223,6 +2235,11 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   slashPaletteRef.current = slashPalette; // executeSlashAction 클로저에서 최신 query 접근용
   const hasKeyboard = !!keyboardUp; // App.jsx에서 내려온 키보드 감지값 사용
   // shortcutHintOpen 제거 — 항상 펼쳐진 상태로 표시
+  useEffect(() => {
+    const handleCloseCharPicker = () => setCharPickerState(null);
+    window.addEventListener('script:closeCharPicker', handleCloseCharPicker);
+    return () => window.removeEventListener('script:closeCharPicker', handleCloseCharPicker);
+  }, []);
   const charCheckBtnRef = useRef(null);
   const editorScrollRef = useRef(null);
   useEffect(() => { if (onScrollRefReady) onScrollRefReady(editorScrollRef); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -2653,6 +2670,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
 
   // ── Badge click: show char picker
   const handleBadgeClick = useCallback((blockId, blockEl, initialQuery = '') => {
+    if (performance.now() < suppressCharPickerOpenUntilRef.current) return;
     const rect = blockEl.getBoundingClientRect();
     setCharPickerState({ blockId, top: rect.bottom + 4, left: rect.left, initialQuery });
   }, []);
@@ -3752,18 +3770,24 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
           projectChars={projectChars}
           initialQuery={charPickerState.initialQuery || ''}
           onSelect={(char) => {
-            surfaceApiRef.current?.updateBlockChar(
-              charPickerState.blockId,
-              char.id || '',
-              char.givenName || char.name || ''
-            );
+            const blockId = charPickerState.blockId;
+            const charId = char.id || '';
+            const charName = char.givenName || char.name || '';
+            suppressCharPickerOpenUntilRef.current = performance.now() + 300;
             setCharPickerState(null);
+            requestAnimationFrame(() => {
+              surfaceApiRef.current?.updateBlockChar(blockId, charId, charName);
+            });
           }}
           onAddNew={(name) => {
+            const blockId = charPickerState.blockId;
+            suppressCharPickerOpenUntilRef.current = performance.now() + 300;
+            setCharPickerState(null);
             const newChar = { id: genId(), projectId: activeProjectId, name, givenName: name, role: 'extra', createdAt: now() };
             dispatch({ type: 'ADD_CHARACTER', payload: newChar });
-            surfaceApiRef.current?.updateBlockChar(charPickerState.blockId, newChar.id, name);
-            setCharPickerState(null);
+            requestAnimationFrame(() => {
+              surfaceApiRef.current?.updateBlockChar(blockId, newChar.id, name);
+            });
           }}
           onClose={() => {
             if (charPickerState.fromDialogue) {
