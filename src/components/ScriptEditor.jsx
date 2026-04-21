@@ -1711,6 +1711,57 @@ const EditorSurface = forwardRef(function EditorSurface({
     },
   }), [doParse, onBadgeClick, syncMeta, onBlocksChange]);
 
+  const syncSlashPalette = useCallback((selection = window.getSelection()) => {
+    const el = surfaceRef.current;
+    if (!selection?.rangeCount || !el) {
+      slashOffsetRef.current = null;
+      onSlashClose?.();
+      return false;
+    }
+
+    const blockEl = findBlockEl(selection.getRangeAt(0).startContainer, el);
+    if (!blockEl) {
+      slashOffsetRef.current = null;
+      onSlashClose?.();
+      return false;
+    }
+
+    const bType = blockEl.dataset.blockType;
+    if (bType === 'scene_number') {
+      slashOffsetRef.current = null;
+      onSlashClose?.();
+      return false;
+    }
+
+    const speechEl = bType === 'dialogue' ? blockEl.querySelector('.ce-speech') : null;
+    const textNode = speechEl || blockEl;
+    const rawText = bType === 'dialogue'
+      ? (speechEl ? speechEl.innerText.replace(/\n$/, '') : blockText(blockEl))
+      : blockText(blockEl);
+    const range = selection.getRangeAt(0);
+    let caretOffset = 0;
+    try {
+      const tempRange = document.createRange();
+      tempRange.setStart(textNode, 0);
+      tempRange.setEnd(range.startContainer, range.startOffset);
+      caretOffset = tempRange.toString().length;
+    } catch (_) {
+      caretOffset = rawText.length;
+    }
+
+    const slashIdx = rawText.lastIndexOf('/', caretOffset - 1);
+    const query = slashIdx >= 0 ? rawText.slice(slashIdx + 1, caretOffset) : null;
+    if (slashIdx >= 0 && query !== null && !/\s/.test(query)) {
+      slashOffsetRef.current = { blockId: blockEl.dataset.blockId, slashIdx, caretOffset };
+      onSlashInput?.({ blockEl, query });
+      return true;
+    }
+
+    slashOffsetRef.current = null;
+    onSlashClose?.();
+    return false;
+  }, [onSlashClose, onSlashInput]);
+
   // ── Input handler ─────────────────────────────────────────────────────────
   const handleInput = useCallback(() => {
     if (composingRef.current) return;
@@ -1751,37 +1802,9 @@ const EditorSurface = forwardRef(function EditorSurface({
     const blockEl = findBlockEl(sel.getRangeAt(0).startContainer, el);
 
     // Slash palette: 커서 앞에 '/'가 있으면 감지 (내용 있는 블록도 지원)
-    if (blockEl) {
-      const bType = blockEl.dataset.blockType;
-      // 씬헤더에서 '/'는 장소 구분자 — 슬래시 명령 억제
-      if (bType === 'scene_number') { slashOffsetRef.current = null; onSlashClose?.(); return; }
-      const speechEl = bType === 'dialogue' ? blockEl.querySelector('.ce-speech') : null;
-      const textNode = speechEl || blockEl;
-      const rawText = bType === 'dialogue'
-        ? (speechEl ? speechEl.innerText.replace(/\n$/, '') : blockText(blockEl))
-        : blockText(blockEl);
-      // 커서 위치 확인 — '/'가 바로 앞에 있는지
-      const range2 = sel?.rangeCount ? sel.getRangeAt(0) : null;
-      let caretOffset = 0;
-      if (range2) {
-        try {
-          const tempRange = document.createRange();
-          tempRange.setStart(textNode, 0);
-          tempRange.setEnd(range2.startContainer, range2.startOffset);
-          caretOffset = tempRange.toString().length;
-        } catch (_) { caretOffset = rawText.length; }
-      }
-      // '/' 바로 뒤에 커서가 있을 때 (또는 '/쿼리' 뒤에 커서가 있을 때)
-      const slashIdx = rawText.lastIndexOf('/', caretOffset - 1);
-      const query = slashIdx >= 0 ? rawText.slice(slashIdx + 1, caretOffset) : null;
-      if (slashIdx >= 0 && query !== null && !/\s/.test(query)) {
-        slashOffsetRef.current = { blockId: blockEl.dataset.blockId, slashIdx, caretOffset };
-        onSlashInput?.({ blockEl, query });
-        return; // 슬래시 메뉴 열린 동안 charSuggest 건너뜀
-      }
+    if (syncSlashPalette(sel)) {
+      return; // 슬래시 메뉴 열린 동안 charSuggest 건너뜀
     }
-    slashOffsetRef.current = null;
-    onSlashClose?.();
 
     // CharSuggestion: check if current action block content looks like a character name
     if (blockEl?.dataset.blockType === 'action') {
@@ -1789,7 +1812,7 @@ const EditorSurface = forwardRef(function EditorSurface({
     } else {
       onCharSuggest?.(null, null);
     }
-  }, [doParse, onCharSuggest, onSlashInput, onSlashClose]);
+  }, [doParse, onCharSuggest, syncSlashPalette]);
 
   // ── KeyDown handler ───────────────────────────────────────────────────────
   const handleKeyDown = useCallback((e) => {
@@ -1803,6 +1826,12 @@ const EditorSurface = forwardRef(function EditorSurface({
     const blockEl = findBlockEl(range.startContainer, el);
     if (!blockEl) return;
     const type = blockEl.dataset.blockType;
+
+    if (!ctrl && !e.altKey && e.key === '/' && type !== 'scene_number') {
+      requestAnimationFrame(() => {
+        if (!composingRef.current) syncSlashPalette();
+      });
+    }
 
     // ── ArrowUp/Down: 빈 블록 건너뜀 방지
     // 브라우저는 <br>만 있는 빈 블록을 수직 탐색에서 건너뛰므로 직접 처리.
@@ -2130,7 +2159,7 @@ const EditorSurface = forwardRef(function EditorSurface({
         return;
       }
     }
-  }, [doParse, onBadgeClick, onCharSuggest]);
+  }, [doParse, onBadgeClick, onCharSuggest, syncSlashPalette]);
 
   // ── Click: dialogue 블록 클릭 시 인물명(::before 영역) 클릭이면 피커 열기
   const handleClick = useCallback((e) => {
