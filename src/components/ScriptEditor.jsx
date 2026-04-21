@@ -2465,12 +2465,50 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     });
     setBlocks(loaded);
     lastSavedBlocks.current = JSON.stringify(loaded);
-    // 회차 진입 시 첫 블록에 커서 자동 포커스
+    // 회차 진입 시 마지막 블록 끝에 커서 자동 포커스
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => surfaceApiRef.current?.focus());
+      requestAnimationFrame(() => surfaceApiRef.current?.focusEnd());
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeEpisodeId, initialized]);
+
+  useEffect(() => {
+    const isAsciiPrintable = (key) => key.length === 1 && /^[\x20-\x7E]$/.test(key);
+    const shouldRouteTypingToEditor = (e) => {
+      if (e.defaultPrevented) return false;
+      if (e.ctrlKey || e.metaKey || e.altKey) return false;
+      if (e.isComposing || e.key === 'Process') return false;
+      const active = document.activeElement;
+      const tag = active?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || active?.isContentEditable) return false;
+      return e.key.length === 1;
+    };
+
+    const onKeyDownCapture = (e) => {
+      if (!shouldRouteTypingToEditor(e)) return;
+      if (!surfaceApiRef.current) return;
+      const surface = document.querySelector('[data-editor-surface]');
+      if (!surface) return;
+      if (surface.contains(e.target) || e.target === surface) return;
+
+      if (isAsciiPrintable(e.key)) {
+        e.preventDefault();
+        surfaceApiRef.current.focusEnd();
+        requestAnimationFrame(() => {
+          const activeSurface = document.querySelector('[data-editor-surface]');
+          if (!activeSurface) return;
+          activeSurface.focus();
+          document.execCommand('insertText', false, e.key);
+        });
+        return;
+      }
+
+      surfaceApiRef.current.focusEnd();
+    };
+
+    window.addEventListener('keydown', onKeyDownCapture, true);
+    return () => window.removeEventListener('keydown', onKeyDownCapture, true);
+  }, []);
 
   // ── External block injection (e.g. IMPORT_TREATMENT_TO_SCRIPT)
   useEffect(() => {
