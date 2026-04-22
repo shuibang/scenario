@@ -501,12 +501,14 @@
     <table class="simple-table">
       <thead><tr><th>블록</th><th>용도</th></tr></thead>
       <tbody>
-        <tr><td>씬 번호</td><td>#1, #2… 씬의 시작을 표시. 씬리스트와 자동 연동됩니다.</td></tr>
-        <tr><td>지문</td><td>장소, 행동, 상황 묘사</td></tr>
+        <tr><td>씬 헤딩</td><td>S#1, S#2… 씬의 시작을 표시. 씬리스트와 자동 연동됩니다.</td></tr>
+        <tr><td>지문</td><td>장소·행동·상황 묘사</td></tr>
         <tr><td>대사</td><td>인물의 말</td></tr>
-        <tr><td>괄호체</td><td>감정 지시나 행동 보조 설명 (예: (작게), (웃으며))</td></tr>
-        <tr><td>씬 참조</td><td>다른 씬 번호를 언급할 때 — 씬 순서가 바뀌면 참조 번호도 자동 갱신</td></tr>
-        <tr><td>기타</td><td>메모나 자유 형식 텍스트</td></tr>
+        <tr><td>괄호체</td><td>대사/지문 안의 짧은 감정 지시나 행동 보조 (예: (작게), (웃으며))</td></tr>
+        <tr><td>등장체크</td><td>해당 씬에 등장하는 인물 체크</td></tr>
+        <tr><td>씬연결</td><td>다른 씬 번호 언급 — 씬 순서가 바뀌면 참조 번호도 자동 갱신</td></tr>
+        <tr><td>기타</td><td>(E)·(F)·Flashback 등 기타 단축어 / 자유 텍스트</td></tr>
+        <tr><td>태그</td><td>색상 강조 · 감정 태그 부착</td></tr>
       </tbody>
     </table>
 
@@ -514,18 +516,46 @@
     <div class="shortcut-list">
       <span class="shortcut-key">Enter</span>
       <span class="shortcut-desc">새 블록 추가</span>
+      <span class="shortcut-key">Shift+Enter</span>
+      <span class="shortcut-desc">블록 내 줄바꿈</span>
+      <span class="shortcut-key">1.</span>
+      <span class="shortcut-desc">빈 줄 시작에 <code>1.</code>을 치면 씬 헤딩으로 전환</span>
       <span class="shortcut-key">/</span>
-      <span class="shortcut-desc">블록 타입 선택 메뉴 열기</span>
-      <span class="shortcut-key">Ctrl+Shift+1/2/3</span>
-      <span class="shortcut-desc">현재 블록 타입 빠르게 변환 (씬번호 / 지문 / 대사)</span>
+      <span class="shortcut-desc">빈 줄에서 슬래시를 치면 블록 팔레트 열림</span>
+      <span class="shortcut-key">/ + 1</span>
+      <span class="shortcut-desc">지문</span>
+      <span class="shortcut-key">/ + 2</span>
+      <span class="shortcut-desc">대사</span>
+      <span class="shortcut-key">/ + 3</span>
+      <span class="shortcut-desc">등장체크</span>
+      <span class="shortcut-key">/ + 4</span>
+      <span class="shortcut-desc">씬연결</span>
+      <span class="shortcut-key">/ + 5</span>
+      <span class="shortcut-desc">기타</span>
+      <span class="shortcut-key">/ + 6</span>
+      <span class="shortcut-desc">태그</span>
+      <span class="shortcut-key">Space × 2</span>
+      <span class="shortcut-desc">빈 줄에서 씬 구분자 삽입 / 지문·대사 안에서는 괄호체 시작</span>
+      <span class="shortcut-key">인물명 + Enter</span>
+      <span class="shortcut-desc">해당 인물의 대사 블록으로 전환</span>
+      <span class="shortcut-key">Ctrl+B / I / U</span>
+      <span class="shortcut-desc">선택 부분 굵게 · 기울임 · 밑줄</span>
       <span class="shortcut-key">Ctrl+S</span>
       <span class="shortcut-desc">수동 저장</span>
       <span class="shortcut-key">Ctrl+Z</span>
       <span class="shortcut-desc">실행 취소</span>
-      <span class="shortcut-key">Ctrl+Shift+Z</span>
+      <span class="shortcut-key">Ctrl+Y</span>
       <span class="shortcut-desc">다시 실행</span>
-      <span class="shortcut-key">Shift+Enter</span>
-      <span class="shortcut-desc">블록 내 줄바꿈</span>
+      <span class="shortcut-key">Ctrl+O</span>
+      <span class="shortcut-desc">작품 열기</span>
+      <span class="shortcut-key">Ctrl+P</span>
+      <span class="shortcut-desc">내보내기 (미리보기 열기)</span>
+      <span class="shortcut-key">Ctrl+Alt+L</span>
+      <span class="shortcut-desc">검토 링크 공유</span>
+      <span class="shortcut-key">Ctrl+Alt+1</span>
+      <span class="shortcut-desc">좌측 프로젝트 탐색기 토글</span>
+      <span class="shortcut-key">F11</span>
+      <span class="shortcut-desc">집중 모드 (상·좌·우 패널 숨김)</span>
     </div>
 
     <p><strong>감정 태그</strong></p>
@@ -534,8 +564,8 @@
     <p><strong>타이프라이터 스크롤</strong></p>
     <p>글을 쓸 때 현재 커서 위치가 항상 화면 중앙에 고정되는 집중 모드입니다. 긴 대본을 쓸 때 시선 이동 없이 편하게 작성할 수 있습니다.</p>
 
-    <p><strong>인라인 서식</strong></p>
-    <p>툴바에서 <strong>굵게(B)</strong>, <em>기울임(I)</em>, 밑줄(U) 서식을 적용할 수 있습니다. PDF 및 HWPX 출력에도 반영됩니다.</p>
+    <p><strong>인라인 서식 · 정렬</strong></p>
+    <p>에디터 툴바에서 <strong>굵게(B)</strong>, <em>기울임(I)</em>, 밑줄(U), <span style="text-decoration: line-through;">취소선(S)</span>을 적용할 수 있고, 블록 단위로 왼쪽·가운데·오른쪽·양끝 정렬을 지정할 수 있습니다. 적용한 서식·정렬은 HWPX·DOCX 출력에도 그대로 반영됩니다. (PDF 출력은 품질 개선 중이라 일시 비활성화 상태입니다.)</p>
   </div>
 
   <!-- 04 씬 리스트 -->
@@ -568,8 +598,8 @@
     <div class="card-grid">
       <div class="card">
         <div class="card-label">비트시트</div>
-        <div class="card-title">Save the Cat 구조</div>
-        <div class="card-desc">발단·전개·절정 등 주요 스토리 구조 포인트를 표로 정리합니다.</div>
+        <div class="card-title">7시퀀스 구조</div>
+        <div class="card-desc">도입·발단·상승·중간점·하강·절정·결말의 7시퀀스 흐름을 표로 정리합니다.</div>
       </div>
       <div class="card">
         <div class="card-label">씬 카드</div>
