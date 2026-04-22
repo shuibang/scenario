@@ -4,47 +4,48 @@ import { useApp } from '../store/AppContext';
 const AD_CLIENT = 'ca-pub-5479563960989185';
 
 // slot → { adSlot, format }
-// 각 슬롯은 고유 AdSense ad unit을 가져야 함 (이상적 상태).
-// TODO 표시는 현재 기존 id를 재사용 중 — AdSense에서 unit 신규 등록 후 교체할 것.
+// 각 슬롯은 고유 AdSense ad unit id를 가짐. 새 slot을 추가할 때는
+// AdSense 콘솔에서 전용 unit을 만든 뒤 여기에 매핑을 추가할 것.
 const SLOT_CONFIG = {
-  // ── Right panel — 2 광고씩 (각 슬롯 고유 id 필요) ──
+  // ── Right panel — 2 광고씩 (각 슬롯 고유 id) ──
   'cover-panel-1':         { adSlot: '9561548489', format: 'auto' },
-  'cover-panel-2':         { adSlot: '9561548489', format: 'auto' }, // TODO: unique unit
-  'synopsis-panel-1':      { adSlot: '9561548489', format: 'auto' }, // TODO: unique unit
-  'synopsis-panel-2':      { adSlot: '9561548489', format: 'auto' }, // TODO: unique unit
-  'biography-panel-1':     { adSlot: '9561548489', format: 'auto' }, // TODO: unique unit
-  'biography-panel-2':     { adSlot: '9561548489', format: 'auto' }, // TODO: unique unit
-  'relationships-panel-1': { adSlot: '9561548489', format: 'auto' }, // TODO: unique unit
-  'relationships-panel-2': { adSlot: '9561548489', format: 'auto' }, // TODO: unique unit
-  'resources-panel-1':     { adSlot: '9561548489', format: 'auto' }, // TODO: unique unit
-  'resources-panel-2':     { adSlot: '9561548489', format: 'auto' }, // TODO: unique unit
-  'treatment-panel-1':     { adSlot: '9561548489', format: 'auto' }, // TODO: unique unit
-  'treatment-panel-2':     { adSlot: '9561548489', format: 'auto' }, // TODO: unique unit
-  'characters-panel-1':    { adSlot: '9561548489', format: 'auto' }, // TODO: unique unit
-  'characters-panel-2':    { adSlot: '9561548489', format: 'auto' }, // TODO: unique unit
-  'scenelist-panel-1':     { adSlot: '9561548489', format: 'auto' }, // TODO: unique unit
-  'scenelist-panel-2':     { adSlot: '9561548489', format: 'auto' }, // TODO: unique unit
-  'settings-panel-1':      { adSlot: '9561548489', format: 'auto' }, // TODO: unique unit
-  'settings-panel-2':      { adSlot: '9561548489', format: 'auto' }, // TODO: unique unit
+  'cover-panel-2':         { adSlot: '7304491166', format: 'auto' },
+  'synopsis-panel-1':      { adSlot: '1516765830', format: 'auto' },
+  'synopsis-panel-2':      { adSlot: '4334500869', format: 'auto' },
+  'biography-panel-1':     { adSlot: '9255867082', format: 'auto' },
+  'biography-panel-2':     { adSlot: '1038465710', format: 'auto' },
+  'relationships-panel-1': { adSlot: '4594567345', format: 'auto' },
+  'relationships-panel-2': { adSlot: '3021419190', format: 'auto' },
+  'resources-panel-1':     { adSlot: '1860592795', format: 'auto' },
+  'resources-panel-2':     { adSlot: '4198769490', format: 'auto' },
+  'treatment-panel-1':     { adSlot: '4295184444', format: 'auto' },
+  'treatment-panel-2':     { adSlot: '8042857761', format: 'auto' },
+  'characters-panel-1':    { adSlot: '4103612757', format: 'auto' },
+  'characters-panel-2':    { adSlot: '7699030808', format: 'auto' },
+  'scenelist-panel-1':     { adSlot: '7851286071', format: 'auto' },
+  'scenelist-panel-2':     { adSlot: '6538204405', format: 'auto' },
+  'settings-panel-1':      { adSlot: '9655322336', format: 'auto' },
+  'settings-panel-2':      { adSlot: '9938181333', format: 'auto' },
 
   // ── Right panel — 단일 광고 ──
-  'structure-panel':       { adSlot: '9561548489', format: 'auto' }, // TODO: unique unit
-  'checklist':             { adSlot: '9561548489', format: 'auto' }, // TODO: unique unit
+  'structure-panel':       { adSlot: '3867597000', format: 'auto' },
+  'checklist':             { adSlot: '2554515337', format: 'auto' },
 
   // ── 에디터 하단 반응형 4분할 ──
   'bottom-fixed-1':        { adSlot: '3846187377', format: 'horizontal' },
-  'bottom-fixed-2':        { adSlot: '3846187377', format: 'horizontal' }, // TODO: unique unit
-  'bottom-fixed-3':        { adSlot: '3846187377', format: 'horizontal' }, // TODO: unique unit
-  'bottom-fixed-4':        { adSlot: '3846187377', format: 'horizontal' }, // TODO: unique unit
+  'bottom-fixed-2':        { adSlot: '3843546272', format: 'horizontal' },
+  'bottom-fixed-3':        { adSlot: '1760520443', format: 'horizontal' },
+  'bottom-fixed-4':        { adSlot: '7168759797', format: 'horizontal' },
 
   // ── 출력 미리보기 모달 ──
-  'print-modal-left':      { adSlot: '3846187377', format: 'horizontal' }, // TODO: unique unit
+  'print-modal-left':      { adSlot: '2694116136', format: 'horizontal' },
   'print-modal-right':     { adSlot: '8715370672', format: 'auto' },
 
   // ── 모바일 ──
+  // mobile-bottom-left / mobile-memo-bottom은 일반 디스플레이로 등록됨 → format 'auto'
   'mobile-bottom':         { adSlot: '2569066048', format: 'autorelaxed' },
-  'mobile-bottom-left':    { adSlot: '2569066048', format: 'autorelaxed' }, // TODO: unique unit
-  'mobile-memo-bottom':    { adSlot: '2569066048', format: 'auto' }, // TODO: unique unit
+  'mobile-bottom-left':    { adSlot: '1241433661', format: 'auto' },
+  'mobile-memo-bottom':    { adSlot: '9066271181', format: 'auto' },
 };
 
 const IS_DEV = import.meta.env.DEV;
