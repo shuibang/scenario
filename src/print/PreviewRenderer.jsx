@@ -337,23 +337,27 @@ export default function PreviewRenderer({ appState, selections, columnWidth = 34
   const lineHeight = preset.lineHeight  ?? 1.6;
   const margins    = preset.pageMargins ?? { top: 35, right: 30, bottom: 30, left: 30 };
 
+  // null = 계산 중, [] = 선택 없음, [...] = 완료
+  const [pages, setPages] = useState(null);
+
   // 실제 컨테이너 너비를 측정해서 scale 계산
+  // deps에 pages를 포함해야, pages 로딩 중엔 컨테이너가 렌더되지 않는 동안
+  // ref가 null이던 경우를 커버 (pages 채워지면 다시 돌아서 정확한 width 측정)
   const containerRef = useRef(null);
   const [measuredWidth, setMeasuredWidth] = useState(columnWidth);
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
+    const w0 = el.getBoundingClientRect().width;
+    if (w0 && w0 > 0) setMeasuredWidth(w0);
     const ro = new ResizeObserver(entries => {
       const w = entries[0]?.contentRect?.width;
       if (w && w > 0) setMeasuredWidth(w);
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [pages]);
   const scale = (measuredWidth / A4_W_PX) * zoom;
-
-  // null = 계산 중, [] = 선택 없음, [...] = 완료
-  const [pages, setPages] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
