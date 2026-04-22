@@ -75,6 +75,19 @@ export default function TreatmentPage() {
     setSelectedEpId(val);
   };
 
+  const createEpisodeForNumber = useCallback((num) => {
+    const existing = projectEpisodes.find(e => e.number === num);
+    if (existing) return existing;
+
+    const ep = {
+      id: genId(), projectId: activeProjectId, number: num,
+      title: '', majorEpisodes: '', summaryItems: [],
+      status: 'draft', createdAt: now(), updatedAt: now(),
+    };
+    dispatch({ type: 'ADD_EPISODE', payload: ep });
+    return ep;
+  }, [projectEpisodes, activeProjectId, dispatch]);
+
   const [items, setItems]       = useState([]);
   const [helpOpen, setHelpOpen] = useState(false);
   const helpRef = useRef(null);
@@ -117,7 +130,7 @@ export default function TreatmentPage() {
 
   // ─── stale-epId guard (회차 삭제 시 fallback) ────────────────────────────
   useEffect(() => {
-    if (!selectedEpId) return;
+    if (!selectedEpId || selectedEpId === 'all') return;
     if (!episodes.some(e => e.id === selectedEpId)) {
       setSelectedEpId(projectEpisodes[0]?.id || null);
     }
@@ -133,17 +146,29 @@ export default function TreatmentPage() {
   // 전체 보기: 모든 회차 항목을 회차별로 묶어서 표시 (빈 항목 1개는 항상 유지)
   const allEpItems = useMemo(() => {
     if (selectedEpId !== 'all') return null;
-    return projectEpisodes.map(ep => ({
-      ep,
-      items: migrateItems(ep.summaryItems).length
-        ? migrateItems(ep.summaryItems)
-        : [{ id: genId(), text: '', order: 0 }],
-    }));
-  }, [selectedEpId, projectEpisodes]); // eslint-disable-line react-hooks/exhaustive-deps
+    const numbers = isSeries && totalEpisodes > 0
+      ? Array.from({ length: totalEpisodes }, (_, i) => i + 1)
+      : (projectEpisodes.length ? projectEpisodes.map(ep => ep.number) : [1]);
+
+    return numbers.map((episodeNumber) => {
+      const ep = projectEpisodes.find(candidate => candidate.number === episodeNumber) || null;
+      return {
+        ep,
+        episodeNumber,
+        isMissing: !ep,
+        items: ep
+          ? (migrateItems(ep.summaryItems).length
+              ? migrateItems(ep.summaryItems)
+              : [{ id: genId(), text: '', order: 0 }])
+          : [],
+      };
+    });
+  }, [selectedEpId, projectEpisodes, isSeries, totalEpisodes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 전체 뷰 전용 저장 — 특정 epId 기준
-  const saveForEp = useCallback((targetEpId, newItems) => {
-    dispatch({ type: 'UPDATE_EPISODE', payload: { id: targetEpId, summaryItems: newItems } });
+  const saveForEp = useCallback((targetEpId, newItems, record = false) => {
+    if (!targetEpId) return;
+    dispatch({ type: 'UPDATE_EPISODE', payload: { id: targetEpId, summaryItems: newItems }, _record: record });
   }, [dispatch]);
 
   const updateItemForEp = useCallback((targetEpId, epItems, id, text) => {
@@ -153,6 +178,13 @@ export default function TreatmentPage() {
   const addItemForEp = useCallback((targetEpId, epItems) => {
     saveForEp(targetEpId, [...epItems, { id: genId(), text: '', order: epItems.length }], true);
   }, [saveForEp]);
+
+  useEffect(() => {
+    if (selectedEpId === 'all') {
+      setImporting(false);
+      setImportWarning(false);
+    }
+  }, [selectedEpId]);
 
   // ─── Focus pending textarea after items change ────────────────────────────
   useEffect(() => {
@@ -396,6 +428,8 @@ export default function TreatmentPage() {
 
   if (!activeProjectId) return null;
 
+  const canImportToScript = selectedEpId !== 'all' && !!epId;
+
   return (
     <div className="flex-1 min-h-0 flex flex-col" style={{ background: 'var(--c-bg)' }}>
       {/* Header bar — 구조/씬리스트와 동일 스타일 */}
@@ -429,7 +463,9 @@ export default function TreatmentPage() {
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           {importMsg && <span className="text-xs" style={{ color: 'var(--c-accent2)' }}>{importMsg}</span>}
           <button
+            disabled={!canImportToScript}
             onClick={() => {
+              if (!canImportToScript) return;
               const epSceneCount = scriptBlocks.filter(b => b.episodeId === epId && b.type === 'scene_number').length;
               const filledCount = items.filter(it => it.text.trim()).length;
               if (epSceneCount > 0 && epSceneCount > filledCount) {
@@ -438,10 +474,38 @@ export default function TreatmentPage() {
                 setImporting(true);
               }
             }}
-            style={{ padding: '3px 10px', borderRadius: 4, fontSize: 11, background: 'transparent', color: 'var(--c-text3)', border: '1px solid var(--c-border3)', cursor: 'pointer' }}
+            title={canImportToScript ? '현재 회차의 트리트먼트를 대본에 추가합니다.' : '대본으로 가져오기는 개별 회차에서만 사용할 수 있습니다.'}
+            style={{
+              padding: '3px 10px',
+              borderRadius: 4,
+              fontSize: 11,
+              background: 'transparent',
+              color: canImportToScript ? 'var(--c-text3)' : 'var(--c-text6)',
+              border: '1px solid var(--c-border3)',
+              cursor: canImportToScript ? 'pointer' : 'not-allowed',
+              opacity: canImportToScript ? 1 : 0.55,
+            }}
           >대본으로 가져오기</button>
         </div>
       </div>
+
+      {selectedEpId === 'all' && (
+        <div
+          className="shrink-0"
+          style={{
+            padding: '10px 12px',
+            borderBottom: '1px solid var(--c-border2)',
+            background: 'var(--c-panel)',
+            fontSize: 11,
+            lineHeight: 1.7,
+            color: 'var(--c-text5)',
+          }}
+        >
+          전체회차에서는 여러 회차를 한 화면에서 정리할 수 있습니다.
+          {isSeries && totalEpisodes > 0 ? ' 비어 있는 회차는 아래에서 바로 추가해 작성하세요.' : ''}
+          대본으로 가져오기는 개별 회차 선택 상태에서만 사용할 수 있습니다.
+        </div>
+      )}
 
       {/* Import warning bar */}
       {importWarning && (
@@ -469,32 +533,66 @@ export default function TreatmentPage() {
       <div style={{ padding: '10px 10px 40px' }}>
 
         {/* 전체 보기 */}
-        {allEpItems && allEpItems.map(({ ep, items: epItems }) => (
-          <div key={ep.id} style={{ marginBottom: 24 }}>
+        {allEpItems && allEpItems.map(({ ep, episodeNumber, isMissing, items: epItems }) => (
+          <div key={ep?.id || `missing-${episodeNumber}`} style={{ marginBottom: 24 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text3)', marginBottom: 6, paddingBottom: 4, borderBottom: '1px solid var(--c-border2)' }}>
-              {ep.number}회 {ep.title || ''}
+              {episodeNumber}회 {ep?.title || ''}
             </div>
-            <div className="space-y-1.5">
-              {epItems.map((it, idx) => (
-                <div key={it.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                  <span style={{ fontSize: 11, color: 'var(--c-text6)', minWidth: 24, textAlign: 'right', marginTop: 6 }}>{idx + 1}.</span>
-                  <textarea
-                    value={it.text}
-                    rows={1}
-                    placeholder="줄거리 항목 입력"
-                    className="flex-1 text-xs resize-none rounded px-3 py-1.5 outline-none"
-                    style={{ background: 'var(--c-input)', color: 'var(--c-text)', border: '1px solid var(--c-border3)', lineHeight: 1.5, minHeight: '2em', overflow: 'hidden' }}
-                    ref={el => { if (el) autoResize(el); }}
-                    onChange={e => { autoResize(e.target); updateItemForEp(ep.id, epItems, it.id, e.target.value); }}
-                  />
+            {isMissing ? (
+              <div
+                style={{
+                  border: '1px dashed var(--c-border3)',
+                  borderRadius: 8,
+                  padding: '14px 12px',
+                  background: 'var(--c-card)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                }}
+              >
+                <div style={{ fontSize: 11, lineHeight: 1.6, color: 'var(--c-text5)' }}>
+                  아직 생성되지 않은 회차입니다. 회차를 추가하면 이 자리에서 바로 작성할 수 있습니다.
                 </div>
-              ))}
-            </div>
-            <button
-              onClick={() => addItemForEp(ep.id, epItems)}
-              className="mt-2 w-full py-1.5 rounded text-xs"
-              style={{ color: 'var(--c-text5)', border: '1px dashed var(--c-border3)', background: 'transparent', cursor: 'pointer' }}
-            >+ {ep.number}회 항목 추가</button>
+                <button
+                  onClick={() => createEpisodeForNumber(episodeNumber)}
+                  className="shrink-0 px-3 py-1.5 rounded text-xs"
+                  style={{
+                    color: 'var(--c-text3)',
+                    border: '1px solid var(--c-border3)',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {episodeNumber}회 추가
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-1.5">
+                  {epItems.map((it, idx) => (
+                    <div key={it.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                      <span style={{ fontSize: 11, color: 'var(--c-text6)', minWidth: 24, textAlign: 'right', marginTop: 6 }}>{idx + 1}.</span>
+                      <textarea
+                        value={it.text}
+                        rows={1}
+                        placeholder="줄거리 항목 입력"
+                        className="flex-1 text-xs resize-none rounded px-3 py-1.5 outline-none"
+                        style={{ background: 'var(--c-input)', color: 'var(--c-text)', border: '1px solid var(--c-border3)', lineHeight: 1.5, minHeight: '2em', overflow: 'hidden' }}
+                        ref={el => { if (el) autoResize(el); }}
+                        onChange={e => { autoResize(e.target); updateItemForEp(ep.id, epItems, it.id, e.target.value); }}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <button
+                  onClick={() => addItemForEp(ep.id, epItems)}
+                  className="mt-2 w-full py-1.5 rounded text-xs"
+                  style={{ color: 'var(--c-text5)', border: '1px dashed var(--c-border3)', background: 'transparent', cursor: 'pointer' }}
+                >+ {episodeNumber}회 항목 추가</button>
+              </>
+            )}
           </div>
         ))}
 
