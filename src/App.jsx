@@ -1647,9 +1647,15 @@ function Shell({ authUser, setAuthUser }) {
     if (action === 'help:resetTour') {
       if (!window.confirm('시작 안내 팝업을 처음부터 다시 보려면 페이지를 새로고침합니다. 계속할까요?')) return;
       try {
-        localStorage.removeItem('drama_onboardingSession');
+        // 투어 완료 플래그 (localStorage, PREFIX=drama_)
+        localStorage.removeItem('drama_onboardingDone');
+        localStorage.removeItem('drama_mobileOnboardingDone');
+        // 페이지별 힌트 표시 기록
         localStorage.removeItem('drama_pageHintsSeen');
         localStorage.removeItem('drama_mobileHintsSeen');
+        // 공용 PC 모드에서 쓰는 세션 플래그
+        sessionStorage.removeItem('drama_onboardingSession');
+        sessionStorage.removeItem('drama_mobileOnboardingSession');
       } catch {}
       window.location.reload();
       return;
