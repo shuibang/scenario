@@ -5,6 +5,34 @@ import { isTokenValid, saveToDrive, clearAccessToken } from './googleDrive';
 import { sharePayloadSchema } from '../utils/urlSchemas';
 import { parsePath, syncUrl } from '../utils/urlSync';
 
+// ─── Work log merge helper ───────────────────────────────────────────────────
+// 같은 projectId + dateKey 엔트리가 있으면 activeDurationSec 합산·최신 activity로 업데이트
+// 하루의 작업이 여러 세션으로 분산 기록되지 않도록 합침
+export function mergeWorkLog(logs, entry) {
+  const idx = (logs || []).findIndex(
+    l => l && l.projectId === entry.projectId && l.dateKey === entry.dateKey
+  );
+  if (idx === -1) return [...(logs || []), entry];
+  const existing = logs[idx];
+  const seen = new Set();
+  const mergedChecklist = [
+    ...(existing.completedChecklistSnapshot || []),
+    ...(entry.completedChecklistSnapshot || []),
+  ].filter(it => {
+    if (!it?.id || seen.has(it.id)) return false;
+    seen.add(it.id);
+    return true;
+  });
+  const merged = {
+    ...existing,
+    activeDurationSec: (existing.activeDurationSec || 0) + (entry.activeDurationSec || 0),
+    completedAt: entry.completedAt ?? existing.completedAt,
+    documentId: entry.documentId ?? existing.documentId,
+    completedChecklistSnapshot: mergedChecklist,
+  };
+  return [...logs.slice(0, idx), merged, ...logs.slice(idx + 1)];
+}
+
 // ─── Default style preset ────────────────────────────────────────────────────
 export const DEFAULT_STYLE_PRESET = {
   dialogueGap: '7em',
@@ -228,7 +256,7 @@ function reducer(state, action) {
       return { ...state, resources: state.resources.filter(r => r.id !== action.id) };
 
     case 'ADD_WORK_LOG':
-      return { ...state, workTimeLogs: [...state.workTimeLogs, action.payload] };
+      return { ...state, workTimeLogs: mergeWorkLog(state.workTimeLogs, action.payload) };
 
     case 'ADD_CHECKLIST_ITEM':
       return { ...state, checklistItems: [...state.checklistItems, action.payload] };
@@ -399,18 +427,27 @@ export function AppProvider({ children }) {
         const savedPreset = getItem(DB_KEYS.stylePresets);
         if (savedPreset) dispatch({ type: 'SET_STYLE_PRESET', payload: savedPreset });
 
-        // URL에서 마지막 위치 복원
-        const urlState = parsePath(window.location.pathname);
-        if (urlState) {
-          const { activeDoc, activeProjectId, activeEpisodeId } = urlState;
-          const projectExists = projects.some(p => p.id === activeProjectId);
+        // URL 우선, 없으면 localStorage fallback으로 마지막 위치 복원
+        let restoreState = parsePath(window.location.pathname);
+        if (!restoreState) {
+          try {
+            const raw = localStorage.getItem('drama_last_active');
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (parsed && (parsed.activeDoc || parsed.activeProjectId)) restoreState = parsed;
+            }
+          } catch {}
+        }
+        if (restoreState) {
+          const { activeDoc, activeProjectId, activeEpisodeId } = restoreState;
+          const projectExists = activeProjectId ? projects.some(p => p.id === activeProjectId) : false;
           const epExists = activeEpisodeId
             ? migratedEpisodes.some(e => e.id === activeEpisodeId && e.projectId === activeProjectId)
             : true;
-          if (projectExists && epExists) {
-            if (activeDoc === 'mypage') {
-              dispatch({ type: 'SET_ACTIVE_DOC', payload: 'mypage' });
-            } else if (activeDoc === 'script' && activeEpisodeId) {
+          if (activeDoc === 'mypage') {
+            dispatch({ type: 'SET_ACTIVE_DOC', payload: 'mypage' });
+          } else if (projectExists && epExists) {
+            if (activeDoc === 'script' && activeEpisodeId) {
               dispatch({ type: 'SET_ACTIVE_PROJECT', id: activeProjectId });
               dispatch({ type: 'SET_ACTIVE_EPISODE', id: activeEpisodeId });
             } else if (activeDoc && activeProjectId) {
@@ -522,14 +559,23 @@ export function AppProvider({ children }) {
     state.stylePreset,
   ]);
 
-  // 상태 변경마다 URL 동기화
+  // 상태 변경마다 URL 동기화 + localStorage fallback 저장
   useEffect(() => {
     if (!state.initialized) return;
-    syncUrl({
+    const snap = {
       activeDoc: state.activeDoc,
       activeProjectId: state.activeProjectId,
       activeEpisodeId: state.activeEpisodeId,
-    });
+    };
+    syncUrl(snap);
+    // URL이 유실(루트 새 탭 진입 등)된 경우를 대비한 마지막 활성 상태 저장
+    try {
+      if (snap.activeDoc || snap.activeProjectId) {
+        localStorage.setItem('drama_last_active', JSON.stringify(snap));
+      } else {
+        localStorage.removeItem('drama_last_active');
+      }
+    } catch {}
   }, [state.initialized, state.activeDoc, state.activeProjectId, state.activeEpisodeId]);
 
   // Drive에서 불러올 때 사용 — skipSavedAt 플래그 자동 설정

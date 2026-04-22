@@ -4,7 +4,7 @@ import LandingPage from './components/LandingPage';
 import { logShareSchema } from './utils/urlSchemas';
 import { getTimelineColor } from './utils/color';
 import { loadLogPayload, isShortReviewId as isUUID } from './utils/reviewShare';
-import { AppProvider, useApp } from './store/AppContext';
+import { AppProvider, useApp, mergeWorkLog } from './store/AppContext';
 import { getSceneFormat, rebuildSceneContent } from './utils/sceneFormat';
 import { FONTS, FONT_STATUS, checkFontsAvailability, getFontPdfStatus, getFontByCssFamily } from './print/FontRegistry';
 import { getItem, setItem, setAll, DB_KEYS, clearDramaStorage, isPublicPcMode, genId, now } from './store/db';
@@ -484,6 +484,7 @@ function RealtimeClock() {
 function WorkTimer({ projectId, documentId, onComplete, saveRef }) {
   const { state, dispatch } = useApp();
   const [elapsed, setElapsed] = useState(0);
+  const [baselineSec, setBaselineSec] = useState(0); // 당일 projectId 누적(이전 저장본)
   const elapsedRef  = useRef(0);           // always up-to-date for cleanup closure
   const activeRef   = useRef(false);
   const idleTimer   = useRef(null);
@@ -494,6 +495,23 @@ function WorkTimer({ projectId, documentId, onComplete, saveRef }) {
   const workLogsRef  = useRef(state.workTimeLogs);
   useEffect(() => { checklistRef.current = state.checklistItems; }, [state.checklistItems]);
   useEffect(() => { workLogsRef.current  = state.workTimeLogs;   }, [state.workTimeLogs]);
+
+  // 당일 누적 baseline — workTimeLogs 갱신 또는 projectId 변경 시 재계산
+  useEffect(() => {
+    if (!projectId) { setBaselineSec(0); return; }
+    const key = new Date().toISOString().slice(0, 10);
+    const base = (state.workTimeLogs || [])
+      .filter(l => l && l.projectId === projectId && l.dateKey === key)
+      .reduce((s, l) => s + (l.activeDurationSec || 0), 0);
+    setBaselineSec(base);
+  }, [projectId, state.workTimeLogs]);
+
+  // projectId 변경 시 세션 상태 리셋
+  useEffect(() => {
+    elapsedRef.current = 0;
+    setElapsed(0);
+    startedAt.current = Date.now();
+  }, [projectId]);
 
   const buildSnapshot = () =>
     checklistRef.current
@@ -536,9 +554,10 @@ function WorkTimer({ projectId, documentId, onComplete, saveRef }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, documentId]);
 
-  const hh = String(Math.floor(elapsed / 3600)).padStart(2, '0');
-  const mm = String(Math.floor((elapsed % 3600) / 60)).padStart(2, '0');
-  const ss = String(elapsed % 60).padStart(2, '0');
+  const totalSec = baselineSec + elapsed;
+  const hh = String(Math.floor(totalSec / 3600)).padStart(2, '0');
+  const mm = String(Math.floor((totalSec % 3600) / 60)).padStart(2, '0');
+  const ss = String(totalSec % 60).padStart(2, '0');
 
   const handleComplete = () => {
     if (elapsedRef.current > 0 && projectId) {
@@ -573,7 +592,8 @@ function WorkTimer({ projectId, documentId, onComplete, saveRef }) {
     };
     dispatch({ type: 'ADD_WORK_LOG', payload: entry });
     // IndexedDB에 직접 기록 (페이지 언로드 시 state 업데이트가 persist되기 전에 닫힐 수 있으므로)
-    const updated = [...workLogsRef.current, entry];
+    // 같은 projectId+dateKey 엔트리가 있으면 병합 — reducer와 동일 로직
+    const updated = mergeWorkLog(workLogsRef.current, entry);
     setAll(DB_KEYS.workTimeLogs, updated).catch(() => {});
     elapsedRef.current = 0;
     startedAt.current = Date.now();
