@@ -300,13 +300,17 @@ function reducer(state, action) {
 
     case 'LOAD_FROM_DRIVE': {
       const p = action.payload;
+      const newProjects = p.projects?.length > 0 ? p.projects : state.projects;
       const newEpisodes = p.episodes?.length > 0 ? p.episodes : state.episodes;
-      // 현재 보고 있던 에피소드가 Drive 데이터에도 존재하면 navigation 유지
+      // project와 episode는 독립적으로 판단 — cover/synopsis 등 에피소드 없는 문서 편집 중에도
+      //   project가 살아 있으면 navigation을 유지한다.
+      const projectStillExists = !!state.activeProjectId &&
+        newProjects.some(pr => pr.id === state.activeProjectId);
       const epStillExists = !!state.activeEpisodeId &&
         newEpisodes.some(e => e.id === state.activeEpisodeId);
       return {
         ...state,
-        projects:       p.projects?.length       > 0 ? p.projects       : state.projects,
+        projects:       newProjects,
         episodes:       newEpisodes,
         characters:     p.characters?.length     > 0 ? p.characters     : state.characters,
         scenes:         p.scenes?.length         > 0 ? p.scenes         : state.scenes,
@@ -317,10 +321,9 @@ function reducer(state, action) {
         workTimeLogs:   p.workTimeLogs?.length   > 0 ? p.workTimeLogs   : state.workTimeLogs,
         checklistItems: p.checklistItems?.length > 0 ? p.checklistItems : state.checklistItems,
         stylePreset:    p.stylePreset            ?? state.stylePreset,
-        // 에피소드가 유지되면 ScriptEditor를 강제 리로드, 없으면 navigation 초기화
-        activeProjectId: epStillExists ? state.activeProjectId : null,
+        activeProjectId: projectStillExists ? state.activeProjectId : null,
         activeEpisodeId: epStillExists ? state.activeEpisodeId : null,
-        activeDoc:       epStillExists ? state.activeDoc       : null,
+        activeDoc:       projectStillExists ? state.activeDoc : null,
         pendingScriptReload: epStillExists ? state.activeEpisodeId : state.pendingScriptReload,
       };
     }
@@ -569,6 +572,9 @@ export function AppProvider({ children }) {
   ]);
 
   // 상태 변경마다 URL 동기화 + localStorage fallback 저장
+  // 주의: 초기화 직후 activeDoc/projectId가 null인 상태에서 기존 저장본을 지우면
+  //       복원 로직이 fallback을 읽기 전에 사라져 새로고침 시 빈 workspace로 떨어짐.
+  //       null 스냅에서는 아무 조치도 하지 않고 복원 dispatch 후의 값만 저장한다.
   useEffect(() => {
     if (!state.initialized) return;
     const snap = {
@@ -577,13 +583,9 @@ export function AppProvider({ children }) {
       activeEpisodeId: state.activeEpisodeId,
     };
     syncUrl(snap);
-    // URL이 유실(루트 새 탭 진입 등)된 경우를 대비한 마지막 활성 상태 저장
+    if (!snap.activeDoc && !snap.activeProjectId) return;
     try {
-      if (snap.activeDoc || snap.activeProjectId) {
-        localStorage.setItem('drama_last_active', JSON.stringify(snap));
-      } else {
-        localStorage.removeItem('drama_last_active');
-      }
+      localStorage.setItem('drama_last_active', JSON.stringify(snap));
     } catch {}
   }, [state.initialized, state.activeDoc, state.activeProjectId, state.activeEpisodeId]);
 
