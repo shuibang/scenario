@@ -10,13 +10,21 @@ import DirectorMembershipPage from './DirectorMembershipPage';
 import PreviewRenderer from '../../print/PreviewRenderer';
 import { parseFullScript, buildPanelsFromScenes, detectScenes } from '../../utils/parseExternalScript';
 import { getStoredFeedbackDisplayName } from '../../utils/feedbackDisplayName';
+import { createFeedbackReplyLink, submitFeedbackSession } from '../../utils/reviewShare';
+import { buildFeedbackCommentPayload } from '../../utils/feedbackVersions';
 import ExcelJS from 'exceljs';
+
+/*
 
 // ─── 텍스트 → appState 변환 (로컬 텍스트 가져오기용) ─────────────────────────
 // DirectorScriptViewer가 기대하는 scriptBlocks 형식으로 파싱한다.
 // 블록 ID는 localId + 인덱스로 고정 → localStorage 메모 키가 안정적으로 유지됨.
 const _LOCAL_DLRE = /^([가-힣A-Za-z][가-힣A-Za-z\s]{0,14})\s*[:\：]\s*(.+)/;
 const _LOCAL_PRRE = /^[\(（].+[\)）]$/;
+
+*/
+const _LOCAL_DLRE = /^([\p{Script=Hangul}A-Za-z][\p{Script=Hangul}A-Za-z\s]{0,14})\s*[:：]\s*(.+)$/u;
+const _LOCAL_PRRE = /^[\(\（].+[\)\）]$/u;
 
 function textToAppState(text, title, localId) {
   const projectId = `${localId}_proj`;
@@ -255,8 +263,8 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
   useEffect(() => {
     const hasModal = !!projSelected || !!projViewing || directorPage !== 'dashboard';
     if (!hasModal) return;
-    if (!window.history.state?.directorInner) {
-      window.history.pushState({ directorInner: true }, '');
+    if (!window.history.state?.directorMobileInner) {
+      window.history.pushState({ directorMobileInner: true }, '');
     }
     const onPop = () => {
       if (projSelected || projViewing) {
@@ -319,6 +327,7 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
       setProjViewing({
         appState: { projects: data.projects||[], episodes: data.episodes||[], characters: data.characters||[], scenes: data.scenes||[], scriptBlocks: data.scriptBlocks||[], coverDocs: data.coverDocs||[], synopsisDocs: data.synopsisDocs||[], activeProjectId: data.activeProjectId, stylePreset: data.stylePreset||{}, initialized: true },
         selections: data.selections || { cover: true, synopsis: true, episodes: {}, chars: true },
+        feedbackContext: data._feedbackContext || null,
       });
     } catch (e) {
       setProjViewing({ error: e.message });
@@ -895,8 +904,8 @@ export default function DirectorDashboard({ session, onBack, isGuest = false }) 
   // 하드웨어 뒤로가기 — 내부 페이지 진입 시 한 단계 복귀 (대본실로 튕기지 않음)
   useEffect(() => {
     if (directorPage === 'dashboard') return;
-    if (!window.history.state?.directorInner) {
-      window.history.pushState({ directorInner: true }, '');
+    if (!window.history.state?.directorDesktopInner) {
+      window.history.pushState({ directorDesktopInner: true }, '');
     }
     const onPop = () => setDirectorPage('dashboard');
     window.addEventListener('popstate', onPop);
@@ -1648,6 +1657,7 @@ function SendLinkGuideModal({ open, url, copied, onClose }) {
 }
 
 // ─── 작가에게 전송 버튼 ───────────────────────────────────────────────────────
+/*
 function SendButton({ scriptRow, viewing }) {
   const D = useD();
   const [sending, setSending] = useState(false);
@@ -1746,6 +1756,112 @@ function SendButton({ scriptRow, viewing }) {
 }
 
 // ─── 씬리스트 행 (대본 작업실 SceneListPage와 동일한 레이아웃) ─────────────────
+*/
+function SendButton({ scriptRow, viewing }) {
+  const D = useD();
+  const [sending, setSending] = useState(false);
+  const [toast, setToast] = useState('');
+  const [sendUrl, setSendUrl] = useState('');
+  const [sendModalOpen, setSendModalOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const feedbackContext = viewing?.feedbackContext || null;
+  const canSendFeedback = !!(feedbackContext?.requestLinkId && feedbackContext?.versionId);
+
+  const handleSend = async () => {
+    if (!supabase || sending || !canSendFeedback) return;
+    setSending(true);
+    setToast('전송 링크 생성 중…');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('로그인이 필요합니다.');
+
+      const senderDisplayName =
+        getStoredFeedbackDisplayName() ||
+        extractUserData(session)?.name ||
+        session.user?.email?.split('@')[0] ||
+        '이름 미상';
+
+      const { data: notesData, error: notesError } = await supabase
+        .from('director_notes')
+        .select('*')
+        .eq('shared_script_id', scriptRow.id);
+      if (notesError) throw new Error(notesError.message);
+
+      const commentPayload = buildFeedbackCommentPayload(notesData || [], viewing.appState);
+      if (commentPayload.length === 0) {
+        throw new Error('보낼 피드백 메모가 없습니다.');
+      }
+
+      const submitResult = await submitFeedbackSession(
+        feedbackContext.requestLinkId,
+        senderDisplayName,
+        commentPayload
+      );
+      const replyLink = await createFeedbackReplyLink({
+        versionId: submitResult?.version_id || feedbackContext.versionId,
+        sessionId: submitResult?.session_id,
+      });
+
+      const success = await copyShareUrl(replyLink.url);
+      setSendUrl(replyLink.url);
+      setCopied(success);
+      setSendModalOpen(true);
+      setToast(success ? '링크 복사됨 ✓' : '링크 생성됨');
+      setTimeout(() => setToast(''), 3000);
+    } catch (err) {
+      setToast(`오류: ${err.message}`);
+      setTimeout(() => setToast(''), 3000);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        {toast && (
+          <span
+            style={{
+              fontSize: 11,
+              color: toast.startsWith('오류') ? '#e05c5c' : toast.includes('✓') ? '#4caf50' : D.text3,
+            }}
+          >
+            {toast}
+          </span>
+        )}
+        <button
+          onClick={handleSend}
+          disabled={sending || !canSendFeedback}
+          title={
+            canSendFeedback
+              ? '작가에게 회신 링크를 전송합니다.'
+              : '버전 공유 링크로 가져온 대본에서만 전송할 수 있습니다.'
+          }
+          style={{
+            padding: '5px 14px',
+            borderRadius: 6,
+            border: 'none',
+            background: sending || !canSendFeedback ? '#555' : D.accent,
+            color: '#1a1a1a',
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: sending || !canSendFeedback ? 'default' : 'pointer',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          작가에게 전송
+        </button>
+      </div>
+      <SendLinkGuideModal
+        open={sendModalOpen}
+        url={sendUrl}
+        copied={copied}
+        onClose={() => setSendModalOpen(false)}
+      />
+    </>
+  );
+}
+
 function DirectorSceneRow({ scene, idx, contentVal, onContentChange, onMetaChange, chars, D }) {
   const [val, setVal] = useState(contentVal);
   useEffect(() => { setVal(contentVal); }, [contentVal]);

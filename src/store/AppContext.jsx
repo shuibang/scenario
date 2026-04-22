@@ -5,6 +5,13 @@ import { isTokenValid, saveToDrive, clearAccessToken } from './googleDrive';
 import { sharePayloadSchema } from '../utils/urlSchemas';
 import { parsePath, syncUrl } from '../utils/urlSync';
 
+// 복원 가능한 activeDoc 값 whitelist — localStorage에 주입된 예상 밖의 값 차단
+const ALLOWED_ACTIVE_DOCS = new Set([
+  'cover', 'synopsis', 'characters', 'resources', 'structure',
+  'scenelist', 'director_notes', 'treatment', 'biography',
+  'relationships', 'mypage', 'script',
+]);
+
 // ─── Work log merge helper ───────────────────────────────────────────────────
 // 같은 projectId + dateKey 엔트리가 있으면 activeDurationSec 합산·최신 activity로 업데이트
 // 하루의 작업이 여러 세션으로 분산 기록되지 않도록 합침
@@ -434,7 +441,9 @@ export function AppProvider({ children }) {
             const raw = localStorage.getItem('drama_last_active');
             if (raw) {
               const parsed = JSON.parse(raw);
-              if (parsed && (parsed.activeDoc || parsed.activeProjectId)) restoreState = parsed;
+              // activeDoc은 whitelist 값만 허용 — localStorage 주입 방어
+              const docOk = parsed?.activeDoc == null || ALLOWED_ACTIVE_DOCS.has(parsed.activeDoc);
+              if (parsed && docOk && (parsed.activeDoc || parsed.activeProjectId)) restoreState = parsed;
             }
           } catch {}
         }

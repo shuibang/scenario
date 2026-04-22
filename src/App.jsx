@@ -45,7 +45,8 @@ import SnapshotPanel from './components/SnapshotPanel';
 import SplitViewPanel from './components/SplitViewPanel';
 import StatusBar from './components/StatusBar';
 import { getLayoutMetrics } from './print/LineTokenizer';
-import { saveReviewPayload } from './utils/reviewShare';
+import { createFeedbackVersionShare } from './utils/reviewShare';
+import { buildFeedbackSnapshot } from './utils/feedbackVersions';
 import SyncConflictModal from './components/SyncConflictModal';
 import { usePageTracking } from './hooks/usePageTracking';
 import { guardedSignInWithGoogle } from './utils/guardedSignIn';
@@ -445,21 +446,14 @@ function CenterPanel({ scrollToSceneId, onScrollHandled, keyboardUp, isMobile, f
 
 // ─── Share helper ─────────────────────────────────────────────────────────────
 export async function buildReviewURL(state, selections) {
-  const { projects, episodes, characters, scenes, scriptBlocks, coverDocs, synopsisDocs, activeProjectId, stylePreset } = state;
-  const payload = {
-    projects:     projects.filter(p => p.id === activeProjectId),
-    episodes:     episodes.filter(e => e.projectId === activeProjectId),
-    characters:   characters.filter(c => c.projectId === activeProjectId),
-    scenes:       scenes.filter(s => s.projectId === activeProjectId),
-    scriptBlocks: scriptBlocks.filter(b => b.projectId === activeProjectId),
-    coverDocs:    coverDocs.filter(d => d.projectId === activeProjectId),
-    synopsisDocs: synopsisDocs.filter(d => d.projectId === activeProjectId),
-    activeProjectId,
-    stylePreset:  stylePreset || {},
-    selections,
-  };
-  const id = await saveReviewPayload(payload);
-  return `${window.location.origin}/app#review=${id}`;
+  const snapshotContent = buildFeedbackSnapshot(state, selections);
+  const title = snapshotContent.projects?.[0]?.title || '피드백 버전';
+  const share = await createFeedbackVersionShare({
+    scriptId: state.activeProjectId,
+    title,
+    snapshotContent,
+  });
+  return share.url;
 }
 
 // ─── Realtime clock ───────────────────────────────────────────────────────────
@@ -480,6 +474,12 @@ function RealtimeClock() {
 }
 
 // ─── Work timer (active-time accumulator) ─────────────────────────────────────
+// 로컬 타임존 기준 YYYY-MM-DD (toISOString은 UTC라 자정 전후에 어긋남)
+function toLocalDateKey(input) {
+  const d = input instanceof Date ? input : new Date(input);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function WorkTimer({ projectId, documentId, onComplete, saveRef }) {
   const { state, dispatch } = useApp();
   const [elapsed, setElapsed] = useState(0);
@@ -498,7 +498,7 @@ function WorkTimer({ projectId, documentId, onComplete, saveRef }) {
   // 당일 누적 baseline — workTimeLogs 갱신 또는 projectId 변경 시 재계산
   useEffect(() => {
     if (!projectId) { setBaselineSec(0); return; }
-    const key = new Date().toISOString().slice(0, 10);
+    const key = toLocalDateKey(new Date());
     const base = (state.workTimeLogs || [])
       .filter(l => l && l.projectId === projectId && l.dateKey === key)
       .reduce((s, l) => s + (l.activeDurationSec || 0), 0);
@@ -566,7 +566,7 @@ function WorkTimer({ projectId, documentId, onComplete, saveRef }) {
         startedAt: startedAt.current,
         completedAt: Date.now(),
         activeDurationSec: elapsedRef.current,
-        dateKey: new Date(startedAt.current).toISOString().slice(0, 10),
+        dateKey: toLocalDateKey(startedAt.current),
         completedChecklistSnapshot: buildSnapshot(),
       }});
     }
@@ -586,7 +586,7 @@ function WorkTimer({ projectId, documentId, onComplete, saveRef }) {
       startedAt: startedAt.current,
       completedAt: Date.now(),
       activeDurationSec: elapsedRef.current,
-      dateKey: new Date(startedAt.current).toISOString().slice(0, 10),
+      dateKey: toLocalDateKey(startedAt.current),
       completedChecklistSnapshot: buildSnapshot(),
     };
     dispatch({ type: 'ADD_WORK_LOG', payload: entry });
