@@ -1766,7 +1766,9 @@ function Shell({ authUser, setAuthUser }) {
           driveData={syncConflict.driveData}
           localProjectCount={syncConflict.localProjectCount ?? state.projects?.length ?? 0}
           onKeepLocal={() => {
-            // 로컬 유지 → Drive에 현재 데이터 업로드
+            // 로컬 유지 → Drive에 현재 데이터 업로드 (local drama_saved_at과 동일 savedAt 공유)
+            const savedAt = new Date().toISOString();
+            try { localStorage.setItem('drama_saved_at', savedAt); } catch {}
             import('./store/googleDrive').then(({ saveToDrive }) => {
               saveToDrive({
                 projects:       state.projects,
@@ -1780,6 +1782,7 @@ function Shell({ authUser, setAuthUser }) {
                 workTimeLogs:   state.workTimeLogs,
                 checklistItems: state.checklistItems,
                 stylePreset:    state.stylePreset,
+                savedAt,
               }).catch(() => {});
             });
             setSyncConflict(null);

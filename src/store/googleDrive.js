@@ -105,7 +105,10 @@ async function deleteFileByName(name) {
 }
 
 // ── Drive에 저장 ────────────────────────────────────────────────────────────
-export async function saveToDrive(payload) {
+// 여러 요청이 겹쳤을 때 응답 순서 역전으로 이전 savedAt이 최신을 덮어쓰는 사고를 막기 위해
+// 모든 호출을 Promise chain으로 직렬화한다.
+let _pendingSave = Promise.resolve();
+async function _doSaveToDrive(payload) {
   if (!isTokenValid()) throw new Error('DRIVE_AUTH_REQUIRED');
 
   // payload.savedAt을 우선 사용 — 로컬 drama_saved_at과 Drive savedAt이 동일한 시각을 갖도록.
@@ -130,6 +133,11 @@ export async function saveToDrive(payload) {
   });
   if (!res.ok) throw new Error(`Drive 저장 실패: ${res.status}`);
   return await res.json();
+}
+export async function saveToDrive(payload) {
+  const next = _pendingSave.catch(() => {}).then(() => _doSaveToDrive(payload));
+  _pendingSave = next.catch(() => {});
+  return next;
 }
 
 // ── 스냅샷 ──────────────────────────────────────────────────────────────────
