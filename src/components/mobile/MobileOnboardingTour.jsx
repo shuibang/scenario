@@ -99,7 +99,8 @@ const MOBILE_PAGE_HINTS = {
     accent: '#6366f1',
     desc: (
       <>
-        <Tag>S#</Tag> <Tag>지문</Tag> <Tag>대사</Tag> 버튼으로 블록 유형을 전환하세요.
+        상단의 <Tag>S#</Tag> <Tag>지문</Tag> <Tag>대사</Tag> 등 버튼으로 블록 유형을 전환하세요. 키보드가 올라오면 화면 하단에도 같은 입력 버튼이 나타납니다.<br/>
+        빈 줄에서 <Tag>1.</Tag> → 씬 헤딩 · <Tag>/</Tag> → 블록 팔레트 · <Tag>Space×2</Tag> → 구분자/괄호체 · 인물명+Enter → 대사
       </>
     ),
   },

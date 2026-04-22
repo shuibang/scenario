@@ -102,9 +102,11 @@ const PAGE_HINTS = {
     title: '대본 편집',
     desc: (
       <>
-        <Tag>S#</Tag> <Tag>지문</Tag> <Tag>대사</Tag> 버튼으로 블록 유형을 전환하며 작성하세요.<br/>
-        단축키: <Tag color="blue">Ctrl+Shift+1</Tag> 씬번호 · <Tag color="blue">Ctrl+Shift+2</Tag> 지문 · <Tag color="blue">Ctrl+Shift+3</Tag> 대사<br/>
-        씬번호 줄에서 <Tag color="blue">Space×2</Tag> → 구분자 자동 삽입<br/>
+        상단 툴바의 <Tag>S#</Tag> <Tag>지문</Tag> <Tag>대사</Tag> 버튼으로 블록 유형을 전환할 수 있습니다.<br/>
+        빈 줄에서 <Tag color="blue">1.</Tag> → 씬 헤딩 자동 전환<br/>
+        빈 줄에서 <Tag color="blue">/</Tag> → 블록 팔레트: <Tag color="blue">/1</Tag> 지문 · <Tag color="blue">/2</Tag> 대사 · <Tag color="blue">/3</Tag> 등장체크 · <Tag color="blue">/4</Tag> 씬연결 · <Tag color="blue">/5</Tag> 기타 · <Tag color="blue">/6</Tag> 태그<br/>
+        <Tag color="blue">Space × 2</Tag> → 빈 줄에선 씬 구분자, 지문·대사 안에선 괄호체 시작<br/>
+        <Tag color="blue">인물명 + Enter</Tag> → 해당 인물의 대사 블록<br/>
         <span style={{ fontSize: 11, color: 'var(--c-text5)' }}>
           모바일 : 키보드가 올라오면 화면 하단에 입력 버튼이 나타납니다.
         </span>
