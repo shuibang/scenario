@@ -114,6 +114,7 @@ export const menuConfig = [
     label: '도움말',
     altKey: 'h',
     items: [
+      { id: 'reset-tour', label: '시작 안내 다시 보기', action: 'help:resetTour' },
       { id: 'manual', label: '사용 설명서', action: 'help:manual' },
       {
         id: 'shortcuts', label: '단축키 목록', hasSubmenu: true,

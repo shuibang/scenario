@@ -1644,6 +1644,16 @@ function Shell({ authUser, setAuthUser }) {
     if (action === 'help:about')   { window.open('/changelog.html', '_blank', 'noopener,noreferrer'); return; }
     if (action === 'help:notices') { setNoticesOpen(true); return; }
     if (action === 'help:qa')      { setQaOpen(true); return; }
+    if (action === 'help:resetTour') {
+      if (!window.confirm('시작 안내 팝업을 처음부터 다시 보려면 페이지를 새로고침합니다. 계속할까요?')) return;
+      try {
+        localStorage.removeItem('drama_onboardingSession');
+        localStorage.removeItem('drama_pageHintsSeen');
+        localStorage.removeItem('drama_mobileHintsSeen');
+      } catch {}
+      window.location.reload();
+      return;
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handleSave, dispatch, setFocusMode]);
 
