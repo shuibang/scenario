@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { FileText } from 'lucide-react';
+import { FileText, Clapperboard, ExternalLink } from 'lucide-react';
 import { useApp } from '../../store/AppContext';
 import { FONTS } from '../../print/FontRegistry';
 import AdBanner from '../AdBanner';
@@ -220,19 +220,26 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-text2)', letterSpacing: '-0.015em', whiteSpace: 'nowrap' }}>대본 작업실</span>
         </button>
 
+        {/* 구분선 */}
+        <div style={{ width: 1, height: 14, background: 'var(--c-border3)', flexShrink: 0, margin: '0 2px' }} />
+
         {/* 연출 작업실 바로가기 */}
-        <button
-          onClick={() => { window.location.hash = '#director'; }}
+        <a
+          href="#director"
+          onClick={e => { e.preventDefault(); window.location.hash = '#director'; }}
           title="연출 작업실"
           style={{
-            width: 26, height: 26, padding: 0, border: 'none', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 13, borderRadius: 6, flexShrink: 0,
-            background: '#e8b84b',
-            boxShadow: '0 0 6px #e8b84b66',
+            display: 'flex', alignItems: 'center', gap: 4,
+            textDecoration: 'none', color: 'var(--c-text4)', fontSize: 12,
+            background: 'transparent', borderRadius: 6,
+            padding: '4px 6px', flexShrink: 0, lineHeight: 1,
             WebkitTapHighlightColor: 'transparent',
           }}
-        >🎬</button>
+        >
+          <Clapperboard size={13} strokeWidth={1.75} style={{ flexShrink: 0 }} />
+          <span style={{ whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>연출 작업실</span>
+          <ExternalLink size={10} strokeWidth={2} style={{ flexShrink: 0, opacity: 0.6 }} />
+        </a>
 
         {/* 오른쪽 spacer + timer */}
         <div style={{ flex: 1 }} />

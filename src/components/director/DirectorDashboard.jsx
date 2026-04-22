@@ -1,8 +1,12 @@
 import { useState, useEffect, useRef, createContext, useContext, Component, memo } from 'react';
+import { ChevronLeft, ChevronRight, Clapperboard, FileText, ExternalLink } from 'lucide-react';
 import { supabaseSignOut, extractUserData, supabase } from '../../store/supabaseClient';
 import { guardedSignInWithGoogle } from '../../utils/guardedSignIn';
 import { setAccessToken, isTokenValid, loadDirectorScript, deleteFileById } from '../../store/googleDrive';
 import DirectorScriptViewer from './DirectorScriptViewer';
+import DirectorHistoryPage from './DirectorHistoryPage';
+import DirectorErrorReportPage from './DirectorErrorReportPage';
+import DirectorMembershipPage from './DirectorMembershipPage';
 import PreviewRenderer from '../../print/PreviewRenderer';
 import { parseFullScript, buildPanelsFromScenes, detectScenes } from '../../utils/parseExternalScript';
 import ExcelJS from 'exceljs';
@@ -147,6 +151,53 @@ const D_LIGHT = {
 const ThemeCtx = createContext(D_DARK);
 const useD = () => useContext(ThemeCtx);
 
+// ─── CollapseButton ───────────────────────────────────────────────────────────
+// 대본 작업실 App.jsx의 CollapseButton을 동일 형태로 이식.
+function CollapseButton({ side, collapsed, onToggle }) {
+  const [hovered, setHovered] = useState(false);
+  const isLeft = side === 'left';
+  const Icon = isLeft
+    ? (collapsed ? ChevronRight : ChevronLeft)
+    : (collapsed ? ChevronLeft  : ChevronRight);
+
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        width: 10, flexShrink: 0, position: 'relative',
+        display: 'flex', alignItems: 'stretch',
+        cursor: 'pointer', zIndex: 10,
+      }}
+      onClick={onToggle}
+      title={collapsed ? '패널 열기' : '패널 닫기'}
+    >
+      <div style={{
+        width: '1.5px', margin: '0 auto',
+        background: hovered ? 'var(--c-accent)' : 'var(--c-border3)',
+        transition: 'background 150ms',
+        borderRadius: 2,
+      }} />
+      {hovered && (
+        <div style={{
+          position: 'absolute',
+          top: '50%', transform: 'translateY(-50%)',
+          [isLeft ? 'right' : 'left']: -3,
+          width: 20, height: 56,
+          background: 'var(--c-accent)',
+          borderRadius: isLeft ? '6px 0 0 6px' : '0 6px 6px 0',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+          color: '#fff',
+          pointerEvents: 'none',
+        }}>
+          <Icon size={12} strokeWidth={2.5} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── 모바일 레이아웃 상수 (대본 작업실 MobileBottomPanel 동일 기준) ──────────────
 const M_TAB_H    = 64;   // 탭바 고정 높이 (px)
 const M_OPEN_H   = 320;  // 열렸을 때 전체 높이 (px)
@@ -157,6 +208,7 @@ const NOTE_COLORS_M = ['#fdf6e3', '#fef08a', '#86efac', '#93c5fd', '#f9a8d4'];
 
 // ─── 연출 작업실 모바일 전용 레이아웃 ─────────────────────────────────────────
 function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, handleLogout, loggingOut }) {
+  const user = extractUserData(session);
   const [tab,        setTab]        = useState(isGuest ? 'storyboard' : 'projects');
   const [panelOpen,  setPanelOpen]  = useState(false);
 
@@ -172,6 +224,22 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
   }, []);
   const keyboardUp = (window.innerHeight - vvHeight - vvOffsetTop) > 100;
 
+  // 햄버거 메뉴 + 내부 페이지 라우팅
+  const [directorPage, setDirectorPage] = useState('dashboard'); // 'dashboard' | 'history' | 'errors' | 'membership'
+  const [menuOpen,     setMenuOpen]     = useState(false);
+  const menuRef = useRef(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e) => { if (!menuRef.current?.contains(e.target)) setMenuOpen(false); };
+    document.addEventListener('pointerdown', handler);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('pointerdown', handler);
+      document.body.style.overflow = prev;
+    };
+  }, [menuOpen]);
+
   // 공통: 작품 목록 (projects + notes + storyboard 탭 공유)
   const [scripts,      setScripts]      = useState(null);
   const [localScripts, setLocalScripts] = useState(() => loadLocalScripts());
@@ -181,6 +249,25 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
   const [projSelected,  setProjSelected]  = useState(null);
   const [projViewing,   setProjViewing]   = useState(null);  // { appState, selections }
   const [projLoading,   setProjLoading]   = useState(false);
+
+  // 하드웨어 뒤로가기 — 뷰어/햄버거 페이지 한 단계 복귀 (대본실로 튕기지 않음)
+  useEffect(() => {
+    const hasModal = !!projSelected || !!projViewing || directorPage !== 'dashboard';
+    if (!hasModal) return;
+    if (!window.history.state?.directorInner) {
+      window.history.pushState({ directorInner: true }, '');
+    }
+    const onPop = () => {
+      if (projSelected || projViewing) {
+        setProjSelected(null);
+        setProjViewing(null);
+      } else if (directorPage !== 'dashboard') {
+        setDirectorPage('dashboard');
+      }
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [projSelected, projViewing, directorPage]);
 
   // 연출 탭 state
   const [noteScript,  setNoteScript]  = useState(null);
@@ -516,6 +603,24 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
     return null;
   })();
 
+  // 접속 기록에서 작품 클릭 시: 대시보드 복귀 + 작품 탭 + 로드
+  const handleOpenFromHistory = (script) => {
+    setDirectorPage('dashboard');
+    setTab('projects');
+    setPanelOpen(false);
+    if (script._isLocal) {
+      setProjSelected(script);
+      setProjViewing({ appState: textToAppState(script.text, script.title, script.id), selections: LOCAL_SELECTIONS });
+    } else {
+      loadProjScript(script);
+    }
+  };
+
+  // 햄버거 내부 페이지 분기 (대시보드 외) — 연출 작업실 내부에서 완결
+  if (directorPage === 'history')    return <DirectorHistoryPage      onBack={() => setDirectorPage('dashboard')} isGuest={isGuest} D={D} onOpenScript={handleOpenFromHistory} />;
+  if (directorPage === 'errors')     return <DirectorErrorReportPage  onBack={() => setDirectorPage('dashboard')} session={session} D={D} />;
+  if (directorPage === 'membership') return <DirectorMembershipPage   onBack={() => setDirectorPage('dashboard')} D={D} />;
+
   return (
     <div style={{
       position: 'fixed',
@@ -535,16 +640,150 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
         paddingRight: 'max(14px, env(safe-area-inset-right, 14px))',
         gap: 8, borderBottom: `1px solid ${D.border}`, background: D.sidebar,
       }}>
-        <button onClick={onBack} title="대본 작업실" style={{ fontSize: 16, color: D.text3, background: 'none', border: `1px solid ${D.border}`, borderRadius: 6, cursor: 'pointer', padding: '2px 7px', lineHeight: 1, flexShrink: 0 }}>📝</button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
-          <span style={{ fontSize: 'clamp(13px, 4vw, 15px)', fontWeight: 700, color: D.accent, letterSpacing: '-0.015em' }}>연출 작업실</span>
-          <div style={{ width: 22, height: 22, borderRadius: 5, background: D.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, boxShadow: `0 0 6px ${D.accent}55` }}>🎬</div>
+        {/* 햄버거 */}
+        <div ref={menuRef} style={{ position: 'relative', flexShrink: 0 }}>
+          <button
+            onClick={() => setMenuOpen(v => !v)}
+            style={{
+              background: 'none', border: 'none', color: D.text3,
+              fontSize: 18, cursor: 'pointer', padding: '6px 8px', lineHeight: 1,
+              WebkitTapHighlightColor: 'transparent',
+            }}
+          >☰</button>
+          {menuOpen && (
+            <div style={{
+              position: 'fixed', top: 'calc(clamp(44px, 12vw, 52px) + 4px)', left: 10,
+              background: D.panel, border: `1px solid ${D.border}`,
+              borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
+              zIndex: 300,
+              width: '64vw', minWidth: 220, maxWidth: 300,
+              maxHeight: 'calc(100dvh - 64px)',
+              overflowY: 'auto', padding: '6px 0',
+            }}>
+              {/* 유저 정보 */}
+              {isGuest || !session ? (
+                <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ fontSize: 12, color: D.text3, lineHeight: 1.6 }}>Google로 로그인하면<br />받은 작품을 볼 수 있습니다.</div>
+                  <button
+                    onClick={() => { setMenuOpen(false); loginWithReturnHash(); }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      width: '100%', padding: '8px 12px', borderRadius: 6,
+                      border: `1px solid ${D.border}`, background: D.card,
+                      color: D.text, fontSize: 13, cursor: 'pointer', fontWeight: 500,
+                    }}
+                  >
+                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="" style={{ width: 16, height: 16 }} />
+                    Google로 로그인
+                  </button>
+                </div>
+              ) : (
+                <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    {user?.avatar
+                      ? <img src={user.avatar} alt="" style={{ width: 30, height: 30, borderRadius: '50%', border: `1px solid ${D.border}` }} />
+                      : <div style={{ width: 30, height: 30, borderRadius: '50%', background: D.card, border: `1px solid ${D.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: D.text3 }}>감</div>}
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: D.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.name || '연출'}</div>
+                      <div style={{ fontSize: 10, color: D.text3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {!isTokenValid() ? '☁ 재연결 필요' : (user?.email || '')}
+                      </div>
+                    </div>
+                  </div>
+                  {!isTokenValid() && (
+                    <button
+                      onClick={() => { setMenuOpen(false); loginWithReturnHash(); }}
+                      style={{ alignSelf: 'flex-start', fontSize: 11, color: D.accent, background: 'none', border: `1px solid ${D.accent}`, borderRadius: 4, padding: '3px 10px', cursor: 'pointer' }}
+                    >Drive 재연결</button>
+                  )}
+                </div>
+              )}
+
+              <div style={{ height: 1, background: D.border, margin: '4px 0' }} />
+
+              {/* 내부 페이지 버튼 */}
+              {[
+                { icon: '🕐', label: '접속 기록', page: 'history' },
+                { icon: '🐞', label: '오류 보고', page: 'errors' },
+                { icon: '⭐', label: '멤버십',    page: 'membership' },
+              ].map(({ icon, label, page }) => (
+                <button
+                  key={page}
+                  onClick={() => { setMenuOpen(false); setDirectorPage(page); }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    width: '100%', background: 'none', border: 'none',
+                    color: D.text, fontSize: 13,
+                    padding: '12px 18px', textAlign: 'left', cursor: 'pointer',
+                    WebkitTapHighlightColor: 'transparent',
+                  }}
+                >
+                  <span>{icon}</span><span>{label}</span>
+                </button>
+              ))}
+
+              <div style={{ height: 1, background: D.border, margin: '4px 0' }} />
+
+              <div style={{ padding: '4px 12px' }}>
+                <DirectorAdBanner height={32} slot="director-mobile-menu" />
+              </div>
+
+              {!isGuest && session && (
+                <>
+                  <div style={{ height: 1, background: D.border, margin: '4px 0' }} />
+                  <button
+                    onClick={() => { setMenuOpen(false); handleLogout(); }}
+                    disabled={loggingOut}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      width: '100%', background: 'none', border: 'none',
+                      color: D.text3, fontSize: 12,
+                      padding: '10px 18px', textAlign: 'left', cursor: 'pointer',
+                      WebkitTapHighlightColor: 'transparent',
+                    }}
+                  >{loggingOut ? '로그아웃 중…' : '로그아웃'}</button>
+                </>
+              )}
+            </div>
+          )}
         </div>
-        {isGuest ? (
-          <button onClick={loginWithReturnHash} style={{ fontSize: 12, color: D.accent, background: 'none', border: `1px solid ${D.accent}`, borderRadius: 4, padding: '4px 10px', cursor: 'pointer' }}>로그인</button>
-        ) : (
-          <button onClick={handleLogout} disabled={loggingOut} style={{ fontSize: 12, color: D.text3, background: 'none', border: `1px solid ${D.border}`, borderRadius: 4, padding: '4px 10px', cursor: 'pointer' }}>{loggingOut ? '…' : '로그아웃'}</button>
-        )}
+
+        {/* 연출 작업실 (현재 위치) */}
+        <button
+          onClick={() => setTab('projects')}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 5,
+            background: 'transparent', border: 'none', cursor: 'pointer',
+            borderRadius: 6, padding: '4px 6px', flexShrink: 0,
+            WebkitTapHighlightColor: 'transparent',
+          }}
+        >
+          <Clapperboard size={15} strokeWidth={2} style={{ color: D.accent, flexShrink: 0 }} />
+          <span style={{ fontSize: 13, fontWeight: 600, color: D.text, letterSpacing: '-0.015em', whiteSpace: 'nowrap' }}>연출 작업실</span>
+        </button>
+
+        {/* 구분선 */}
+        <div style={{ width: 1, height: 14, background: D.border, flexShrink: 0, margin: '0 2px' }} />
+
+        {/* 대본 작업실 바로가기 */}
+        <a
+          href="#"
+          onClick={e => { e.preventDefault(); onBack(); }}
+          title="대본 작업실"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 4,
+            textDecoration: 'none', color: D.text3, fontSize: 12,
+            background: 'transparent', borderRadius: 6,
+            padding: '4px 6px', flexShrink: 0, lineHeight: 1,
+            WebkitTapHighlightColor: 'transparent',
+          }}
+        >
+          <FileText size={13} strokeWidth={1.75} style={{ flexShrink: 0 }} />
+          <span style={{ whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>대본 작업실</span>
+          <ExternalLink size={10} strokeWidth={2} style={{ flexShrink: 0, opacity: 0.6 }} />
+        </a>
+
+        <div style={{ flex: 1 }} />
       </header>
 
       {/* 메인 콘텐츠 */}
@@ -678,26 +917,40 @@ export default function DirectorDashboard({ session, onBack, isGuest = false }) 
         display: 'flex', alignItems: 'center', padding: '0 24px', gap: 16,
         borderBottom: `1px solid ${D.border}`, background: D.sidebar,
       }}>
-        {/* 사이드바 토글 */}
+        {/* 연출 작업실 (현재 위치, 작품 목록으로) */}
         <button
-          onClick={() => setSidebarCollapsed(v => !v)}
-          title={sidebarCollapsed ? '메뉴 열기' : '메뉴 닫기'}
-          style={{ background: 'none', border: 'none', color: D.text3, fontSize: 16, cursor: 'pointer', padding: '4px 6px', lineHeight: 1, borderRadius: 4, flexShrink: 0 }}
-        >{sidebarCollapsed ? '☰' : '✕'}</button>
-        {/* 대본 작업실 바로가기 */}
-        <button
-          onClick={onBack}
-          title="대본 작업실"
-          style={{ width: 28, height: 28, borderRadius: 6, background: 'none', border: `1px solid ${D.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, fontSize: 13, color: D.text3, transition: 'background 120ms' }}
+          onClick={() => setActiveMenu('projects')}
+          title="연출 작업실"
+          className="flex items-center gap-1.5 shrink-0 rounded px-2 py-1"
+          style={{ background: 'transparent', border: 'none', cursor: 'pointer', transition: 'background 120ms' }}
           onMouseEnter={e => { e.currentTarget.style.background = D.card; }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
-        >📝</button>
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+        >
+          <Clapperboard size={15} strokeWidth={2} style={{ color: D.accent, flexShrink: 0 }} />
+          <span style={{ fontSize: 13, fontWeight: 600, color: D.text, letterSpacing: '-0.015em', whiteSpace: 'nowrap' }}>연출 작업실</span>
+        </button>
 
-        {/* 연출 작업실 로고 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginRight: 8 }}>
-          <span style={{ fontWeight: 700, fontSize: 13, color: D.accent, letterSpacing: '-0.015em' }}>연출 작업실</span>
-          <div style={{ width: 26, height: 26, borderRadius: 6, background: D.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, boxShadow: `0 0 8px ${D.accent}55` }}>🎬</div>
-        </div>
+        {/* 구분선 */}
+        <div style={{ width: 1, height: 14, background: D.border, flexShrink: 0, margin: '0 2px' }} />
+
+        {/* 대본 작업실 바로가기 */}
+        <a
+          href="#"
+          onClick={e => { e.preventDefault(); onBack(); }}
+          title="대본 작업실으로 이동"
+          className="flex items-center gap-1 shrink-0 rounded px-2 py-1"
+          style={{
+            textDecoration: 'none', color: D.text3, fontSize: 12,
+            background: 'transparent', transition: 'background 120ms, color 120ms',
+            lineHeight: 1,
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = D.card; e.currentTarget.style.color = D.text2; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = D.text3; }}
+        >
+          <FileText size={13} strokeWidth={1.75} style={{ flexShrink: 0 }} />
+          <span style={{ whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>대본 작업실</span>
+          <ExternalLink size={10} strokeWidth={2} style={{ flexShrink: 0, opacity: 0.6 }} />
+        </a>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {user?.avatar
@@ -721,29 +974,32 @@ export default function DirectorDashboard({ session, onBack, isGuest = false }) 
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
 
         {/* 사이드바 */}
-        <aside style={{
-          width: sidebarCollapsed ? 0 : 220,
-          flexShrink: 0,
-          background: D.sidebar,
-          borderRight: sidebarCollapsed ? 'none' : `1px solid ${D.border}`,
-          display: 'flex', flexDirection: 'column',
-          overflow: 'hidden',
-          transition: 'width 0.22s cubic-bezier(0.4,0,0.2,1)',
-        }}>
-          <div style={{ width: 220, flex: 1, padding: '20px 0', display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <SideSection label="작품" />
-            <SideItem icon="📄" label="작품 목록" active={activeMenu === 'projects'} onClick={() => setActiveMenu('projects')} />
-            <div style={{ margin: '12px 0 0', height: 1, background: D.border }} />
-            <SideSection label="연출" />
-            <SideItem icon="📝" label="연출노트"   active={activeMenu === 'notes'}      onClick={() => setActiveMenu('notes')} />
-            <SideItem icon="📋" label="씬리스트"   active={activeMenu === 'scenelist'}  onClick={() => setActiveMenu('scenelist')} />
-            <SideItem icon="🎞" label="스토리보드" active={activeMenu === 'storyboard'} onClick={() => setActiveMenu('storyboard')} />
-          </div>
-          <div style={{ width: 220, padding: '0 12px 12px', display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
-            <DirectorAdBanner height={120} slot="director-sidebar" />
-            <DirectorAdBanner height={120} slot="director-sidebar" />
-          </div>
-        </aside>
+        {!sidebarCollapsed && (
+          <aside style={{
+            width: 220,
+            flexShrink: 0,
+            background: D.sidebar,
+            borderRight: `1px solid ${D.border}`,
+            display: 'flex', flexDirection: 'column',
+            overflow: 'hidden',
+          }}>
+            <div style={{ width: 220, flex: 1, padding: '20px 0', display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <SideSection label="작품" />
+              <SideItem icon="📄" label="작품 목록" active={activeMenu === 'projects'} onClick={() => setActiveMenu('projects')} />
+              <div style={{ margin: '12px 0 0', height: 1, background: D.border }} />
+              <SideSection label="연출" />
+              <SideItem icon="📝" label="연출노트"   active={activeMenu === 'notes'}      onClick={() => setActiveMenu('notes')} />
+              <SideItem icon="📋" label="씬리스트"   active={activeMenu === 'scenelist'}  onClick={() => setActiveMenu('scenelist')} />
+              <SideItem icon="🎞" label="스토리보드" active={activeMenu === 'storyboard'} onClick={() => setActiveMenu('storyboard')} />
+            </div>
+            <div style={{ width: 220, padding: '0 12px 12px', display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
+              <DirectorAdBanner height={120} slot="director-sidebar" />
+              <DirectorAdBanner height={120} slot="director-sidebar" />
+            </div>
+          </aside>
+        )}
+
+        <CollapseButton side="right" collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(v => !v)} />
 
         <main style={{ flex: 1, display: 'flex', minHeight: 0, background: D.bg, overflow: 'hidden' }}>
           {activeMenu === 'projects'   && <ProjectsPanel session={session} isGuest={isGuest} />}
