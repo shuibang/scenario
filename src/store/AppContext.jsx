@@ -508,6 +508,8 @@ export function AppProvider({ children }) {
     if (!state.initialized) return;
     clearTimeout(persistTimer.current);
     persistTimer.current = setTimeout(async () => {
+      // 로컬 drama_saved_at과 Drive savedAt이 반드시 같은 시각을 쓰도록 한 번만 생성
+      const savedAt = new Date().toISOString();
       try {
         await Promise.all([
           setAll(DB_KEYS.projects,      state.projects),
@@ -525,7 +527,7 @@ export function AppProvider({ children }) {
           setItem(DB_KEYS.stylePresets, state.stylePreset);
         }
         if (!skipSavedAtRef.current) {
-          localStorage.setItem('drama_saved_at', new Date().toISOString());
+          localStorage.setItem('drama_saved_at', savedAt);
         }
         skipSavedAtRef.current = false;
       } catch (e) {
@@ -551,6 +553,7 @@ export function AppProvider({ children }) {
           workTimeLogs:   state.workTimeLogs,
           checklistItems: state.checklistItems,
           stylePreset:    state.stylePreset,
+          savedAt,
         }).catch(e => {
           if (e.message?.includes('403')) {
             clearAccessToken(); // 권한 없는 토큰 → 무효화해서 재시도 방지

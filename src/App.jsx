@@ -815,10 +815,16 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
       } catch {}
       const hasLocalData = localProjects.length > 0;
       const driveHasData = (driveData?.projects?.length ?? 0) > 0;
+      // 같은 저장 건인데 네트워크 지연 등으로 ms 단위 어긋남은 충돌로 보지 않음 (5초 이내 허용)
+      const localMs = new Date(localSavedAt || 0).getTime();
+      const driveMs = new Date(driveData?.savedAt || 0).getTime();
+      const tsLooksSame = Math.abs(driveMs - localMs) <= 5000;
       if (!driveData?.savedAt || !driveHasData) {
         setDriveStatus('synced');
       } else if (!hasLocalData) {
         loadFromDriveData(driveData);
+        setDriveStatus('synced');
+      } else if (tsLooksSame) {
         setDriveStatus('synced');
       } else {
         onSyncConflict?.({ localSavedAt, driveData, localProjectCount: localProjects.length });

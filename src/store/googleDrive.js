@@ -108,7 +108,10 @@ async function deleteFileByName(name) {
 export async function saveToDrive(payload) {
   if (!isTokenValid()) throw new Error('DRIVE_AUTH_REQUIRED');
 
-  const content  = JSON.stringify({ ...payload, savedAt: new Date().toISOString() });
+  // payload.savedAt을 우선 사용 — 로컬 drama_saved_at과 Drive savedAt이 동일한 시각을 갖도록.
+  // 호출자가 지정하지 않은 경우(legacy) 현재 시각으로 대체.
+  const savedAt = payload?.savedAt || new Date().toISOString();
+  const content = JSON.stringify({ ...payload, savedAt });
   const existing = await findFile();
   const metadata = { name: FILE_NAME, ...(!existing && { parents: ['appDataFolder'] }) };
 
