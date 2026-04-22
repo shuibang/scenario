@@ -1421,6 +1421,22 @@ function Shell({ authUser, setAuthUser }) {
     return () => clearInterval(timer);
   }, [state]);
 
+  const promptDriveReauthForSave = useCallback(() => {
+    if (!authUser) {
+      clearTimeout(saveToastTimer.current);
+      setSaveToastMsg('Drive 로그인 필요 — 백업 기록은 저장되지 않았습니다');
+      setSaveToast(true);
+      saveToastTimer.current = setTimeout(() => setSaveToast(false), 3500);
+      return;
+    }
+
+    clearTimeout(saveToastTimer.current);
+    setSaveToastMsg('Drive 재로그인이 필요해요. 로그인 창을 열고 있어요.');
+    setSaveToast(true);
+    saveToastTimer.current = setTimeout(() => setSaveToast(false), 3500);
+    guardedSignInWithGoogle();
+  }, [authUser]);
+
   const handleSave = useCallback(() => {
     window.dispatchEvent(new Event('script:requestSave'));
     // 수동 저장 시 스냅샷 생성 — 토큰 없으면 갱신 후 시도
@@ -1443,18 +1459,19 @@ function Shell({ authUser, setAuthUser }) {
         if (isTokenValid()) {
           await saveSnapshot(snap, '수동저장', 'manual');
         } else {
-          clearTimeout(saveToastTimer.current);
-          setSaveToastMsg('Drive 로그인 필요 — 백업 기록은 저장되지 않았습니다');
-          setSaveToast(true);
-          saveToastTimer.current = setTimeout(() => setSaveToast(false), 3500);
+          promptDriveReauthForSave();
         }
-      } catch {}
+      } catch (error) {
+        if (error?.message?.includes('401') || error?.message?.includes('DRIVE_AUTH_REQUIRED')) {
+          promptDriveReauthForSave();
+        }
+      }
     })();
     clearTimeout(saveToastTimer.current);
     setSaveToastMsg('저장되었습니다');
     setSaveToast(true);
     saveToastTimer.current = setTimeout(() => setSaveToast(false), 2000);
-  }, [state]);
+  }, [state, promptDriveReauthForSave]);
 
   // 전역 Ctrl+S 단축키 → 토스트 포함 저장
   useEffect(() => {

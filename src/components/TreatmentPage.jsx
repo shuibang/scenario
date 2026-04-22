@@ -36,7 +36,7 @@ function migrateItems(raw) {
 // "대본으로 가져오기": 각 항목 → 씬번호 + 지문 블록 (원본 유지)
 export default function TreatmentPage() {
   const { state, dispatch } = useApp();
-  const { episodes, scriptBlocks, scenes, projects, activeProjectId, activeEpisodeId } = state;
+  const { episodes, scriptBlocks, scenes, projects, activeProjectId } = state;
 
   const activeProject = projects?.find(p => p.id === activeProjectId);
   const isSeries = isMultiEpisode(activeProject?.projectType);
@@ -57,11 +57,13 @@ export default function TreatmentPage() {
     ? Array.from({ length: visibleEpisodeCount }, (_, i) => i + 1).filter(n => !existingNums.has(n))
     : [];
 
-  const [selectedEpId, setSelectedEpId] = useState(
-    activeEpisodeId || projectEpisodes[0]?.id || null
-  );
+  const [selectedEpId, setSelectedEpId] = useState('all');
   const epId   = selectedEpId === 'all' ? null : (selectedEpId || projectEpisodes[0]?.id);
   const episode = episodes.find(e => e.id === epId);
+
+  useEffect(() => {
+    setSelectedEpId('all');
+  }, [activeProjectId]);
 
   const handleEpSelect = (val) => {
     if (val === 'all') { setSelectedEpId('all'); return; }
@@ -177,6 +179,10 @@ export default function TreatmentPage() {
       };
     });
   }, [selectedEpId, projectEpisodes, isSeries, visibleEpisodeCount]); // eslint-disable-line react-hooks/exhaustive-deps
+  const allViewItemIds = useMemo(
+    () => (allEpItems ? allEpItems.flatMap(({ items }) => items.map(it => it.id)) : []),
+    [allEpItems]
+  );
 
   // 전체 뷰 전용 저장 — 특정 epId 기준
   const saveForEp = useCallback((targetEpId, newItems, record = false) => {
@@ -243,9 +249,54 @@ export default function TreatmentPage() {
     el.style.height = el.scrollHeight + 'px';
   };
 
+  const focusTextareaById = useCallback((id, cursor = 0) => {
+    const el = textareaRefs.current[id];
+    if (!el) return false;
+    el.focus();
+    try { el.setSelectionRange(cursor, cursor); } catch {}
+    return true;
+  }, []);
+
+  const moveBetweenItems = useCallback((orderedIds, currentId, direction) => {
+    const currentIndex = orderedIds.indexOf(currentId);
+    if (currentIndex < 0) return false;
+    const targetId = orderedIds[currentIndex + direction];
+    if (!targetId) return false;
+    const targetEl = textareaRefs.current[targetId];
+    const cursor = direction < 0 ? (targetEl?.value?.length ?? 0) : 0;
+    return focusTextareaById(targetId, cursor);
+  }, [focusTextareaById]);
+
+  const handleArrowNavigation = useCallback((e, orderedIds, currentId) => {
+    if (e.nativeEvent.isComposing) return false;
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return false;
+
+    const start = e.target.selectionStart;
+    const end = e.target.selectionEnd;
+    const valueLength = e.target.value.length;
+
+    if (start !== end) return false;
+
+    if (e.key === 'ArrowUp' && start === 0) {
+      const moved = moveBetweenItems(orderedIds, currentId, -1);
+      if (moved) e.preventDefault();
+      return moved;
+    }
+
+    if (e.key === 'ArrowDown' && start === valueLength) {
+      const moved = moveBetweenItems(orderedIds, currentId, 1);
+      if (moved) e.preventDefault();
+      return moved;
+    }
+
+    return false;
+  }, [moveBetweenItems]);
+
   // ─── Keyboard: Enter → split, Backspace at 0 → merge ────────────────────
   const handleKeyDown = useCallback((e, it, idx) => {
     if (e.nativeEvent.isComposing) return;
+
+    if (handleArrowNavigation(e, items.map(item => item.id), it.id)) return;
 
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -300,7 +351,11 @@ export default function TreatmentPage() {
         return;
       }
     }
-  }, [items, save]);
+  }, [items, save, handleArrowNavigation]);
+
+  const handleAllViewKeyDown = useCallback((e, itemId) => {
+    handleArrowNavigation(e, allViewItemIds, itemId);
+  }, [allViewItemIds, handleArrowNavigation]);
 
   // ─── Paste: split multi-line text into multiple items ─────────────────────
   const handlePaste = useCallback((e, it, idx) => {
@@ -615,8 +670,12 @@ export default function TreatmentPage() {
                         placeholder="줄거리 항목 입력"
                         className="flex-1 text-xs resize-none rounded px-3 py-1.5 outline-none"
                         style={{ background: 'var(--c-input)', color: 'var(--c-text)', border: '1px solid var(--c-border3)', lineHeight: 1.5, minHeight: '2em', overflow: 'hidden' }}
-                        ref={el => { if (el) autoResize(el); }}
+                        ref={el => {
+                          textareaRefs.current[it.id] = el;
+                          if (el) autoResize(el);
+                        }}
                         onChange={e => { autoResize(e.target); updateItemForEp(ep.id, epItems, it.id, e.target.value); }}
+                        onKeyDown={e => handleAllViewKeyDown(e, it.id)}
                       />
                     </div>
                   ))}
