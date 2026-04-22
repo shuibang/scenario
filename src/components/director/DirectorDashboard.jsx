@@ -1215,6 +1215,8 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
   const [subCollapsed,  setSubCollapsed]  = useState(false);
   const [localScripts,  setLocalScripts]  = useState(() => loadLocalScripts());
   const [importOpen,    setImportOpen]    = useState(false);
+  // 삭제 진행 중 재클릭 방지 (느린 네트워크에서 중복 요청 차단)
+  const deletingIdsRef = useRef(new Set());
 
   // Drive 토큰 유효성 사전 확인 (로그인은 됐지만 Drive 권한 만료 상태)
   const driveDisconnected = !isGuest && session && !session.provider_token && !isTokenValid();
@@ -1291,38 +1293,52 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
 
   const handleDeleteScript = async (script) => {
     if (!supabase) return;
+    // 이미 삭제 요청이 진행 중이면 재진입 차단 (느린 네트워크에서 중복 클릭 방지)
+    if (deletingIdsRef.current.has(script.id)) return;
     if (!window.confirm(`"${script.title}"\n\n목록에서 삭제하고 Google Drive 파일도 함께 삭제할까요?\n연출노트와 스토리보드도 함께 삭제됩니다.`)) return;
 
-    // 1) Drive 파일 삭제 (실패해도 계속 진행 — 파일이 이미 없는 경우 대비)
-    if (script.drive_file_id) {
-      try {
-        // 토큰이 없으면 세션에서 가져오기
-        if (!isTokenValid()) {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session?.provider_token) setAccessToken(session.provider_token, session.expires_in ?? 3600);
+    deletingIdsRef.current.add(script.id);
+    try {
+      // 1) Drive 파일 삭제 (실패해도 계속 진행 — 파일이 이미 없는 경우 대비)
+      if (script.drive_file_id) {
+        try {
+          if (!isTokenValid()) {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.provider_token) setAccessToken(session.provider_token, session.expires_in ?? 3600);
+          }
+          await deleteFileById(script.drive_file_id);
+        } catch {
+          // Drive 삭제 실패는 무시 (파일 없음·권한 없음 등)
         }
-        await deleteFileById(script.drive_file_id);
-      } catch {
-        // Drive 삭제 실패는 무시 (파일 없음·권한 없음 등)
       }
-    }
 
-    // 2) shared_scripts row 삭제
-    const { data: deleted, error } = await supabase
-      .from('shared_scripts')
-      .delete()
-      .eq('id', script.id)
-      .eq('director_id', session.user.id)
-      .select('id');
-    if (error) { alert(`삭제 실패: ${error.message}`); return; }
-    if (!deleted || deleted.length === 0) {
-      alert('삭제 권한이 없거나 이미 삭제된 항목입니다.');
-      return;
+      // 2) FK 제약 우회 — shared_scripts를 참조하는 하위 테이블을 먼저 정리
+      //    (레거시 director_deliveries, director_notes에 연결된 행이 남아 있으면 삭제 실패)
+      try { await supabase.from('director_deliveries').delete().eq('shared_script_id', script.id); } catch {}
+      try { await supabase.from('director_notes').delete().eq('shared_script_id', script.id); } catch {}
+
+      // 3) shared_scripts row 삭제
+      const { data: deleted, error } = await supabase
+        .from('shared_scripts')
+        .delete()
+        .eq('id', script.id)
+        .eq('director_id', session.user.id)
+        .select('id');
+      if (error) { alert(`삭제 중 오류가 발생했어요.\n${error.message}`); return; }
+      if (!deleted || deleted.length === 0) {
+        // 이미 다른 요청으로 지워진 상태일 뿐이므로 목록에서만 제거하고 조용히 안내
+        setScripts(prev => prev.filter(s => s.id !== script.id));
+        if (selected?.id === script.id) { setSelected(null); setViewing(null); }
+        alert('이미 삭제된 항목입니다.');
+        return;
+      }
+      try { localStorage.removeItem(`director_private_notes_${script.id}`); } catch {}
+      try { localStorage.removeItem(`director_storyboard_${script.id}`); } catch {}
+      setScripts(prev => prev.filter(s => s.id !== script.id));
+      if (selected?.id === script.id) { setSelected(null); setViewing(null); }
+    } finally {
+      deletingIdsRef.current.delete(script.id);
     }
-    try { localStorage.removeItem(`director_private_notes_${script.id}`); } catch {}
-    try { localStorage.removeItem(`director_storyboard_${script.id}`); } catch {}
-    setScripts(prev => prev.filter(s => s.id !== script.id));
-    if (selected?.id === script.id) { setSelected(null); setViewing(null); }
   };
 
   return (
