@@ -1538,7 +1538,6 @@ function Shell({ authUser, setAuthUser }) {
     // ── 파일 ──
     if (action === 'file:new') { setNewProjectOpen(true); return; }
     if (action === 'file:openList')    { setOpenProjectOpen(true); return; }
-    if (action === 'file:openFile')    { setOpenProjectOpen(true); return; }
     if (action === 'file:save')        { handleSave(); return; }
     if (action === 'file:saveAs')      { setSaveAsOpen(true); return; }
     if (action === 'file:share')       { setShareLinkOpen(true); return; }

@@ -11,13 +11,7 @@ export const menuConfig = [
     altKey: 'f',
     items: [
       { id: 'new-project',  label: '새 작품',           shortcut: 'Ctrl+Alt+N',  action: 'file:new' },
-      {
-        id: 'open', label: '열기', hasSubmenu: true,
-        submenu: [
-          { id: 'open-list', label: '내 작품 목록…',    shortcut: 'Ctrl+O',      action: 'file:openList' },
-          { id: 'open-file', label: '파일에서 열기…',   shortcut: 'Ctrl+Alt+O',  action: 'file:openFile' },
-        ],
-      },
+      { id: 'open', label: '열기…', shortcut: 'Ctrl+O', action: 'file:openList' },
       'separator',
       { id: 'save',    label: '저장',             shortcut: 'Ctrl+S',      action: 'file:save' },
       { id: 'save-as', label: '파일로 내보내기…', shortcut: 'Ctrl+Alt+S',  action: 'file:saveAs' },
