@@ -7,7 +7,7 @@ import { loadLogPayload, isShortReviewId as isUUID } from './utils/reviewShare';
 import { AppProvider, useApp, mergeWorkLog } from './store/AppContext';
 import { getSceneFormat, rebuildSceneContent } from './utils/sceneFormat';
 import { FONTS, FONT_STATUS, checkFontsAvailability, getFontPdfStatus, getFontByCssFamily } from './print/FontRegistry';
-import { getItem, setItem, setAll, DB_KEYS, clearDramaStorage, isPublicPcMode, genId, now } from './store/db';
+import { getItem, setItem, getAll, setAll, DB_KEYS, clearDramaStorage, isPublicPcMode, genId, now } from './store/db';
 import { setAccessToken, clearAccessToken, loadFromDrive, isTokenValid, saveSnapshot } from './store/googleDrive';
 import { supabase, signInWithGoogle, supabaseSignOut, extractUserData, refreshDriveToken } from './store/supabaseClient';
 import LeftPanel from './components/LeftPanel';
@@ -806,10 +806,12 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
     try {
       const driveData = await loadFromDrive();
       const localSavedAt = localStorage.getItem('drama_saved_at') || null;
-      const hasLocalData = (() => {
+      // IndexedDB 기반 로컬 데이터 유무 판정 — localStorage('drama_projects')만 보던 예전 로직은
+      //   IndexedDB 마이그레이션 이후 항상 false로 떨어져 Drive가 로컬을 덮어쓰는 문제가 있었음.
+      const hasLocalData = await (async () => {
         try {
-          const raw = localStorage.getItem('drama_projects');
-          return raw ? JSON.parse(raw).length > 0 : false;
+          const p = await getAll(DB_KEYS.projects);
+          return Array.isArray(p) && p.length > 0;
         } catch { return false; }
       })();
       const driveHasData = (driveData?.projects?.length ?? 0) > 0;

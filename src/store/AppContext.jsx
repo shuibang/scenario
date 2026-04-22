@@ -589,11 +589,12 @@ export function AppProvider({ children }) {
     } catch {}
   }, [state.initialized, state.activeDoc, state.activeProjectId, state.activeEpisodeId]);
 
-  // Drive에서 불러올 때 사용 — skipSavedAt 플래그 자동 설정
+  // Drive/스냅샷에서 불러올 때 사용
+  // 주의: skipDriveSaveRef를 쓰지 않는다 — 복원 후 편집이 없으면 Drive에는 여전히 옛 버전이 남아
+  //       다음 새로고침에서 그 옛 버전이 복원된 상태를 덮어쓰는 사고가 발생했다.
+  //       복원 직후에도 자동저장이 돌아 Drive에 복원 상태를 반영하도록 한다.
   const loadFromDriveData = (drivePayload) => {
     skipSavedAtRef.current = true;
-    skipDriveSaveRef.current = true; // 방금 Drive에서 불러온 걸 즉시 다시 쓰지 않음
-    // LOAD_FROM_DRIVE 후 drama_saved_at을 Drive의 savedAt으로 덮어씀 (다음 비교 기준)
     if (drivePayload.savedAt) {
       try { localStorage.setItem('drama_saved_at', drivePayload.savedAt); } catch {}
     }
