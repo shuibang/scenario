@@ -522,16 +522,6 @@ export function AppProvider({ children }) {
     state.stylePreset,
   ]);
 
-  // 초기 로드 시에만 자동 복원 (사용자가 직접 닫은 경우는 복원하지 않음)
-  const didAutoRestore = useRef(false);
-  useEffect(() => {
-    if (state.initialized && !state.activeProjectId && state.projects.length > 0 && !didAutoRestore.current) {
-      didAutoRestore.current = true;
-      dispatch({ type: 'SET_ACTIVE_PROJECT', id: state.projects[0].id });
-    }
-    if (state.initialized) didAutoRestore.current = true;
-  }, [state.initialized]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // 상태 변경마다 URL 동기화
   useEffect(() => {
     if (!state.initialized) return;
