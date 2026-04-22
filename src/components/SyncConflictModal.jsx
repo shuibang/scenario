@@ -67,14 +67,8 @@ function DataCard({ title, savedAt, projectCount, highlight, onClick, label }) {
   );
 }
 
-export default function SyncConflictModal({ localSavedAt, driveData, onKeepLocal, onLoadDrive, onDismiss }) {
+export default function SyncConflictModal({ localSavedAt, driveData, localProjectCount = 0, onKeepLocal, onLoadDrive, onDismiss }) {
   const driveProjectCount = driveData?.projects?.length ?? 0;
-  const localProjectCount = (() => {
-    try {
-      const raw = localStorage.getItem('drama_projects');
-      return raw ? JSON.parse(raw).length : 0;
-    } catch { return 0; }
-  })();
 
   const localIsNewer = new Date(localSavedAt || 0) >= new Date(driveData?.savedAt || 0);
 

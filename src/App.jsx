@@ -808,12 +808,12 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
       const localSavedAt = localStorage.getItem('drama_saved_at') || null;
       // IndexedDB 기반 로컬 데이터 유무 판정 — localStorage('drama_projects')만 보던 예전 로직은
       //   IndexedDB 마이그레이션 이후 항상 false로 떨어져 Drive가 로컬을 덮어쓰는 문제가 있었음.
-      const hasLocalData = await (async () => {
-        try {
-          const p = await getAll(DB_KEYS.projects);
-          return Array.isArray(p) && p.length > 0;
-        } catch { return false; }
-      })();
+      let localProjects = [];
+      try {
+        const p = await getAll(DB_KEYS.projects);
+        if (Array.isArray(p)) localProjects = p;
+      } catch {}
+      const hasLocalData = localProjects.length > 0;
       const driveHasData = (driveData?.projects?.length ?? 0) > 0;
       if (!driveData?.savedAt || !driveHasData) {
         setDriveStatus('synced');
@@ -821,7 +821,7 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
         loadFromDriveData(driveData);
         setDriveStatus('synced');
       } else {
-        onSyncConflict?.({ localSavedAt, driveData });
+        onSyncConflict?.({ localSavedAt, driveData, localProjectCount: localProjects.length });
         setDriveStatus('none');
         _driveSyncing = false;
         return;
@@ -1758,6 +1758,7 @@ function Shell({ authUser, setAuthUser }) {
         <SyncConflictModal
           localSavedAt={syncConflict.localSavedAt}
           driveData={syncConflict.driveData}
+          localProjectCount={syncConflict.localProjectCount ?? state.projects?.length ?? 0}
           onKeepLocal={() => {
             // 로컬 유지 → Drive에 현재 데이터 업로드
             import('./store/googleDrive').then(({ saveToDrive }) => {
