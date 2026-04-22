@@ -233,6 +233,36 @@ export async function saveDirectorScript(title, data) {
   return json.id;
 }
 
+export async function saveFeedbackVersionSnapshot(title, data) {
+  if (!isTokenValid()) throw new Error('DRIVE_AUTH_REQUIRED');
+
+  const safeTitle = (title || 'feedback')
+    .replace(/[/\\?%*:|"<>]/g, '_')
+    .slice(0, 40);
+  const fileName = `feedback_version_${Date.now()}_${safeTitle}.json`;
+  const content = JSON.stringify({
+    title,
+    data,
+    savedAt: new Date().toISOString(),
+  });
+
+  const form = new FormData();
+  form.append(
+    'metadata',
+    new Blob([JSON.stringify({ name: fileName, parents: ['appDataFolder'] })], { type: 'application/json' })
+  );
+  form.append('file', new Blob([content], { type: 'application/json' }));
+
+  const res = await fetch(`${UPLOAD_API}/files?uploadType=multipart&fields=id`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${_accessToken}` },
+    body: form,
+  });
+  if (!res.ok) throw new Error(`Drive save failed: ${res.status}`);
+  const json = await res.json();
+  return json.id;
+}
+
 /**
  * fileId로 Drive 파일 삭제
  * 파일이 이미 없거나 권한 없음(404/403)이면 조용히 무시

@@ -233,14 +233,24 @@ function StickyNote({
   offsetIndex = 0,
   zIndexLevel = 10,
   onActivate,
+  dimmed = false,
 }) {
   const [menu, setMenu] = useState(false);
   const isScript = noteType === 'script';
   const meta = buildFeedbackNoteMeta(note);
+  const collapsible = readOnly && !!meta;
+  const [expanded, setExpanded] = useState(!collapsible);
+
+  useEffect(() => {
+    setExpanded(!collapsible);
+  }, [collapsible, note?.id, note?.feedback_session_key]);
 
   const handleClick = () => {
     onActivate?.();
-    if (readOnly) return;
+    if (readOnly) {
+      if (collapsible) setExpanded((value) => !value);
+      return;
+    }
     setMenu((value) => !value);
   };
 
@@ -262,6 +272,8 @@ function StickyNote({
         cursor: 'pointer',
         zIndex: zIndexLevel,
         borderTop: `3px solid ${isScript ? '#e8b84b' : '#93c5fd'}`,
+        opacity: dimmed ? 0.55 : 1,
+        transform: `translate(${Number(note?.position_offset || 0)}px, ${Number(note?.position_offset || 0) * 0.4}px)`,
       }}
       onClick={handleClick}
     >
@@ -277,11 +289,25 @@ function StickyNote({
         {isScript ? '작가 전달' : '내 노트'}
       </div>
       {meta && (
-        <div style={{ fontSize: 9, color: '#555', lineHeight: 1.4, marginBottom: 4 }}>
-          {meta}
+        <div style={{ fontSize: 9, color: '#555', lineHeight: 1.4, marginBottom: expanded || !collapsible ? 4 : 0, display: 'flex', alignItems: 'center', gap: 4 }}>
+          {!note?.is_read && readOnly && (
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                background: '#dc2626',
+                display: 'inline-block',
+                flexShrink: 0,
+              }}
+            />
+          )}
+          <span>{meta}</span>
         </div>
       )}
-      <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{note.content}</div>
+      {(expanded || !collapsible) && (
+        <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{note.content}</div>
+      )}
       {menu && (
         <div
           style={{
@@ -344,6 +370,7 @@ function BlockRow({
   onEdit,
   onDelete,
   readOnly,
+  highlightSessionId,
 }) {
   const [hovered, setHovered] = useState(false);
   const [popupOpen, setPopupOpen] = useState(false);
@@ -469,6 +496,7 @@ function BlockRow({
             offsetIndex={index}
             zIndexLevel={isRaised ? 40 : 10 + index}
             onActivate={() => setRaisedNoteKey(noteKey)}
+            dimmed={!!highlightSessionId && note?.received_session_id !== highlightSessionId}
             onEdit={() => setPopupOpen(true)}
             onDelete={() => onDelete(note.id ?? note._localId, noteType)}
           />
@@ -487,6 +515,7 @@ export default function DirectorScriptViewer({
   readOnly = false,
   initialNotes = null,
   localOnly = false,
+  highlightSessionId = null,
 }) {
   const [scriptNotes, setScriptNotes] = useState(initialNotes || {});
   const [privateNotes, setPrivateNotes] = useState(() =>
@@ -923,6 +952,7 @@ export default function DirectorScriptViewer({
                 onEdit={handleEdit}
                 onDelete={handleDelete}
                 readOnly={rowReadOnly}
+                highlightSessionId={highlightSessionId}
               />
             );
           })}

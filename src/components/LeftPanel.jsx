@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../store/AppContext';
 import { genId, now } from '../store/db';
 import { isMultiEpisode } from '../utils/projectTypes';
-import { getReceivedDeliveries, saveReceivedDeliveries } from '../utils/receivedFeedback';
 import FeedbackButtons from './FeedbackButtons';
 import FindReplacePanel from './FindReplacePanel';
 import {
@@ -242,11 +241,44 @@ function ProjectItem({ project, section = 'all', expanded, onToggle }) {
                   />
                 </>);
               })()}
-              <FeedbackSection projectId={project.id} activeDoc={activeDoc} dispatch={dispatch} large={large} />
+              <FeedbackSection activeDoc={activeDoc} dispatch={dispatch} large={large} />
             </div>
           </>}
         </div>
       )}
+    </div>
+  );
+}
+
+function FeedbackSection({ activeDoc, dispatch, large }) {
+  const isPageActive = activeDoc === 'director_notes';
+  const indent = large ? 32 : 24;
+
+  return (
+    <div style={{ marginTop: 2 }}>
+      <div
+        onClick={() => { dispatch({ type: 'SET_ACTIVE_DOC', payload: 'director_notes' }); }}
+        className="flex items-center cursor-pointer rounded mx-1 mb-0.5"
+        style={{
+          paddingLeft: indent,
+          paddingRight: 8,
+          paddingTop: large ? 10 : 5,
+          paddingBottom: large ? 10 : 5,
+          background: isPageActive ? 'var(--c-active)' : 'transparent',
+          color: isPageActive ? 'var(--c-accent)' : 'var(--c-text4)',
+          WebkitTapHighlightColor: 'transparent',
+          fontSize: large ? 'clamp(14px, 4vw, 16px)' : undefined,
+        }}
+        onMouseEnter={e => { if (!isPageActive) e.currentTarget.style.background = 'var(--c-hover)'; }}
+        onMouseLeave={e => { if (!isPageActive) e.currentTarget.style.background = 'transparent'; }}
+      >
+        <StickyNote
+          size={large ? 16 : 14}
+          strokeWidth={1.75}
+          style={{ flexShrink: 0, marginRight: 6, color: isPageActive ? 'var(--c-accent)' : 'var(--c-text5)' }}
+        />
+        <span className={`truncate flex-1 ${large ? '' : 'text-sm'}`}>피드백 노트</span>
+      </div>
     </div>
   );
 }
@@ -467,7 +499,7 @@ function NewProjectModal({ onCommit, onCancel }) {
   );
 }
 
-function FeedbackSection({ projectId, activeDoc, dispatch, large }) {
+function LegacyFeedbackSection({ projectId, activeDoc, dispatch, large }) {
   const [expanded, setExpanded] = useState(false);
   const [allDeliveries, setAllDeliveries] = useState(() => getReceivedDeliveries());
   const [activeId, setActiveId] = useState(() => localStorage.getItem('drama_active_delivery_id') || null);

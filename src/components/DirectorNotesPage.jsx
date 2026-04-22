@@ -3,231 +3,461 @@ import DirectorScriptViewer from './director/DirectorScriptViewer';
 import { getBlockPosition, scrollToBlock } from '../utils/blockPosition';
 import { buildFeedbackNoteMeta } from '../utils/feedbackNoteMeta';
 import { useApp } from '../store/AppContext';
-import { getReceivedDeliveries } from '../utils/receivedFeedback';
+import {
+  buildFeedbackNotesByBlock,
+  buildFeedbackViewerState,
+  clearFeedbackFocus,
+  readFeedbackFocus,
+  sortFeedbackCommentsByDocumentOrder,
+} from '../utils/feedbackVersions';
+import {
+  deleteFeedbackVersion,
+  listFeedbackComments,
+  listFeedbackSessionsForVersions,
+  listFeedbackVersions,
+  markFeedbackSessionRead,
+  renameFeedbackVersion,
+} from '../utils/reviewShare';
 
-const ACTIVE_PAGE_KEY = 'drama_active_delivery_id';
+const ACTIVE_VERSION_KEY = 'drama_active_feedback_version_id';
 const ACTIVE_SESSION_KEY = 'drama_active_feedback_session_id';
 
-function getFilteredDeliveries(projectId) {
-  return getReceivedDeliveries().filter((delivery) => !delivery.projectId || delivery.projectId === projectId);
+function getUnreadCountByVersion(sessions) {
+  return (sessions || []).reduce((map, session) => {
+    if (!session?.version_id || session.is_read) return map;
+    map.set(session.version_id, (map.get(session.version_id) || 0) + 1);
+    return map;
+  }, new Map());
 }
 
-function sortSessionsByRecent(sessions) {
-  return [...(sessions || [])].sort(
-    (a, b) =>
-      new Date(b?.savedAt || b?.submittedAt || 0).getTime() -
-      new Date(a?.savedAt || a?.submittedAt || 0).getTime()
+function FeedbackDeleteModal({ open, versionName, sessionCount, commentCount, onClose, onConfirm, deleting }) {
+  if (!open) return null;
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 9999,
+        background: 'rgba(0,0,0,0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 16,
+      }}
+    >
+      <div
+        style={{
+          width: '100%',
+          maxWidth: 440,
+          background: '#fff',
+          borderRadius: 14,
+          boxShadow: '0 20px 50px rgba(0,0,0,0.24)',
+          padding: 24,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 14,
+        }}
+      >
+        <div style={{ fontSize: 18, fontWeight: 700, color: '#111' }}>버전을 삭제할까요?</div>
+        <div style={{ fontSize: 13, color: '#555', lineHeight: 1.7 }}>
+          <strong>{versionName}</strong> 버전과 여기에 달린 피드백 {commentCount}건, 세션 {sessionCount}개,
+          Drive 스냅샷이 모두 삭제됩니다.
+          <br />
+          복구할 수 없습니다.
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <button
+            onClick={onClose}
+            disabled={deleting}
+            style={{
+              padding: '9px 14px',
+              borderRadius: 8,
+              border: '1px solid #ddd',
+              background: '#fff',
+              color: '#666',
+              cursor: deleting ? 'default' : 'pointer',
+              fontSize: 13,
+            }}
+          >
+            취소
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={deleting}
+            style={{
+              padding: '9px 16px',
+              borderRadius: 8,
+              border: 'none',
+              background: deleting ? '#fca5a5' : '#dc2626',
+              color: '#fff',
+              cursor: deleting ? 'default' : 'pointer',
+              fontSize: 13,
+              fontWeight: 700,
+            }}
+          >
+            {deleting ? '삭제 중...' : '영구 삭제'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
-}
-
-function buildBlockOrderMap(appState) {
-  const orderMap = new Map();
-  const activeProjectId = appState?.activeProjectId;
-  const synopsisDocs = Array.isArray(appState?.synopsisDocs) ? appState.synopsisDocs.filter(Boolean) : [];
-  const episodes = Array.isArray(appState?.episodes) ? appState.episodes.filter(Boolean) : [];
-  const scriptBlocks = Array.isArray(appState?.scriptBlocks) ? appState.scriptBlocks.filter(Boolean) : [];
-  let cursor = 0;
-
-  const synopsisDoc = synopsisDocs.find((doc) => doc?.projectId === activeProjectId);
-  const rawSynopsisBlocks = synopsisDoc?.blocks ?? synopsisDoc?.content;
-  if (Array.isArray(rawSynopsisBlocks)) {
-    rawSynopsisBlocks.filter(Boolean).forEach((block) => {
-      if (block?.id && !orderMap.has(block.id)) orderMap.set(block.id, cursor++);
-    });
-  }
-
-  episodes
-    .filter((episode) => episode?.projectId === activeProjectId)
-    .forEach((episode) => {
-      scriptBlocks
-        .filter((block) => block?.episodeId === episode.id)
-        .forEach((block) => {
-          if (block?.id && !orderMap.has(block.id)) orderMap.set(block.id, cursor++);
-        });
-    });
-
-  scriptBlocks.forEach((block) => {
-    if (block?.id && !orderMap.has(block.id)) orderMap.set(block.id, cursor++);
-  });
-
-  return orderMap;
-}
-
-function sortNotesByDocumentOrder(notes, sessions) {
-  const sessionMap = new Map();
-  const orderMapBySession = new Map();
-
-  (sessions || []).forEach((session) => {
-    sessionMap.set(session.id, session);
-    orderMapBySession.set(session.id, buildBlockOrderMap(session.appState));
-  });
-
-  return [...(notes || [])]
-    .map((note, index) => {
-      const sessionId = note.received_session_id;
-      const session = sessionMap.get(sessionId);
-      const orderMap = orderMapBySession.get(sessionId);
-      const blockOrder = orderMap?.has(note.block_id) ? orderMap.get(note.block_id) : Number.MAX_SAFE_INTEGER;
-      const submittedAt = new Date(note.submitted_at || session?.submittedAt || 0).getTime() || 0;
-      return { note, index, blockOrder, submittedAt, session };
-    })
-    .sort((a, b) => {
-      if (a.blockOrder !== b.blockOrder) return a.blockOrder - b.blockOrder;
-      if (a.submittedAt !== b.submittedAt) return a.submittedAt - b.submittedAt;
-      return a.index - b.index;
-    });
 }
 
 export default function DirectorNotesPage() {
   const { state } = useApp();
   const activeProjectId = state.activeProjectId;
-  const [deliveries, setDeliveries] = useState(() => getFilteredDeliveries(activeProjectId));
-  const [selectedId, setSelectedId] = useState(() => {
-    const id = localStorage.getItem(ACTIVE_PAGE_KEY);
-    const list = getFilteredDeliveries(activeProjectId);
-    return (id && list.find((delivery) => delivery.id === id)?.id) || list[0]?.id || null;
-  });
-  const [activeSessionId, setActiveSessionId] = useState(
-    () => localStorage.getItem(ACTIVE_SESSION_KEY) || null
-  );
+  const [versions, setVersions] = useState([]);
+  const [allSessions, setAllSessions] = useState([]);
+  const [comments, setComments] = useState([]);
+  const [selectedVersionId, setSelectedVersionId] = useState(() => localStorage.getItem(ACTIVE_VERSION_KEY) || null);
+  const [activeSessionId, setActiveSessionId] = useState(() => localStorage.getItem(ACTIVE_SESSION_KEY) || null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [panelOpen, setPanelOpen] = useState(true);
-  const [pendingScrollBlockId, setPendingScrollBlockId] = useState('');
+  const [renameVersionId, setRenameVersionId] = useState('');
+  const [renameValue, setRenameValue] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [deleteVersionId, setDeleteVersionId] = useState('');
 
   useEffect(() => {
-    const next = getFilteredDeliveries(activeProjectId);
-    setDeliveries(next);
-    const savedId = localStorage.getItem(ACTIVE_PAGE_KEY);
-    const nextSelectedId =
-      (savedId && next.find((delivery) => delivery.id === savedId)?.id) ||
-      next[0]?.id ||
-      null;
-    setSelectedId(nextSelectedId);
-  }, [activeProjectId]);
+    if (!activeProjectId) {
+      setVersions([]);
+      setAllSessions([]);
+      setComments([]);
+      setSelectedVersionId(null);
+      setActiveSessionId(null);
+      return;
+    }
 
-  useEffect(() => {
-    const handler = () => {
-      const next = getFilteredDeliveries(activeProjectId);
-      setDeliveries(next);
-      const savedId = localStorage.getItem(ACTIVE_PAGE_KEY);
-      const nextSelectedId =
-        (savedId && next.find((delivery) => delivery.id === savedId)?.id) ||
-        next[0]?.id ||
-        null;
-      setSelectedId(nextSelectedId);
+    let mounted = true;
+    const focus = readFeedbackFocus();
+
+    const load = async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const nextVersions = await listFeedbackVersions(activeProjectId);
+        const nextSessions = await listFeedbackSessionsForVersions(nextVersions.map((version) => version.id));
+        if (!mounted) return;
+
+        setVersions(nextVersions);
+        setAllSessions(nextSessions);
+
+        const storedVersionId = localStorage.getItem(ACTIVE_VERSION_KEY);
+        const preferredVersionId =
+          (focus?.scriptId === activeProjectId && focus?.versionId) ||
+          storedVersionId ||
+          selectedVersionId ||
+          nextVersions[0]?.id ||
+          null;
+        const resolvedVersionId =
+          nextVersions.find((version) => version.id === preferredVersionId)?.id || nextVersions[0]?.id || null;
+        setSelectedVersionId(resolvedVersionId);
+        if (resolvedVersionId) localStorage.setItem(ACTIVE_VERSION_KEY, resolvedVersionId);
+        else localStorage.removeItem(ACTIVE_VERSION_KEY);
+      } catch (loadError) {
+        if (!mounted) return;
+        setError(loadError.message || '피드백 노트를 불러오지 못했습니다.');
+        setVersions([]);
+        setAllSessions([]);
+        setComments([]);
+      } finally {
+        if (mounted) setLoading(false);
+      }
     };
-    window.addEventListener('drama_delivery_changed', handler);
-    return () => window.removeEventListener('drama_delivery_changed', handler);
+
+    load();
+    return () => {
+      mounted = false;
+    };
   }, [activeProjectId]);
 
-  const selected = useMemo(
-    () => deliveries.find((delivery) => delivery.id === selectedId) || deliveries[0] || null,
-    [deliveries, selectedId]
+  const selectedVersion = useMemo(
+    () => versions.find((version) => version.id === selectedVersionId) || versions[0] || null,
+    [selectedVersionId, versions]
   );
 
-  const sessions = useMemo(
-    () => sortSessionsByRecent(selected?.sessions || []),
-    [selected]
+  const versionSessions = useMemo(
+    () =>
+      allSessions
+        .filter((session) => session.version_id === selectedVersion?.id)
+        .sort(
+          (left, right) =>
+            new Date(right?.submitted_at || 0).getTime() - new Date(left?.submitted_at || 0).getTime()
+        ),
+    [allSessions, selectedVersion]
   );
 
   useEffect(() => {
-    if (!selected) {
+    if (!selectedVersion) {
+      setComments([]);
       setActiveSessionId(null);
       localStorage.removeItem(ACTIVE_SESSION_KEY);
       return;
     }
 
-    const nextSessionId =
-      (activeSessionId && sessions.find((session) => session.id === activeSessionId)?.id) ||
-      sessions[0]?.id ||
-      null;
+    let mounted = true;
+    const focus = readFeedbackFocus();
 
-    setActiveSessionId(nextSessionId);
-    if (nextSessionId) {
-      localStorage.setItem(ACTIVE_SESSION_KEY, nextSessionId);
-    } else {
-      localStorage.removeItem(ACTIVE_SESSION_KEY);
-    }
-  }, [activeSessionId, selected, sessions]);
+    const loadComments = async () => {
+      try {
+        setComments([]);
+        const nextComments = await listFeedbackComments(versionSessions.map((session) => session.id));
+        if (!mounted) return;
+        setComments(nextComments);
 
-  const activeSession = useMemo(
-    () => sessions.find((session) => session.id === activeSessionId) || sessions[0] || null,
-    [activeSessionId, sessions]
-  );
+        const storedSessionId = localStorage.getItem(ACTIVE_SESSION_KEY);
+        const preferredSessionId =
+          (focus?.scriptId === activeProjectId && focus?.versionId === selectedVersion.id && focus?.sessionId) ||
+          storedSessionId ||
+          activeSessionId ||
+          versionSessions.find((session) => !session.is_read)?.id ||
+          versionSessions[0]?.id ||
+          null;
+        const resolvedSessionId =
+          versionSessions.find((session) => session.id === preferredSessionId)?.id ||
+          versionSessions[0]?.id ||
+          null;
 
-  const sortedNotes = useMemo(
-    () => sortNotesByDocumentOrder(selected?.notes || [], sessions),
-    [selected, sessions]
-  );
+        setActiveSessionId(resolvedSessionId);
+        if (resolvedSessionId) localStorage.setItem(ACTIVE_SESSION_KEY, resolvedSessionId);
+        else localStorage.removeItem(ACTIVE_SESSION_KEY);
+
+        if (focus?.scriptId === activeProjectId && focus?.versionId === selectedVersion.id) {
+          clearFeedbackFocus();
+        }
+      } catch (loadError) {
+        if (!mounted) return;
+        setError(loadError.message || '피드백 코멘트를 불러오지 못했습니다.');
+        setComments([]);
+      }
+    };
+
+    loadComments();
+    return () => {
+      mounted = false;
+    };
+  }, [activeProjectId, selectedVersion, versionSessions]);
 
   useEffect(() => {
-    if (!pendingScrollBlockId) return;
-    const raf = window.requestAnimationFrame(() => {
-      scrollToBlock(pendingScrollBlockId);
-      setPendingScrollBlockId('');
-    });
-    return () => window.cancelAnimationFrame(raf);
-  }, [activeSessionId, pendingScrollBlockId]);
+    if (!activeSessionId) return;
+    const activeSession = versionSessions.find((session) => session.id === activeSessionId);
+    if (!activeSession || activeSession.is_read) return;
 
-  const handleSelectSession = (sessionId) => {
-    setActiveSessionId(sessionId);
-    if (sessionId) localStorage.setItem(ACTIVE_SESSION_KEY, sessionId);
+    markFeedbackSessionRead(activeSessionId)
+      .then((updated) => {
+        if (!updated) return;
+        setAllSessions((current) =>
+          current.map((session) =>
+            session.id === activeSessionId
+              ? { ...session, is_read: true, read_at: updated.read_at || new Date().toISOString() }
+              : session
+          )
+        );
+      })
+      .catch(() => {});
+  }, [activeSessionId, versionSessions]);
+
+  const viewer = useMemo(
+    () => buildFeedbackViewerState(selectedVersion?.snapshot_content || null),
+    [selectedVersion]
+  );
+
+  const sortedComments = useMemo(
+    () => sortFeedbackCommentsByDocumentOrder(comments, viewer.appState, versionSessions),
+    [comments, versionSessions, viewer.appState]
+  );
+
+  const notesMap = useMemo(
+    () => buildFeedbackNotesByBlock(sortedComments, versionSessions),
+    [sortedComments, versionSessions]
+  );
+
+  const unreadCountByVersion = useMemo(
+    () => getUnreadCountByVersion(allSessions),
+    [allSessions]
+  );
+
+  const deleteTarget = useMemo(
+    () => versions.find((version) => version.id === deleteVersionId) || null,
+    [deleteVersionId, versions]
+  );
+
+  const deleteTargetSessionCount = useMemo(
+    () => allSessions.filter((session) => session.version_id === deleteTarget?.id).length,
+    [allSessions, deleteTarget]
+  );
+
+  const deleteTargetCommentCount = useMemo(() => {
+    if (!deleteTarget) return 0;
+    const sessionIds = new Set(
+      allSessions.filter((session) => session.version_id === deleteTarget.id).map((session) => session.id)
+    );
+    return comments.filter((comment) => sessionIds.has(comment.session_id)).length;
+  }, [allSessions, comments, deleteTarget]);
+
+  const handleSelectVersion = (versionId) => {
+    setSelectedVersionId(versionId);
+    if (versionId) localStorage.setItem(ACTIVE_VERSION_KEY, versionId);
+    else localStorage.removeItem(ACTIVE_VERSION_KEY);
   };
 
-  if (deliveries.length === 0) {
+  const handleSelectSession = (sessionId, blockId = '') => {
+    setActiveSessionId(sessionId);
+    if (sessionId) localStorage.setItem(ACTIVE_SESSION_KEY, sessionId);
+    if (blockId) scrollToBlock(blockId);
+  };
+
+  const handleRenameSubmit = async (versionId) => {
+    const nextName = String(renameValue || '').trim();
+    if (!nextName) return;
+    try {
+      const updated = await renameFeedbackVersion(versionId, nextName);
+      setVersions((current) =>
+        current.map((version) =>
+          version.id === versionId ? { ...version, version_name: updated.version_name } : version
+        )
+      );
+      setRenameVersionId('');
+      setRenameValue('');
+    } catch (renameError) {
+      setError(renameError.message || '버전 이름을 바꾸지 못했습니다.');
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    try {
+      setDeleting(true);
+      await deleteFeedbackVersion(deleteTarget);
+      const nextVersions = versions.filter((version) => version.id !== deleteTarget.id);
+      const nextSessions = allSessions.filter((session) => session.version_id !== deleteTarget.id);
+      const remainingSessionIds = new Set(nextSessions.map((session) => session.id));
+      setVersions(nextVersions);
+      setAllSessions(nextSessions);
+      setComments((current) => current.filter((comment) => remainingSessionIds.has(comment.session_id)));
+      const nextSelectedVersionId = nextVersions[0]?.id || null;
+      setSelectedVersionId(nextSelectedVersionId);
+      if (nextSelectedVersionId) localStorage.setItem(ACTIVE_VERSION_KEY, nextSelectedVersionId);
+      else localStorage.removeItem(ACTIVE_VERSION_KEY);
+      setDeleteVersionId('');
+    } catch (deleteError) {
+      setError(deleteError.message || '버전을 삭제하지 못했습니다.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  if (!activeProjectId) {
     return (
       <div style={{ padding: '60px 32px', textAlign: 'center', color: 'var(--c-text5)', fontSize: 13 }}>
-        <div style={{ fontSize: 32, marginBottom: 16, opacity: 0.4 }}>🗒</div>
-        <div style={{ fontWeight: 600, marginBottom: 8 }}>받은 피드백 노트가 없습니다</div>
+        프로젝트를 먼저 선택해 주세요.
+      </div>
+    );
+  }
+
+  if (loading && versions.length === 0) {
+    return (
+      <div style={{ padding: '60px 32px', textAlign: 'center', color: 'var(--c-text5)', fontSize: 13 }}>
+        피드백 노트를 불러오는 중...
+      </div>
+    );
+  }
+
+  if (error && versions.length === 0) {
+    return (
+      <div style={{ padding: '60px 32px', textAlign: 'center', color: '#dc2626', fontSize: 13, lineHeight: 1.7 }}>
+        {error}
+        <br />
+        새 피드백 구조용 Supabase 마이그레이션이 아직 적용되지 않았다면 먼저 반영해 주세요.
+      </div>
+    );
+  }
+
+  if (versions.length === 0) {
+    return (
+      <div style={{ padding: '60px 32px', textAlign: 'center', color: 'var(--c-text5)', fontSize: 13 }}>
+        <div style={{ fontSize: 32, marginBottom: 16, opacity: 0.4 }}>메모</div>
+        <div style={{ fontWeight: 600, marginBottom: 8 }}>아직 버전 피드백이 없습니다</div>
         <div style={{ fontSize: 12, lineHeight: 1.7, color: 'var(--c-text6)' }}>
-          연출에게 검토 링크를 공유하고,<br />
-          연출이 피드백 노트를 전송하면 여기에 표시됩니다
+          공유 링크를 만들면 버전이 생성되고,
+          <br />
+          연출이 회신한 피드백이 여기에 쌓입니다.
         </div>
       </div>
     );
   }
 
-  const sessionNotes = activeSession?.notes || [];
-  const appState = activeSession ? { ...(activeSession.appState || {}), initialized: true } : null;
-  const selections =
-    activeSession?.appState?.selections || { cover: true, synopsis: true, episodes: {}, chars: true };
-  const panelW = panelOpen ? 280 : 44;
-  const notesMap = {};
-
-  sessionNotes.forEach((note) => {
-    if (!note?.block_id) return;
-    if (!notesMap[note.block_id]) notesMap[note.block_id] = [];
-    notesMap[note.block_id].push(note);
-  });
-
   return (
     <div style={{ display: 'flex', height: '100%', minHeight: 0, background: 'var(--c-bg)' }}>
       <div style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: 'auto', background: '#d8d8d8' }}>
-        {selected && sessions.length > 1 && (
-          <div
-            style={{
-              position: 'sticky',
-              top: 0,
-              zIndex: 20,
-              display: 'flex',
-              gap: 8,
-              overflowX: 'auto',
-              padding: '10px 14px',
-              borderBottom: '1px solid #d7d7d7',
-              background: 'rgba(250,250,250,0.96)',
-              backdropFilter: 'blur(10px)',
-            }}
-          >
-            {sessions.map((session, index) => {
-              const meta =
-                buildFeedbackNoteMeta({
-                  sender_display_name: session.senderDisplayName,
-                  submitted_at: session.submittedAt,
-                }) || `회신 ${sessions.length - index}`;
-              const active = session.id === activeSession?.id;
-              return (
+        <div
+          style={{
+            position: 'sticky',
+            top: 0,
+            zIndex: 20,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
+            padding: '10px 14px',
+            borderBottom: '1px solid #d7d7d7',
+            background: 'rgba(250,250,250,0.96)',
+            backdropFilter: 'blur(10px)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflowX: 'auto' }}>
+            {versions.map((version) => {
+              const unreadCount = unreadCountByVersion.get(version.id) || 0;
+              const active = version.id === selectedVersion?.id;
+              const editing = renameVersionId === version.id;
+              return editing ? (
+                <div
+                  key={version.id}
+                  style={{
+                    flexShrink: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '6px 10px',
+                    borderRadius: 999,
+                    background: '#fff',
+                    border: '1px solid #2563eb',
+                  }}
+                >
+                  <input
+                    value={renameValue}
+                    onChange={(event) => setRenameValue(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') handleRenameSubmit(version.id);
+                      if (event.key === 'Escape') {
+                        setRenameVersionId('');
+                        setRenameValue('');
+                      }
+                    }}
+                    style={{
+                      width: 90,
+                      border: 'none',
+                      outline: 'none',
+                      fontSize: 12,
+                      fontWeight: 600,
+                    }}
+                  />
+                  <button
+                    onClick={() => handleRenameSubmit(version.id)}
+                    style={{ border: 'none', background: 'none', color: '#2563eb', fontSize: 11, cursor: 'pointer' }}
+                  >
+                    저장
+                  </button>
+                </div>
+              ) : (
                 <button
-                  key={session.id}
-                  onClick={() => handleSelectSession(session.id)}
+                  key={version.id}
+                  onClick={() => handleSelectVersion(version.id)}
+                  onDoubleClick={() => {
+                    setRenameVersionId(version.id);
+                    setRenameValue(version.version_name);
+                  }}
                   style={{
                     flexShrink: 0,
                     padding: '7px 12px',
@@ -239,32 +469,139 @@ export default function DirectorNotesPage() {
                     fontWeight: active ? 700 : 500,
                     cursor: 'pointer',
                     whiteSpace: 'nowrap',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
                   }}
                 >
-                  {meta}
+                  <span>{version.version_name}</span>
+                  {unreadCount > 0 && (
+                    <span
+                      style={{
+                        minWidth: 18,
+                        height: 18,
+                        padding: '0 5px',
+                        borderRadius: 999,
+                        background: '#dc2626',
+                        color: '#fff',
+                        fontSize: 10,
+                        fontWeight: 700,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      {unreadCount}
+                    </span>
+                  )}
                 </button>
               );
             })}
-          </div>
-        )}
 
-        {appState ? (
-          <DirectorScriptViewer
-            appState={appState}
-            selections={selections}
-            readOnly={true}
-            initialNotes={notesMap}
-          />
-        ) : (
-          <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 13 }}>
-            왼쪽 피드백 메뉴에서 항목을 선택해주세요
+            {selectedVersion && (
+              <>
+                <button
+                  onClick={() => {
+                    setRenameVersionId(selectedVersion.id);
+                    setRenameValue(selectedVersion.version_name);
+                  }}
+                  style={{
+                    flexShrink: 0,
+                    padding: '7px 12px',
+                    borderRadius: 999,
+                    border: '1px solid #d7d7d7',
+                    background: '#fff',
+                    color: '#555',
+                    fontSize: 11,
+                    cursor: 'pointer',
+                  }}
+                >
+                  이름 변경
+                </button>
+                <button
+                  onClick={() => setDeleteVersionId(selectedVersion.id)}
+                  style={{
+                    flexShrink: 0,
+                    padding: '7px 12px',
+                    borderRadius: 999,
+                    border: '1px solid #fecaca',
+                    background: '#fff5f5',
+                    color: '#b91c1c',
+                    fontSize: 11,
+                    cursor: 'pointer',
+                  }}
+                >
+                  버전 삭제
+                </button>
+              </>
+            )}
           </div>
-        )}
+
+          {versionSessions.length > 0 && (
+            <div style={{ display: 'flex', gap: 8, overflowX: 'auto' }}>
+              {versionSessions.map((session) => {
+                const active = session.id === activeSessionId;
+                const meta =
+                  buildFeedbackNoteMeta({
+                    sender_display_name: session.sender_display_name,
+                    submitted_at: session.submitted_at,
+                  }) || session.sender_display_name;
+                return (
+                  <button
+                    key={session.id}
+                    onClick={() => handleSelectSession(session.id)}
+                    style={{
+                      flexShrink: 0,
+                      padding: '6px 11px',
+                      borderRadius: 999,
+                      border: active ? '1px solid #2563eb' : '1px solid #e5e7eb',
+                      background: active ? '#eff6ff' : '#fff',
+                      color: active ? '#1d4ed8' : '#666',
+                      fontSize: 11,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <span>{meta}</span>
+                    {!session.is_read && (
+                      <span
+                        style={{
+                          width: 7,
+                          height: 7,
+                          borderRadius: '50%',
+                          background: '#dc2626',
+                          display: 'inline-block',
+                        }}
+                      />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {error && (
+            <div style={{ fontSize: 12, color: '#dc2626' }}>
+              {error}
+            </div>
+          )}
+        </div>
+
+        <DirectorScriptViewer
+          appState={viewer.appState}
+          selections={viewer.selections}
+          readOnly={true}
+          initialNotes={notesMap}
+          highlightSessionId={activeSessionId}
+        />
       </div>
 
       <div
         style={{
-          width: panelW,
+          width: panelOpen ? 280 : 44,
           flexShrink: 0,
           background: '#fff',
           borderLeft: '1px solid #ddd',
@@ -277,8 +614,7 @@ export default function DirectorNotesPage() {
         <div style={{ height: 44, flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 12px', borderBottom: '1px solid #eee', gap: 8 }}>
           {panelOpen && (
             <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: '#222' }}>
-              코멘트
-              <span style={{ fontSize: 11, fontWeight: 400, color: '#999' }}>({sortedNotes.length})</span>
+              코멘트 <span style={{ fontSize: 11, fontWeight: 400, color: '#999' }}>({sortedComments.length})</span>
             </span>
           )}
           <button
@@ -291,38 +627,37 @@ export default function DirectorNotesPage() {
 
         {panelOpen && (
           <div style={{ flex: 1, overflowY: 'auto', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {sortedNotes.length === 0 && (
+            {sortedComments.length === 0 && (
               <div style={{ textAlign: 'center', color: '#bbb', fontSize: 12, marginTop: 24 }}>
                 코멘트가 없습니다.
               </div>
             )}
 
-            {sortedNotes.map(({ note, session, index }) => {
-              const pos = getBlockPosition(note.block_id, session?.appState?.scriptBlocks);
-              const meta = buildFeedbackNoteMeta(note);
-              const active = note.received_session_id === activeSession?.id;
+            {sortedComments.map((comment, index) => {
+              const blockId = comment?.line_ref?.block_id || '';
+              const session = versionSessions.find((item) => item.id === comment.session_id) || null;
+              const meta = buildFeedbackNoteMeta({
+                sender_display_name: session?.sender_display_name,
+                submitted_at: session?.submitted_at,
+              });
+              const active = comment.session_id === activeSessionId;
+              const position = getBlockPosition(blockId, viewer.appState?.scriptBlocks);
               return (
                 <button
-                  key={note.feedback_session_key || note.submitted_at || note.id || `${note.block_id}_${index}`}
-                  onClick={() => {
-                    if (note.received_session_id && note.received_session_id !== activeSession?.id) {
-                      handleSelectSession(note.received_session_id);
-                      setPendingScrollBlockId(note.block_id);
-                      return;
-                    }
-                    scrollToBlock(note.block_id);
-                  }}
+                  key={comment.id || `${blockId}_${index}`}
+                  onClick={() => handleSelectSession(comment.session_id, blockId)}
                   style={{
                     textAlign: 'left',
-                    background: note.color || '#fef08a',
+                    background: comment?.line_ref?.color || '#fef08a',
                     borderRadius: 6,
                     padding: '8px 10px',
                     boxShadow: '1px 2px 6px rgba(0,0,0,0.08)',
                     border: active ? '1px solid rgba(37,99,235,0.35)' : '1px solid transparent',
                     cursor: 'pointer',
+                    opacity: activeSessionId && !active ? 0.72 : 1,
                   }}
                 >
-                  {pos && (
+                  {position && (
                     <div
                       style={{
                         fontSize: 10,
@@ -342,7 +677,7 @@ export default function DirectorNotesPage() {
                         border: '1px solid rgba(37,99,235,0.2)',
                       }}
                     >
-                      ↳ {pos}
+                      {position}
                     </div>
                   )}
                   {meta && (
@@ -351,7 +686,7 @@ export default function DirectorNotesPage() {
                     </div>
                   )}
                   <div style={{ fontSize: 13, color: '#111', lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                    {note.content}
+                    {comment.comment_text}
                   </div>
                 </button>
               );
@@ -359,6 +694,16 @@ export default function DirectorNotesPage() {
           </div>
         )}
       </div>
+
+      <FeedbackDeleteModal
+        open={!!deleteTarget}
+        versionName={deleteTarget?.version_name || ''}
+        sessionCount={deleteTargetSessionCount}
+        commentCount={deleteTargetCommentCount}
+        onClose={() => setDeleteVersionId('')}
+        onConfirm={handleDeleteConfirm}
+        deleting={deleting}
+      />
     </div>
   );
 }

@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useApp } from '../../store/AppContext';
 import MobileScriptTab from './MobileScriptTab';
 import MobileMemoTab, { MobileChecklistPanel } from './MobileMemoTab';
 import AdBanner from '../AdBanner';
-import { getReceivedDeliveries } from '../../utils/receivedFeedback';
 
 const TABS = [
   { id: 'script',   icon: '📝', label: '대본' },
@@ -26,7 +25,7 @@ const PLAN_DOCS = [
   { doc: 'scenelist',  label: '씬리스트' },
 ];
 
-function FeedbackTabContent({ dispatch, onClose }) {
+function LegacyFeedbackTabContent({ dispatch, onClose }) {
   const { state } = useApp();
   const activeProjectId = state.activeProjectId;
   const [deliveries] = useState(() =>
@@ -73,6 +72,22 @@ const OPEN_H     = 280;  // px — 열렸을 때 패널 전체 고정 높이
 const CONTENT_H  = OPEN_H - TAB_H; // 콘텐츠 영역 = 224px
 const AD_W       = '25%'; // 왼쪽 광고 (대본 탭 버튼 폭과 동일)
 const MENU_W     = '75%'; // 오른쪽 메뉴
+
+function FeedbackTabContent({ dispatch, onClose, activeDoc }) {
+  return (
+    <div className="m-panel-content">
+      <div
+        className={`m-item${activeDoc === 'director_notes' ? ' active' : ''}`}
+        onClick={() => {
+          dispatch({ type: 'SET_ACTIVE_DOC', payload: 'director_notes' });
+          onClose?.();
+        }}
+      >
+        피드백 노트
+      </div>
+    </div>
+  );
+}
 
 export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, onClose }) {
   const { state, dispatch } = useApp();
@@ -182,7 +197,7 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, on
                   </div>
                 )}
                 {tab === 'feedback' && (
-                  <FeedbackTabContent dispatch={dispatch} onClose={onClose} />
+                  <FeedbackTabContent dispatch={dispatch} onClose={onClose} activeDoc={activeDoc} />
                 )}
               </div>
             </>
