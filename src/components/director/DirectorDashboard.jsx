@@ -9,6 +9,7 @@ import DirectorErrorReportPage from './DirectorErrorReportPage';
 import DirectorMembershipPage from './DirectorMembershipPage';
 import PreviewRenderer from '../../print/PreviewRenderer';
 import { parseFullScript, buildPanelsFromScenes, detectScenes } from '../../utils/parseExternalScript';
+import { getStoredFeedbackDisplayName } from '../../utils/feedbackDisplayName';
 import ExcelJS from 'exceljs';
 
 // ─── 텍스트 → appState 변환 (로컬 텍스트 가져오기용) ─────────────────────────
@@ -1662,6 +1663,13 @@ function SendButton({ scriptRow, viewing }) {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('로그인이 필요합니다.');
+      const submittedAt = new Date().toISOString();
+      const senderDisplayName =
+        getStoredFeedbackDisplayName() ||
+        extractUserData(session)?.name ||
+        session.user?.email?.split('@')[0] ||
+        '이름 미상';
+      if (!session) throw new Error('로그인이 필요합니다.');
 
       // 현재 메모 전체 로드
       const { data: notesData } = await supabase
@@ -1669,13 +1677,21 @@ function SendButton({ scriptRow, viewing }) {
         .select('*')
         .eq('shared_script_id', scriptRow.id);
 
+      const notesSnapshot = (notesData || []).map((note, index) => ({
+        ...note,
+        sender_user_id: session.user.id,
+        sender_display_name: senderDisplayName,
+        submitted_at: submittedAt,
+        feedback_session_key: `${submittedAt}:${note.id || note.block_id || index}`,
+      }));
+
       const { data, error } = await supabase
         .from('director_deliveries')
         .insert({
           director_id:      session.user.id,
           shared_script_id: scriptRow.id,
           script_snapshot:  viewing.appState,
-          notes_snapshot:   notesData || [],
+          notes_snapshot:   notesSnapshot,
         })
         .select('id')
         .single();

@@ -3,23 +3,139 @@
  * 작가가 연출 전송 링크(#delivery=UUID)를 열었을 때 보이는 화면
  * - DirectorScriptViewer(readOnly)로 코멘트 인라인 표시
  * - 우측 패널: 코멘트 목록 (위치 뱃지 클릭 → 해당 블록 스크롤)
- * - "연출노트로 저장" → localStorage에 버전 누적 저장
+ * - "피드백 노트로 저장" → localStorage에 버전 누적 저장
  */
 import { useState, useEffect } from 'react';
 import { supabase } from '../store/supabaseClient';
 import DirectorScriptViewer from './director/DirectorScriptViewer';
 import { getBlockPosition, scrollToBlock } from '../utils/blockPosition';
+import { buildFeedbackNoteMeta } from '../utils/feedbackNoteMeta';
 import { getAll } from '../store/db';
 
 const DELIVERY_STORAGE_KEY = 'director_deliveries_received';
 
+function noteMergeKey(note, fallbackIndex) {
+  if (!note) return `fallback:${fallbackIndex}`;
+  const sessionKey =
+    note.feedback_session_key ||
+    note.delivery_id ||
+    note.submitted_at ||
+    note.submittedAt ||
+    '';
+  const baseKey = note.id || note.block_id || `fallback:${fallbackIndex}`;
+  return sessionKey ? `${sessionKey}:${baseKey}` : baseKey;
+}
+
+function normalizeNotes(notes) {
+  return Array.isArray(notes) ? notes.filter(Boolean) : [];
+}
+
+function mergeNotes(existingNotes, incomingNotes) {
+  const merged = normalizeNotes(existingNotes).map(note => ({ ...note }));
+  const indexByKey = new Map();
+
+  merged.forEach((note, index) => {
+    indexByKey.set(noteMergeKey(note, index), index);
+  });
+
+  normalizeNotes(incomingNotes).forEach((note, index) => {
+    const key = noteMergeKey(note, index);
+    const existingIndex = indexByKey.get(key);
+    if (existingIndex === undefined) {
+      indexByKey.set(key, merged.length);
+      merged.push({ ...note });
+      return;
+    }
+    merged[existingIndex] = { ...merged[existingIndex], ...note };
+  });
+
+  return merged;
+}
+
+function entryTimestamp(entry) {
+  return new Date(entry?.savedAt || entry?.createdAt || 0).getTime() || 0;
+}
+
+function projectTimestamp(project) {
+  return new Date(project?.updatedAt || project?.createdAt || 0).getTime() || 0;
+}
+
+function sortProjectsByRecent(projects) {
+  return [...(Array.isArray(projects) ? projects : [])]
+    .filter(Boolean)
+    .sort((a, b) => projectTimestamp(b) - projectTimestamp(a));
+}
+
+function normalizeReceivedDeliveries(list) {
+  const source = Array.isArray(list) ? list.filter(Boolean) : [];
+  const mergedByProject = new Map();
+  const standalone = [];
+
+  source.forEach((entry, index) => {
+    const normalized = {
+      id: entry.id || `delivery_${index}`,
+      deliveryIds: Array.isArray(entry.deliveryIds) && entry.deliveryIds.length > 0
+        ? [...new Set(entry.deliveryIds.filter(Boolean))]
+        : (entry.id ? [entry.id] : []),
+      title: entry.title || '피드백 노트',
+      savedAt: entry.savedAt || entry.createdAt || new Date().toISOString(),
+      createdAt: entry.createdAt || entry.savedAt || new Date().toISOString(),
+      appState: entry.appState || null,
+      notes: normalizeNotes(entry.notes),
+      projectId: entry.projectId || null,
+    };
+
+    if (!normalized.projectId) {
+      standalone.push(normalized);
+      return;
+    }
+
+    const current = mergedByProject.get(normalized.projectId);
+    if (!current) {
+      mergedByProject.set(normalized.projectId, normalized);
+      return;
+    }
+
+    const keepLatest = entryTimestamp(normalized) >= entryTimestamp(current);
+    mergedByProject.set(normalized.projectId, {
+      ...(keepLatest ? normalized : current),
+      id: current.id,
+      deliveryIds: [...new Set([...(current.deliveryIds || []), ...(normalized.deliveryIds || [])])],
+      projectId: current.projectId || normalized.projectId,
+      title: (keepLatest ? normalized.title : current.title) || '피드백 노트',
+      notes: mergeNotes(current.notes, normalized.notes),
+      appState: keepLatest ? (normalized.appState || current.appState) : (current.appState || normalized.appState),
+      createdAt: current.createdAt || normalized.createdAt,
+      savedAt: keepLatest ? normalized.savedAt : current.savedAt,
+    });
+  });
+
+  return [
+    ...Array.from(mergedByProject.values()).sort((a, b) => entryTimestamp(b) - entryTimestamp(a)),
+    ...standalone.sort((a, b) => entryTimestamp(b) - entryTimestamp(a)),
+  ];
+}
+
+function containsDeliveryId(list, deliveryId) {
+  return normalizeReceivedDeliveries(list).some(entry =>
+    entry.id === deliveryId || (entry.deliveryIds || []).includes(deliveryId)
+  );
+}
+
 export function getReceivedDeliveries() {
-  try { return JSON.parse(localStorage.getItem(DELIVERY_STORAGE_KEY) || '[]'); }
+  try {
+    const raw = JSON.parse(localStorage.getItem(DELIVERY_STORAGE_KEY) || '[]');
+    const normalized = normalizeReceivedDeliveries(raw);
+    if (JSON.stringify(raw) !== JSON.stringify(normalized)) {
+      localStorage.setItem(DELIVERY_STORAGE_KEY, JSON.stringify(normalized));
+    }
+    return normalized;
+  }
   catch { return []; }
 }
 
 function saveReceived(list) {
-  localStorage.setItem(DELIVERY_STORAGE_KEY, JSON.stringify(list));
+  localStorage.setItem(DELIVERY_STORAGE_KEY, JSON.stringify(normalizeReceivedDeliveries(list)));
 }
 
 export default function DirectorDeliveryView() {
@@ -48,27 +164,28 @@ export default function DirectorDeliveryView() {
         if (error || !data) { setBad(true); return; }
         setDelivery(data);
         const existing = getReceivedDeliveries();
-        if (existing.some(d => d.id === data.id)) setAlreadySaved(true);
+        if (containsDeliveryId(existing, data.id)) setAlreadySaved(true);
       });
   }, [deliveryId]);
 
   const openPicker = async () => {
     if (!delivery) return;
     const existing = getReceivedDeliveries();
-    if (existing.some(d => d.id === delivery.id)) { setAlreadySaved(true); return; }
-    const list = await getAll('projects');
-    setProjects(list || []);
-    setPickedProjId(list?.[0]?.id || '');
+    if (containsDeliveryId(existing, delivery.id)) { setAlreadySaved(true); return; }
+    const list = sortProjectsByRecent(await getAll('projects'));
+    setProjects(list);
+    setPickedProjId(list[0]?.id || '');
     setPickerOpen(true);
   };
 
   const handleConfirmSave = () => {
     if (!delivery) return;
     const existing = getReceivedDeliveries();
-    if (existing.some(d => d.id === delivery.id)) { setAlreadySaved(true); setPickerOpen(false); return; }
+    if (containsDeliveryId(existing, delivery.id)) { setAlreadySaved(true); setPickerOpen(false); return; }
     saveReceived([{
       id:        delivery.id,
-      title:     delivery.script_snapshot?.projects?.[0]?.title || '연출노트',
+      deliveryIds:[delivery.id],
+      title:     delivery.script_snapshot?.projects?.[0]?.title || '피드백 노트',
       savedAt:   new Date().toISOString(),
       createdAt: delivery.created_at,
       appState:  delivery.script_snapshot,
@@ -94,13 +211,17 @@ export default function DirectorDeliveryView() {
 
   const appState   = { ...(delivery.script_snapshot || {}), initialized: true };
   const selections = delivery.script_snapshot?.selections || { cover: true, synopsis: true, episodes: {}, chars: true };
-  const title      = delivery.script_snapshot?.projects?.[0]?.title || '연출노트';
+  const title      = delivery.script_snapshot?.projects?.[0]?.title || '피드백 노트';
   const notes      = delivery.notes_snapshot || [];
   const panelW     = panelOpen ? 280 : 44;
 
   // notes_snapshot → { [block_id]: note } 맵
   const notesMap = {};
-  notes.forEach(n => { if (n.block_id) notesMap[n.block_id] = n; });
+  notes.forEach(n => {
+    if (!n.block_id) return;
+    if (!notesMap[n.block_id]) notesMap[n.block_id] = [];
+    notesMap[n.block_id].push(n);
+  });
 
   return (
     <div style={{ height: '100vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', fontFamily: "'Pretendard', 'Apple SD Gothic Neo', sans-serif" }}>
@@ -115,7 +236,7 @@ export default function DirectorDeliveryView() {
           style={{ fontSize: 12, color: '#888', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
           ← 대본 작업실
         </button>
-        <span style={{ fontWeight: 700, fontSize: 14, color: '#111' }}>{title} — 연출노트</span>
+        <span style={{ fontWeight: 700, fontSize: 14, color: '#111' }}>{title} — 피드백 노트</span>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
           {saved && <span style={{ fontSize: 12, color: '#4caf50' }}>저장됨 ✓</span>}
           <button onClick={openPicker} disabled={alreadySaved}
@@ -125,7 +246,7 @@ export default function DirectorDeliveryView() {
               color: '#fff', fontSize: 12, fontWeight: 600,
               cursor: alreadySaved ? 'default' : 'pointer',
             }}>
-            {alreadySaved ? '이미 저장됨' : '연출노트로 저장'}
+            {alreadySaved ? '이미 저장됨' : '피드백 노트로 저장'}
           </button>
         </div>
       </header>
@@ -164,8 +285,9 @@ export default function DirectorDeliveryView() {
               )}
               {notes.map((n, i) => {
                 const pos = getBlockPosition(n.block_id, appState?.scriptBlocks);
+                const meta = buildFeedbackNoteMeta(n);
                 return (
-                  <div key={n.id || i} style={{
+                  <div key={n.feedback_session_key || n.submitted_at || n.id || `${n.block_id}_${i}`} style={{
                     background: n.color || '#fef08a', borderRadius: 6, padding: '8px 10px',
                     boxShadow: '1px 2px 6px rgba(0,0,0,0.08)',
                   }}>
@@ -181,6 +303,11 @@ export default function DirectorDeliveryView() {
                           cursor: 'pointer', border: '1px solid rgba(37,99,235,0.2)',
                         }}
                       >📍 {pos}</div>
+                    )}
+                    {meta && (
+                      <div style={{ fontSize: 10, color: '#666', fontWeight: 600, marginBottom: 6 }}>
+                        {meta}
+                      </div>
                     )}
                     <div style={{ fontSize: 13, color: '#111', lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                       {n.content}

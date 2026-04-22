@@ -9,6 +9,7 @@ import { useState, useEffect } from 'react';
 import { getReceivedDeliveries } from './DirectorDeliveryView';
 import DirectorScriptViewer from './director/DirectorScriptViewer';
 import { getBlockPosition, scrollToBlock } from '../utils/blockPosition';
+import { buildFeedbackNoteMeta } from '../utils/feedbackNoteMeta';
 import { useApp } from '../store/AppContext';
 
 export default function DirectorNotesPage() {
@@ -58,7 +59,11 @@ export default function DirectorNotesPage() {
 
   // notes_snapshot 배열 → { [block_id]: note } 맵 (DirectorScriptViewer initialNotes 형식)
   const notesMap = {};
-  notes.forEach(n => { if (n.block_id) notesMap[n.block_id] = n; });
+  notes.forEach(n => {
+    if (!n.block_id) return;
+    if (!notesMap[n.block_id]) notesMap[n.block_id] = [];
+    notesMap[n.block_id].push(n);
+  });
 
   return (
     <div style={{ display: 'flex', height: '100%', minHeight: 0, background: 'var(--c-bg)' }}>
@@ -100,8 +105,9 @@ export default function DirectorNotesPage() {
             )}
             {notes.map((n, i) => {
               const pos = getBlockPosition(n.block_id, appState?.scriptBlocks);
+              const meta = buildFeedbackNoteMeta(n);
               return (
-                <div key={n.id || i} style={{
+                <div key={n.feedback_session_key || n.submitted_at || n.id || `${n.block_id}_${i}`} style={{
                   background: n.color || '#fef08a', borderRadius: 6, padding: '8px 10px',
                   boxShadow: '1px 2px 6px rgba(0,0,0,0.08)',
                 }}>
@@ -117,6 +123,11 @@ export default function DirectorNotesPage() {
                         cursor: 'pointer', border: '1px solid rgba(37,99,235,0.2)',
                       }}
                     >📍 {pos}</div>
+                  )}
+                  {meta && (
+                    <div style={{ fontSize: 10, color: '#666', fontWeight: 600, marginBottom: 6 }}>
+                      {meta}
+                    </div>
                   )}
                   <div style={{ fontSize: 13, color: '#111', lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                     {n.content}
