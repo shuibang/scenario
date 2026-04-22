@@ -1171,9 +1171,39 @@ function EmptySlot({ icon, label, sub }) {
 }
 
 // ─── 패널들 ───────────────────────────────────────────────────────────────────
+// 404는 Drive에서 파일 자체가 사라진 고아 상태 — 재로그인해도 복구 불가
+function isDriveMissing(msg) {
+  return msg && msg.includes('404');
+}
 // Drive 끊김 여부: provider_token이 없을 때 참
 function isDriveError(msg) {
+  if (isDriveMissing(msg)) return false;
   return msg && (msg.includes('Drive 권한') || msg.includes('provider_token') || msg.includes('Drive'));
+}
+
+function OrphanScriptCard({ D, onRemove, removing }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, padding: 32, textAlign: 'center', maxWidth: 340 }}>
+      <div style={{ fontSize: 32 }}>🗂</div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: D.text }}>Drive에서 파일을 찾을 수 없어요</div>
+      <div style={{ fontSize: 12, color: D.text2, lineHeight: 1.7 }}>
+        이 대본의 Drive 파일이 이미 삭제된 것 같습니다.<br />
+        작품 목록에서 제거할 수 있어요.
+      </div>
+      <button
+        onClick={onRemove}
+        disabled={removing}
+        style={{
+          padding: '8px 20px', borderRadius: 8,
+          border: `1px solid ${D.border}`, background: D.card,
+          color: D.text, fontSize: 13, fontWeight: 500,
+          cursor: removing ? 'not-allowed' : 'pointer', opacity: removing ? 0.6 : 1,
+        }}
+      >
+        {removing ? '제거 중…' : '목록에서 제거'}
+      </button>
+    </div>
+  );
 }
 
 function DriveReconnectCard({ D, message }) {
@@ -1217,6 +1247,7 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
   const [importOpen,    setImportOpen]    = useState(false);
   // 삭제 진행 중 재클릭 방지 (느린 네트워크에서 중복 요청 차단)
   const deletingIdsRef = useRef(new Set());
+  const [removingOrphan, setRemovingOrphan] = useState(false);
 
   // Drive 토큰 유효성 사전 확인 (로그인은 됐지만 Drive 권한 만료 상태)
   const driveDisconnected = !isGuest && session && !session.provider_token && !isTokenValid();
@@ -1333,6 +1364,29 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
       if (selected?.id === script.id) { setSelected(null); setViewing(null); }
     } finally {
       deletingIdsRef.current.delete(script.id);
+    }
+  };
+
+  // Drive 파일이 이미 사라진 고아 레코드를 목록에서 조용히 제거 (확인창 없음 — 사용자가 카드 버튼에서 명시적으로 누름)
+  const removeOrphanScript = async (script) => {
+    if (!supabase || !script) return;
+    setRemovingOrphan(true);
+    try {
+      const { error } = await supabase
+        .from('shared_scripts')
+        .delete()
+        .eq('id', script.id)
+        .eq('director_id', session.user.id);
+      if (error) {
+        alert(`목록에서 제거 실패: ${error.message}`);
+        return;
+      }
+      try { localStorage.removeItem(`director_private_notes_${script.id}`); } catch {}
+      try { localStorage.removeItem(`director_storyboard_${script.id}`); } catch {}
+      setScripts(prev => prev.filter(s => s.id !== script.id));
+      if (selected?.id === script.id) { setSelected(null); setViewing(null); }
+    } finally {
+      setRemovingOrphan(false);
     }
   };
 
@@ -1477,9 +1531,11 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
           )}
           {selected && !loading && viewing?.error && (
             <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {isDriveError(viewing.error)
-                ? <DriveReconnectCard D={D} message={viewing.error} />
-                : <div style={{ fontSize: 13, color: '#c00' }}>불러오기 실패: {viewing.error}</div>
+              {isDriveMissing(viewing.error)
+                ? <OrphanScriptCard D={D} onRemove={() => removeOrphanScript(selected)} removing={removingOrphan} />
+                : isDriveError(viewing.error)
+                  ? <DriveReconnectCard D={D} message={viewing.error} />
+                  : <div style={{ fontSize: 13, color: '#c00' }}>불러오기 실패: {viewing.error}</div>
               }
             </div>
           )}
