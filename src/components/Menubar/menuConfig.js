@@ -66,7 +66,7 @@ export const menuConfig = [
     items: [
       { id: 'toggle-explorer', label: '프로젝트 탐색기', shortcut: 'Ctrl+Alt+1', action: 'view:toggleExplorer', checkable: true },
       { id: 'toggle-topbar',   label: '상단바',                                   action: 'view:toggleTopbar',   checkable: true },
-      { id: 'split-view',      label: '분할 보기',        shortcut: 'Ctrl+Alt+2', action: 'view:splitView',      checkable: true },
+      { id: 'split-view',      label: '분할 보기',        shortcut: 'Ctrl+Alt+2', action: 'view:splitView',      checkable: true, mobileHide: true },
       { id: 'focus-mode',      label: '집중 모드',        shortcut: 'F11',        action: 'view:focusMode' },
       'separator',
       { id: 'fullscreen',      label: '전체 화면',        shortcut: 'F12',        action: 'view:fullscreen' },

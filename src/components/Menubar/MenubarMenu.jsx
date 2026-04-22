@@ -3,9 +3,11 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import MenubarItem from './MenubarItem';
 import MenubarSeparator from './MenubarSeparator';
 
-export default function MenubarMenu({ menu, onAction, checkedItems = {}, dynamicData = {} }) {
+export default function MenubarMenu({ menu, onAction, checkedItems = {}, dynamicData = {}, isMobile = false }) {
   const resolveItems = (items) =>
-    items.map(item => {
+    items
+      .filter(item => !(isMobile && item !== 'separator' && item.mobileHide))
+      .map(item => {
       if (item === 'separator') return item;
       if (item.dynamic && dynamicData[item.dynamic]) {
         const dynItems = dynamicData[item.dynamic];

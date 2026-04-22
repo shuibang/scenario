@@ -257,7 +257,7 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
 
       {/* Row 2: 메뉴바 — 좌우 균등 배치 */}
       <div style={{ borderTop: '1px solid var(--c-border2)' }} className="mobile-menubar-row">
-        <Menubar onAction={onMenuAction} recentProjects={recentProjects} checkedItems={checkedItems} />
+        <Menubar onAction={onMenuAction} recentProjects={recentProjects} checkedItems={checkedItems} isMobile />
       </div>
 
       {/* Row 3: mobile toolbar */}
