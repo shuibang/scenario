@@ -176,7 +176,7 @@ export default function SnapshotPanel({ onClose }) {
       if (!data) throw new Error('스냅샷 데이터를 찾을 수 없습니다.');
 
       // 3) 앱 상태 교체
-      loadFromDriveData(data);
+      loadFromDriveData(data, { syncBackToDrive: true });
       showToast('복원 완료');
       setConfirm(null);
       onClose();

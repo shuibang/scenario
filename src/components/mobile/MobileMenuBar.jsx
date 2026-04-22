@@ -12,7 +12,7 @@ import { guardedSignInWithGoogle } from '../../utils/guardedSignIn';
 import Menubar from '../Menubar/Menubar';
 
 export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, WorkTimer, authUser, onLogout, onMenuAction, recentProjects = [], checkedItems = {} }) {
-  const { state, dispatch } = useApp();
+  const { state, dispatch, loadFromDriveData } = useApp();
   const { activeProjectId, stylePreset } = state;
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -31,7 +31,7 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
         const driveSavedAt = new Date(driveData.savedAt).getTime();
         const localSavedAt = new Date(localStorage.getItem('drama_saved_at') || 0).getTime();
         if (driveSavedAt > localSavedAt && (driveData.projects?.length ?? 0) > 0) {
-          dispatch({ type: 'LOAD_FROM_DRIVE', payload: driveData });
+          loadFromDriveData(driveData);
         }
       }
       setDriveStatus('synced');

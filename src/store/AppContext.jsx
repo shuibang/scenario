@@ -405,6 +405,7 @@ export function AppProvider({ children }) {
   // INIT/LOAD_FROM_DRIVE 직후 Drive 자동저장을 건너뛰기 위한 플래그
   // (페이지 로드 시 데스크톱 데이터가 Drive를 덮어써서 모바일 데이터를 잃는 레이스컨디션 방지)
   const skipDriveSaveRef = useRef(false);
+  const forcedSavedAtRef = useRef(null);
 
   useEffect(() => {
     (async () => {
@@ -430,12 +431,23 @@ export function AppProvider({ children }) {
             getAll(DB_KEYS.workTimeLogs),
             getAll(DB_KEYS.checklistItems),
           ]);
+        const savedPreset = getItem(DB_KEYS.stylePresets);
         dispatch({
           type: 'INIT',
-          payload: { projects, episodes: migratedEpisodes, characters, scenes, scriptBlocks, coverDocs, synopsisDocs, resources, workTimeLogs, checklistItems },
+          payload: {
+            projects,
+            episodes: migratedEpisodes,
+            characters,
+            scenes,
+            scriptBlocks,
+            coverDocs,
+            synopsisDocs,
+            resources,
+            workTimeLogs,
+            checklistItems,
+            stylePreset: savedPreset || DEFAULT_STYLE_PRESET,
+          },
         });
-        const savedPreset = getItem(DB_KEYS.stylePresets);
-        if (savedPreset) dispatch({ type: 'SET_STYLE_PRESET', payload: savedPreset });
 
         // URL 우선, 없으면 localStorage fallback으로 마지막 위치 복원
         let restoreState = parsePath(window.location.pathname);
@@ -509,7 +521,7 @@ export function AppProvider({ children }) {
     clearTimeout(persistTimer.current);
     persistTimer.current = setTimeout(async () => {
       // 로컬 drama_saved_at과 Drive savedAt이 반드시 같은 시각을 쓰도록 한 번만 생성
-      const savedAt = new Date().toISOString();
+      const savedAt = forcedSavedAtRef.current || new Date().toISOString();
       try {
         await Promise.all([
           setAll(DB_KEYS.projects,      state.projects),
@@ -530,10 +542,12 @@ export function AppProvider({ children }) {
           localStorage.setItem('drama_saved_at', savedAt);
         }
         skipSavedAtRef.current = false;
+        forcedSavedAtRef.current = null;
       } catch (e) {
         console.error('[AppContext] IndexedDB 저장 실패:', e?.name, e?.message);
         dispatch({ type: 'SET_SAVE_STATUS', payload: 'error' });
         dispatch({ type: 'SET_SAVE_ERROR_MSG', payload: `저장 실패: ${e?.message || '알 수 없는 오류'}` });
+        forcedSavedAtRef.current = null;
         return;
       }
       // Drive 자동저장 (토큰 유효할 때만)
@@ -596,11 +610,23 @@ export function AppProvider({ children }) {
   // 주의: skipDriveSaveRef를 쓰지 않는다 — 복원 후 편집이 없으면 Drive에는 여전히 옛 버전이 남아
   //       다음 새로고침에서 그 옛 버전이 복원된 상태를 덮어쓰는 사고가 발생했다.
   //       복원 직후에도 자동저장이 돌아 Drive에 복원 상태를 반영하도록 한다.
-  const loadFromDriveData = (drivePayload) => {
+  const loadFromDriveData = (drivePayload, options = {}) => {
+    const { syncBackToDrive = false } = options;
+
     skipSavedAtRef.current = true;
-    if (drivePayload.savedAt) {
-      try { localStorage.setItem('drama_saved_at', drivePayload.savedAt); } catch {}
+    skipDriveSaveRef.current = !syncBackToDrive;
+
+    if (syncBackToDrive) {
+      const nextSavedAt = new Date().toISOString();
+      forcedSavedAtRef.current = nextSavedAt;
+      try { localStorage.setItem('drama_saved_at', nextSavedAt); } catch {}
+    } else {
+      forcedSavedAtRef.current = null;
+      if (drivePayload.savedAt) {
+        try { localStorage.setItem('drama_saved_at', drivePayload.savedAt); } catch {}
+      }
     }
+
     dispatch({ type: 'LOAD_FROM_DRIVE', payload: drivePayload });
   };
 
