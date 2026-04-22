@@ -1509,11 +1509,151 @@ function ScriptListItem({ script, active, onClick, onDelete }) {
   );
 }
 
+async function copyShareUrl(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {}
+
+  try {
+    const el = document.createElement('input');
+    el.value = text;
+    document.body.appendChild(el);
+    el.select();
+    const copied = document.execCommand('copy');
+    document.body.removeChild(el);
+    return copied;
+  } catch {
+    return false;
+  }
+}
+
+function SendLinkGuideModal({ open, url, copied, onClose }) {
+  const D = useD();
+  const [copyMessage, setCopyMessage] = useState('');
+
+  useEffect(() => {
+    if (!open) return;
+    setCopyMessage('');
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  const handleCopyAgain = async () => {
+    const success = await copyShareUrl(url);
+    setCopyMessage(success ? '링크를 다시 복사했어요.' : '자동 복사에 실패했어요. 아래 링크를 직접 복사해주세요.');
+  };
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 9999,
+      background: 'rgba(0,0,0,0.55)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 16,
+    }}>
+      <div style={{
+        width: '100%', maxWidth: 460,
+        background: D.panel,
+        border: `1px solid ${D.border}`,
+        borderRadius: 16,
+        boxShadow: '0 24px 48px rgba(0,0,0,0.3)',
+        padding: 24,
+        display: 'flex', flexDirection: 'column', gap: 14,
+      }}>
+        <div style={{ fontSize: 18, fontWeight: 700, color: D.text }}>
+          전송 링크가 준비됐어요
+        </div>
+        <div style={{ fontSize: 13, lineHeight: 1.7, color: D.text2 }}>
+          {copied
+            ? '링크를 클립보드에 복사해뒀어요. 지금 카카오톡, 문자, 메일 등에 바로 붙여넣어 작가에게 보내주세요.'
+            : '링크는 생성됐지만 자동 복사가 되지 않았어요. 아래 링크를 복사해서 바로 작가에게 보내주세요.'}
+        </div>
+        <div style={{
+          background: D.active,
+          border: `1px solid ${D.accentDim}`,
+          borderRadius: 10,
+          padding: '10px 12px',
+          fontSize: 12,
+          color: D.text,
+          lineHeight: 1.7,
+        }}>
+          복사만 하고 닫으면 전달되지 않습니다. 링크를 전송해야 작가가 피드백을 받을 수 있어요.
+        </div>
+        <div style={{ fontSize: 12, color: D.text3 }}>
+          링크 유효기간: 발급 후 7일
+        </div>
+        <div style={{
+          border: `1px solid ${D.border}`,
+          borderRadius: 10,
+          background: D.bg,
+          padding: 10,
+        }}>
+          <input
+            readOnly
+            value={url}
+            onFocus={(e) => e.target.select()}
+            style={{
+              width: '100%',
+              background: 'transparent',
+              border: 'none',
+              outline: 'none',
+              color: D.text2,
+              fontSize: 12,
+              lineHeight: 1.5,
+            }}
+          />
+        </div>
+        <div style={{ minHeight: 18, fontSize: 12, color: copyMessage ? '#4caf50' : D.text3 }}>
+          {copyMessage || '메신저 창에 바로 붙여넣어 보내면 됩니다.'}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap' }}>
+          <button
+            onClick={handleCopyAgain}
+            style={{
+              padding: '8px 14px',
+              borderRadius: 8,
+              border: `1px solid ${D.border}`,
+              background: 'transparent',
+              color: D.text2,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            링크 다시 복사
+          </button>
+          <button
+            onClick={onClose}
+            style={{
+              padding: '8px 16px',
+              borderRadius: 8,
+              border: 'none',
+              background: D.accent,
+              color: '#1a1a1a',
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            확인
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── 작가에게 전송 버튼 ───────────────────────────────────────────────────────
 function SendButton({ scriptRow, viewing }) {
   const D = useD();
   const [sending, setSending] = useState(false);
   const [toast,   setToast]   = useState('');
+  const [sendUrl, setSendUrl] = useState('');
+  const [sendModalOpen, setSendModalOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const handleSend = async () => {
     if (!supabase || sending) return;
@@ -1543,14 +1683,11 @@ function SendButton({ scriptRow, viewing }) {
       if (error) throw new Error(error.message);
 
       const url = `${window.location.origin}/app#delivery=${data.id}`;
-      try { await navigator.clipboard.writeText(url); }
-      catch {
-        const el = document.createElement('input');
-        el.value = url; document.body.appendChild(el);
-        el.select(); document.execCommand('copy');
-        document.body.removeChild(el);
-      }
-      setToast('링크 복사됨 ✓');
+      const success = await copyShareUrl(url);
+      setSendUrl(url);
+      setCopied(success);
+      setSendModalOpen(true);
+      setToast(success ? '링크 복사됨 ✓' : '링크 생성됨');
       setTimeout(() => setToast(''), 3000);
     } catch (err) {
       setToast(`오류: ${err.message}`);
@@ -1561,26 +1698,34 @@ function SendButton({ scriptRow, viewing }) {
   };
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-      {toast && (
-        <span style={{
-          fontSize: 11,
-          color: toast.startsWith('오류') ? '#e05c5c' : toast.includes('✓') ? '#4caf50' : D.text3,
-        }}>{toast}</span>
-      )}
-      <button
-        onClick={handleSend}
-        disabled={sending}
-        style={{
-          padding: '5px 14px', borderRadius: 6, border: 'none',
-          background: sending ? '#555' : D.accent,
-          color: '#1a1a1a', fontSize: 12, fontWeight: 700,
-          cursor: sending ? 'default' : 'pointer', whiteSpace: 'nowrap',
-        }}
-      >
-        작가에게 전송
-      </button>
-    </div>
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        {toast && (
+          <span style={{
+            fontSize: 11,
+            color: toast.startsWith('오류') ? '#e05c5c' : toast.includes('✓') ? '#4caf50' : D.text3,
+          }}>{toast}</span>
+        )}
+        <button
+          onClick={handleSend}
+          disabled={sending}
+          style={{
+            padding: '5px 14px', borderRadius: 6, border: 'none',
+            background: sending ? '#555' : D.accent,
+            color: '#1a1a1a', fontSize: 12, fontWeight: 700,
+            cursor: sending ? 'default' : 'pointer', whiteSpace: 'nowrap',
+          }}
+        >
+          작가에게 전송
+        </button>
+      </div>
+      <SendLinkGuideModal
+        open={sendModalOpen}
+        url={sendUrl}
+        copied={copied}
+        onClose={() => setSendModalOpen(false)}
+      />
+    </>
   );
 }
 
@@ -2490,7 +2635,7 @@ function SbDrawingCanvas({ initialData, onSave }) {
   return (
     <div style={{ position: 'relative' }}>
       <canvas ref={canvasRef} width={320} height={180}
-        style={{ width: '100%', aspectRatio: '16/9', display: 'block', cursor: tool === 'eraser' ? 'cell' : 'crosshair', borderRadius: 2 }}
+        style={{ width: '100%', aspectRatio: '16/9', display: 'block', cursor: tool === 'eraser' ? 'cell' : 'crosshair', borderRadius: 2, touchAction: 'none' }}
         onMouseDown={startDraw} onMouseMove={draw} onMouseUp={endDraw} onMouseLeave={endDraw}
         onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={endDraw}
       />

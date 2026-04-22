@@ -20,7 +20,6 @@ import ResourcePanel from './components/ResourcePanel';
 import PrintPreviewModal from './components/PrintPreviewModal';
 import StructurePage from './components/StructurePage';
 import SceneListPage from './components/SceneListPage';
-import StoryboardPage from './components/StoryboardPage';
 import DirectorNotesPage from './components/DirectorNotesPage';
 import DirectorApp from './components/director/DirectorApp';
 import TreatmentPage from './components/TreatmentPage';
