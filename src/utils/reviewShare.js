@@ -1,94 +1,352 @@
-/**
- * reviewShare — 검토 링크 저장/불러오기 (Supabase review_links 테이블)
- */
+import {
+  deleteFileById,
+  isTokenValid,
+  saveFeedbackVersionSnapshot,
+  setAccessToken,
+} from '../store/googleDrive';
 import { supabase } from '../store/supabaseClient';
 
+const MAX_PAYLOAD_BYTES = 5 * 1024 * 1024;
+const FEEDBACK_LINK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const LOG_LINK_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
 function genId() {
-  return crypto.randomUUID(); // 128비트 UUID — 추측 공격 방지
+  return crypto.randomUUID();
 }
 
-// 페이로드 최대 크기 (5 MB) — DB 폭탄 공격 방지
-const MAX_PAYLOAD_BYTES = 5 * 1024 * 1024;
+function ensureSupabase() {
+  if (!supabase) throw new Error('Supabase environment is not configured.');
+}
 
-/**
- * 검토 payload를 Supabase에 저장하고 짧은 ID를 반환합니다.
- * @param {object} payload
- * @returns {Promise<string>} id
- */
-export async function saveReviewPayload(payload) {
-  if (!supabase) throw new Error('Supabase 환경변수가 설정되지 않았습니다.');
-  // 검토 링크 생성은 인증된 사용자만 가능 — 비인증 시 Supabase 스팸/남용 방지
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) throw new Error('검토 링크 생성은 로그인 후 이용할 수 있습니다.');
-  // 페이로드 크기 검사 — DB 폭탄 방지 (시나리오 1)
-  if (JSON.stringify(payload).length > MAX_PAYLOAD_BYTES) {
-    throw new Error('대본 데이터가 너무 큽니다 (최대 5MB). 에피소드 선택 범위를 줄여주세요.');
+async function getRequiredSession() {
+  ensureSupabase();
+  const {
+    data: { session },
+    error,
+  } = await supabase.auth.getSession();
+  if (error) throw new Error(error.message);
+  if (!session) throw new Error('Login is required.');
+  return session;
+}
+
+async function ensureDriveAccessToken() {
+  if (isTokenValid()) return;
+  const session = await getRequiredSession();
+  if (session?.provider_token) {
+    setAccessToken(session.provider_token, session.expires_in ?? 3600);
+    return;
   }
+  const { data, error } = await supabase.auth.refreshSession();
+  if (error) throw new Error(error.message);
+  const nextSession = data?.session;
+  if (nextSession?.provider_token) {
+    setAccessToken(nextSession.provider_token, nextSession.expires_in ?? 3600);
+    return;
+  }
+  throw new Error('Google Drive reconnect is required.');
+}
+
+function assertPayloadSize(payload) {
+  if (JSON.stringify(payload).length > MAX_PAYLOAD_BYTES) {
+    throw new Error('Payload is too large. Please reduce the selected range.');
+  }
+}
+
+function feedbackExpiresAt() {
+  return new Date(Date.now() + FEEDBACK_LINK_TTL_MS).toISOString();
+}
+
+export function isShortReviewId(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
+export async function saveReviewPayload(payload) {
+  ensureSupabase();
+  await getRequiredSession();
+  assertPayloadSize(payload);
   const id = genId();
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7일
-  const { error } = await supabase.from('review_links').insert({ id, payload, expires_at: expiresAt });
+  const { error } = await supabase.from('review_links').insert({
+    id,
+    payload,
+    expires_at: feedbackExpiresAt(),
+  });
   if (error) throw new Error(error.message);
   return id;
 }
 
-/**
- * ID로 검토 payload를 불러옵니다.
- * @param {string} id
- * @returns {Promise<object>} payload
- */
 export async function loadReviewPayload(id) {
-  if (!supabase) throw new Error('Supabase 환경변수가 설정되지 않았습니다.');
+  ensureSupabase();
   const { data, error } = await supabase
     .from('review_links')
     .select('payload, expires_at')
     .eq('id', id)
     .single();
   if (error) throw new Error(error.message);
-  // 만료 링크 우회 방지 — 클라이언트 이중 검증 (시나리오 2)
   if (data.expires_at && new Date(data.expires_at) < new Date()) {
     throw new Error('EXPIRED');
   }
   return data.payload;
 }
 
-/** URL 해시값이 UUID(Supabase 저장)인지 판단 */
-export function isShortReviewId(val) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(val);
+export async function createFeedbackVersionShare({ scriptId, title, snapshotContent }) {
+  ensureSupabase();
+  if (!scriptId) throw new Error('작품이 선택되지 않았습니다. 작품을 연 뒤 다시 시도해주세요.');
+  const session = await getRequiredSession();
+  assertPayloadSize(snapshotContent);
+  await ensureDriveAccessToken();
+
+  const { data: lastVersion, error: versionOrderError } = await supabase
+    .from('feedback_versions')
+    .select('version_order')
+    .eq('script_id', scriptId)
+    .is('deleted_at', null)
+    .order('version_order', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (versionOrderError) throw new Error(versionOrderError.message);
+
+  const versionOrder = (lastVersion?.version_order || 0) + 1;
+  const versionName = `ver.${versionOrder}`;
+  let driveFileId = '';
+  let versionId = '';
+
+  try {
+    driveFileId = await saveFeedbackVersionSnapshot(title, {
+      scriptId,
+      versionName,
+      versionOrder,
+      snapshotContent,
+    });
+
+    const { data: version, error: versionError } = await supabase
+      .from('feedback_versions')
+      .insert({
+        author_user_id: session.user.id,
+        script_id: scriptId,
+        version_name: versionName,
+        version_order: versionOrder,
+        snapshot_content: snapshotContent,
+        drive_file_id: driveFileId,
+      })
+      .select('id, version_name, version_order, created_at')
+      .single();
+
+    if (versionError) throw new Error(versionError.message);
+    versionId = version.id;
+
+    const linkId = genId();
+    const { error: linkError } = await supabase.from('review_links').insert({
+      id: linkId,
+      created_by: session.user.id,
+      link_type: 'feedback_version',
+      link_role: 'request',
+      version_id: version.id,
+      expires_at: feedbackExpiresAt(),
+    });
+
+    if (linkError) throw new Error(linkError.message);
+
+    return {
+      linkId,
+      versionId: version.id,
+      versionName: version.version_name,
+      url: `${window.location.origin}/app#review=${linkId}`,
+    };
+  } catch (error) {
+    if (versionId) {
+      await supabase.from('feedback_versions').delete().eq('id', versionId);
+    }
+    if (driveFileId) {
+      try {
+        await deleteFileById(driveFileId);
+      } catch {}
+    }
+    throw error;
+  }
 }
 
-/**
- * 작업기록 payload를 Supabase에 저장하고 UUID를 반환합니다.
- * 인증 불필요 — 작업기록 공유는 로그인 없이도 가능 (RLS: insert 허용)
- * @param {object} payload
- * @returns {Promise<string>} id
- */
-export async function saveLogPayload(payload) {
-  if (!supabase) throw new Error('Supabase 환경변수가 설정되지 않았습니다.');
-  // 페이로드 크기 검사 — 비인증 삽입이므로 DB 폭탄 방지 특히 중요 (시나리오 1)
-  if (JSON.stringify(payload).length > MAX_PAYLOAD_BYTES) {
-    throw new Error('작업기록 데이터가 너무 큽니다 (최대 5MB).');
+export async function loadFeedbackLinkBundle(linkId) {
+  ensureSupabase();
+  const { data, error } = await supabase.rpc('get_feedback_link_bundle', {
+    p_link_id: linkId,
+  });
+  if (error) {
+    if (String(error.message || '').includes('FEEDBACK_LINK_NOT_FOUND')) {
+      throw new Error('EXPIRED');
+    }
+    throw new Error(error.message);
   }
+  return data;
+}
+
+export async function loadSharedReviewResource(linkId) {
+  try {
+    const bundle = await loadFeedbackLinkBundle(linkId);
+    return {
+      kind: 'feedback_version',
+      link: bundle?.link || null,
+      version: bundle?.version || null,
+      session: bundle?.session || null,
+      comments: bundle?.comments || [],
+      snapshotContent: bundle?.version?.snapshot_content || null,
+    };
+  } catch (error) {
+    if (error?.message !== 'EXPIRED') {
+      try {
+        const payload = await loadReviewPayload(linkId);
+        return {
+          kind: 'legacy_review',
+          link: null,
+          version: null,
+          session: null,
+          comments: [],
+          snapshotContent: payload,
+        };
+      } catch (legacyError) {
+        if (legacyError?.message === 'EXPIRED') throw legacyError;
+        throw error;
+      }
+    }
+    throw error;
+  }
+}
+
+export async function submitFeedbackSession(linkId, senderDisplayName, comments) {
+  ensureSupabase();
+  const { data, error } = await supabase.rpc('submit_feedback_session', {
+    p_link_id: linkId,
+    p_sender_display_name: senderDisplayName,
+    p_comments: comments,
+  });
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function createFeedbackReplyLink({ versionId, sessionId }) {
+  ensureSupabase();
+  const session = await getRequiredSession();
+  const linkId = genId();
+  const { error } = await supabase.from('review_links').insert({
+    id: linkId,
+    created_by: session.user.id,
+    link_type: 'feedback_version',
+    link_role: 'reply',
+    version_id: versionId,
+    session_id: sessionId,
+    expires_at: feedbackExpiresAt(),
+  });
+  if (error) throw new Error(error.message);
+  return {
+    linkId,
+    url: `${window.location.origin}/app#delivery=${linkId}`,
+  };
+}
+
+export async function listFeedbackVersions(scriptId) {
+  ensureSupabase();
+  const { data, error } = await supabase
+    .from('feedback_versions')
+    .select('id, script_id, version_name, version_order, drive_file_id, created_at, updated_at')
+    .eq('script_id', scriptId)
+    .is('deleted_at', null)
+    .order('version_order', { ascending: false });
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
+export async function listFeedbackSessions(versionId) {
+  ensureSupabase();
+  const { data, error } = await supabase
+    .from('feedback_sessions')
+    .select('id, version_id, sender_display_name, submitted_at, is_read, read_at')
+    .eq('version_id', versionId)
+    .order('submitted_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
+export async function listFeedbackSessionsForVersions(versionIds) {
+  ensureSupabase();
+  if (!Array.isArray(versionIds) || versionIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from('feedback_sessions')
+    .select('id, version_id, sender_display_name, submitted_at, is_read, read_at')
+    .in('version_id', versionIds)
+    .order('submitted_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
+export async function listFeedbackComments(sessionIds) {
+  ensureSupabase();
+  if (!Array.isArray(sessionIds) || sessionIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from('feedback_comments')
+    .select('id, session_id, scene_id, line_ref, comment_text, position_offset, created_at')
+    .in('session_id', sessionIds)
+    .order('created_at', { ascending: true });
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
+export async function renameFeedbackVersion(versionId, versionName) {
+  ensureSupabase();
+  const { data, error } = await supabase
+    .from('feedback_versions')
+    .update({ version_name: versionName })
+    .eq('id', versionId)
+    .select('id, version_name')
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function markFeedbackSessionRead(sessionId) {
+  ensureSupabase();
+  const { data, error } = await supabase
+    .from('feedback_sessions')
+    .update({ is_read: true, read_at: new Date().toISOString() })
+    .eq('id', sessionId)
+    .eq('is_read', false)
+    .select('id, is_read, read_at')
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function deleteFeedbackVersion(version) {
+  ensureSupabase();
+  if (!version?.id) throw new Error('Missing version id.');
+  await ensureDriveAccessToken();
+  if (version.drive_file_id) {
+    await deleteFileById(version.drive_file_id);
+  }
+  const { error } = await supabase.from('feedback_versions').delete().eq('id', version.id);
+  if (error) throw new Error(error.message);
+}
+
+export async function saveLogPayload(payload) {
+  ensureSupabase();
+  assertPayloadSize(payload);
   const id = genId();
-  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30일
-  const { error } = await supabase.from('review_links').insert({ id, payload, expires_at: expiresAt });
+  const { error } = await supabase.from('review_links').insert({
+    id,
+    payload,
+    expires_at: new Date(Date.now() + LOG_LINK_TTL_MS).toISOString(),
+  });
   if (error) throw new Error(error.message);
   return id;
 }
 
-/**
- * UUID로 작업기록 payload를 불러옵니다.
- * @param {string} id
- * @returns {Promise<object>} payload
- */
 export async function loadLogPayload(id) {
-  if (!supabase) throw new Error('Supabase 환경변수가 설정되지 않았습니다.');
+  ensureSupabase();
   const { data, error } = await supabase
     .from('review_links')
     .select('payload, expires_at')
     .eq('id', id)
     .single();
   if (error) throw new Error(error.message);
-  // 만료 링크 우회 방지 — 클라이언트 이중 검증 (시나리오 2)
   if (data.expires_at && new Date(data.expires_at) < new Date()) {
     throw new Error('EXPIRED');
   }
