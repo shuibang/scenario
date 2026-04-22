@@ -45,11 +45,16 @@ export default function TreatmentPage() {
   const projectEpisodes = episodes
     .filter(e => e.projectId === activeProjectId)
     .sort((a, b) => a.number - b.number);
+  const highestEpisodeNumber = projectEpisodes.reduce((max, ep) => Math.max(max, ep.number || 0), 0);
+  const visibleEpisodeCount = isSeries
+    ? Math.max(totalEpisodes, highestEpisodeNumber, 1)
+    : Math.max(highestEpisodeNumber, 1);
+  const nextEpisodeNumber = Math.max(totalEpisodes, highestEpisodeNumber, 0) + 1;
 
   // 미니시리즈: totalEpisodes 중 아직 생성 안 된 회차 번호 목록
   const existingNums = new Set(projectEpisodes.map(e => e.number));
   const missingNums = isSeries
-    ? Array.from({ length: totalEpisodes }, (_, i) => i + 1).filter(n => !existingNums.has(n))
+    ? Array.from({ length: visibleEpisodeCount }, (_, i) => i + 1).filter(n => !existingNums.has(n))
     : [];
 
   const [selectedEpId, setSelectedEpId] = useState(
@@ -75,9 +80,13 @@ export default function TreatmentPage() {
     setSelectedEpId(val);
   };
 
-  const createEpisodeForNumber = useCallback((num) => {
+  const createEpisodeForNumber = useCallback((num, { expandProject = false } = {}) => {
     const existing = projectEpisodes.find(e => e.number === num);
     if (existing) return existing;
+
+    if (expandProject && isSeries && activeProjectId && totalEpisodes < num) {
+      dispatch({ type: 'UPDATE_PROJECT', payload: { id: activeProjectId, totalEpisodes: num } });
+    }
 
     const ep = {
       id: genId(), projectId: activeProjectId, number: num,
@@ -86,7 +95,11 @@ export default function TreatmentPage() {
     };
     dispatch({ type: 'ADD_EPISODE', payload: ep });
     return ep;
-  }, [projectEpisodes, activeProjectId, dispatch]);
+  }, [projectEpisodes, activeProjectId, dispatch, isSeries, totalEpisodes]);
+
+  const handleAddEpisodeInAllView = useCallback(() => {
+    createEpisodeForNumber(nextEpisodeNumber, { expandProject: true });
+  }, [createEpisodeForNumber, nextEpisodeNumber]);
 
   const [items, setItems]       = useState([]);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -146,8 +159,8 @@ export default function TreatmentPage() {
   // 전체 보기: 모든 회차 항목을 회차별로 묶어서 표시 (빈 항목 1개는 항상 유지)
   const allEpItems = useMemo(() => {
     if (selectedEpId !== 'all') return null;
-    const numbers = isSeries && totalEpisodes > 0
-      ? Array.from({ length: totalEpisodes }, (_, i) => i + 1)
+    const numbers = isSeries && visibleEpisodeCount > 0
+      ? Array.from({ length: visibleEpisodeCount }, (_, i) => i + 1)
       : (projectEpisodes.length ? projectEpisodes.map(ep => ep.number) : [1]);
 
     return numbers.map((episodeNumber) => {
@@ -163,7 +176,7 @@ export default function TreatmentPage() {
           : [],
       };
     });
-  }, [selectedEpId, projectEpisodes, isSeries, totalEpisodes]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedEpId, projectEpisodes, isSeries, visibleEpisodeCount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 전체 뷰 전용 저장 — 특정 epId 기준
   const saveForEp = useCallback((targetEpId, newItems, record = false) => {
@@ -501,9 +514,31 @@ export default function TreatmentPage() {
             color: 'var(--c-text5)',
           }}
         >
-          전체회차에서는 여러 회차를 한 화면에서 정리할 수 있습니다.
-          {isSeries && totalEpisodes > 0 ? ' 비어 있는 회차는 아래에서 바로 추가해 작성하세요.' : ''}
-          대본으로 가져오기는 개별 회차 선택 상태에서만 사용할 수 있습니다.
+          <div>
+            전체회차에서는 여러 회차를 한 화면에서 정리할 수 있습니다.
+            {isSeries ? ' 회차 추가는 새 회차를 만드는 버튼이고, 각 회차 아래 내용 추가는 그 회차 안의 항목만 늘립니다.' : ''}
+            대본으로 가져오기는 개별 회차 선택 상태에서만 사용할 수 있습니다.
+          </div>
+          {isSeries && (
+            <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <button
+                onClick={handleAddEpisodeInAllView}
+                className="px-3 py-1.5 rounded text-xs"
+                style={{
+                  color: 'var(--c-text3)',
+                  border: '1px solid var(--c-border3)',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                + {nextEpisodeNumber}회차 추가
+              </button>
+              <span style={{ color: 'var(--c-text6)' }}>
+                새 회차를 만든 뒤, 각 회차 아래에서 내용만 이어서 추가할 수 있습니다.
+              </span>
+            </div>
+          )}
         </div>
       )}
 
@@ -552,7 +587,7 @@ export default function TreatmentPage() {
                 }}
               >
                 <div style={{ fontSize: 11, lineHeight: 1.6, color: 'var(--c-text5)' }}>
-                  아직 생성되지 않은 회차입니다. 회차를 추가하면 이 자리에서 바로 작성할 수 있습니다.
+                  아직 생성되지 않은 회차입니다. 이 버튼으로 회차를 만들면 바로 이 자리에서 내용을 이어서 작성할 수 있습니다.
                 </div>
                 <button
                   onClick={() => createEpisodeForNumber(episodeNumber)}
@@ -565,7 +600,7 @@ export default function TreatmentPage() {
                     whiteSpace: 'nowrap',
                   }}
                 >
-                  {episodeNumber}회 추가
+                  {episodeNumber}회차 추가
                 </button>
               </div>
             ) : (
@@ -590,7 +625,7 @@ export default function TreatmentPage() {
                   onClick={() => addItemForEp(ep.id, epItems)}
                   className="mt-2 w-full py-1.5 rounded text-xs"
                   style={{ color: 'var(--c-text5)', border: '1px dashed var(--c-border3)', background: 'transparent', cursor: 'pointer' }}
-                >+ {episodeNumber}회 항목 추가</button>
+                >+ {episodeNumber}회차 안 내용 추가</button>
               </>
             )}
           </div>
