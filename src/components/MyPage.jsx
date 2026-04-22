@@ -866,6 +866,7 @@ function ErrorReportTab() {
     const { error } = await supabase.from('error_reports').insert({
       type,
       description: description.trim(),
+      source: 'script',
       page: page.trim() || null,
       email: email.trim() || null,
       user_id: userId,

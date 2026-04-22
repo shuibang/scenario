@@ -22,10 +22,10 @@ export default function DirectorErrorReportPage({ onBack, session, D }) {
     setStatus('sending');
     if (!supabase) { setStatus('error'); return; }
     const userId = session?.user?.id ?? null;
-    // source 구분: description 프리픽스에 [Director] 자동 삽입
     const { error } = await supabase.from('error_reports').insert({
       type,
-      description: `[Director] ${description.trim()}`,
+      description: description.trim(),
+      source: 'director',
       page: page.trim() || null,
       email: email.trim() || null,
       user_id: userId,

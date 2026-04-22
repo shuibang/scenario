@@ -1575,7 +1575,6 @@ const EditorSurface = forwardRef(function EditorSurface({
     if (sel?.rangeCount) {
       const blockEl = findBlockEl(sel.getRangeAt(0).startContainer, el);
       onSelectionChange?.(blockEl?.dataset.blockType || null);
-      setActiveAlignment(blockEl?.dataset.alignment || null);
       window.dispatchEvent(new CustomEvent('script:alignment:state', { detail: blockEl?.dataset.alignment || null }));
     }
   }, [onBlocksChange, syncMeta, onSelectionChange]);
@@ -2303,7 +2302,6 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   const sceneItemsRef = useRef([]); // render마다 갱신 — keydown 핸들러에서 참조
   const [pendingBlockType, setPendingBlockType] = useState(null); // for mobile / no-focus toolbar clicks
   const [activeBlockType, setActiveBlockType] = useState(null);  // 현재 커서의 블록 타입 (툴바 하이라이트)
-  const [activeAlignment, setActiveAlignment] = useState(null); // 현재 커서 블록의 alignment
   const [charCheckPicker, setCharCheckPicker] = useState(null); // { sceneId, top, left, mobile }
   const [symbolPickerCloseToken, setSymbolPickerCloseToken] = useState(0);
   const [slashPalette, setSlashPalette] = useState(null); // null | { blockEl, query, x, y, selectedIdx }

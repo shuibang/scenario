@@ -414,6 +414,8 @@ function CenterPanel({ scrollToSceneId, onScrollHandled, keyboardUp, isMobile, f
       </div>
     );
   }
+  // MyPage는 프로젝트와 무관하게 열람 가능 — 빈 상태에서도 진입할 수 있어야 함
+  if (activeDoc === 'mypage') return <MyPage />;
   if (!activeProjectId) {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-4" style={{ background: 'var(--c-bg)' }}>
@@ -432,7 +434,6 @@ function CenterPanel({ scrollToSceneId, onScrollHandled, keyboardUp, isMobile, f
   if (activeDoc === 'treatment') return <TreatmentPage />;
   if (activeDoc === 'biography') return <BiographyPage />;
   if (activeDoc === 'relationships') return <RelationshipsPage />;
-  if (activeDoc === 'mypage') return <MyPage />;
   if (activeDoc === 'script' && activeEpisodeId) {
     return <ScriptWithTimeline scrollToSceneId={scrollToSceneId} onScrollHandled={onScrollHandled} keyboardUp={keyboardUp} isMobile={isMobile} focusMode={focusMode} setFocusMode={setFocusMode} />;
   }

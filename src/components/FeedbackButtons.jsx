@@ -60,7 +60,7 @@ export default function FeedbackButtons() {
       ? `${reportDesc.trim()}\n\n📸 스크린샷: ${screenshotUrl}`
       : reportDesc.trim();
     const { error } = await supabase.from('error_reports').insert({
-      type: reportType, description: descFull, user_id: userId,
+      type: reportType, description: descFull, source: 'script', user_id: userId,
       email: reportEmail.trim() || null,
     });
     if (!error) localStorage.setItem('error_report_last_at', String(Date.now()));
