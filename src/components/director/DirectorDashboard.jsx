@@ -888,6 +888,26 @@ export default function DirectorDashboard({ session, onBack, isGuest = false }) 
     { id: 'storyboard', icon: '🎞', label: '스토리보드' },
   ];
 
+  // 데스크톱: 햄버거 대용 내부 페이지 라우팅 (사이드바 "계정" 섹션에서 진입)
+  const [directorPage, setDirectorPage] = useState('dashboard'); // 'dashboard' | 'history' | 'errors' | 'membership'
+
+  // 하드웨어 뒤로가기 — 내부 페이지 진입 시 한 단계 복귀 (대본실로 튕기지 않음)
+  useEffect(() => {
+    if (directorPage === 'dashboard') return;
+    if (!window.history.state?.directorInner) {
+      window.history.pushState({ directorInner: true }, '');
+    }
+    const onPop = () => setDirectorPage('dashboard');
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [directorPage]);
+
+  // 접속기록에서 작품 클릭 → 작품 메뉴 전환(자동 뷰어 로드는 추후)
+  const handleOpenFromHistory = () => {
+    setDirectorPage('dashboard');
+    setActiveMenu('projects');
+  };
+
   /* ── 모바일 레이아웃 ──────────────────────────────────────────────────── */
   if (isMobile) {
     return (
@@ -907,6 +927,11 @@ export default function DirectorDashboard({ session, onBack, isGuest = false }) 
   }
 
   /* ── 데스크톱 레이아웃 ──────────────────────────────────────────────── */
+  // 내부 페이지 분기 — 연출 작업실 내부에서 완결 (대본실로 튕기지 않음)
+  if (directorPage === 'history')    return <DirectorHistoryPage      onBack={() => setDirectorPage('dashboard')} isGuest={isGuest} D={D} onOpenScript={handleOpenFromHistory} />;
+  if (directorPage === 'errors')     return <DirectorErrorReportPage  onBack={() => setDirectorPage('dashboard')} session={session} D={D} />;
+  if (directorPage === 'membership') return <DirectorMembershipPage   onBack={() => setDirectorPage('dashboard')} D={D} />;
+
   return (
     <ThemeCtx.Provider value={D}>
     <div style={{ height: '100vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', background: D.bg, color: D.text, fontFamily: "'Pretendard', 'Apple SD Gothic Neo', sans-serif" }}>
@@ -991,6 +1016,11 @@ export default function DirectorDashboard({ session, onBack, isGuest = false }) 
               <SideItem icon="📝" label="연출노트"   active={activeMenu === 'notes'}      onClick={() => setActiveMenu('notes')} />
               <SideItem icon="📋" label="씬리스트"   active={activeMenu === 'scenelist'}  onClick={() => setActiveMenu('scenelist')} />
               <SideItem icon="🎞" label="스토리보드" active={activeMenu === 'storyboard'} onClick={() => setActiveMenu('storyboard')} />
+              <div style={{ margin: '12px 0 0', height: 1, background: D.border }} />
+              <SideSection label="계정" />
+              <SideItem icon="🕐" label="접속 기록" active={false} onClick={() => setDirectorPage('history')} />
+              <SideItem icon="🐞" label="오류 보고" active={false} onClick={() => setDirectorPage('errors')} />
+              <SideItem icon="⭐" label="멤버십"    active={false} onClick={() => setDirectorPage('membership')} />
             </div>
             <div style={{ width: 220, padding: '0 12px 12px', display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
               <DirectorAdBanner height={120} slot="director-sidebar" />
