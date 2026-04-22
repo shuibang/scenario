@@ -1038,6 +1038,12 @@ export default function MyPage() {
     return () => window.removeEventListener('mypage:tab', handler);
   }, []);
 
+  // 데스크톱 전환 시 errors 탭이 활성화돼 있으면 기본 탭으로 되돌림
+  // (데스크톱에서는 좌 패널의 FeedbackButtons로 오류보고하므로 MyPage 탭은 숨김)
+  useEffect(() => {
+    if (!isMobile && activeTab === 'errors') setActiveTab('stats');
+  }, [isMobile, activeTab]);
+
   const tabLabel = TABS.find(t => t.id === activeTab)?.label || '';
 
   return (
@@ -1046,7 +1052,7 @@ export default function MyPage() {
       {!isMobile && (
         <div style={{ flexShrink: 0, borderBottom: '1px solid var(--c-border)', background: 'var(--c-panel)' }}>
           <div style={{ display: 'flex', alignItems: 'center', padding: '8px 16px 0' }}>
-            {TABS.map(t => (
+            {TABS.filter(t => t.id !== 'errors').map(t => (
               <button
                 key={t.id}
                 onClick={() => setActiveTab(t.id)}
