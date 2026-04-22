@@ -247,7 +247,7 @@ export async function listFeedbackVersions(scriptId) {
   ensureSupabase();
   const { data, error } = await supabase
     .from('feedback_versions')
-    .select('id, script_id, version_name, version_order, drive_file_id, created_at, updated_at')
+    .select('id, script_id, version_name, version_order, drive_file_id, snapshot_content, created_at, updated_at')
     .eq('script_id', scriptId)
     .is('deleted_at', null)
     .order('version_order', { ascending: false });

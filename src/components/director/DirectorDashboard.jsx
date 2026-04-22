@@ -1262,6 +1262,7 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
           initialized:     true,
         },
         selections: data.selections || { cover: true, synopsis: true, episodes: {}, chars: true },
+        feedbackContext: data._feedbackContext || null,
       });
     } catch (err) {
       setViewing({ error: err.message });
