@@ -11,50 +11,11 @@ import DirectorScriptViewer from './director/DirectorScriptViewer';
 import { getBlockPosition, scrollToBlock } from '../utils/blockPosition';
 import { buildFeedbackNoteMeta } from '../utils/feedbackNoteMeta';
 import { getAll } from '../store/db';
-
-const DELIVERY_STORAGE_KEY = 'director_deliveries_received';
-
-function noteMergeKey(note, fallbackIndex) {
-  if (!note) return `fallback:${fallbackIndex}`;
-  const sessionKey =
-    note.feedback_session_key ||
-    note.delivery_id ||
-    note.submitted_at ||
-    note.submittedAt ||
-    '';
-  const baseKey = note.id || note.block_id || `fallback:${fallbackIndex}`;
-  return sessionKey ? `${sessionKey}:${baseKey}` : baseKey;
-}
-
-function normalizeNotes(notes) {
-  return Array.isArray(notes) ? notes.filter(Boolean) : [];
-}
-
-function mergeNotes(existingNotes, incomingNotes) {
-  const merged = normalizeNotes(existingNotes).map(note => ({ ...note }));
-  const indexByKey = new Map();
-
-  merged.forEach((note, index) => {
-    indexByKey.set(noteMergeKey(note, index), index);
-  });
-
-  normalizeNotes(incomingNotes).forEach((note, index) => {
-    const key = noteMergeKey(note, index);
-    const existingIndex = indexByKey.get(key);
-    if (existingIndex === undefined) {
-      indexByKey.set(key, merged.length);
-      merged.push({ ...note });
-      return;
-    }
-    merged[existingIndex] = { ...merged[existingIndex], ...note };
-  });
-
-  return merged;
-}
-
-function entryTimestamp(entry) {
-  return new Date(entry?.savedAt || entry?.createdAt || 0).getTime() || 0;
-}
+import {
+  containsReceivedDeliveryId,
+  getReceivedDeliveries,
+  saveReceivedDeliveries,
+} from '../utils/receivedFeedback';
 
 function projectTimestamp(project) {
   return new Date(project?.updatedAt || project?.createdAt || 0).getTime() || 0;
@@ -64,78 +25,6 @@ function sortProjectsByRecent(projects) {
   return [...(Array.isArray(projects) ? projects : [])]
     .filter(Boolean)
     .sort((a, b) => projectTimestamp(b) - projectTimestamp(a));
-}
-
-function normalizeReceivedDeliveries(list) {
-  const source = Array.isArray(list) ? list.filter(Boolean) : [];
-  const mergedByProject = new Map();
-  const standalone = [];
-
-  source.forEach((entry, index) => {
-    const normalized = {
-      id: entry.id || `delivery_${index}`,
-      deliveryIds: Array.isArray(entry.deliveryIds) && entry.deliveryIds.length > 0
-        ? [...new Set(entry.deliveryIds.filter(Boolean))]
-        : (entry.id ? [entry.id] : []),
-      title: entry.title || '피드백 노트',
-      savedAt: entry.savedAt || entry.createdAt || new Date().toISOString(),
-      createdAt: entry.createdAt || entry.savedAt || new Date().toISOString(),
-      appState: entry.appState || null,
-      notes: normalizeNotes(entry.notes),
-      projectId: entry.projectId || null,
-    };
-
-    if (!normalized.projectId) {
-      standalone.push(normalized);
-      return;
-    }
-
-    const current = mergedByProject.get(normalized.projectId);
-    if (!current) {
-      mergedByProject.set(normalized.projectId, normalized);
-      return;
-    }
-
-    const keepLatest = entryTimestamp(normalized) >= entryTimestamp(current);
-    mergedByProject.set(normalized.projectId, {
-      ...(keepLatest ? normalized : current),
-      id: current.id,
-      deliveryIds: [...new Set([...(current.deliveryIds || []), ...(normalized.deliveryIds || [])])],
-      projectId: current.projectId || normalized.projectId,
-      title: (keepLatest ? normalized.title : current.title) || '피드백 노트',
-      notes: mergeNotes(current.notes, normalized.notes),
-      appState: keepLatest ? (normalized.appState || current.appState) : (current.appState || normalized.appState),
-      createdAt: current.createdAt || normalized.createdAt,
-      savedAt: keepLatest ? normalized.savedAt : current.savedAt,
-    });
-  });
-
-  return [
-    ...Array.from(mergedByProject.values()).sort((a, b) => entryTimestamp(b) - entryTimestamp(a)),
-    ...standalone.sort((a, b) => entryTimestamp(b) - entryTimestamp(a)),
-  ];
-}
-
-function containsDeliveryId(list, deliveryId) {
-  return normalizeReceivedDeliveries(list).some(entry =>
-    entry.id === deliveryId || (entry.deliveryIds || []).includes(deliveryId)
-  );
-}
-
-export function getReceivedDeliveries() {
-  try {
-    const raw = JSON.parse(localStorage.getItem(DELIVERY_STORAGE_KEY) || '[]');
-    const normalized = normalizeReceivedDeliveries(raw);
-    if (JSON.stringify(raw) !== JSON.stringify(normalized)) {
-      localStorage.setItem(DELIVERY_STORAGE_KEY, JSON.stringify(normalized));
-    }
-    return normalized;
-  }
-  catch { return []; }
-}
-
-function saveReceived(list) {
-  localStorage.setItem(DELIVERY_STORAGE_KEY, JSON.stringify(normalizeReceivedDeliveries(list)));
 }
 
 export default function DirectorDeliveryView() {
@@ -164,14 +53,14 @@ export default function DirectorDeliveryView() {
         if (error || !data) { setBad(true); return; }
         setDelivery(data);
         const existing = getReceivedDeliveries();
-        if (containsDeliveryId(existing, data.id)) setAlreadySaved(true);
+        if (containsReceivedDeliveryId(existing, data.id)) setAlreadySaved(true);
       });
   }, [deliveryId]);
 
   const openPicker = async () => {
     if (!delivery) return;
     const existing = getReceivedDeliveries();
-    if (containsDeliveryId(existing, delivery.id)) { setAlreadySaved(true); return; }
+    if (containsReceivedDeliveryId(existing, delivery.id)) { setAlreadySaved(true); return; }
     const list = sortProjectsByRecent(await getAll('projects'));
     setProjects(list);
     setPickedProjId(list[0]?.id || '');
@@ -181,16 +70,23 @@ export default function DirectorDeliveryView() {
   const handleConfirmSave = () => {
     if (!delivery) return;
     const existing = getReceivedDeliveries();
-    if (containsDeliveryId(existing, delivery.id)) { setAlreadySaved(true); setPickerOpen(false); return; }
-    saveReceived([{
-      id:        delivery.id,
-      deliveryIds:[delivery.id],
-      title:     delivery.script_snapshot?.projects?.[0]?.title || '피드백 노트',
-      savedAt:   new Date().toISOString(),
+    if (containsReceivedDeliveryId(existing, delivery.id)) { setAlreadySaved(true); setPickerOpen(false); return; }
+    const savedAt = new Date().toISOString();
+    saveReceivedDeliveries([{
+      id: delivery.id,
+      title: delivery.script_snapshot?.projects?.[0]?.title || '피드백 노트',
+      savedAt,
       createdAt: delivery.created_at,
-      appState:  delivery.script_snapshot,
-      notes:     delivery.notes_snapshot || [],
       projectId: pickedProjId || null,
+      sessions: [{
+        id: delivery.id,
+        deliveryId: delivery.id,
+        title: delivery.script_snapshot?.projects?.[0]?.title || '피드백 노트',
+        savedAt,
+        createdAt: delivery.created_at,
+        appState: delivery.script_snapshot,
+        notes: delivery.notes_snapshot || [],
+      }],
     }, ...existing]);
     window.dispatchEvent(new Event('drama_delivery_changed'));
     setSaved(true);

@@ -3,12 +3,7 @@ import { useApp } from '../../store/AppContext';
 import MobileScriptTab from './MobileScriptTab';
 import MobileMemoTab, { MobileChecklistPanel } from './MobileMemoTab';
 import AdBanner from '../AdBanner';
-
-const DELIVERY_STORAGE_KEY = 'director_deliveries_received';
-function getReceivedDeliveries() {
-  try { const r = localStorage.getItem(DELIVERY_STORAGE_KEY); return r ? JSON.parse(r) : []; }
-  catch { return []; }
-}
+import { getReceivedDeliveries } from '../../utils/receivedFeedback';
 
 const TABS = [
   { id: 'script',   icon: '📝', label: '대본' },
@@ -56,7 +51,12 @@ function FeedbackTabContent({ dispatch, onClose }) {
           <div
             key={d.id || i}
             className="m-item"
-            onClick={() => { dispatch({ type: 'SET_ACTIVE_DOC', payload: 'director_notes' }); onClose?.(); }}
+            onClick={() => {
+              localStorage.setItem('drama_active_delivery_id', d.id);
+              window.dispatchEvent(new Event('drama_delivery_changed'));
+              dispatch({ type: 'SET_ACTIVE_DOC', payload: 'director_notes' });
+              onClose?.();
+            }}
             style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}
           >
             <span style={{ fontWeight: 500 }}>{d.title || `피드백 ${i + 1}`}</span>

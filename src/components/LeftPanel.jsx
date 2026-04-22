@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../store/AppContext';
 import { genId, now } from '../store/db';
 import { isMultiEpisode } from '../utils/projectTypes';
+import { getReceivedDeliveries, saveReceivedDeliveries } from '../utils/receivedFeedback';
 import FeedbackButtons from './FeedbackButtons';
 import FindReplacePanel from './FindReplacePanel';
 import {
@@ -466,20 +467,15 @@ function NewProjectModal({ onCommit, onCancel }) {
   );
 }
 
-const DELIVERY_KEY = 'director_deliveries_received';
-function getDeliveries() {
-  try { return JSON.parse(localStorage.getItem(DELIVERY_KEY) || '[]'); } catch { return []; }
-}
-
 function FeedbackSection({ projectId, activeDoc, dispatch, large }) {
   const [expanded, setExpanded] = useState(false);
-  const [allDeliveries, setAllDeliveries] = useState(() => getDeliveries());
+  const [allDeliveries, setAllDeliveries] = useState(() => getReceivedDeliveries());
   const [activeId, setActiveId] = useState(() => localStorage.getItem('drama_active_delivery_id') || null);
   const deliveries = allDeliveries.filter(d => !d.projectId || d.projectId === projectId);
 
   useEffect(() => {
     const handler = () => {
-      setAllDeliveries(getDeliveries());
+      setAllDeliveries(getReceivedDeliveries());
       setActiveId(localStorage.getItem('drama_active_delivery_id'));
     };
     window.addEventListener('drama_delivery_changed', handler);
@@ -496,7 +492,7 @@ function FeedbackSection({ projectId, activeDoc, dispatch, large }) {
   const handleDelete = (e, id) => {
     e.stopPropagation();
     const next = allDeliveries.filter(d => d.id !== id);
-    localStorage.setItem(DELIVERY_KEY, JSON.stringify(next));
+    saveReceivedDeliveries(next);
     if (activeId === id) {
       const fallback = deliveries.filter(d => d.id !== id)[0]?.id || null;
       if (fallback) localStorage.setItem('drama_active_delivery_id', fallback);
