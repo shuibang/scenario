@@ -24,7 +24,7 @@ const _LOCAL_PRRE = /^[\(（].+[\)）]$/;
 
 */
 const _LOCAL_DLRE = /^([\p{Script=Hangul}A-Za-z][\p{Script=Hangul}A-Za-z\s]{0,14})\s*[:：]\s*(.+)$/u;
-const _LOCAL_PRRE = /^[\(\（].+[\)\）]$/u;
+const _LOCAL_PRRE = /^[(（].+[)）]$/u;
 
 function textToAppState(text, title, localId) {
   const projectId = `${localId}_proj`;
