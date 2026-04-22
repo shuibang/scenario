@@ -1312,12 +1312,7 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
         }
       }
 
-      // 2) FK 제약 우회 — shared_scripts를 참조하는 하위 테이블을 먼저 정리
-      //    (레거시 director_deliveries, director_notes에 연결된 행이 남아 있으면 삭제 실패)
-      try { await supabase.from('director_deliveries').delete().eq('shared_script_id', script.id); } catch {}
-      try { await supabase.from('director_notes').delete().eq('shared_script_id', script.id); } catch {}
-
-      // 3) shared_scripts row 삭제
+      // 2) shared_scripts row 삭제 (director_deliveries·director_notes는 FK CASCADE로 자동 정리)
       const { data: deleted, error } = await supabase
         .from('shared_scripts')
         .delete()
