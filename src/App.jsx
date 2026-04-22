@@ -1952,13 +1952,12 @@ function Shell({ authUser, setAuthUser }) {
         {!focusMode && <StatusBar />}
 
         <div style={{ overflow: 'hidden', height: focusMode ? 0 : 'auto' }}>
-          <AdBanner
-            slot="bottom-fixed"
-            mobileHide={false}
-            height={48}
-            className="no-print"
-            style={{ margin: '0 8px 6px', borderRadius: 6 }}
-          />
+          <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-1.5 no-print" style={{ margin: '0 8px 6px' }}>
+            <AdBanner slot="bottom-fixed-1" mobileHide={false} height={48} style={{ borderRadius: 6 }} />
+            <div className="hidden md:block"><AdBanner slot="bottom-fixed-2" mobileHide={false} height={48} style={{ borderRadius: 6 }} /></div>
+            <div className="hidden md:block"><AdBanner slot="bottom-fixed-3" mobileHide={false} height={48} style={{ borderRadius: 6 }} /></div>
+            <div className="hidden xl:block"><AdBanner slot="bottom-fixed-4" mobileHide={false} height={48} style={{ borderRadius: 6 }} /></div>
+          </div>
         </div>
 
         {modals}
@@ -2048,13 +2047,12 @@ function Shell({ authUser, setAuthUser }) {
       {!focusMode && <StatusBar />}
 
       <div style={{ overflow: 'hidden', height: focusMode ? 0 : 'auto' }}>
-        <AdBanner
-          slot="bottom-fixed"
-          mobileHide={false}
-          height={48}
-          className="no-print"
-          style={{ margin: '0 8px 6px', borderRadius: 6 }}
-        />
+        <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-1.5 no-print" style={{ margin: '0 8px 6px' }}>
+          <AdBanner slot="bottom-fixed-1" mobileHide={false} height={48} style={{ borderRadius: 6 }} />
+          <div className="hidden md:block"><AdBanner slot="bottom-fixed-2" mobileHide={false} height={48} style={{ borderRadius: 6 }} /></div>
+          <div className="hidden md:block"><AdBanner slot="bottom-fixed-3" mobileHide={false} height={48} style={{ borderRadius: 6 }} /></div>
+          <div className="hidden xl:block"><AdBanner slot="bottom-fixed-4" mobileHide={false} height={48} style={{ borderRadius: 6 }} /></div>
+        </div>
       </div>
 
       {modals}

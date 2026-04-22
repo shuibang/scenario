@@ -391,11 +391,11 @@ function CoverMiniPreview() {
   const { activeDoc } = state;
 
   if (activeDoc === 'cover') {
-    return <AdBanner slot="cover-panel" mobileHide={false} height={120} style={{ margin: 12 }} />;
+    return <AdBanner slot="cover-panel-1" mobileHide={false} height={120} style={{ margin: 12 }} />;
   }
 
   if (activeDoc === 'synopsis') {
-    return <AdBanner slot="synopsis-panel" mobileHide={false} height={120} style={{ margin: 12 }} />;
+    return <AdBanner slot="synopsis-panel-1" mobileHide={false} height={120} style={{ margin: 12 }} />;
   }
 
   return null;
@@ -547,10 +547,11 @@ export default function RightPanel({ onScrollToScene }) {
   );
 
   // 2개 광고 + 메모 채움 레이아웃 (7개 패널 공통)
-  const twoAdPanel = (slot, docKey) => withMemo(
+  // baseSlot: 'cover-panel' → 실제 slot은 'cover-panel-1', 'cover-panel-2'로 분기 (각 고유 ad unit)
+  const twoAdPanel = (baseSlot, docKey) => withMemo(
     <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <AdBanner slot={slot} mobileHide={false} height={120} style={{ width: '100%' }} />
-      <AdBanner slot={slot} mobileHide={false} height={120} style={{ width: '100%' }} />
+      <AdBanner slot={`${baseSlot}-1`} mobileHide={false} height={120} style={{ width: '100%' }} />
+      <AdBanner slot={`${baseSlot}-2`} mobileHide={false} height={120} style={{ width: '100%' }} />
     </div>,
     docKey,
     true
@@ -572,8 +573,8 @@ export default function RightPanel({ onScrollToScene }) {
   } else if (activeDoc === 'scenelist') {
     contextContent = withMemo(
       <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <AdBanner slot="scenelist-panel" mobileHide={false} height={120} style={{ width: '100%' }} />
-        <AdBanner slot="scenelist-panel" mobileHide={false} height={120} style={{ width: '100%' }} />
+        <AdBanner slot="scenelist-panel-1" mobileHide={false} height={120} style={{ width: '100%' }} />
+        <AdBanner slot="scenelist-panel-2" mobileHide={false} height={120} style={{ width: '100%' }} />
       </div>,
       'scenelist',
       true
@@ -597,8 +598,8 @@ export default function RightPanel({ onScrollToScene }) {
   } else if (activeDoc === 'mypage') {
     contextContent = withMemo(
       <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <AdBanner slot="settings-panel" mobileHide={false} height={120} style={{ width: '100%' }} />
-        <AdBanner slot="settings-panel" mobileHide={false} height={120} style={{ width: '100%' }} />
+        <AdBanner slot="settings-panel-1" mobileHide={false} height={120} style={{ width: '100%' }} />
+        <AdBanner slot="settings-panel-2" mobileHide={false} height={120} style={{ width: '100%' }} />
       </div>,
       'mypage',
       true

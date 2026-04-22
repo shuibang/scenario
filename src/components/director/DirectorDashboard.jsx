@@ -1023,8 +1023,8 @@ export default function DirectorDashboard({ session, onBack, isGuest = false }) 
               <SideItem icon="⭐" label="멤버십"    active={false} onClick={() => setDirectorPage('membership')} />
             </div>
             <div style={{ width: 220, padding: '0 12px 12px', display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
-              <DirectorAdBanner height={120} slot="director-sidebar" />
-              <DirectorAdBanner height={120} slot="director-sidebar" />
+              <DirectorAdBanner height={120} slot="director-sidebar-1" />
+              <DirectorAdBanner height={120} slot="director-sidebar-2" />
             </div>
           </aside>
         )}
