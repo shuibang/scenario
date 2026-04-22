@@ -207,17 +207,283 @@
 
   <div class="timeline">
 
-    <!-- v11 -->
+    <!-- v17 (2026-04-22) -->
     <div class="cl-entry">
       <div class="cl-dot"></div>
       <div class="cl-card">
         <details open>
           <summary>
             <div class="cl-meta">
+              <div class="cl-date">2026-04-22</div>
+              <div class="cl-title">📮 연출 작업실 피드백 왕복 정리 · 광고 레이아웃 개편 · 기타 버그 수정</div>
+            </div>
+            <span class="new-badge">최신</span>
+            <span class="arrow">▶</span>
+          </summary>
+          <div class="cl-body">
+            <div class="cl-section">
+              <div class="cl-section-head">연출 작업실</div>
+              <ul>
+                <li>모바일 헤더에 햄버거 메뉴 추가 — 프로필·접속 기록·오류 보고·멤버십을 한 곳에서 진입</li>
+                <li>데스크톱 사이드바에도 "계정" 섹션 추가 (접속 기록 / 오류 보고 / 멤버십)</li>
+                <li>대본 ↔ 연출 전환 헤더 UI 통일 — 현재 작업실 표시 + 상대 작업실 바로가기 링크</li>
+                <li>사이드바 접기를 대본 작업실과 동일한 알약 버튼으로 개선 (데스크톱)</li>
+                <li>내부에서 뒤로가기 시 대본 작업실로 튕겨 나가던 문제 해결</li>
+                <li>스토리보드 그림 그릴 때 화면이 스크롤되던 문제 수정</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">피드백 왕복 흐름 수정</div>
+              <ul>
+                <li>검토 링크 생성 → 연출 작업실에서 열기 · 가져오기 → 작가에게 전송까지 끝까지 동작하도록 정리</li>
+                <li>대본 작업실 "피드백 노트" 페이지에서 본문이 비어 보이던 문제 수정</li>
+                <li>작품을 선택하지 않은 상태에서 링크 생성 시 친화적 안내 메시지 표시</li>
+                <li>링크 공유 후 같은 브라우저에서 열람 시 "불러오는 중…"에서 멈추던 문제 해결</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">상태 유지 · 데이터</div>
+              <ul>
+                <li>창을 닫거나 새로고침해도 마지막 작품이 자동으로 다시 열리도록 복원</li>
+                <li>작업시간이 새로고침마다 0으로 보이던 문제 해결 — 당일 누적 합산으로 표시</li>
+                <li>하루에 여러 번 작업을 기록해도 일별로 한 줄로 합쳐짐</li>
+                <li>작업 날짜가 자정 전후에 UTC로 어긋나던 문제 수정 (로컬 시간 기준으로)</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">연출 작품 삭제</div>
+              <ul>
+                <li>느린 네트워크에서 중복 클릭 방지 — 같은 삭제가 두 번 실행되지 않도록</li>
+                <li>이미 삭제된 항목을 또 클릭했을 때 친화적 안내 + 목록 즉시 정리</li>
+                <li>FK 제약으로 삭제가 실패하던 문제 해결 — 자식 테이블 자동 정리</li>
+                <li>Drive 파일이 사라진 고아 레코드에 "목록에서 제거" 카드 제공</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">UI · 메뉴</div>
+              <ul>
+                <li>모바일 "보기 → 분할 보기" 메뉴 숨김 (화면 크기 부적합)</li>
+                <li>마이페이지 "오류 제출" 탭을 데스크톱에서 숨김 — 왼쪽 🐞 버튼과 중복</li>
+                <li>파일 메뉴 "열기" 서브메뉴를 하나로 통합</li>
+                <li>하단 고정 광고를 반응형 4분할로 재배치 (모바일 1 / 태블릿 3 / 데스크톱 4)</li>
+                <li>광고 단위별 ID 고유화 — 위치별 집계 정확도 개선</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">검토 링크 뷰어</div>
+              <ul>
+                <li>기본 100% 표시 크기를 태블릿 기준 폭(모바일은 화면 가로)으로 조정 — 이전보다 훨씬 크게 보임</li>
+                <li>확대 배율 범위: 모바일 50~150%, 태블릿/데스크톱 100~200%</li>
+                <li>미리보기 사이즈 측정 오류 수정 — 기본 상태에서 작게 표시되던 문제 해소</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">버그 수정</div>
+              <ul>
+                <li>정규식 파싱 에러로 대본 작업실이 하얗게 변하던 문제 수정</li>
+                <li>오류 보고에 대본 / 연출 구분(source) 필드 정식화</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- v16 (2026-04-21) -->
+    <div class="cl-entry">
+      <div class="cl-dot"></div>
+      <div class="cl-card">
+        <details>
+          <summary>
+            <div class="cl-meta">
+              <div class="cl-date">2026-04-21</div>
+              <div class="cl-title">⌨️ 에디터 입력 흐름 정비 · 사용자 스타일 커스터마이징</div>
+            </div>
+            <span class="arrow">▶</span>
+          </summary>
+          <div class="cl-body">
+            <div class="cl-section">
+              <div class="cl-section-head">에디터 입력</div>
+              <ul>
+                <li>블록 삽입 단축키 체계 재구성 — 숫자 · 슬래시 일원화</li>
+                <li>회차 대본 진입 즉시 첫 블록에 커서 자동 포커스</li>
+                <li>슬래시 명령 팔레트 · 인물명 선택 포커스 흐름 개선</li>
+                <li>씬 헤더 블록 바깥에서도 슬래시 팔레트 정상 동작 복구</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">사용자 설정</div>
+              <ul>
+                <li>"사용자 설정" 모달을 2탭 구조로 통합 (공통 + 블록별)</li>
+                <li>블록 스타일 들여쓰기 커스터마이징 — 씬 · 지문 · 대사 등 여백 직접 조정</li>
+                <li>구조 태그에서 Save the Cat 제거 — 7시퀀스 흐름만 유지</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">출력 · 기타</div>
+              <ul>
+                <li>출력 항목 선택 상태가 다음 열람 때도 유지되도록 저장</li>
+                <li>작업 통계 카운트 오차 수정</li>
+                <li>타임라인 표시 · 한컴 출력 호환성 개선</li>
+                <li>업데이트 감지 폴링 버그 + 인물명 선택기 동작 수정</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- v15 (2026-04-20) -->
+    <div class="cl-entry">
+      <div class="cl-dot"></div>
+      <div class="cl-card">
+        <details>
+          <summary>
+            <div class="cl-meta">
+              <div class="cl-date">2026-04-20</div>
+              <div class="cl-title">✨ 서식 · 씬기호 전면 정비 · 단막(70분) 작품 유형 추가</div>
+            </div>
+            <span class="arrow">▶</span>
+          </summary>
+          <div class="cl-body">
+            <div class="cl-section">
+              <div class="cl-section-head">서식 · 출력</div>
+              <ul>
+                <li>인라인 서식(굵게 · 기울임 · 밑줄 · 취소선)과 블록 정렬이 HWPX · DOCX 출력에 그대로 반영</li>
+                <li>에디터 툴바 재설계 — 자주 쓰는 기능 접근성 개선</li>
+                <li>이탤릭 출력 경고 제거 (HWPX · DOCX 모두 정상 지원 확인)</li>
+                <li>PDF 출력 일시 비활성화 — 품질 개선 중으로 표기</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">씬 · 블록</div>
+              <ul>
+                <li>씬기호 포맷 시스템 전면 수정 — 구조화 필드 기반 렌더, 뱃지 중복 제거</li>
+                <li>씬 삭제 시 다른 뷰에 좀비 씬이 남던 문제 해결</li>
+                <li>복붙 시 빈 줄(문단 구분)이 사라지던 버그 수정, 복붙 자동 분류 복구</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">메뉴 · UI</div>
+              <ul>
+                <li>작품 유형에 <strong>단막(70분)</strong> 추가</li>
+                <li>상태바 재설계 · 메뉴 정리 · 가져오기 안내 개선</li>
+                <li>input · textarea · 씬 헤더에서 슬래시 팔레트 억제 (오작동 방지)</li>
+                <li>상단 정보바를 모바일 전용으로 제한, 단축버튼 행(B/I/U/S · 정렬)도 모바일 전용으로 재배치</li>
+                <li>새 작품 팝업 스타일 · "만들기" 버튼 누락 CSS 복구</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- v14 (2026-04-19) -->
+    <div class="cl-entry">
+      <div class="cl-dot"></div>
+      <div class="cl-card">
+        <details>
+          <summary>
+            <div class="cl-meta">
+              <div class="cl-date">2026-04-19</div>
+              <div class="cl-title">🛠 에디터 엔진 개선 및 UI 전면 리팩터링</div>
+            </div>
+            <span class="arrow">▶</span>
+          </summary>
+          <div class="cl-body">
+            <div class="cl-section">
+              <div class="cl-section-head">내부 구조 개선</div>
+              <ul>
+                <li>블록 처리 · 이벤트 라우팅 · 포커스 관리 코어 리팩터링 — 이후 입력 흐름과 서식 반영 개선의 토대</li>
+                <li>UI 전반 구조 정리 — 반복 렌더 · 성능 비효율 해소</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- v13 (2026-04-17) -->
+    <div class="cl-entry">
+      <div class="cl-dot"></div>
+      <div class="cl-card">
+        <details>
+          <summary>
+            <div class="cl-meta">
+              <div class="cl-date">2026-04-17</div>
+              <div class="cl-title">🔍 SEO 랜딩 페이지 추가 · 공유 링크 안정화</div>
+            </div>
+            <span class="arrow">▶</span>
+          </summary>
+          <div class="cl-body">
+            <div class="cl-section">
+              <div class="cl-section-head">SEO · 배포</div>
+              <ul>
+                <li>드라마 대본 양식 SEO 랜딩 페이지 추가 (/template)</li>
+                <li>sitemap.xml · robots.txt 추가, 네이버 서치어드바이저 소유권 인증</li>
+                <li>Clean URL 도입 (/notice · /changelog · /help 등) + 내부 링크 · canonical 통일</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">공유 링크</div>
+              <ul>
+                <li>공유 검토 링크 404 문제 해결 — URL 경로를 /app으로 고정하고 cleanUrls 충돌 해소</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">문서 · 기타</div>
+              <ul>
+                <li>template 페이지 예시 서식 · 글자색 · 대시 정리, FAQ 문구 현행화</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- v12 (2026-04-16) -->
+    <div class="cl-entry">
+      <div class="cl-dot"></div>
+      <div class="cl-card">
+        <details>
+          <summary>
+            <div class="cl-meta">
+              <div class="cl-date">2026-04-16</div>
+              <div class="cl-title">🧭 공지 · 업데이트 · 사용설명서 · 개발기 정적 페이지 정비 · 씬 헤더 형식 설정</div>
+            </div>
+            <span class="arrow">▶</span>
+          </summary>
+          <div class="cl-body">
+            <div class="cl-section">
+              <div class="cl-section-head">랜딩 · 정적 페이지</div>
+              <ul>
+                <li>공지사항 · 업데이트 내역 · 사용 설명서 · 개발기(1~3편) 정적 HTML 페이지 추가</li>
+                <li>랜딩 푸터에 각 페이지 바로가기 정리</li>
+                <li>사용 가이드 색상태그 · 단축키 · 씬리스트 설명 현행화 · Q&A 갱신 (피드백 노트 · Space×2 등)</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">에디터</div>
+              <ul>
+                <li>씬 헤더 형식 설정 · 씬리스트 양방향 동기화 · 피드백 노트 UX 개선</li>
+                <li>회차 대본 진입 시 첫 블록에 커서 자동 포커스</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- v11 (2026-04-14) -->
+    <div class="cl-entry">
+      <div class="cl-dot"></div>
+      <div class="cl-card">
+        <details>
+          <summary>
+            <div class="cl-meta">
               <div class="cl-date">2026-04-14</div>
               <div class="cl-title">🎬 연출 작업실 모바일 UI 전면 개편 및 서브패널 접기 기능</div>
             </div>
-            <span class="new-badge">최신</span>
             <span class="arrow">▶</span>
           </summary>
           <div class="cl-body">
