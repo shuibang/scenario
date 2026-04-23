@@ -44,6 +44,7 @@ function baseState(overrides = {}) {
     savedAt: null,
     scrollToSceneId: null,
     pendingScriptReload: null,
+    guardPending: null,
     undoStack: [],
     redoStack: [],
     ...overrides,
@@ -167,6 +168,22 @@ describe('reducer / SYNC_SCENES', () => {
     });
     const other = next.scenes.find(s => s.id === 's-other');
     expect(other).toEqual(otherEpScene);
+  });
+
+  describe('guardPending actions', () => {
+    it('SET_GUARD_PENDING — payload를 guardPending에 그대로 저장', () => {
+      const state = baseState();
+      const diff = { scriptBlocks: { prev: 100, next: 20, dropRatio: 0.8 }, scenes: null };
+      const payload = { diff, snapshotAt: 123456 };
+      const next = reducer(state, { type: 'SET_GUARD_PENDING', payload });
+      expect(next.guardPending).toEqual(payload);
+    });
+
+    it('CLEAR_GUARD_PENDING — guardPending을 null로 초기화', () => {
+      const state = baseState({ guardPending: { diff: {}, snapshotAt: 1 } });
+      const next = reducer(state, { type: 'CLEAR_GUARD_PENDING' });
+      expect(next.guardPending).toBeNull();
+    });
   });
 
   // 기존 결함 박제: payload의 episodeId가 action.episodeId와 다르면 리듀서는

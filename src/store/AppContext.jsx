@@ -2,6 +2,7 @@ import React, { createContext, useContext, useReducer, useEffect, useRef } from 
 import { getAll, setAll, getItem, setItem, DB_KEYS, genId, now, migrateFromLocalStorage } from './db';
 import { createSeedData } from '../data/seed';
 import { isTokenValid, saveToDrive, clearAccessToken } from './googleDrive';
+import { computeSizeGuard } from './sizeGuard';
 import { sharePayloadSchema } from '../utils/urlSchemas';
 import { parsePath, syncUrl } from '../utils/urlSync';
 
@@ -109,6 +110,8 @@ const initialState = {
   savedAt: null,
   scrollToSceneId: null,
   pendingScriptReload: null, // episodeId — tells ScriptEditor to reload blocks from store
+  // Data-size guard: persist가 70%+ 급감을 감지하면 사용자 확인 대기 상태로 전환
+  guardPending: null, // null | { diff: { scriptBlocks: {prev,next,dropRatio}|null, scenes: ...|null }, snapshotAt: number }
   // Undo/Redo (session-only, not persisted)
   undoStack: [],   // snapshots of { episodes, scenes, scriptBlocks }
   redoStack: [],
@@ -304,6 +307,10 @@ function reducer(state, action) {
       };
     case 'SET_SAVE_ERROR_MSG':
       return { ...state, saveErrorMsg: action.payload };
+    case 'SET_GUARD_PENDING':
+      return { ...state, guardPending: action.payload };
+    case 'CLEAR_GUARD_PENDING':
+      return { ...state, guardPending: null };
     case 'SET_SCROLL_TO_SCENE':
       return { ...state, scrollToSceneId: action.id };
 
@@ -415,6 +422,13 @@ export function AppProvider({ children }) {
   // (페이지 로드 시 데스크톱 데이터가 Drive를 덮어써서 모바일 데이터를 잃는 레이스컨디션 방지)
   const skipDriveSaveRef = useRef(false);
   const forcedSavedAtRef = useRef(null);
+  // Size-guard refs — 저장 직전 데이터 급감 감지용
+  // lastSavedSizesRef: 직전 성공 저장 시점의 { scriptBlocks, scenes } 개수 (null=첫 저장)
+  // guardAcceptOnceRef: 사용자가 모달에서 "저장" 눌렀을 때 한 사이클만 가드 스킵
+  // guardDismissedSizesRef: 사용자가 "취소" 누른 시점의 사이즈 — 이 값이 유지되는 동안 저장 보류
+  const lastSavedSizesRef = useRef(null);
+  const guardAcceptOnceRef = useRef(false);
+  const guardDismissedSizesRef = useRef(null);
 
   useEffect(() => {
     (async () => {
@@ -527,8 +541,45 @@ export function AppProvider({ children }) {
 
   useEffect(() => {
     if (!state.initialized) return;
+    // 가드 모달이 떠 있으면 persist 보류 — 사용자 응답 후 재개
+    if (state.guardPending) return;
     clearTimeout(persistTimer.current);
     persistTimer.current = setTimeout(async () => {
+      // Size guard: 70%+ 감소 감지 시 저장 중단 + 모달 트리거
+      // INIT/LOAD_FROM_DRIVE 로 lastSavedSizesRef가 비면 초기값으로 선주입 후 비교 스킵
+      const currentSizes = {
+        scriptBlocks: state.scriptBlocks.length,
+        scenes: state.scenes.length,
+      };
+      const dismissed = guardDismissedSizesRef.current;
+      if (lastSavedSizesRef.current === null) {
+        lastSavedSizesRef.current = currentSizes;
+      } else if (guardAcceptOnceRef.current) {
+        // 사용자가 직전 모달에서 "저장"을 선택 — 이 사이클은 가드 스킵
+        guardAcceptOnceRef.current = false;
+        guardDismissedSizesRef.current = null;
+        // 사용자 수용 = baseline 확정 (저장 결과와 독립)
+        lastSavedSizesRef.current = currentSizes;
+      } else if (
+        dismissed &&
+        dismissed.scriptBlocks === currentSizes.scriptBlocks &&
+        dismissed.scenes === currentSizes.scenes
+      ) {
+        // 사용자가 취소한 사이즈 그대로 — 편집 없으므로 저장 보류
+        return;
+      } else {
+        // 사이즈가 dismissed와 달라졌으면 취소 상태 해제하고 재평가
+        if (dismissed) guardDismissedSizesRef.current = null;
+        const diff = computeSizeGuard(lastSavedSizesRef.current, currentSizes);
+        if (diff) {
+          dispatch({
+            type: 'SET_GUARD_PENDING',
+            payload: { diff, snapshotAt: Date.now() },
+          });
+          return;
+        }
+      }
+
       // 로컬 drama_saved_at과 Drive savedAt이 반드시 같은 시각을 쓰도록 한 번만 생성
       const savedAt = forcedSavedAtRef.current || new Date().toISOString();
       try {
@@ -552,6 +603,7 @@ export function AppProvider({ children }) {
         }
         skipSavedAtRef.current = false;
         forcedSavedAtRef.current = null;
+        lastSavedSizesRef.current = currentSizes;
       } catch (e) {
         console.error('[AppContext] IndexedDB 저장 실패:', e?.name, e?.message);
         dispatch({ type: 'SET_SAVE_STATUS', payload: 'error' });
@@ -595,6 +647,8 @@ export function AppProvider({ children }) {
     state.workTimeLogs,
     state.checklistItems,
     state.stylePreset,
+    // guardPending이 non-null → null로 바뀌는 전이를 효과가 감지해 저장을 재개하도록 포함
+    state.guardPending,
   ]);
 
   // 상태 변경마다 URL 동기화 + localStorage fallback 저장
@@ -639,8 +693,23 @@ export function AppProvider({ children }) {
     dispatch({ type: 'LOAD_FROM_DRIVE', payload: drivePayload });
   };
 
+  // Size-guard user responses — SizeGuardModal에서 호출
+  const acceptSizeGuard = () => {
+    // 다음 persist 사이클에서 가드 스킵하고 그대로 저장
+    guardAcceptOnceRef.current = true;
+    dispatch({ type: 'CLEAR_GUARD_PENDING' });
+  };
+  const cancelSizeGuard = () => {
+    // 현재 크기를 취소 baseline으로 기억 — 사용자가 다시 편집하기 전까지 저장 보류
+    guardDismissedSizesRef.current = {
+      scriptBlocks: state.scriptBlocks.length,
+      scenes: state.scenes.length,
+    };
+    dispatch({ type: 'CLEAR_GUARD_PENDING' });
+  };
+
   return (
-    <AppContext.Provider value={{ state, dispatch, loadFromDriveData, genId, now }}>
+    <AppContext.Provider value={{ state, dispatch, loadFromDriveData, acceptSizeGuard, cancelSizeGuard, genId, now }}>
       {children}
     </AppContext.Provider>
   );

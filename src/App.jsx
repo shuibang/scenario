@@ -48,6 +48,7 @@ import { getLayoutMetrics } from './print/LineTokenizer';
 import { createFeedbackVersionShare } from './utils/reviewShare';
 import { buildFeedbackSnapshot } from './utils/feedbackVersions';
 import SyncConflictModal from './components/SyncConflictModal';
+import SizeGuardModal from './components/SizeGuardModal';
 import { usePageTracking } from './hooks/usePageTracking';
 import { guardedSignInWithGoogle } from './utils/guardedSignIn';
 import Menubar from './components/Menubar/Menubar';
@@ -1785,6 +1786,7 @@ function Shell({ authUser, setAuthUser }) {
       />
 
       {printPreviewOpen && <PrintPreviewModal onClose={() => setPrintPreviewOpen(false)} defaultFormat={exportDefaultFormat} />}
+      <SizeGuardModal />
       {syncConflict && (
         <SyncConflictModal
           localSavedAt={syncConflict.localSavedAt}
