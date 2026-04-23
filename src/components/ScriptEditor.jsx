@@ -6,7 +6,8 @@ import { createPortal } from 'react-dom';
 import DOMPurify from 'dompurify';
 import { useApp } from '../store/AppContext';
 import { genId, now } from '../store/db';
-import { resolveSceneLabel, parseSceneContent, SCENE_PREFIX_STRIP_RE } from '../utils/sceneResolver';
+import { resolveSceneLabel, SCENE_PREFIX_STRIP_RE } from '../utils/sceneResolver';
+import { buildSceneNumberBlock } from '../utils/sceneBlockBuilder';
 import { buildSceneLabel, getScenePrefix } from '../utils/scenePrefix';
 import { parseScriptText } from '../utils/parseScriptText';
 import { getSceneFormat, formatSceneHeader } from '../utils/sceneFormat';
@@ -698,18 +699,10 @@ function parseSurface(surface, metaRef, epId, projId) {
       alignment: div.dataset.alignment || prev.alignment || undefined,
     };
     if (type === 'scene_number') {
-      // rawText는 DOM 표시용(라벨 제거된 값)이므로 parsed는 순수 내용
-      const parsed = parseSceneContent(rawText);
       const label = prev.label || div.dataset.label || '';
-      // content에 label prefix가 있으면 제거 후 resolveSceneLabel 호출
-      const cleanContent = (parsed.location || parsed.specialSituation)
-        ? undefined // structured → resolveSceneLabel이 알아서 조합
-        : rawText.replace(SCENE_PREFIX_STRIP_RE, '');
-      const contentForResolve = cleanContent !== undefined
-        ? { label, location: '', subLocation: '', timeOfDay: '', specialSituation: '', content: cleanContent }
-        : { label, ...parsed };
-      const content = resolveSceneLabel(contentForResolve);
-      return { ...base, ...parsed, content, sceneId: div.dataset.sceneId || prev.sceneId || genId() };
+      const sceneId = div.dataset.sceneId || prev.sceneId || genId();
+      const sceneFields = buildSceneNumberBlock({ prev, rawText, label, sceneId });
+      return { ...base, ...sceneFields };
     }
     if (type === 'dialogue') {
       // sceneRefs 없는 dialogue는 HTML 서식 보존
