@@ -83,41 +83,28 @@ export const NOTICES = [
 const STORAGE_KEY = 'drama_dismissed_notice';
 
 export default function UpdateBanner() {
-  const latest = NOTICES[0];
   const announcement = ANNOUNCEMENTS[0];
   const [dismissed, setDismissed] = useState(() => {
     try {
-      return localStorage.getItem(STORAGE_KEY) === latest.id;
+      return announcement ? localStorage.getItem(STORAGE_KEY) === announcement.id : false;
     } catch { return false; }
   });
 
-  if (!latest || dismissed) return null;
+  if (!announcement || dismissed) return null;
 
   const dismiss = () => {
-    try { localStorage.setItem(STORAGE_KEY, latest.id); } catch {}
+    try { localStorage.setItem(STORAGE_KEY, announcement.id); } catch {}
     setDismissed(true);
   };
 
   return (
-    <div className="no-print" style={{ display: 'flex', flexDirection: 'column', gap: 5, padding: '5px 14px', background: 'var(--c-active)', borderBottom: '1px solid var(--c-border2)', flexShrink: 0 }}>
-      {/* 공지사항 배너 */}
-      {announcement && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 10, color: 'var(--c-accent)', fontWeight: 600, flexShrink: 0 }}>공지</span>
-          <span style={{
-            flex: 1, textAlign: 'left', fontSize: 11, color: 'var(--c-text2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}>
-            {announcement.title}
-          </span>
-        </div>
-      )}
-      {/* 업데이트 배너 */}
+    <div className="no-print" style={{ display: 'flex', padding: '7px 14px', background: 'var(--c-active)', borderBottom: '1px solid var(--c-border2)', flexShrink: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontSize: 11, color: 'var(--c-accent)', fontWeight: 600, flexShrink: 0 }}>
-          업데이트 {latest.date}
+        <span style={{ fontSize: 10, color: 'var(--c-accent)', fontWeight: 600, flexShrink: 0 }}>
+          공지
         </span>
-        <span style={{ fontSize: 11, color: 'var(--c-text3)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {latest.content}
+        <span style={{ fontSize: 11, color: 'var(--c-text2)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {announcement.title}
         </span>
         <button
           onClick={dismiss}

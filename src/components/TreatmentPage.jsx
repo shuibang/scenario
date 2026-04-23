@@ -8,6 +8,8 @@ import { isMultiEpisode } from '../utils/projectTypes';
 const STATUS_COLOR = { imported: 'var(--c-accent2)', modified: '#f59e0b', deleted: '#ef4444' };
 const STATUS_LABEL = { imported: '변환됨', modified: '수정됨', deleted: '씬 삭제됨' };
 const STATUS_BADGE = { imported: '✓', modified: '△', deleted: '✕' };
+const TREATMENT_HELP_AUTO_COUNT_KEY = 'drama_treatment_help_auto_count';
+const TREATMENT_HELP_AUTO_LAST_AT_KEY = 'drama_treatment_help_auto_last_at';
 
 // ─── Scene heading detector ────────────────────────────────────────────────────
 // "특수상황) 장소" 또는 "(시간대)" 패턴이 있으면 씬 헤딩으로 인식
@@ -113,6 +115,23 @@ export default function TreatmentPage() {
     document.addEventListener('touchstart', handler);
     return () => { document.removeEventListener('mousedown', handler); document.removeEventListener('touchstart', handler); };
   }, [helpOpen]);
+
+  useEffect(() => {
+    try {
+      const openedCount = Number(localStorage.getItem(TREATMENT_HELP_AUTO_COUNT_KEY) || '0');
+      const lastOpenedAt = Number(localStorage.getItem(TREATMENT_HELP_AUTO_LAST_AT_KEY) || '0');
+      const nowTs = Date.now();
+
+      if (openedCount >= 2) return;
+      if (nowTs - lastOpenedAt < 1500) return;
+
+      localStorage.setItem(TREATMENT_HELP_AUTO_COUNT_KEY, String(openedCount + 1));
+      localStorage.setItem(TREATMENT_HELP_AUTO_LAST_AT_KEY, String(nowTs));
+      setHelpOpen(true);
+    } catch {
+      setHelpOpen(true);
+    }
+  }, []);
 
   // Compute per-item import status: null | 'imported' | 'modified' | 'deleted'
   const itemStatusMap = useMemo(() => {
@@ -506,9 +525,15 @@ export default function TreatmentPage() {
         <div ref={helpRef} style={{ position: 'relative', display: 'inline-flex' }}>
           <button onClick={() => setHelpOpen(v => !v)} title="도움말" style={{ width: 18, height: 18, borderRadius: '50%', border: '1px solid var(--c-border3)', background: helpOpen ? 'var(--c-active)' : 'transparent', color: 'var(--c-text5)', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, flexShrink: 0 }}>?</button>
           {helpOpen && (
-            <div style={{ position: 'absolute', top: '24px', left: 0, zIndex: 200, background: 'var(--c-card)', border: '1px solid var(--c-border)', borderRadius: 8, padding: '10px 14px', width: 240, boxShadow: '0 4px 16px rgba(0,0,0,0.18)' }}>
+            <div style={{ position: 'absolute', top: '24px', left: 0, zIndex: 200, background: 'var(--c-card)', border: '1px solid var(--c-border)', borderRadius: 8, padding: '10px 14px', width: 260, boxShadow: '0 4px 16px rgba(0,0,0,0.18)' }}>
               <div className="text-xs font-semibold mb-2" style={{ color: 'var(--c-text3)' }}>트리트먼트 안내</div>
-              {['각 씬의 내용을 간략히 작성하세요.', '대본으로 가져오기로 씬을 대본에 추가할 수 있습니다.', '대본과 자동동기화 됩니다.'].map((t, i) => (
+              {[
+                '각 씬의 내용을 간략히 작성하세요.',
+                '전체회차에서는 여러 회차를 한 화면에서 정리할 수 있습니다.',
+                isSeries ? '회차 추가는 새 회차를 만드는 버튼이고, 각 회차 아래 내용 추가는 그 회차 안의 항목만 늘립니다.' : '개별 회차를 선택해 항목을 정리할 수 있습니다.',
+                '대본으로 가져오기는 개별 회차 선택 상태에서만 사용할 수 있습니다.',
+                '바깥 화면을 터치하거나 클릭하면 이 안내가 닫힙니다.',
+              ].map((t, i) => (
                 <div key={i} className="text-[11px] leading-relaxed" style={{ color: 'var(--c-text5)' }}>· {t}</div>
               ))}
             </div>
@@ -528,6 +553,22 @@ export default function TreatmentPage() {
             <option key={`__new__${n}`} value={`__new__${n}`}>자동생성 : {n}회</option>
           ))}
         </select>
+        {selectedEpId === 'all' && isSeries && (
+          <button
+            onClick={handleAddEpisodeInAllView}
+            className="px-2.5 py-1 rounded text-xs"
+            style={{
+              color: 'var(--c-text3)',
+              border: '1px solid var(--c-border3)',
+              background: 'transparent',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+            }}
+          >
+            + {nextEpisodeNumber}회차 추가
+          </button>
+        )}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           {importMsg && <span className="text-xs" style={{ color: 'var(--c-accent2)' }}>{importMsg}</span>}
           <button
@@ -556,46 +597,6 @@ export default function TreatmentPage() {
           >대본으로 가져오기</button>
         </div>
       </div>
-
-      {selectedEpId === 'all' && (
-        <div
-          className="shrink-0"
-          style={{
-            padding: '10px 12px',
-            borderBottom: '1px solid var(--c-border2)',
-            background: 'var(--c-panel)',
-            fontSize: 11,
-            lineHeight: 1.7,
-            color: 'var(--c-text5)',
-          }}
-        >
-          <div>
-            전체회차에서는 여러 회차를 한 화면에서 정리할 수 있습니다.
-            {isSeries ? ' 회차 추가는 새 회차를 만드는 버튼이고, 각 회차 아래 내용 추가는 그 회차 안의 항목만 늘립니다.' : ''}
-            대본으로 가져오기는 개별 회차 선택 상태에서만 사용할 수 있습니다.
-          </div>
-          {isSeries && (
-            <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <button
-                onClick={handleAddEpisodeInAllView}
-                className="px-3 py-1.5 rounded text-xs"
-                style={{
-                  color: 'var(--c-text3)',
-                  border: '1px solid var(--c-border3)',
-                  background: 'transparent',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                + {nextEpisodeNumber}회차 추가
-              </button>
-              <span style={{ color: 'var(--c-text6)' }}>
-                새 회차를 만든 뒤, 각 회차 아래에서 내용만 이어서 추가할 수 있습니다.
-              </span>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Import warning bar */}
       {importWarning && (
