@@ -2400,7 +2400,8 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
       const updatedScenes = sceneBlocks.map((b, idx) => {
         const existing = sceneMapForSave.get(b.sceneId);
         return {
-          id: b.sceneId || genId(),
+          ...(existing || {}),
+          id: b.sceneId || existing?.id || genId(),
           episodeId: activeEpisodeId, projectId: activeProjectId,
           sceneSeq: idx + 1, label: buildSceneLabel(idx + 1),
           status: existing?.status || 'draft',
@@ -2439,7 +2440,8 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
       const updatedScenes = sceneBlocks.map((b, idx) => {
         const existing = currentScenes.find(s => s.id === b.sceneId);
         return {
-          id: b.sceneId || genId(),
+          ...(existing || {}),
+          id: b.sceneId || existing?.id || genId(),
           episodeId: epId, projectId: b.projectId,
           sceneSeq: idx + 1, label: buildSceneLabel(idx + 1),
           status: existing?.status || 'draft',
@@ -2906,7 +2908,8 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     const updatedScenes = sceneBlocks.map((b, idx) => {
       const existing = scenes.find(s => s.id === b.sceneId);
       return {
-        id: b.sceneId || genId(),
+        ...(existing || {}),
+        id: b.sceneId || existing?.id || genId(),
         episodeId: activeEpisodeId, projectId: activeProjectId,
         sceneSeq: idx + 1, label: buildSceneLabel(idx + 1),
         status: existing?.status || 'draft',

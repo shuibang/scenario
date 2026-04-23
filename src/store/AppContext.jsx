@@ -115,6 +115,7 @@ const initialState = {
 };
 
 // ─── Reducer ─────────────────────────────────────────────────────────────────
+// NOTE: `reducer` is also exported (bottom of file) for unit tests.
 function reducer(state, action) {
   switch (action.type) {
     case 'INIT':
@@ -187,9 +188,17 @@ function reducer(state, action) {
       const thisEpScenes  = state.scenes.filter(s => s.episodeId === action.episodeId);
       // removeOrphans=true (에디터): 블록에 없는 씬 제거 / false (씬리스트·씬보드): 기존 씬 유지
       const preserved = removeOrphans ? [] : thisEpScenes.filter(s => !syncedIds.has(s.id));
+      // 병합: payload의 각 항목을 같은 id인 기존 씬과 합쳐 whitelist 밖 필드(emotionTags 등) 보존
+      // 이중 방어선: 빌더(...existing 스프레드) + 리듀서(id 기준 병합)
+      // 배경: 데이터 유실 조사에서 발견된 SYNC_SCENES 완전 교체 버그 방어
+      const existingByIdInEpisode = new Map(thisEpScenes.map(s => [s.id, s]));
+      const merged = action.payload.map(p => {
+        const prev = existingByIdInEpisode.get(p.id);
+        return prev ? { ...prev, ...p } : p;
+      });
       return {
         ...state,
-        scenes: [...otherEpScenes, ...preserved, ...action.payload],
+        scenes: [...otherEpScenes, ...preserved, ...merged],
       };
     }
 
@@ -642,3 +651,6 @@ export function useApp() {
   if (!ctx) throw new Error('useApp must be used within AppProvider');
   return ctx;
 }
+
+// Exported for unit tests (e.g. AppContext.test.js). Not intended as a public API.
+export { reducer };
