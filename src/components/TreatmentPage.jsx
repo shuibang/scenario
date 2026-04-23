@@ -1,8 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useApp } from '../store/AppContext';
 import { genId, now } from '../store/db';
 import { parseSceneContent } from '../utils/sceneResolver';
 import { isMultiEpisode } from '../utils/projectTypes';
+import UnifiedTagPicker from './UnifiedTagPicker';
+import EmotionTagPicker from './EmotionTagPicker';
+import { getChipInlineStyle } from '../utils/emotionColor';
+import { BUILTIN_GUIDES } from '../data/structureTags';
 
 // ─── Import status ────────────────────────────────────────────────────────────
 const STATUS_COLOR = { imported: 'var(--c-accent2)', modified: '#f59e0b', deleted: '#ef4444' };
@@ -23,13 +28,22 @@ function looksLikeSceneHeading(text) {
 // ─── Migration: old {id, text} → new {id, text, order, ...extra} ─────────────
 function migrateItems(raw) {
   if (!Array.isArray(raw) || raw.length === 0)
-    return [{ id: genId(), text: '', order: 0 }];
+    return [{ id: genId(), text: '', order: 0, emotionTags: [], structureTags: [] }];
   return raw.map((it, i) => ({
     ...it,                       // preserve all fields (importedSceneId, importedText, etc.)
     id:    it.id    || genId(),
     text:  it.text  ?? '',
     order: it.order ?? i,
+    emotionTags:   Array.isArray(it.emotionTags)   ? it.emotionTags   : [],
+    structureTags: Array.isArray(it.structureTags) ? it.structureTags : [],
   }));
+}
+
+function structureTagColor(beat) {
+  for (const g of BUILTIN_GUIDES) {
+    if (g.beats.includes(beat)) return g.color;
+  }
+  return '#6b7280';
 }
 
 // ─── TreatmentPage ────────────────────────────────────────────────────────────
@@ -154,6 +168,12 @@ export default function TreatmentPage() {
   const [importWarning, setImportWarning] = useState(false);
   const [importMsg, setImportMsg] = useState('');
 
+  // Slash-triggered tag pickers (single-episode view)
+  // unifiedPicker: { itemId, top, left }
+  // emotionPicker: { itemId, top, left, initialWord, existingTag }
+  const [unifiedPicker, setUnifiedPicker] = useState(null);
+  const [emotionPicker, setEmotionPicker] = useState(null);
+
   // textarea refs for focus control after state updates
   const textareaRefs   = useRef({});
   const pendingFocus   = useRef(null); // { id, cursor }
@@ -203,11 +223,48 @@ export default function TreatmentPage() {
     [allEpItems]
   );
 
+  // ── Shared sync helper: action 블록 텍스트/감정태그 + scene 구조태그를 items에 맞춰 재반영
+  const applyTreatmentSync = useCallback((targetEpId, newItems) => {
+    if (!targetEpId) return;
+    if (localStorage.getItem('drama_treatmentSync') !== 'sync') return;
+    const epBlocks = scriptBlocksRef.current.filter(b => b.episodeId === targetEpId);
+    let blocksChanged = false;
+    const updatedBlocks = epBlocks.map(block => {
+      const item = newItems.find(it => it.importedSceneId === block.sceneId);
+      if (!item) return block;
+      if (block.type === 'action') {
+        const firstEmotion = (item.emotionTags || [])[0] || null;
+        const textDiffers = item.text.trim() !== block.content?.trim();
+        const tagDiffers = JSON.stringify(block.emotionTag || null) !== JSON.stringify(firstEmotion);
+        if (textDiffers || tagDiffers) {
+          blocksChanged = true;
+          return { ...block, content: item.text.trim(), emotionTag: firstEmotion, updatedAt: now() };
+        }
+      }
+      return block;
+    });
+    if (blocksChanged) {
+      dispatch({ type: 'SET_BLOCKS', episodeId: targetEpId, payload: updatedBlocks });
+    }
+    newItems.forEach(it => {
+      if (!it.importedSceneId) return;
+      const scene = scenes.find(s => s.id === it.importedSceneId && s.episodeId === targetEpId);
+      if (!scene) return;
+      const desired = it.structureTags || [];
+      const current = scene.tags || [];
+      const same = desired.length === current.length && desired.every(t => current.includes(t));
+      if (!same) {
+        dispatch({ type: 'UPDATE_SCENE', payload: { id: scene.id, tags: desired } });
+      }
+    });
+  }, [dispatch, scenes]);
+
   // 전체 뷰 전용 저장 — 특정 epId 기준
   const saveForEp = useCallback((targetEpId, newItems, record = false) => {
     if (!targetEpId) return;
     dispatch({ type: 'UPDATE_EPISODE', payload: { id: targetEpId, summaryItems: newItems }, _record: record });
-  }, [dispatch]);
+    applyTreatmentSync(targetEpId, newItems);
+  }, [dispatch, applyTreatmentSync]);
 
   const updateItemForEp = useCallback((targetEpId, epItems, id, text) => {
     saveForEp(targetEpId, epItems.map(it => it.id === id ? { ...it, text } : it));
@@ -216,6 +273,56 @@ export default function TreatmentPage() {
   const addItemForEp = useCallback((targetEpId, epItems) => {
     saveForEp(targetEpId, [...epItems, { id: genId(), text: '', order: epItems.length }], true);
   }, [saveForEp]);
+
+  // Fetch the latest items for an episode (used by tag mutation handlers that may be
+  // invoked after a picker opens, so a captured `epItems` snapshot could be stale).
+  const getLatestItemsForEp = useCallback((targetEpId) => {
+    const ep = episodes.find(e => e.id === targetEpId);
+    return ep ? migrateItems(ep.summaryItems) : [];
+  }, [episodes]);
+
+  const addEmotionTagForEp = useCallback((targetEpId, itemId, tag) => {
+    const latest = getLatestItemsForEp(targetEpId);
+    const newItems = latest.map(it => {
+      if (it.id !== itemId) return it;
+      const existing = it.emotionTags || [];
+      const idx = existing.findIndex(t => t.word === tag.word);
+      const nextTags = idx >= 0
+        ? existing.map((t, i) => (i === idx ? tag : t))
+        : [...existing, tag];
+      return { ...it, emotionTags: nextTags };
+    });
+    saveForEp(targetEpId, newItems, true);
+  }, [getLatestItemsForEp, saveForEp]);
+
+  const removeEmotionTagForEp = useCallback((targetEpId, itemId, word) => {
+    const latest = getLatestItemsForEp(targetEpId);
+    const newItems = latest.map(it => {
+      if (it.id !== itemId) return it;
+      return { ...it, emotionTags: (it.emotionTags || []).filter(t => t.word !== word) };
+    });
+    saveForEp(targetEpId, newItems, true);
+  }, [getLatestItemsForEp, saveForEp]);
+
+  const addStructureTagForEp = useCallback((targetEpId, itemId, beat) => {
+    const latest = getLatestItemsForEp(targetEpId);
+    const newItems = latest.map(it => {
+      if (it.id !== itemId) return it;
+      const existing = it.structureTags || [];
+      if (existing.includes(beat)) return it;
+      return { ...it, structureTags: [...existing, beat] };
+    });
+    saveForEp(targetEpId, newItems, true);
+  }, [getLatestItemsForEp, saveForEp]);
+
+  const removeStructureTagForEp = useCallback((targetEpId, itemId, beat) => {
+    const latest = getLatestItemsForEp(targetEpId);
+    const newItems = latest.map(it => {
+      if (it.id !== itemId) return it;
+      return { ...it, structureTags: (it.structureTags || []).filter(b => b !== beat) };
+    });
+    saveForEp(targetEpId, newItems, true);
+  }, [getLatestItemsForEp, saveForEp]);
 
   useEffect(() => {
     if (selectedEpId === 'all') {
@@ -241,25 +348,48 @@ export default function TreatmentPage() {
   const save = useCallback((newItems, record = false) => {
     setItems(newItems);
     dispatch({ type: 'UPDATE_EPISODE', payload: { id: epId, summaryItems: newItems }, _record: record });
+    applyTreatmentSync(epId, newItems);
+  }, [epId, dispatch, applyTreatmentSync]);
 
-    // ── Auto-sync: importedSceneId가 있는 항목의 action 블록을 즉시 갱신
-    if (localStorage.getItem('drama_treatmentSync') === 'sync') {
-      const epBlocks = scriptBlocksRef.current.filter(b => b.episodeId === epId);
-      let changed = false;
-      const updatedBlocks = epBlocks.map(block => {
-        if (block.type !== 'action') return block;
-        const item = newItems.find(it => it.importedSceneId === block.sceneId);
-        if (item && item.text.trim() !== block.content?.trim()) {
-          changed = true;
-          return { ...block, content: item.text.trim(), updatedAt: now() };
-        }
-        return block;
-      });
-      if (changed) {
-        dispatch({ type: 'SET_BLOCKS', episodeId: epId, payload: updatedBlocks });
-      }
-    }
-  }, [epId, dispatch]);
+  // ─── Tag mutation helpers (single-episode view) ──────────────────────────
+  const addEmotionTagToItem = useCallback((itemId, tag) => {
+    const newItems = items.map(it => {
+      if (it.id !== itemId) return it;
+      const existing = it.emotionTags || [];
+      const idx = existing.findIndex(t => t.word === tag.word);
+      const nextTags = idx >= 0
+        ? existing.map((t, i) => (i === idx ? tag : t))   // replace existing word
+        : [...existing, tag];
+      return { ...it, emotionTags: nextTags };
+    });
+    save(newItems, true);
+  }, [items, save]);
+
+  const removeEmotionTagFromItem = useCallback((itemId, word) => {
+    const newItems = items.map(it => {
+      if (it.id !== itemId) return it;
+      return { ...it, emotionTags: (it.emotionTags || []).filter(t => t.word !== word) };
+    });
+    save(newItems, true);
+  }, [items, save]);
+
+  const addStructureTagToItem = useCallback((itemId, beat) => {
+    const newItems = items.map(it => {
+      if (it.id !== itemId) return it;
+      const existing = it.structureTags || [];
+      if (existing.includes(beat)) return it;
+      return { ...it, structureTags: [...existing, beat] };
+    });
+    save(newItems, true);
+  }, [items, save]);
+
+  const removeStructureTagFromItem = useCallback((itemId, beat) => {
+    const newItems = items.map(it => {
+      if (it.id !== itemId) return it;
+      return { ...it, structureTags: (it.structureTags || []).filter(b => b !== beat) };
+    });
+    save(newItems, true);
+  }, [items, save]);
 
   // ─── Auto-resize textarea ─────────────────────────────────────────────────
   const autoResize = (el) => {
@@ -314,6 +444,28 @@ export default function TreatmentPage() {
   // ─── Keyboard: Enter → split, Backspace at 0 → merge ────────────────────
   const handleKeyDown = useCallback((e, it, idx) => {
     if (e.nativeEvent.isComposing) return;
+
+    // Slash → open unified tag picker
+    // Trigger when '/' is typed at the start of the line or right after whitespace
+    if (e.key === '/' && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+      const pos = e.target.selectionStart;
+      const end = e.target.selectionEnd;
+      if (pos === end) {
+        const before = it.text.slice(0, pos);
+        const prevChar = before.slice(-1);
+        const atTriggerPos = pos === 0 || prevChar === '\n' || /\s/.test(prevChar);
+        if (atTriggerPos) {
+          e.preventDefault();
+          const rect = e.target.getBoundingClientRect();
+          setUnifiedPicker({
+            itemId: it.id,
+            top: rect.bottom + 4,
+            left: rect.left,
+          });
+          return;
+        }
+      }
+    }
 
     if (handleArrowNavigation(e, items.map(item => item.id), it.id)) return;
 
@@ -372,7 +524,31 @@ export default function TreatmentPage() {
     }
   }, [items, save, handleArrowNavigation]);
 
-  const handleAllViewKeyDown = useCallback((e, itemId) => {
+  const handleAllViewKeyDown = useCallback((e, epId, itemId) => {
+    if (e.nativeEvent.isComposing) return;
+
+    if (e.key === '/' && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+      const pos = e.target.selectionStart;
+      const end = e.target.selectionEnd;
+      if (pos === end) {
+        const value = e.target.value || '';
+        const before = value.slice(0, pos);
+        const prevChar = before.slice(-1);
+        const atTriggerPos = pos === 0 || prevChar === '\n' || /\s/.test(prevChar);
+        if (atTriggerPos) {
+          e.preventDefault();
+          const rect = e.target.getBoundingClientRect();
+          setUnifiedPicker({
+            itemId,
+            epId,
+            top: rect.bottom + 4,
+            left: rect.left,
+          });
+          return;
+        }
+      }
+    }
+
     handleArrowNavigation(e, allViewItemIds, itemId);
   }, [allViewItemIds, handleArrowNavigation]);
 
@@ -467,10 +643,17 @@ export default function TreatmentPage() {
       const actionContent = isHeading ? lines.slice(1).join('\n').trim() : it.text.trim();
       const parsedFields = isHeading ? parseSceneContent(firstLine) : {};
 
+      const emotionTags = Array.isArray(it.emotionTags) ? it.emotionTags : [];
+      const structureTags = Array.isArray(it.structureTags) ? it.structureTags : [];
+      const firstEmotion = emotionTags[0] || null;
+
       newScenes.push({
         id: sceneId, episodeId: epId, projectId: activeProjectId,
         sourceTreatmentItemId: it.id,
-        sceneSeq, status: 'draft', tags: [], createdAt: now(), updatedAt: now(),
+        sceneSeq, status: 'draft',
+        tags: [...structureTags],
+        emotionTags: [...emotionTags],
+        createdAt: now(), updatedAt: now(),
         content: sceneHeadingContent,
         ...parsedFields,
       });
@@ -483,6 +666,7 @@ export default function TreatmentPage() {
       newBlocks.push({
         id: genId(), episodeId: epId, projectId: activeProjectId,
         type: 'action', label: '', content: actionContent, sceneId,
+        emotionTag: firstEmotion,
         createdAt: now(), updatedAt: now(),
       });
     });
@@ -665,19 +849,84 @@ export default function TreatmentPage() {
                   {epItems.map((it, idx) => (
                     <div key={it.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
                       <span style={{ fontSize: 11, color: 'var(--c-text6)', minWidth: 24, textAlign: 'right', marginTop: 6 }}>{idx + 1}.</span>
-                      <textarea
-                        value={it.text}
-                        rows={1}
-                        placeholder="줄거리 항목 입력"
-                        className="flex-1 text-xs resize-none rounded px-3 py-1.5 outline-none"
-                        style={{ background: 'var(--c-input)', color: 'var(--c-text)', border: '1px solid var(--c-border3)', lineHeight: 1.5, minHeight: '2em', overflow: 'hidden' }}
-                        ref={el => {
-                          textareaRefs.current[it.id] = el;
-                          if (el) autoResize(el);
-                        }}
-                        onChange={e => { autoResize(e.target); updateItemForEp(ep.id, epItems, it.id, e.target.value); }}
-                        onKeyDown={e => handleAllViewKeyDown(e, it.id)}
-                      />
+                      <div className="flex-1 flex flex-col gap-1 min-w-0">
+                        <textarea
+                          value={it.text}
+                          rows={1}
+                          placeholder="줄거리 항목 입력 (/ 로 태그 추가)"
+                          className="w-full text-xs resize-none rounded px-3 py-1.5 outline-none"
+                          style={{ background: 'var(--c-input)', color: 'var(--c-text)', border: '1px solid var(--c-border3)', lineHeight: 1.5, minHeight: '2em', overflow: 'hidden' }}
+                          ref={el => {
+                            textareaRefs.current[it.id] = el;
+                            if (el) autoResize(el);
+                          }}
+                          onChange={e => { autoResize(e.target); updateItemForEp(ep.id, epItems, it.id, e.target.value); }}
+                          onKeyDown={e => handleAllViewKeyDown(e, ep.id, it.id)}
+                        />
+                        {((it.emotionTags && it.emotionTags.length) || (it.structureTags && it.structureTags.length)) ? (
+                          <div className="flex flex-wrap gap-1 px-1">
+                            {(it.emotionTags || []).map(tag => (
+                              <span
+                                key={`em-${tag.word}`}
+                                onClick={() => {
+                                  const el = textareaRefs.current[it.id];
+                                  const rect = el?.getBoundingClientRect();
+                                  setEmotionPicker({
+                                    itemId: it.id,
+                                    epId: ep.id,
+                                    top: (rect?.bottom ?? 0) + 4,
+                                    left: rect?.left ?? 0,
+                                    existingTag: tag,
+                                    initialWord: tag.word,
+                                  });
+                                }}
+                                style={{
+                                  ...getChipInlineStyle(tag.color, tag.intensity),
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  padding: '1px 6px',
+                                  borderRadius: 999,
+                                  fontSize: 10,
+                                  lineHeight: 1.5,
+                                  cursor: 'pointer',
+                                }}
+                                title="클릭하여 수정"
+                              >
+                                {tag.word}
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); removeEmotionTagForEp(ep.id, it.id, tag.word); }}
+                                  style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 10, padding: 0, lineHeight: 1, opacity: 0.7 }}
+                                  title="삭제"
+                                >×</button>
+                              </span>
+                            ))}
+                            {(it.structureTags || []).map(beat => (
+                              <span
+                                key={`st-${beat}`}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  padding: '1px 6px',
+                                  borderRadius: 4,
+                                  fontSize: 10,
+                                  lineHeight: 1.5,
+                                  color: '#fff',
+                                  background: structureTagColor(beat),
+                                }}
+                              >
+                                {beat}
+                                <button
+                                  onClick={() => removeStructureTagForEp(ep.id, it.id, beat)}
+                                  style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 10, padding: 0, lineHeight: 1, opacity: 0.75 }}
+                                  title="삭제"
+                                >×</button>
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -722,30 +971,94 @@ export default function TreatmentPage() {
                   >→씬</button>
                 )}
               </div>
-              <textarea
-                ref={el => {
-                  textareaRefs.current[it.id] = el;
-                  if (el) autoResize(el);
-                }}
-                value={it.text}
-                rows={1}
-                placeholder="줄거리 항목 입력"
-                className="flex-1 text-xs resize-none rounded px-3 py-1.5 outline-none"
-                style={{
-                  background: 'var(--c-input)',
-                  color: 'var(--c-text)',
-                  border: '1px solid var(--c-border3)',
-                  lineHeight: 1.5,
-                  minHeight: '2em',
-                  overflow: 'hidden',
-                }}
-                onChange={e => {
-                  autoResize(e.target);
-                  updateItem(it.id, e.target.value);
-                }}
-                onKeyDown={e => handleKeyDown(e, it, idx)}
-                onPaste={e => handlePaste(e, it, idx)}
-              />
+              <div className="flex-1 flex flex-col gap-1 min-w-0">
+                <textarea
+                  ref={el => {
+                    textareaRefs.current[it.id] = el;
+                    if (el) autoResize(el);
+                  }}
+                  value={it.text}
+                  rows={1}
+                  placeholder="줄거리 항목 입력 (/ 로 태그 추가)"
+                  className="w-full text-xs resize-none rounded px-3 py-1.5 outline-none"
+                  style={{
+                    background: 'var(--c-input)',
+                    color: 'var(--c-text)',
+                    border: '1px solid var(--c-border3)',
+                    lineHeight: 1.5,
+                    minHeight: '2em',
+                    overflow: 'hidden',
+                  }}
+                  onChange={e => {
+                    autoResize(e.target);
+                    updateItem(it.id, e.target.value);
+                  }}
+                  onKeyDown={e => handleKeyDown(e, it, idx)}
+                  onPaste={e => handlePaste(e, it, idx)}
+                />
+                {((it.emotionTags && it.emotionTags.length) || (it.structureTags && it.structureTags.length)) ? (
+                  <div className="flex flex-wrap gap-1 px-1">
+                    {(it.emotionTags || []).map(tag => (
+                      <span
+                        key={`em-${tag.word}`}
+                        onClick={() => {
+                          const el = textareaRefs.current[it.id];
+                          const rect = el?.getBoundingClientRect();
+                          setEmotionPicker({
+                            itemId: it.id,
+                            top: (rect?.bottom ?? 0) + 4,
+                            left: rect?.left ?? 0,
+                            existingTag: tag,
+                            initialWord: tag.word,
+                          });
+                        }}
+                        style={{
+                          ...getChipInlineStyle(tag.color, tag.intensity),
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          padding: '1px 6px',
+                          borderRadius: 999,
+                          fontSize: 10,
+                          lineHeight: 1.5,
+                          cursor: 'pointer',
+                        }}
+                        title="클릭하여 수정"
+                      >
+                        {tag.word}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); removeEmotionTagFromItem(it.id, tag.word); }}
+                          style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 10, padding: 0, lineHeight: 1, opacity: 0.7 }}
+                          title="삭제"
+                        >×</button>
+                      </span>
+                    ))}
+                    {(it.structureTags || []).map(beat => (
+                      <span
+                        key={`st-${beat}`}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          padding: '1px 6px',
+                          borderRadius: 4,
+                          fontSize: 10,
+                          lineHeight: 1.5,
+                          color: '#fff',
+                          background: structureTagColor(beat),
+                        }}
+                      >
+                        {beat}
+                        <button
+                          onClick={() => removeStructureTagFromItem(it.id, beat)}
+                          style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 10, padding: 0, lineHeight: 1, opacity: 0.75 }}
+                          title="삭제"
+                        >×</button>
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
               <div className="flex flex-col gap-0.5 shrink-0 mt-1">
                 <button
                   onClick={() => moveItem(it.id, -1)}
@@ -780,6 +1093,66 @@ export default function TreatmentPage() {
 
       </div>
       </div>
+
+      {/* Unified tag picker (slash-triggered) */}
+      {unifiedPicker && (() => {
+        const isAllView = !!unifiedPicker.epId;
+        const pickerItem = isAllView
+          ? getLatestItemsForEp(unifiedPicker.epId).find(it => it.id === unifiedPicker.itemId)
+          : items.find(it => it.id === unifiedPicker.itemId);
+        const safeLeft = Math.min(unifiedPicker.left, window.innerWidth - 272);
+        return (
+          <UnifiedTagPicker
+            position={{ top: unifiedPicker.top, left: safeLeft }}
+            currentStructureTags={pickerItem?.structureTags || []}
+            onAddStructure={(beat) => {
+              if (isAllView) addStructureTagForEp(unifiedPicker.epId, unifiedPicker.itemId, beat);
+              else addStructureTagToItem(unifiedPicker.itemId, beat);
+              setUnifiedPicker(null);
+            }}
+            onOpenFullPicker={(word) => {
+              setEmotionPicker({
+                itemId: unifiedPicker.itemId,
+                epId: unifiedPicker.epId,
+                top: unifiedPicker.top,
+                left: unifiedPicker.left,
+                initialWord: word,
+                existingTag: null,
+              });
+              setUnifiedPicker(null);
+            }}
+            onClose={() => setUnifiedPicker(null)}
+          />
+        );
+      })()}
+
+      {/* Emotion tag picker (3-step) */}
+      {emotionPicker && createPortal(
+        <>
+          <div
+            style={{ position: 'fixed', inset: 0, zIndex: 299 }}
+            onMouseDown={(e) => { e.preventDefault(); setEmotionPicker(null); }}
+          />
+          <div style={{
+            position: 'fixed',
+            top: emotionPicker.top,
+            left: Math.min(emotionPicker.left, window.innerWidth - 296),
+            zIndex: 300,
+          }}>
+            <EmotionTagPicker
+              existingTag={emotionPicker.existingTag}
+              initialWord={emotionPicker.initialWord || ''}
+              onSelect={(tag) => {
+                if (emotionPicker.epId) addEmotionTagForEp(emotionPicker.epId, emotionPicker.itemId, tag);
+                else addEmotionTagToItem(emotionPicker.itemId, tag);
+                setEmotionPicker(null);
+              }}
+              onClose={() => setEmotionPicker(null)}
+            />
+          </div>
+        </>,
+        document.body
+      )}
       </div>
   );
 }
