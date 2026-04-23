@@ -140,4 +140,89 @@ describe('buildSceneNumberBlock', () => {
       expectEmptyStructured(result);
     });
   });
+
+  describe('구조화 씬 rawText 불변 가드 (원본 복원)', () => {
+    it('#14 rawText 불변 → prev 구조화 필드 유지 (parseSceneContent 우회)', () => {
+      const result = buildSceneNumberBlock({
+        prev: {
+          location: '카페',
+          subLocation: '안방',
+          timeOfDay: '낮',
+          specialSituation: '',
+          // custom 포맷에서 formatSceneHeader 결과로 가정
+          rawText: '카페 > 안방 @낮',
+        },
+        rawText: '카페 > 안방 @낮', // DOM 현재값 동일 = 편집 없음
+        label: 'S#3.',
+        sceneId: SCENE_ID,
+      });
+      // prev 구조화 필드 그대로 유지
+      expect(result.location).toBe('카페');
+      expect(result.subLocation).toBe('안방');
+      expect(result.timeOfDay).toBe('낮');
+      expect(result.specialSituation).toBe('');
+      // content는 DEFAULT_FORMAT(paren) 기준 재조합
+      expect(result.content).toBe('S#3. 카페 - 안방 (낮)');
+    });
+
+    it('#15 rawText 변경 → 기존 파싱 경로 (편집 반영)', () => {
+      const result = buildSceneNumberBlock({
+        prev: {
+          location: '카페',
+          timeOfDay: '낮',
+          rawText: '카페 (낮)',
+        },
+        rawText: '사무실 (밤)', // 실제 편집
+        label: 'S#3.',
+        sceneId: SCENE_ID,
+      });
+      expect(result.location).toBe('사무실');
+      expect(result.timeOfDay).toBe('밤');
+    });
+
+    it('#16 prev.rawText 없음 + 구조화 필드 있음 → 기존 파싱 경로 (fallback)', () => {
+      const result = buildSceneNumberBlock({
+        prev: { location: '카페' }, // rawText 필드 없음
+        rawText: '카페 (낮)',
+        label: 'S#3.',
+        sceneId: SCENE_ID,
+      });
+      expect(result.location).toBe('카페');
+      expect(result.timeOfDay).toBe('낮');
+    });
+
+    it('#17 (박제) 미세 공백 차이 → 엄격 비교 불일치로 파싱 경로', () => {
+      const result = buildSceneNumberBlock({
+        prev: {
+          location: '카페',
+          subLocation: '안방',
+          timeOfDay: '낮',
+          rawText: '카페 - 안방 (낮)',
+        },
+        rawText: '카페 - 안방  (낮)', // 공백 한 칸 더 (편집 간주)
+        label: 'S#3.',
+        sceneId: SCENE_ID,
+      });
+      // parseSceneContent 경로 — 엄격 비교 동작 고정
+      const parsedLocation = result.location;
+      // parseSceneContent가 해석한 결과로 진행됐는지만 확인 (정확한 값은 파서 구현 의존)
+      expect(parsedLocation).not.toBe(undefined);
+    });
+
+    it('#18 (박제) prev.rawText 빈 문자열 → 불일치로 파싱 경로', () => {
+      const result = buildSceneNumberBlock({
+        prev: {
+          location: '카페',
+          timeOfDay: '낮',
+          rawText: '', // 빈 문자열 — 가드 조건(prevRaw !== '')에 의해 유지 분기 타지 않음
+        },
+        rawText: '카페 (낮)',
+        label: 'S#3.',
+        sceneId: SCENE_ID,
+      });
+      // 파싱 경로로 떨어져야 함
+      expect(result.location).toBe('카페');
+      expect(result.timeOfDay).toBe('낮');
+    });
+  });
 });

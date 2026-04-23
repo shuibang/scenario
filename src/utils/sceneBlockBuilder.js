@@ -42,6 +42,23 @@ export function buildSceneNumberBlock({ prev, rawText, label, sceneId }) {
   const safeLabel = label || '';
 
   if (hasStructured) {
+    // rawText 불변 = 사용자 편집 없음 → prev 구조화 필드 유지
+    // (format 변경 후 doParse가 재파싱 시 하드코딩 파서가 custom 포맷을 잘못 파싱해
+    //  구조화 필드를 뭉개는 현상 방지. loadBlocks의 origMap 복원과 의미적으로 동등)
+    const prevRaw = prevObj.rawText ?? '';
+    const currRaw = safeRaw ?? '';
+    if (prevRaw === currRaw && prevRaw !== '') {
+      const location         = prevObj.location         || '';
+      const subLocation      = prevObj.subLocation      || '';
+      const timeOfDay        = prevObj.timeOfDay        || '';
+      const specialSituation = prevObj.specialSituation || '';
+      const content = resolveSceneLabel({
+        label: safeLabel,
+        location, subLocation, timeOfDay, specialSituation,
+      });
+      return { location, subLocation, timeOfDay, specialSituation, content, sceneId };
+    }
+
     // 구조화 씬: 기존 동작 (parseSceneContent → resolveSceneLabel)
     const parsed = parseSceneContent(safeRaw);
     const cleanContent = (parsed.location || parsed.specialSituation)
