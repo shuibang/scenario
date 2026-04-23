@@ -6,12 +6,12 @@ import AdBanner from '../AdBanner';
 import { mobileTbtnStyle } from '../../styles/tokens';
 import { applyInlineFormat } from '../../utils/textFormat';
 import { clearAccessToken, loadFromDrive, isTokenValid } from '../../store/googleDrive';
-import { isPublicPcMode } from '../../store/db';
+import { isPublicPcMode, getAll, DB_KEYS } from '../../store/db';
 import { supabaseSignOut, refreshDriveToken } from '../../store/supabaseClient';
 import { guardedSignInWithGoogle } from '../../utils/guardedSignIn';
 import Menubar from '../Menubar/Menubar';
 
-export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, WorkTimer, authUser, onLogout, onMenuAction, recentProjects = [], checkedItems = {} }) {
+export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, WorkTimer, authUser, onLogout, onMenuAction, onSyncConflict, recentProjects = [], checkedItems = {} }) {
   const { state, dispatch, loadFromDriveData } = useApp();
   const { activeProjectId, stylePreset } = state;
   const [menuOpen, setMenuOpen] = useState(false);
@@ -20,21 +20,40 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
   const syncingRef = useRef(false);
   const timerSaveRef = useRef(null); // WorkTimer의 autoSave 연결
 
-  // Drive 동기화 — Supabase provider_token 사용 (모바일은 자동 적용, 충돌 UI 없음)
+  // Drive 동기화 — 데스크톱과 동일한 충돌 판정 기준.
+  // 이전에는 "모바일은 자동 적용, 충돌 UI 없음" 설계였으나,
+  // 여러 기기 간 동기화 시 모바일 데이터가 경고 없이 덮어써지는 사고가 있어
+  // 양쪽에 의미 있는 데이터가 있고 타임스탬프가 다르면 충돌 모달을 띄우도록 통일.
   const runDriveSync = useCallback(async () => {
     if (syncingRef.current || !isTokenValid()) return;
     syncingRef.current = true;
     setDriveStatus('syncing');
     try {
       const driveData = await loadFromDrive();
-      if (driveData?.savedAt) {
-        const driveSavedAt = new Date(driveData.savedAt).getTime();
-        const localSavedAt = new Date(localStorage.getItem('drama_saved_at') || 0).getTime();
-        if (driveSavedAt > localSavedAt && (driveData.projects?.length ?? 0) > 0) {
-          loadFromDriveData(driveData);
-        }
+      const localSavedAt = localStorage.getItem('drama_saved_at') || null;
+      let localProjects = [];
+      try {
+        const p = await getAll(DB_KEYS.projects);
+        if (Array.isArray(p)) localProjects = p;
+      } catch {}
+      const hasLocalData = localProjects.length > 0;
+      const driveHasData = (driveData?.projects?.length ?? 0) > 0;
+      const localMs = new Date(localSavedAt || 0).getTime();
+      const driveMs = new Date(driveData?.savedAt || 0).getTime();
+      const tsLooksSame = Math.abs(driveMs - localMs) <= 5000;
+      if (!driveData?.savedAt || !driveHasData) {
+        setDriveStatus('synced');
+      } else if (!hasLocalData) {
+        loadFromDriveData(driveData);
+        setDriveStatus('synced');
+      } else if (tsLooksSame) {
+        setDriveStatus('synced');
+      } else {
+        onSyncConflict?.({ localSavedAt, driveData, localProjectCount: localProjects.length });
+        setDriveStatus('none');
+        syncingRef.current = false;
+        return;
       }
-      setDriveStatus('synced');
       setTimeout(() => setDriveStatus('none'), 3000);
     } catch (e) {
       if (e.message?.includes('401') || e.message?.includes('DRIVE_AUTH_REQUIRED')) {
@@ -50,7 +69,7 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
     } finally {
       syncingRef.current = false;
     }
-  }, [dispatch]);
+  }, [loadFromDriveData, onSyncConflict]);
 
   // 로그인 후 토큰 유효하면 Drive 동기화
   useEffect(() => {

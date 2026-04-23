@@ -12,7 +12,7 @@ const SNAPSHOTS_INDEX = 'drama_snapshots.json';
 const SNAP_PREFIX     = 'drama_snap_';
 
 // 타입별 보관 한도
-const SNAP_LIMITS = { auto: 3, manual: 5, backup: 5 };
+const SNAP_LIMITS = { auto: 10, manual: 10, backup: 10 };
 
 // ── Token 관리 ──────────────────────────────────────────────────────────────
 let _accessToken = null;

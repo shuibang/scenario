@@ -1202,6 +1202,7 @@ function Shell({ authUser, setAuthUser }) {
 
   // Drive 동기화 충돌 — { localSavedAt, driveData } | null
   const [syncConflict, setSyncConflict] = useState(null);
+  const [syncConflictBusy, setSyncConflictBusy] = useState(null);
 
   // Panel widths with localStorage persistence
   const [panelWidths, setPanelWidths] = useState(() => loadPanelWidths());
@@ -1391,10 +1392,17 @@ function Shell({ authUser, setAuthUser }) {
   }, []);
 
   // 10분마다 자동저장 스냅샷
+  // 과거에는 dependency가 [state]라 매 편집마다 타이머가 리셋되어
+  // 활발히 작업 중인 사용자에게는 자동 스냅샷이 거의 발동하지 않았음.
+  // 최신 state는 ref로 읽고, 타이머는 init 시 한 번만 건다.
+  const autoSnapStateRef = useRef(state);
+  useEffect(() => { autoSnapStateRef.current = state; }, [state]);
   useEffect(() => {
+    if (!state.initialized) return;
     const AUTO_INTERVAL = 10 * 60 * 1000;
     const timer = setInterval(async () => {
-      if (!state.initialized || !state.projects.length) return;
+      const s = autoSnapStateRef.current;
+      if (!s?.initialized || !s.projects?.length) return;
       try {
         const token = await refreshDriveToken();
         if (!token) {
@@ -1404,22 +1412,22 @@ function Shell({ authUser, setAuthUser }) {
           return;
         }
         await saveSnapshot({
-          projects:       state.projects,
-          episodes:       state.episodes,
-          characters:     state.characters,
-          scenes:         state.scenes,
-          scriptBlocks:   state.scriptBlocks,
-          coverDocs:      state.coverDocs,
-          synopsisDocs:   state.synopsisDocs,
-          resources:      state.resources,
-          workTimeLogs:   state.workTimeLogs,
-          checklistItems: state.checklistItems,
-          stylePreset:    state.stylePreset,
+          projects:       s.projects,
+          episodes:       s.episodes,
+          characters:     s.characters,
+          scenes:         s.scenes,
+          scriptBlocks:   s.scriptBlocks,
+          coverDocs:      s.coverDocs,
+          synopsisDocs:   s.synopsisDocs,
+          resources:      s.resources,
+          workTimeLogs:   s.workTimeLogs,
+          checklistItems: s.checklistItems,
+          stylePreset:    s.stylePreset,
         }, '자동저장', 'auto');
       } catch {}
     }, AUTO_INTERVAL);
     return () => clearInterval(timer);
-  }, [state]);
+  }, [state.initialized]);
 
   const promptDriveReauthForSave = useCallback(() => {
     if (!authUser) {
@@ -1782,12 +1790,29 @@ function Shell({ authUser, setAuthUser }) {
           localSavedAt={syncConflict.localSavedAt}
           driveData={syncConflict.driveData}
           localProjectCount={syncConflict.localProjectCount ?? state.projects?.length ?? 0}
-          onKeepLocal={() => {
-            // 로컬 유지 → Drive에 현재 데이터 업로드 (local drama_saved_at과 동일 savedAt 공유)
-            const savedAt = new Date().toISOString();
-            try { localStorage.setItem('drama_saved_at', savedAt); } catch {}
-            import('./store/googleDrive').then(({ saveToDrive }) => {
-              saveToDrive({
+          busy={syncConflictBusy}
+          busyMessage={syncConflictBusy}
+          onKeepLocal={async () => {
+            // 로컬 유지 → Drive에 현재 데이터 업로드.
+            // 반드시 Drive 쓰기가 끝난 뒤에 localStorage.drama_saved_at 을 갱신해야
+            // 중간 새로고침 시 local=T2 / drive=옛값 이 되어 모달이 다시 뜨는 레이스를 피함.
+            if (syncConflictBusy) return;
+            setSyncConflictBusy('다른 기기 본 보존 중…');
+            try {
+              const { saveToDrive, saveSnapshot } = await import('./store/googleDrive');
+              const preserve = syncConflict?.driveData;
+              // 1) 기존 Drive 내용을 스냅샷으로 먼저 보존 (실수로 눌러도 복원 가능)
+              if (preserve && (preserve.projects?.length ?? 0) > 0) {
+                try {
+                  await saveSnapshot(preserve, '다른 기기 본 자동 보존', 'auto');
+                } catch (e) {
+                  console.warn('[Drive] 보존 스냅샷 저장 실패:', e);
+                }
+              }
+              // 2) 현재 로컬 상태를 Drive에 업로드
+              setSyncConflictBusy('Drive 업데이트 중…');
+              const savedAt = new Date().toISOString();
+              await saveToDrive({
                 projects:       state.projects,
                 episodes:       state.episodes,
                 characters:     state.characters,
@@ -1800,15 +1825,26 @@ function Shell({ authUser, setAuthUser }) {
                 checklistItems: state.checklistItems,
                 stylePreset:    state.stylePreset,
                 savedAt,
-              }).catch(() => {});
-            });
-            setSyncConflict(null);
+              });
+              // 3) 성공 후에만 localStorage 갱신 → 다음 runDriveSync 에서 tsLooksSame = true
+              try { localStorage.setItem('drama_saved_at', savedAt); } catch {}
+              setSyncConflict(null);
+            } catch (e) {
+              console.warn('[Drive] 기기 유지 실패:', e);
+              clearTimeout(saveToastTimer.current);
+              setSaveToastMsg('동기화 실패 — 네트워크를 확인하고 다시 시도해 주세요.');
+              setSaveToast(true);
+              saveToastTimer.current = setTimeout(() => setSaveToast(false), 3500);
+            } finally {
+              setSyncConflictBusy(null);
+            }
           }}
           onLoadDrive={() => {
+            if (syncConflictBusy) return;
             loadFromDriveData(syncConflict.driveData);
             setSyncConflict(null);
           }}
-          onDismiss={() => setSyncConflict(null)}
+          onDismiss={syncConflictBusy ? undefined : () => setSyncConflict(null)}
         />
       )}
       {!isMobile && <OnboardingTour />}
@@ -1899,6 +1935,7 @@ function Shell({ authUser, setAuthUser }) {
             authUser={authUser}
             onLogout={() => setAuthUser(null)}
             onMenuAction={handleMenuAction}
+            onSyncConflict={setSyncConflict}
             recentProjects={recentProjects}
             checkedItems={menuCheckedItems}
           />

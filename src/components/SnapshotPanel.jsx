@@ -290,9 +290,9 @@ export default function SnapshotPanel({ onClose }) {
 
         {/* 안내 */}
         <div style={{ fontSize: 11, color: 'var(--c-text6)', marginBottom: 14, lineHeight: 1.7 }}>
-          <b style={{ color: 'var(--c-text5)' }}>자동저장</b> 10분마다 · 3개 보관 &nbsp;|&nbsp;
-          <b style={{ color: 'var(--c-text5)' }}>수동저장</b> 저장 버튼 시 · 5개 보관 &nbsp;|&nbsp;
-          <b style={{ color: 'var(--c-text5)' }}>백업</b> 직접 생성 · 5개 보관
+          <b style={{ color: 'var(--c-text5)' }}>자동저장</b> 10분마다 · 10개 보관 &nbsp;|&nbsp;
+          <b style={{ color: 'var(--c-text5)' }}>수동저장</b> 저장 버튼 시 · 10개 보관 &nbsp;|&nbsp;
+          <b style={{ color: 'var(--c-text5)' }}>백업</b> 직접 생성 · 10개 보관
           {notLoggedIn && <span style={{ color: '#f6ad55' }}> &nbsp;— Drive 로그인 필요</span>}
         </div>
 

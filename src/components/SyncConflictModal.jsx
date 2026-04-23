@@ -67,7 +67,7 @@ function DataCard({ title, savedAt, projectCount, highlight, onClick, label }) {
   );
 }
 
-export default function SyncConflictModal({ localSavedAt, driveData, localProjectCount = 0, onKeepLocal, onLoadDrive, onDismiss }) {
+export default function SyncConflictModal({ localSavedAt, driveData, localProjectCount = 0, onKeepLocal, onLoadDrive, onDismiss, busy = false, busyMessage = '동기화 중…' }) {
   const driveProjectCount = driveData?.projects?.length ?? 0;
 
   const localIsNewer = new Date(localSavedAt || 0) >= new Date(driveData?.savedAt || 0);
@@ -100,7 +100,7 @@ export default function SyncConflictModal({ localSavedAt, driveData, localProjec
           어느 데이터를 사용할지 선택해 주세요. 선택하지 않은 쪽은 덮어씌워집니다.
         </div>
 
-        <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 12, marginBottom: 16, opacity: busy ? 0.5 : 1, pointerEvents: busy ? 'none' : 'auto' }}>
           <DataCard
             title="현재 기기"
             savedAt={localSavedAt}
@@ -119,11 +119,11 @@ export default function SyncConflictModal({ localSavedAt, driveData, localProjec
           />
         </div>
 
-        <div style={{ fontSize: 11, color: 'var(--c-text6)', textAlign: 'center', lineHeight: 1.6 }}>
-          선택 후 드라이브 자동 동기화가 시작됩니다.
+        <div style={{ fontSize: 11, color: busy ? 'var(--c-accent)' : 'var(--c-text6)', textAlign: 'center', lineHeight: 1.6, fontWeight: busy ? 600 : 400 }}>
+          {busy ? busyMessage : '선택 후 드라이브 자동 동기화가 시작됩니다.'}
         </div>
 
-        {onDismiss && (
+        {onDismiss && !busy && (
           <button
             onClick={onDismiss}
             style={{
