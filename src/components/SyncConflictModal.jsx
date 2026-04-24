@@ -97,7 +97,8 @@ export default function SyncConflictModal({ localSavedAt, driveData, localProjec
         </div>
         <div style={{ fontSize: 13, color: 'var(--c-text5)', marginBottom: 22, lineHeight: 1.6 }}>
           로그인하면서 Drive에서 다른 기기의 저장 데이터를 감지했습니다.<br/>
-          어느 데이터를 사용할지 선택해 주세요. 선택하지 않은 쪽은 덮어씌워집니다.
+          어느 데이터를 사용할지 선택해 주세요. 선택하지 않은 쪽은 덮어씌워집니다.<br/>
+          선택 전 현재 데이터가 자동으로 스냅샷에 보존됩니다.
         </div>
 
         <div style={{ display: 'flex', gap: 12, marginBottom: 16, opacity: busy ? 0.5 : 1, pointerEvents: busy ? 'none' : 'auto' }}>

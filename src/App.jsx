@@ -1801,7 +1801,7 @@ function Shell({ authUser, setAuthUser }) {
             // 반드시 Drive 쓰기가 끝난 뒤에 localStorage.drama_saved_at 을 갱신해야
             // 중간 새로고침 시 local=T2 / drive=옛값 이 되어 모달이 다시 뜨는 레이스를 피함.
             if (syncConflictBusy) return;
-            setSyncConflictBusy('다른 기기 본 보존 중…');
+            setSyncConflictBusy('이전 Drive 데이터를 스냅샷에 보존 중…');
             try {
               const { saveToDrive, saveSnapshot } = await import('./store/googleDrive');
               const preserve = syncConflict?.driveData;
@@ -1843,10 +1843,38 @@ function Shell({ authUser, setAuthUser }) {
               setSyncConflictBusy(null);
             }
           }}
-          onLoadDrive={() => {
+          onLoadDrive={async () => {
             if (syncConflictBusy) return;
-            loadFromDriveData(syncConflict.driveData);
-            setSyncConflict(null);
+            setSyncConflictBusy('현재 기기 데이터를 스냅샷에 보존 중…');
+            try {
+              const { saveSnapshot } = await import('./store/googleDrive');
+              const localSnap = {
+                projects:       state.projects,
+                episodes:       state.episodes,
+                characters:     state.characters,
+                scenes:         state.scenes,
+                scriptBlocks:   state.scriptBlocks,
+                coverDocs:      state.coverDocs,
+                synopsisDocs:   state.synopsisDocs,
+                resources:      state.resources,
+                workTimeLogs:   state.workTimeLogs,
+                checklistItems: state.checklistItems,
+                stylePreset:    state.stylePreset,
+              };
+              if ((localSnap.projects?.length ?? 0) > 0) {
+                await saveSnapshot(localSnap, '다른 기기 불러오기 직전 자동 보존', 'auto');
+              }
+              loadFromDriveData(syncConflict.driveData);
+              setSyncConflict(null);
+            } catch (e) {
+              console.warn('[Drive] 불러오기 직전 로컬 보존 실패:', e);
+              clearTimeout(saveToastTimer.current);
+              setSaveToastMsg('현재 데이터를 백업하지 못해 불러오기를 중단했습니다. 네트워크를 확인해 주세요.');
+              setSaveToast(true);
+              saveToastTimer.current = setTimeout(() => setSaveToast(false), 3500);
+            } finally {
+              setSyncConflictBusy(null);
+            }
           }}
           onDismiss={syncConflictBusy ? undefined : () => setSyncConflict(null)}
         />
