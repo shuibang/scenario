@@ -5,6 +5,7 @@ import { isTokenValid, saveToDrive, clearAccessToken } from './googleDrive';
 import { computeSizeGuard } from './sizeGuard';
 import { sharePayloadSchema } from '../utils/urlSchemas';
 import { parsePath, syncUrl } from '../utils/urlSync';
+import { describeDriveError } from '../utils/driveError';
 
 // 복원 가능한 activeDoc 값 whitelist — localStorage에 주입된 예상 밖의 값 차단
 const ALLOWED_ACTIVE_DOCS = new Set([
@@ -630,10 +631,20 @@ export function AppProvider({ children }) {
           stylePreset:    state.stylePreset,
           savedAt,
         }).catch(e => {
-          if (e.message?.includes('403')) {
-            clearAccessToken(); // 권한 없는 토큰 → 무효화해서 재시도 방지
-            console.warn('[Drive] 403 권한 오류 — 재로그인 필요');
-          } else if (e.message !== 'DRIVE_AUTH_REQUIRED') {
+          // DRIVE_AUTH_REQUIRED: isTokenValid() 로컬 감지 — 서버 호출 전 정상 흐름, 무해하게 스킵
+          if (e.message === 'DRIVE_AUTH_REQUIRED') return;
+          const { kind } = describeDriveError(e);
+          if (kind === 'auth' || kind === 'perm') {
+            // 실제 인증/권한 오류 → 토큰 무효화해서 다음 사이클 자동저장 시도 방지
+            clearAccessToken();
+            console.warn('[Drive] 자동저장 인증/권한 오류 — 재로그인 필요:', e.message);
+          } else if (kind === 'quota') {
+            // 토큰은 유효 — clearAccessToken 하면 불필요한 재로그인 유발
+            // 사용자 알림은 수동저장/백업 시도 시 UI 레이어에서 처리됨
+            console.warn('[Drive] 자동저장 실패: 드라이브 용량 부족 (수동 저장 시 안내됨)');
+          } else if (kind === 'rate') {
+            console.warn('[Drive] 자동저장 레이트 리밋 — 다음 사이클에서 재시도');
+          } else {
             console.warn('[Drive] 자동저장 실패:', e);
           }
         });
