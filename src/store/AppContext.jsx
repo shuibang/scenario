@@ -583,6 +583,8 @@ export function AppProvider({ children }) {
 
       // 로컬 drama_saved_at과 Drive savedAt이 반드시 같은 시각을 쓰도록 한 번만 생성
       const savedAt = forcedSavedAtRef.current || new Date().toISOString();
+      // drama_saved_at 쓰기는 Drive 쓰기 결과에 따라 지연 처리 (옵션 A) — try 스코프 밖에서 참조
+      let shouldUpdateSavedAt = false;
       try {
         await Promise.all([
           setAll(DB_KEYS.projects,      state.projects),
@@ -599,9 +601,8 @@ export function AppProvider({ children }) {
         if (localStorage.getItem('drama_auth_user')) {
           setItem(DB_KEYS.stylePresets, state.stylePreset);
         }
-        if (!skipSavedAtRef.current) {
-          localStorage.setItem('drama_saved_at', savedAt);
-        }
+        // drama_saved_at 쓰기는 try 블록 밖 Drive 결과에 따라 처리 — 여기서는 flag 캡처만
+        shouldUpdateSavedAt = !skipSavedAtRef.current;
         skipSavedAtRef.current = false;
         forcedSavedAtRef.current = null;
         lastSavedSizesRef.current = currentSizes;
@@ -616,6 +617,10 @@ export function AppProvider({ children }) {
       // INIT/LOAD_FROM_DRIVE 직후 한 사이클은 건너뜀 — Drive 데이터를 덮어쓰는 레이스컨디션 방지
       const skipDrive = skipDriveSaveRef.current;
       skipDriveSaveRef.current = false;
+      // Drive 비활성 경로 (비로그인·토큰만료·skipDrive): 즉시 drama_saved_at 쓰기 (기존 동작 유지)
+      if (shouldUpdateSavedAt && (!isTokenValid() || skipDrive)) {
+        try { localStorage.setItem('drama_saved_at', savedAt); } catch {}
+      }
       if (isTokenValid() && !skipDrive) {
         saveToDrive({
           projects:       state.projects,
@@ -630,24 +635,31 @@ export function AppProvider({ children }) {
           checklistItems: state.checklistItems,
           stylePreset:    state.stylePreset,
           savedAt,
-        }).catch(e => {
-          // DRIVE_AUTH_REQUIRED: isTokenValid() 로컬 감지 — 서버 호출 전 정상 흐름, 무해하게 스킵
-          if (e.message === 'DRIVE_AUTH_REQUIRED') return;
-          const { kind } = describeDriveError(e);
-          if (kind === 'auth' || kind === 'perm') {
-            // 실제 인증/권한 오류 → 토큰 무효화해서 다음 사이클 자동저장 시도 방지
-            clearAccessToken();
-            console.warn('[Drive] 자동저장 인증/권한 오류 — 재로그인 필요:', e.message);
-          } else if (kind === 'quota') {
-            // 토큰은 유효 — clearAccessToken 하면 불필요한 재로그인 유발
-            // 사용자 알림은 수동저장/백업 시도 시 UI 레이어에서 처리됨
-            console.warn('[Drive] 자동저장 실패: 드라이브 용량 부족 (수동 저장 시 안내됨)');
-          } else if (kind === 'rate') {
-            console.warn('[Drive] 자동저장 레이트 리밋 — 다음 사이클에서 재시도');
-          } else {
-            console.warn('[Drive] 자동저장 실패:', e);
-          }
-        });
+        })
+          .then(() => {
+            // Drive 쓰기 성공 시에만 drama_saved_at 갱신 → 실패 시 local-Drive 불일치 방지
+            if (shouldUpdateSavedAt) {
+              try { localStorage.setItem('drama_saved_at', savedAt); } catch {}
+            }
+          })
+          .catch(e => {
+            // DRIVE_AUTH_REQUIRED: isTokenValid() 로컬 감지 — 서버 호출 전 정상 흐름, 무해하게 스킵
+            if (e.message === 'DRIVE_AUTH_REQUIRED') return;
+            const { kind } = describeDriveError(e);
+            if (kind === 'auth' || kind === 'perm') {
+              // 실제 인증/권한 오류 → 토큰 무효화해서 다음 사이클 자동저장 시도 방지
+              clearAccessToken();
+              console.warn('[Drive] 자동저장 인증/권한 오류 — 재로그인 필요:', e.message);
+            } else if (kind === 'quota') {
+              // 토큰은 유효 — clearAccessToken 하면 불필요한 재로그인 유발
+              // 사용자 알림은 수동저장/백업 시도 시 UI 레이어에서 처리됨
+              console.warn('[Drive] 자동저장 실패: 드라이브 용량 부족 (수동 저장 시 안내됨)');
+            } else if (kind === 'rate') {
+              console.warn('[Drive] 자동저장 레이트 리밋 — 다음 사이클에서 재시도');
+            } else {
+              console.warn('[Drive] 자동저장 실패:', e);
+            }
+          });
       }
     }, 300);
   }, [
