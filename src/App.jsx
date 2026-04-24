@@ -2324,7 +2324,7 @@ export default function App() {
           setAuthUser(userData);
         }
         if (session.provider_token) {
-          setAccessToken(session.provider_token, 3600);
+          setAccessToken(session.provider_token, session.expires_in ?? 3600);
         }
         // OAuth 복귀 후 검토 링크 등 이전 hash 복원
         if (event === 'SIGNED_IN') {
