@@ -51,6 +51,7 @@ import SyncConflictModal from './components/SyncConflictModal';
 import SizeGuardModal from './components/SizeGuardModal';
 import { usePageTracking } from './hooks/usePageTracking';
 import { guardedSignInWithGoogle } from './utils/guardedSignIn';
+import { describeDriveError } from './utils/driveError';
 import Menubar from './components/Menubar/Menubar';
 import useKeyboardShortcuts from './hooks/useKeyboardShortcuts';
 import OpenProjectModal  from './components/Modals/OpenProjectModal';
@@ -1835,10 +1836,12 @@ function Shell({ authUser, setAuthUser }) {
               setSyncConflict(null);
             } catch (e) {
               console.warn('[Drive] 기기 유지 실패:', e);
+              const { userMsg, kind } = describeDriveError(e);
               clearTimeout(saveToastTimer.current);
-              setSaveToastMsg('동기화 실패 — 네트워크를 확인하고 다시 시도해 주세요.');
+              setSaveToastMsg(userMsg);
               setSaveToast(true);
               saveToastTimer.current = setTimeout(() => setSaveToast(false), 3500);
+              if (kind === 'auth') promptDriveReauthForSave();
             } finally {
               setSyncConflictBusy(null);
             }
@@ -1868,10 +1871,12 @@ function Shell({ authUser, setAuthUser }) {
               setSyncConflict(null);
             } catch (e) {
               console.warn('[Drive] 불러오기 직전 로컬 보존 실패:', e);
+              const { userMsg, kind } = describeDriveError(e);
               clearTimeout(saveToastTimer.current);
-              setSaveToastMsg('현재 데이터를 백업하지 못해 불러오기를 중단했습니다. 네트워크를 확인해 주세요.');
+              setSaveToastMsg(`현재 데이터를 백업하지 못해 불러오기를 중단했습니다. ${userMsg}`);
               setSaveToast(true);
               saveToastTimer.current = setTimeout(() => setSaveToast(false), 3500);
+              if (kind === 'auth') promptDriveReauthForSave();
             } finally {
               setSyncConflictBusy(null);
             }

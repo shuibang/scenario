@@ -47,6 +47,24 @@ export function getDeviceLabel() {
 }
 
 // ── 내부 헬퍼 ──────────────────────────────────────────────────────────────
+// Google Drive API 에러 응답 바디를 파싱해 구조화 Error로 던진다.
+// err.driveStatus / driveReason / driveMessage 필드를 붙여 상위에서 세분화 가능.
+// message 문자열에는 기존 status가 포함되어 e.message.includes('403') 같은 레거시 매칭이 계속 동작.
+async function throwDriveError(res, fallbackLabel) {
+  let reason = null;
+  let gmsg = null;
+  try {
+    const body = await res.json();
+    reason = body?.error?.errors?.[0]?.reason ?? null;
+    gmsg = body?.error?.message ?? null;
+  } catch {}
+  const err = new Error(`${fallbackLabel}: ${res.status}${reason ? ` ${reason}` : ''}`);
+  err.driveStatus = res.status;
+  err.driveReason = reason;
+  err.driveMessage = gmsg;
+  throw err;
+}
+
 async function findFile() {
   const res = await fetch(
     `${DRIVE_API}/files?spaces=appDataFolder&q=name%3D%27${FILE_NAME}%27&fields=files(id,modifiedTime)`,
@@ -82,7 +100,7 @@ async function upsertFile(name, jsonContent) {
     headers: { Authorization: `Bearer ${_accessToken}` },
     body:    form,
   });
-  if (!res.ok) throw new Error(`Drive 파일 저장 실패: ${res.status}`);
+  if (!res.ok) await throwDriveError(res, 'Drive 파일 저장 실패');
 }
 
 async function readFileByName(name) {
@@ -131,7 +149,7 @@ async function _doSaveToDrive(payload) {
     headers: { Authorization: `Bearer ${_accessToken}` },
     body:    form,
   });
-  if (!res.ok) throw new Error(`Drive 저장 실패: ${res.status}`);
+  if (!res.ok) await throwDriveError(res, 'Drive 저장 실패');
   return await res.json();
 }
 export async function saveToDrive(payload) {
@@ -239,7 +257,7 @@ export async function saveDirectorScript(title, data) {
     headers: { Authorization: `Bearer ${_accessToken}` },
     body:    form,
   });
-  if (!res.ok) throw new Error(`Drive 저장 실패: ${res.status}`);
+  if (!res.ok) await throwDriveError(res, 'Drive 저장 실패');
   const json = await res.json();
   return json.id;
 }
@@ -301,7 +319,7 @@ export async function loadDirectorScript(fileId) {
   const res = await fetch(`${DRIVE_API}/files/${fileId}?alt=media`, {
     headers: { Authorization: `Bearer ${_accessToken}` },
   });
-  if (!res.ok) throw new Error(`Drive 불러오기 실패: ${res.status}`);
+  if (!res.ok) await throwDriveError(res, 'Drive 불러오기 실패');
   return await res.json();
 }
 
@@ -315,6 +333,6 @@ export async function loadFromDrive() {
   const res = await fetch(`${DRIVE_API}/files/${file.id}?alt=media`, {
     headers: { Authorization: `Bearer ${_accessToken}` },
   });
-  if (!res.ok) throw new Error(`Drive 불러오기 실패: ${res.status}`);
+  if (!res.ok) await throwDriveError(res, 'Drive 불러오기 실패');
   return await res.json();
 }
