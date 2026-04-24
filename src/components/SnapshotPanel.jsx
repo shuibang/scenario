@@ -46,10 +46,11 @@ function DeviceBadge({ label }) {
 
 // ── 타입 뱃지 ────────────────────────────────────────────────────────────────
 const TYPE_STYLE = {
-  auto:    { bg: 'rgba(246,173,85,0.15)',  color: '#f6ad55', text: '자동저장' },
-  manual:  { bg: 'rgba(154,230,180,0.15)', color: '#68d391', text: '수동저장' },
-  backup:  { bg: 'rgba(183,148,246,0.15)', color: '#b794f4', text: '백업'     },
-  restore: { bg: 'rgba(160,174,192,0.15)', color: '#a0aec0', text: '복원 전'  },
+  auto:          { bg: 'rgba(246,173,85,0.15)',  color: '#f6ad55', text: '자동저장' },
+  manual:        { bg: 'rgba(154,230,180,0.15)', color: '#68d391', text: '수동저장' },
+  backup:        { bg: 'rgba(183,148,246,0.15)', color: '#b794f4', text: '백업'     },
+  restore:       { bg: 'rgba(160,174,192,0.15)', color: '#a0aec0', text: '복원 전'  },
+  device_switch: { bg: 'rgba(99,179,237,0.15)',  color: '#63b3ed', text: '기기 전환' },
 };
 function TypeBadge({ type, label }) {
   const s = TYPE_STYLE[type] ?? TYPE_STYLE.manual;

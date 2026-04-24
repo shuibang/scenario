@@ -1818,7 +1818,7 @@ function Shell({ authUser, setAuthUser }) {
               // 1) 기존 Drive 내용을 스냅샷으로 먼저 보존 (실수로 눌러도 복원 가능)
               if (preserve && (preserve.projects?.length ?? 0) > 0) {
                 try {
-                  await saveSnapshot(preserve, '다른 기기 본 자동 보존', 'auto');
+                  await saveSnapshot(preserve, '다른 기기 본 자동 보존', 'device_switch');
                 } catch (e) {
                   console.warn('[Drive] 보존 스냅샷 저장 실패:', e);
                 }
@@ -1875,7 +1875,7 @@ function Shell({ authUser, setAuthUser }) {
                 stylePreset:    state.stylePreset,
               };
               if ((localSnap.projects?.length ?? 0) > 0) {
-                await saveSnapshot(localSnap, '다른 기기 불러오기 직전 자동 보존', 'auto');
+                await saveSnapshot(localSnap, '다른 기기 불러오기 직전 자동 보존', 'device_switch');
               }
               loadFromDriveData(syncConflict.driveData);
               try { sessionStorage.removeItem('sync-conflict-dismissed'); } catch {}

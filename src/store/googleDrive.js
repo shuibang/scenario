@@ -12,7 +12,12 @@ const SNAPSHOTS_INDEX = 'drama_snapshots.json';
 const SNAP_PREFIX     = 'drama_snap_';
 
 // 타입별 보관 한도
-const SNAP_LIMITS = { auto: 10, manual: 10, backup: 10 };
+//   auto:          10분 주기 자동 스냅샷 전용
+//   manual:        사용자 "저장" 버튼
+//   backup:        SnapshotPanel "지금 백업"
+//   restore:       SnapshotPanel 복원 직전 자동 보존 — 한도 없으면 무제한 누적
+//   device_switch: 기기 간 동기화 모달에서 덮어쓰기 직전 자동 보존 — auto와 분리해 밀려남 방지
+const SNAP_LIMITS = { auto: 10, manual: 10, backup: 10, restore: 5, device_switch: 5 };
 
 // ── Token 관리 ──────────────────────────────────────────────────────────────
 let _accessToken = null;
