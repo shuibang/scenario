@@ -829,6 +829,15 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
       } else if (tsLooksSame) {
         setDriveStatus('synced');
       } else {
+        // "나중에 결정"으로 모달을 닫은 세션에서는 재출현하지 않는다.
+        // sessionStorage는 탭 단위로 유지되므로 브라우저/탭을 새로 열면 자동 초기화 → 다시 판정.
+        let dismissedThisSession = false;
+        try { dismissedThisSession = sessionStorage.getItem('sync-conflict-dismissed') === '1'; } catch {}
+        if (dismissedThisSession) {
+          setDriveStatus('synced');
+          _driveSyncing = false;
+          return;
+        }
         onSyncConflict?.({ localSavedAt, driveData, localProjectCount: localProjects.length });
         setDriveStatus('none');
         _driveSyncing = false;
@@ -1833,6 +1842,7 @@ function Shell({ authUser, setAuthUser }) {
               });
               // 3) 성공 후에만 localStorage 갱신 → 다음 runDriveSync 에서 tsLooksSame = true
               try { localStorage.setItem('drama_saved_at', savedAt); } catch {}
+              try { sessionStorage.removeItem('sync-conflict-dismissed'); } catch {}
               setSyncConflict(null);
             } catch (e) {
               console.warn('[Drive] 기기 유지 실패:', e);
@@ -1868,6 +1878,7 @@ function Shell({ authUser, setAuthUser }) {
                 await saveSnapshot(localSnap, '다른 기기 불러오기 직전 자동 보존', 'auto');
               }
               loadFromDriveData(syncConflict.driveData);
+              try { sessionStorage.removeItem('sync-conflict-dismissed'); } catch {}
               setSyncConflict(null);
             } catch (e) {
               console.warn('[Drive] 불러오기 직전 로컬 보존 실패:', e);
@@ -1881,7 +1892,10 @@ function Shell({ authUser, setAuthUser }) {
               setSyncConflictBusy(null);
             }
           }}
-          onDismiss={syncConflictBusy ? undefined : () => setSyncConflict(null)}
+          onDismiss={syncConflictBusy ? undefined : () => {
+            try { sessionStorage.setItem('sync-conflict-dismissed', '1'); } catch {}
+            setSyncConflict(null);
+          }}
         />
       )}
       {!isMobile && <OnboardingTour />}
