@@ -1405,12 +1405,14 @@ function Shell({ authUser, setAuthUser }) {
       const s = autoSnapStateRef.current;
       if (!s?.initialized || !s.projects?.length) return;
       try {
-        const token = await refreshDriveToken();
-        if (!token) {
-          setSaveToastMsg('구글 드라이브 재연결이 필요해요');
-          setSaveToast(true);
-          setTimeout(() => setSaveToast(false), 3500);
-          return;
+        if (!isTokenValid()) {
+          const token = await refreshDriveToken();
+          if (!token) {
+            setSaveToastMsg('구글 드라이브 재연결이 필요해요');
+            setSaveToast(true);
+            setTimeout(() => setSaveToast(false), 3500);
+            return;
+          }
         }
         await saveSnapshot({
           projects:       s.projects,
