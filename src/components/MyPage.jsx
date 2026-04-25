@@ -757,9 +757,11 @@ function AnnounceCard({ item, autoOpen }) {
 }
 
 // ─── NoticesTab ───────────────────────────────────────────────────────────────
+// 업데이트 내역은 도움말 → '업데이트 내역' 메뉴(/changelog.html 새 탭)로 분리.
+// 모달은 공지(ANNOUNCEMENTS)만 표시. NOTICES 데이터는 다음 단계의 외부 이전을 위해
+// import는 그대로 두지만 여기서는 사용하지 않음.
 export function NoticesTab() {
-  const [sub, setSub] = useState('notices');
-  const [openAnnouncementId, setOpenAnnouncementId] = useState(() => {
+  const [openAnnouncementId] = useState(() => {
     try {
       const id = localStorage.getItem('drama_open_announcement_id');
       if (id) {
@@ -770,27 +772,11 @@ export function NoticesTab() {
     return null;
   });
 
-  const tabStyle = (id) => ({
-    padding: '6px 16px', fontSize: 13,
-    fontWeight: sub === id ? 600 : 400,
-    color: sub === id ? 'var(--c-accent)' : 'var(--c-text5)',
-    background: 'none', border: 'none',
-    borderBottom: sub === id ? '2px solid var(--c-accent)' : '2px solid transparent',
-    cursor: 'pointer', marginBottom: -1,
-  });
-
-  const items = sub === 'notices' ? ANNOUNCEMENTS : NOTICES;
-
   return (
     <div className="flex flex-col gap-3">
       <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--c-text3)', marginBottom: 8, paddingBottom: 10, borderBottom: '1px solid var(--c-border)' }}>공지사항</div>
-      {/* 서브 탭 */}
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--c-border)', marginBottom: 4 }}>
-        <button style={tabStyle('notices')} onClick={() => setSub('notices')}>공지</button>
-        <button style={tabStyle('updates')} onClick={() => setSub('updates')}>업데이트</button>
-      </div>
 
-      {items.map(n => n.title ? (
+      {ANNOUNCEMENTS.map(n => n.title ? (
         <AnnounceCard key={n.id} item={n} autoOpen={openAnnouncementId === n.id} />
       ) : (
         <div key={n.id} className="rounded-lg px-4 py-3"
