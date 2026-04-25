@@ -774,8 +774,6 @@ export function NoticesTab() {
 
   return (
     <div className="flex flex-col gap-3">
-      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--c-text3)', marginBottom: 8, paddingBottom: 10, borderBottom: '1px solid var(--c-border)' }}>공지사항</div>
-
       {ANNOUNCEMENTS.map(n => n.title ? (
         <AnnounceCard key={n.id} item={n} autoOpen={openAnnouncementId === n.id} />
       ) : (
