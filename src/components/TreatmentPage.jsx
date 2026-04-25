@@ -549,8 +549,31 @@ export default function TreatmentPage() {
       }
     }
 
+    // Enter → split into new item (mirrors single-episode view).
+    // Shift+Enter falls through → textarea default = newline within item.
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      const epItems = getLatestItemsForEp(epId);
+      const idx = epItems.findIndex(it => it.id === itemId);
+      if (idx < 0) return;
+      const it = epItems[idx];
+      const pos = e.target.selectionStart;
+      const before = it.text.slice(0, pos);
+      const after = it.text.slice(pos);
+      const newId = genId();
+      const newItems = [
+        ...epItems.slice(0, idx),
+        { ...it, text: before },
+        { id: newId, text: after, order: idx + 1 },
+        ...epItems.slice(idx + 1),
+      ];
+      pendingFocus.current = { id: newId, cursor: 0 };
+      saveForEp(epId, newItems, true);
+      return;
+    }
+
     handleArrowNavigation(e, allViewItemIds, itemId);
-  }, [allViewItemIds, handleArrowNavigation]);
+  }, [allViewItemIds, getLatestItemsForEp, saveForEp, handleArrowNavigation]);
 
   // ─── Paste: split multi-line text into multiple items ─────────────────────
   const handlePaste = useCallback((e, it, idx) => {
