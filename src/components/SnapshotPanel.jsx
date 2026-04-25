@@ -19,6 +19,7 @@ import {
   isTokenValid,
 } from '../store/googleDrive';
 import { refreshDriveToken } from '../store/supabaseClient';
+import { formatSnapshotMetaLine } from '../utils/snapshotMeta';
 
 // ── 날짜 포맷 ────────────────────────────────────────────────────────────────
 function fmtDate(iso) {
@@ -335,7 +336,7 @@ export default function SnapshotPanel({ onClose }) {
                     {i === 0 && <span style={{ fontSize: 10, color: 'var(--c-accent)' }}>최신</span>}
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--c-text3)' }}>{fmtDate(snap.savedAt)}</div>
-                  <div style={{ fontSize: 11, color: 'var(--c-text6)' }}>작품 {snap.projectCount}개</div>
+                  <div style={{ fontSize: 11, color: 'var(--c-text6)' }}>{formatSnapshotMetaLine(snap)}</div>
                 </div>
 
                 {/* 액션 */}

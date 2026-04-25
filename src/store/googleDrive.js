@@ -4,6 +4,8 @@
  * - AppContext의 persist effect에서 isTokenValid() 체크 후 saveToDrive() 호출
  */
 
+import { computeSnapshotMeta } from '../utils/snapshotMeta';
+
 const DRIVE_API  = 'https://www.googleapis.com/drive/v3';
 const UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3';
 const FILE_NAME  = 'drama_workspace.json';
@@ -189,13 +191,17 @@ export async function saveSnapshot(payload, label = '수동저장', type = 'manu
   const savedAt = new Date().toISOString();
   const device  = getDeviceLabel();
 
+  // 메타 계산: 같은 jsonStr을 업로드와 sizeBytes 양쪽에 재사용 (한 번만 직렬화)
+  const jsonStr = JSON.stringify({ ...payload, savedAt });
+  const meta    = computeSnapshotMeta(payload, jsonStr);
+
   // 1) 스냅샷 데이터 파일 저장
-  await upsertFile(`${SNAP_PREFIX}${id}.json`, JSON.stringify({ ...payload, savedAt }));
+  await upsertFile(`${SNAP_PREFIX}${id}.json`, jsonStr);
 
   // 2) 인덱스 갱신
   const existing = await readFileByName(SNAPSHOTS_INDEX);
   const prev     = existing?.snapshots ?? [];
-  const entry    = { id, savedAt, label, type, device, projectCount: payload.projects?.length ?? 0 };
+  const entry    = { id, savedAt, label, type, device, ...meta };
   const updated  = [entry, ...prev];
 
   // 3) 타입별 한도 초과분 삭제
