@@ -637,8 +637,10 @@ export function AppProvider({ children }) {
       // INIT/LOAD_FROM_DRIVE 직후 한 사이클은 건너뜀 — Drive 데이터를 덮어쓰는 레이스컨디션 방지
       const skipDrive = skipDriveSaveRef.current;
       skipDriveSaveRef.current = false;
-      // Drive 비활성 경로 (비로그인·토큰만료·skipDrive): 즉시 drama_saved_at 쓰기 (기존 동작 유지)
-      if (shouldUpdateSavedAt && (!isTokenValid() || skipDrive)) {
+      // skipDrive (INIT/LOAD_FROM_DRIVE 직후 한 사이클): drama_saved_at 즉시 동기화.
+      // 토큰 만료/비로그인은 Drive 호출 안 하므로 drama_saved_at도 갱신 보류 →
+      // 토큰 복구 후 .then으로 Drive savedAt과 함께 갱신. 그래야 재로그인 시 충돌 모달 안 뜸.
+      if (shouldUpdateSavedAt && skipDrive) {
         try { localStorage.setItem('drama_saved_at', savedAt); } catch {}
       }
       if (isTokenValid() && !skipDrive) {
