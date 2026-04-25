@@ -572,6 +572,56 @@ export default function TreatmentPage() {
       return;
     }
 
+    // Backspace at start of non-first item → merge into previous item.
+    // Empty-item special case is the same shape: '' merged into prev = prev unchanged → 항목만 삭제.
+    if (e.key === 'Backspace') {
+      const pos = e.target.selectionStart;
+      const end = e.target.selectionEnd;
+      if (pos === 0 && end === 0) {
+        const epItems = getLatestItemsForEp(epId);
+        const idx = epItems.findIndex(it => it.id === itemId);
+        if (idx > 0) {
+          e.preventDefault();
+          const it = epItems[idx];
+          const prev = epItems[idx - 1];
+          const cursor = prev.text.length;
+          const merged = { ...prev, text: prev.text + it.text };
+          const newItems = [
+            ...epItems.slice(0, idx - 1),
+            merged,
+            ...epItems.slice(idx + 1),
+          ];
+          pendingFocus.current = { id: prev.id, cursor };
+          saveForEp(epId, newItems, true);
+          return;
+        }
+      }
+    }
+
+    // Delete at end of non-last item → merge with next item.
+    if (e.key === 'Delete') {
+      const epItems = getLatestItemsForEp(epId);
+      const idx = epItems.findIndex(it => it.id === itemId);
+      if (idx >= 0 && idx < epItems.length - 1) {
+        const it = epItems[idx];
+        const pos = e.target.selectionStart;
+        if (pos === it.text.length && e.target.selectionEnd === pos) {
+          e.preventDefault();
+          const next = epItems[idx + 1];
+          const cursor = it.text.length;
+          const merged = { ...it, text: it.text + next.text };
+          const newItems = [
+            ...epItems.slice(0, idx),
+            merged,
+            ...epItems.slice(idx + 2),
+          ];
+          pendingFocus.current = { id: it.id, cursor };
+          saveForEp(epId, newItems, true);
+          return;
+        }
+      }
+    }
+
     handleArrowNavigation(e, allViewItemIds, itemId);
   }, [allViewItemIds, getLatestItemsForEp, saveForEp, handleArrowNavigation]);
 
