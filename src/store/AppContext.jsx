@@ -6,6 +6,7 @@ import { computeSizeGuard } from './sizeGuard';
 import { sharePayloadSchema } from '../utils/urlSchemas';
 import { parsePath, syncUrl } from '../utils/urlSync';
 import { describeDriveError } from '../utils/driveError';
+import { detectScriptBlockDuplicates } from '../utils/dedupBlocks';
 
 // 복원 가능한 activeDoc 값 whitelist — localStorage에 주입된 예상 밖의 값 차단
 const ALLOWED_ACTIVE_DOCS = new Set([
@@ -122,8 +123,18 @@ const initialState = {
 // NOTE: `reducer` is also exported (bottom of file) for unit tests.
 function reducer(state, action) {
   switch (action.type) {
-    case 'INIT':
+    case 'INIT': {
+      const nextBlocks = action.payload?.scriptBlocks ?? state.scriptBlocks;
+      const detection = detectScriptBlockDuplicates(nextBlocks);
+      if (detection.hasDuplicates) {
+        console.warn('[중복감지] INIT 시점 scriptBlocks 중복', {
+          total: detection.totalDuplicates,
+          totalBlocks: detection.totalBlocks,
+          keys: detection.duplicateKeys,
+        });
+      }
       return { ...state, ...action.payload, initialized: true };
+    }
 
     case 'ADD_PROJECT':
       return { ...state, projects: [...state.projects, action.payload] };
@@ -325,13 +336,22 @@ function reducer(state, action) {
         newProjects.some(pr => pr.id === state.activeProjectId);
       const epStillExists = !!state.activeEpisodeId &&
         newEpisodes.some(e => e.id === state.activeEpisodeId);
+      const nextBlocks = p.scriptBlocks?.length > 0 ? p.scriptBlocks : state.scriptBlocks;
+      const detection = detectScriptBlockDuplicates(nextBlocks);
+      if (detection.hasDuplicates) {
+        console.warn('[중복감지] LOAD_FROM_DRIVE 시점 scriptBlocks 중복', {
+          total: detection.totalDuplicates,
+          totalBlocks: detection.totalBlocks,
+          keys: detection.duplicateKeys,
+        });
+      }
       return {
         ...state,
         projects:       newProjects,
         episodes:       newEpisodes,
         characters:     p.characters?.length     > 0 ? p.characters     : state.characters,
         scenes:         p.scenes?.length         > 0 ? p.scenes         : state.scenes,
-        scriptBlocks:   p.scriptBlocks?.length   > 0 ? p.scriptBlocks   : state.scriptBlocks,
+        scriptBlocks:   nextBlocks,
         coverDocs:      p.coverDocs?.length      > 0 ? p.coverDocs      : state.coverDocs,
         synopsisDocs:   p.synopsisDocs?.length   > 0 ? p.synopsisDocs   : state.synopsisDocs,
         resources:      p.resources?.length      > 0 ? p.resources      : state.resources,
