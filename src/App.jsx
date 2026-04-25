@@ -1690,6 +1690,7 @@ function Shell({ authUser, setAuthUser }) {
     if (action === 'help:about')   { window.open('/changelog.html', '_blank', 'noopener,noreferrer'); return; }
     if (action === 'help:notices') { setNoticesOpen(true); return; }
     if (action === 'help:qa')      { setQaOpen(true); return; }
+    if (action === 'help:kakao')   { window.open('https://open.kakao.com/me/daejak', '_blank', 'noopener,noreferrer'); return; }
     if (action === 'help:resetTour') {
       if (!window.confirm('시작 안내 팝업을 처음부터 다시 보려면 페이지를 새로고침합니다. 계속할까요?')) return;
       try {

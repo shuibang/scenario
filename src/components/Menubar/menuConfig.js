@@ -156,6 +156,7 @@ export const menuConfig = [
       'separator',
       { id: 'notices', label: '공지사항',    action: 'help:notices' },
       { id: 'qa',      label: 'Q&A',         action: 'help:qa' },
+      { id: 'kakao',   label: '카카오톡 문의', action: 'help:kakao' },
       'separator',
       { id: 'about', label: '업데이트 내역', action: 'help:about' },
     ],
