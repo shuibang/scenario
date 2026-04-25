@@ -332,6 +332,9 @@ export default function TreatmentPage() {
   }, [selectedEpId]);
 
   // ─── Focus pending textarea after items change ────────────────────────────
+  // 단일회차 뷰: items state 변경 시 / 전체뷰: saveForEp가 dispatch만 하므로
+  // state.episodes 변경 시점에 effect가 발화해야 함 → 두 dep 모두 포함.
+  // pendingFocus null 가드가 있어 미관련 렌더에서 발화해도 부작용 없음.
   useEffect(() => {
     if (!pendingFocus.current) return;
     const { id, cursor } = pendingFocus.current;
@@ -340,7 +343,7 @@ export default function TreatmentPage() {
     if (!el) return;
     el.focus();
     try { el.setSelectionRange(cursor, cursor); } catch {}
-  }, [items]);
+  }, [items, episodes]);
 
   // ─── Persist to episode.summaryItems ─────────────────────────────────────
   // record=true → structural change (split/merge/move/paste), recorded in undo stack
