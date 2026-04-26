@@ -2155,6 +2155,10 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   const undoActive = useRef(false);
   const undoPushTimer = useRef(null);
   const isSavingRef = useRef(false); // SET_SAVE_STATUS 중복 dispatch 방지
+  // Mount 직후 첫 debounced save effect 실행에서는 'saving' dispatch 스킵.
+  // 이유: load effect가 setBlocks(loaded) 직후 deps[blocks]가 변경되어 effect가 fire하지만
+  // 실제 사용자 편집은 없음(같은 데이터 재로드). 이 첫 fire에서 'saving' 띄우면 창 크기 변동 등 리마운트마다 깜빡.
+  const firstRunAfterMount = useRef(true);
   useEffect(() => {
     if (undoActive.current) return;
     clearTimeout(undoPushTimer.current);
@@ -2374,6 +2378,11 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   // 최적화: JSON.stringify는 타이머 안에서만, dispatch('saving')는 1회만 → 매 키입력 25컴포넌트 리렌더 방지
   useEffect(() => {
     if (!activeEpisodeId || !blocks.length) return;
+    // 마운트 직후 첫 fire는 load effect의 setBlocks 결과 — 사용자 편집 아님. 스킵.
+    if (firstRunAfterMount.current) {
+      firstRunAfterMount.current = false;
+      return;
+    }
     if (!isSavingRef.current) {
       isSavingRef.current = true;
       dispatch({ type: 'SET_SAVE_STATUS', payload: 'saving' });
@@ -2426,7 +2435,9 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
       const currentBlocks = blocksRef.current;
       if (!epId || !currentBlocks.length) return;
       const serialized = JSON.stringify(currentBlocks);
-      // 변경사항 있든 없든 항상 flush (navigate away 시 데이터 유실 방지)
+      // 변경 없으면 dispatch 스킵 — editor:flush 핸들러(line 2467)와 동일 패턴.
+      // 창 크기 변동 등으로 unmount될 때 SET_BLOCKS가 새 reference 만들어 자동저장 effect를 깨우는 것을 방지.
+      if (serialized === lastSavedBlocks.current) return;
       clearTimeout(saveTimer.current);
       const currentScenes = scenesRef.current;
       const sceneBlocks = currentBlocks.filter(b => b.type === 'scene_number');
