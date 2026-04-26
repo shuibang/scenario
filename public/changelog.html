@@ -207,17 +207,183 @@
 
   <div class="timeline">
 
-    <!-- v17 (2026-04-22) -->
+    <!-- v21 (2026-04-26) -->
     <div class="cl-entry">
       <div class="cl-dot"></div>
       <div class="cl-card">
         <details open>
           <summary>
             <div class="cl-meta">
+              <div class="cl-date">2026-04-26</div>
+              <div class="cl-title">🔌 드라이브 연결 상태 표시 · 자동저장 안정화 · 메뉴 정리</div>
+            </div>
+            <span class="new-badge">최신</span>
+            <span class="arrow">▶</span>
+          </summary>
+          <div class="cl-body">
+            <div class="cl-section">
+              <div class="cl-section-head">드라이브 · 자동저장</div>
+              <ul>
+                <li>화면 상단에 드라이브 연결 상태 표시 추가 — 지금 동기화되고 있는지 한눈에 보임</li>
+                <li>구글 인증이 만료돼도 작업 중이면 자동으로 다시 연결 — 갑자기 저장이 멈추는 일이 줄어듦</li>
+                <li>창 크기를 바꿀 때마다 매번 자동저장되던 문제와 인디케이터 깜빡임 정리</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">성능</div>
+              <ul>
+                <li>스냅샷 저장 속도 약 10초 → 3~4초로 단축</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">메뉴 · 화면</div>
+              <ul>
+                <li>상단 메뉴 라벨을 더 명확하게 정리하고 중복 제거</li>
+                <li>공지사항 단일 소스 시스템 — 모달 · 배너 · 정적 페이지가 한 번 작성으로 동시 갱신</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">보안</div>
+              <ul>
+                <li>공용 PC 모드 로그아웃 시 화면에 남은 작업 흔적까지 깨끗이 초기화</li>
+                <li>모바일 환경에서 일부 흔적이 남던 비대칭 문제 동시 수정</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- v20 (2026-04-25) -->
+    <div class="cl-entry">
+      <div class="cl-dot"></div>
+      <div class="cl-card">
+        <details>
+          <summary>
+            <div class="cl-meta">
+              <div class="cl-date">2026-04-25</div>
+              <div class="cl-title">✏️ 트리트먼트 전체뷰 키보드 조작 · 스냅샷 메타 표시 · 도움말 카카오톡</div>
+            </div>
+            <span class="arrow">▶</span>
+          </summary>
+          <div class="cl-body">
+            <div class="cl-section">
+              <div class="cl-section-head">트리트먼트 (전체 회차 보기)</div>
+              <ul>
+                <li>전체 회차 보기에서 Enter로 새 항목을 만들 수 있음</li>
+                <li>줄 맨 앞에서 Backspace, 줄 맨 끝에서 Delete로 위·아래 항목과 합쳐짐</li>
+                <li>항목을 나누거나 합친 직후에도 커서가 정확한 위치에 그대로 머묾</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">백업 · 스냅샷</div>
+              <ul>
+                <li>스냅샷 목록에 씬 개수 · 글자 수 · 용량 표시 — 어느 시점인지 더 쉽게 식별</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">도움말 · 공지사항</div>
+              <ul>
+                <li>도움말 메뉴에 카카오톡 문의 바로가기 추가</li>
+                <li>공지사항 모달 구조 단순화 — 탭 제거</li>
+                <li>공지사항 모달 본문의 중복 소제목 정리</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">동기화 안정성</div>
+              <ul>
+                <li>토큰 만료 시 "저장됨" 시각 표시가 잘못 갱신되지 않도록 보류</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- v19 (2026-04-24) -->
+    <div class="cl-entry">
+      <div class="cl-dot"></div>
+      <div class="cl-card">
+        <details>
+          <summary>
+            <div class="cl-meta">
+              <div class="cl-date">2026-04-24</div>
+              <div class="cl-title">🛟 드라이브 동기화 안정화 · 백업 강화 · 인증 정확도 개선</div>
+            </div>
+            <span class="arrow">▶</span>
+          </summary>
+          <div class="cl-body">
+            <div class="cl-section">
+              <div class="cl-section-head">드라이브 · 동기화</div>
+              <ul>
+                <li>자동저장 중 일시적 권한 오류를 파일 종류별로 정밀하게 처리</li>
+                <li>드라이브 오류 발생 시 실제 원인을 화면에 노출 (용량 부족 · 권한 만료 등)</li>
+                <li>저장이 실제로 완료된 시점에만 "저장됨"으로 표시 (이전엔 안 됐는데도 된 것처럼 보일 수 있었음)</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">백업 · 복원</div>
+              <ul>
+                <li>다른 기기 작업이 감지되면 드라이브에서 불러오기 전 현재 기기 데이터를 먼저 백업 — 덮어쓰기 위험 감소</li>
+                <li>"기기 데이터가 다름" 팝업의 "나중에 결정"을 세션 동안 기억</li>
+                <li>스냅샷 복원에 한도 추가 — 무제한 복원으로 인한 부작용 방지</li>
+                <li>기기 전환으로 자동 생성되는 스냅샷을 일반 스냅샷과 분리 보관 + 한도 별도 관리</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">로그인 · 인증</div>
+              <ul>
+                <li>로그인 세션의 실제 만료 시간 사용 — 토큰 만료 추적 정확도 개선</li>
+                <li>10분 자동 스냅샷에서 유효한 토큰은 재발급을 건너뛰어 불필요한 호출 감소</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- v18 (2026-04-23) -->
+    <div class="cl-entry">
+      <div class="cl-dot"></div>
+      <div class="cl-card">
+        <details>
+          <summary>
+            <div class="cl-meta">
+              <div class="cl-date">2026-04-23</div>
+              <div class="cl-title">🛡 동기화 사고 직후 긴급 수정 · 트리트먼트 태그 픽커</div>
+            </div>
+            <span class="arrow">▶</span>
+          </summary>
+          <div class="cl-body">
+            <div class="cl-section">
+              <div class="cl-section-head">데이터 보호 (긴급 수정)</div>
+              <ul>
+                <li>씬 데이터의 비편집 필드(구조화 필드 · 레거시 헤더)가 자동 정리 과정에서 사라지지 않도록 보존</li>
+                <li>지나치게 작은 데이터가 저장되는 경우 사이즈 검사 추가 — 조용한 데이터 손실 방지</li>
+                <li>씬 동기화 시 화이트리스트 외 필드도 그대로 유지하도록 정책 변경</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">트리트먼트</div>
+              <ul>
+                <li>각 항목에 감정 태그 · 구조 태그를 슬래시 명령으로 추가 가능</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- v17 (2026-04-22) -->
+    <div class="cl-entry">
+      <div class="cl-dot"></div>
+      <div class="cl-card">
+        <details>
+          <summary>
+            <div class="cl-meta">
               <div class="cl-date">2026-04-22</div>
               <div class="cl-title">📮 연출 작업실 피드백 왕복 정리 · 광고 레이아웃 개편 · 기타 버그 수정</div>
             </div>
-            <span class="new-badge">최신</span>
             <span class="arrow">▶</span>
           </summary>
           <div class="cl-body">
