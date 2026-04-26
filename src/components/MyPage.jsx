@@ -10,7 +10,7 @@ import {
 } from '../print/fontStorage';
 import { resetPageHints } from './OnboardingTour';
 import AdBanner from './AdBanner';
-import { NOTICES, ANNOUNCEMENTS } from './UpdateBanner';
+import { ANNOUNCEMENTS } from './UpdateBanner';
 import { SCENE_PREFIX_OPTIONS, getScenePrefix, setScenePrefix } from '../utils/scenePrefix';
 import { getSceneFormat, setSceneFormat, LOC_SEP_PRESETS, TIME_FMT_PRESETS, isCustomLocSep, previewFormat } from '../utils/sceneFormat';
 
@@ -738,8 +738,7 @@ function AnnounceCard({ item, autoOpen }) {
 
 // ─── NoticesTab ───────────────────────────────────────────────────────────────
 // 업데이트 내역은 도움말 → '업데이트 내역' 메뉴(/changelog.html 새 탭)로 분리.
-// 모달은 공지(ANNOUNCEMENTS)만 표시. NOTICES 데이터는 다음 단계의 외부 이전을 위해
-// import는 그대로 두지만 여기서는 사용하지 않음.
+// 모달은 공지(ANNOUNCEMENTS)만 표시.
 export function NoticesTab() {
   const [openAnnouncementId] = useState(() => {
     try {
