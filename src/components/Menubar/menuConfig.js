@@ -92,7 +92,7 @@ export const menuConfig = [
     altKey: 'o',
     items: [
       { id: 'format-style-settings', label: '기본 스타일…',    action: 'format:styleSettings' },
-      { id: 'format-user-settings',  label: '사용자 설정…',      action: 'format:userSettings' },
+      { id: 'format-user-settings',  label: '스타일 설정…',      action: 'format:userSettings' },
       { id: 'format-tag-manage',     label: '태그 / 기타 단축어…', action: 'format:tagManage' },
     ],
   },
@@ -105,7 +105,7 @@ export const menuConfig = [
       { id: 'spellcheck', label: '맞춤법 검사', action: 'tools:spellcheck', disabled: true, disabledLabel: '준비 중' },
       { id: 'wordcount',  label: '글자수 세기', action: 'tools:wordcount' },
       'separator',
-      { id: 'settings',   label: '설정…',       action: 'tools:settings' },
+      { id: 'settings',   label: '환경 설정…',  action: 'tools:settings' },
     ],
   },
 

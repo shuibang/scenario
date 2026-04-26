@@ -576,26 +576,6 @@ export function SettingsTab() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {/* 사용 가이드 다시 보기 */}
-      <div
-        className="flex items-start gap-4 rounded-lg"
-        style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)', padding: '12px 16px' }}
-      >
-        <div className="flex-1">
-          <div className="text-sm font-medium mb-0.5" style={{ color: 'var(--c-text)' }}>사용 가이드</div>
-          <div className="text-xs" style={{ color: 'var(--c-text5)' }}>
-            처음 사용자를 위한 단계별 UI 투어를 다시 볼 수 있습니다.
-          </div>
-        </div>
-        <button
-          onClick={() => window.dispatchEvent(new CustomEvent('drama:startTour'))}
-          className="shrink-0 text-xs px-3 py-1.5 rounded"
-          style={{ background: 'var(--c-accent)', color: '#fff', border: 'none', cursor: 'pointer' }}
-        >
-          다시 보기
-        </button>
-      </div>
-
       {/* 공용 PC 모드 */}
       <div
         className="flex items-start gap-4 rounded-lg"

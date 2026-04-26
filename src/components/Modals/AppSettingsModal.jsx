@@ -4,7 +4,7 @@ import { SettingsTab } from '../MyPage';
 
 export default function AppSettingsModal({ open, onClose }) {
   return (
-    <Modal open={open} onClose={onClose} title="설정" size="md" description="앱 설정">
+    <Modal open={open} onClose={onClose} title="환경 설정" size="md" description="공용 PC 모드 및 설계 도구 설정">
       <div style={{ overflowY: 'auto', maxHeight: 480, paddingRight: 2 }}>
         <SettingsTab />
       </div>
