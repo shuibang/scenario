@@ -25,14 +25,24 @@ const SNAP_LIMITS = { auto: 10, manual: 10, backup: 10, restore: 5, device_switc
 let _accessToken = null;
 let _tokenExpiry = 0;
 
+// 토큰 상태 변경 시 헤더 인디케이터 등이 즉시 갱신되도록 window 이벤트 발행.
+// 자연 만료(시간 경과)는 이벤트 안 뜨므로 구독자가 별도 폴링 필요.
+function emitAuthChange() {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('drive:auth-changed'));
+  }
+}
+
 export function setAccessToken(token, expiresInSec) {
   _accessToken = token;
   _tokenExpiry = Date.now() + (expiresInSec - 60) * 1000; // 만료 1분 전에 무효화
+  emitAuthChange();
 }
 
 export function clearAccessToken() {
   _accessToken = null;
   _tokenExpiry = 0;
+  emitAuthChange();
 }
 
 export function isTokenValid() {

@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { FileText, Undo2, Redo2, Sun, Moon, User, Clapperboard, ExternalLink, ChevronLeft, ChevronRight, Strikethrough, AlignLeft, AlignCenter, AlignRight, AlignJustify } from 'lucide-react';
+import { FileText, Undo2, Redo2, Sun, Moon, User, Clapperboard, ExternalLink, ChevronLeft, ChevronRight, Strikethrough, AlignLeft, AlignCenter, AlignRight, AlignJustify, Cloud, CloudOff } from 'lucide-react';
 import LandingPage from './components/LandingPage';
 import { logShareSchema } from './utils/urlSchemas';
 import { getTimelineColor } from './utils/color';
@@ -50,6 +50,8 @@ import { buildFeedbackSnapshot } from './utils/feedbackVersions';
 import SyncConflictModal from './components/SyncConflictModal';
 import SizeGuardModal from './components/SizeGuardModal';
 import { usePageTracking } from './hooks/usePageTracking';
+import { useDriveAuthState } from './hooks/useDriveAuthState';
+import { shouldRunInitialSync, markInitialSyncDone, resetInitialSyncGate } from './store/driveSyncGate';
 import { guardedSignInWithGoogle } from './utils/guardedSignIn';
 import { describeDriveError } from './utils/driveError';
 import Menubar from './components/Menubar/Menubar';
@@ -755,15 +757,17 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
 
-  const [savedLabel, setSavedLabel] = useState('');
+  // savedAt/activeProjectId 기준 라벨 계산. 마운트 시 (창 크기 변경 등) 빈 라벨로 잠깐 보였다가 채워지는 깜빡임 방지 위해 함수 추출 + 첫 useState에서 즉시 평가.
+  const computeSavedLabel = (sa, pid) => {
+    if (!sa || !pid) return '';
+    const mins = Math.floor((Date.now() - sa) / 60_000);
+    if (mins < 1)  return '방금 저장됨';
+    if (mins < 60) return `${mins}분 전 저장`;
+    return `${Math.floor(mins / 60)}시간 전 저장`;
+  };
+  const [savedLabel, setSavedLabel] = useState(() => computeSavedLabel(savedAt, activeProjectId));
   useEffect(() => {
-    const update = () => {
-      if (!savedAt || !activeProjectId) { setSavedLabel(''); return; }
-      const mins = Math.floor((Date.now() - savedAt) / 60_000);
-      if (mins < 1) setSavedLabel('방금 저장됨');
-      else if (mins < 60) setSavedLabel(`${mins}분 전 저장`);
-      else setSavedLabel(`${Math.floor(mins / 60)}시간 전 저장`);
-    };
+    const update = () => setSavedLabel(computeSavedLabel(savedAt, activeProjectId));
     update();
     const id = setInterval(update, 30_000);
     return () => clearInterval(id);
@@ -800,6 +804,9 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
 
   const [loginOpen, setLoginOpen]        = useState(false);
   const [driveStatus, setDriveStatus]    = useState('none');
+  const { valid: driveTokenValid, settled: driveAuthSettled } = useDriveAuthState();
+  // 끊김 배지 클릭 시 중복 호출 방지
+  const [reconnecting, setReconnecting]  = useState(false);
 
   const runDriveSync = useCallback(async () => {
     if (_driveSyncing || !isTokenValid()) return;
@@ -858,8 +865,24 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
   }, [loadFromDriveData, onSyncConflict]);
 
   useEffect(() => {
-    if (authUser && isTokenValid() && driveStatus === 'none') runDriveSync();
+    if (!authUser || !isTokenValid() || driveStatus !== 'none') return;
+    // 같은 사용자에 대해 한 번 sync 완료했으면 리마운트(창 크기 변경 등)에서는 스킵.
+    if (!shouldRunInitialSync(authUser.email)) return;
+    markInitialSyncDone(authUser.email);
+    runDriveSync();
   }, [authUser]);
+
+  const handleDriveReconnect = useCallback(async () => {
+    if (reconnecting) return;
+    setReconnecting(true);
+    try {
+      const t = await refreshDriveToken();
+      if (t) { setDriveStatus('none'); runDriveSync(); }
+      else guardedSignInWithGoogle();
+    } finally {
+      setReconnecting(false);
+    }
+  }, [reconnecting, runDriveSync]);
 
   const commitTitle = () => {
     if (activeProject && titleDraft.trim()) {
@@ -973,10 +996,36 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
           {driveStatus === 'syncing' && <span style={{ fontSize: 11, color: 'var(--c-text5)' }}>동기화 중…</span>}
           {driveStatus === 'synced'  && <span style={{ fontSize: 11, color: 'var(--c-success)' }}>Drive ✓</span>}
           {driveStatus === 'error'   && (
-            <span style={{ fontSize: 11, color: '#f87171', cursor: 'pointer' }} onClick={async () => { setDriveStatus('none'); const t = await refreshDriveToken(); if (t) runDriveSync(); else guardedSignInWithGoogle(); }}>Drive 오류</span>
+            <span style={{ fontSize: 11, color: '#f87171', cursor: 'pointer' }} onClick={handleDriveReconnect}>Drive 오류</span>
           )}
           {driveStatus === 'reauth' && (
             <span style={{ fontSize: 11, color: '#f6ad55', cursor: 'pointer' }} onClick={() => guardedSignInWithGoogle()}>재연결 필요</span>
+          )}
+          {/* Drive 연결 인디케이터 — driveStatus가 transient(syncing/synced/error/reauth) 아닐 때만 노출.
+              valid → 회색 Cloud. !valid && settled → 끊김 배지. !valid && !settled → 표시 보류
+              (부팅 직후 토큰 도착 전 잠깐 끊김 깜빡 방지). */}
+          {authUser && driveStatus === 'none' && (
+            driveTokenValid
+              ? <span title="Drive 연결됨" style={{ display: 'inline-flex', alignItems: 'center', color: 'var(--c-text6)' }}>
+                  <Cloud size={13} strokeWidth={1.75} />
+                </span>
+              : driveAuthSettled
+                  ? <button
+                      type="button"
+                      onClick={handleDriveReconnect}
+                      disabled={reconnecting}
+                      title="Drive 연결이 끊겼어요. 클릭해서 재연결하세요"
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                        background: 'transparent', border: 'none', padding: '2px 4px',
+                        borderRadius: 4, cursor: reconnecting ? 'wait' : 'pointer',
+                        color: '#f59e0b', fontSize: 11, letterSpacing: '-0.01em',
+                      }}
+                    >
+                      <CloudOff size={13} strokeWidth={2} />
+                      <span>{reconnecting ? '재연결 중…' : 'Drive 끊김'}</span>
+                    </button>
+                  : null
           )}
           <RealtimeClock />
           {activeProjectId && <WorkTimer key={activeProjectId} projectId={activeProjectId} documentId={state.activeEpisodeId || state.activeDoc} saveRef={timerSaveRef} />}
@@ -2389,6 +2438,7 @@ export default function App() {
       } else if (event === 'SIGNED_OUT') {
         try { localStorage.removeItem('drama_auth_user'); } catch {}
         clearAccessToken();
+        resetInitialSyncGate();
         setAuthUser(null);
       }
     });

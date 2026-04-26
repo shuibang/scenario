@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { FileText, Clapperboard, ExternalLink } from 'lucide-react';
+import { FileText, Clapperboard, ExternalLink, CloudOff } from 'lucide-react';
 import { useApp } from '../../store/AppContext';
 import { FONTS } from '../../print/FontRegistry';
 import AdBanner from '../AdBanner';
@@ -9,6 +9,8 @@ import { clearAccessToken, loadFromDrive, isTokenValid } from '../../store/googl
 import { isPublicPcMode, getAll, DB_KEYS } from '../../store/db';
 import { supabaseSignOut, refreshDriveToken } from '../../store/supabaseClient';
 import { guardedSignInWithGoogle } from '../../utils/guardedSignIn';
+import { useDriveAuthState } from '../../hooks/useDriveAuthState';
+import { shouldRunInitialSync, markInitialSyncDone } from '../../store/driveSyncGate';
 import Menubar from '../Menubar/Menubar';
 
 export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, WorkTimer, authUser, onLogout, onMenuAction, onSyncConflict, recentProjects = [], checkedItems = {} }) {
@@ -17,6 +19,8 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
   const [driveStatus, setDriveStatus] = useState('none');
+  const { valid: driveTokenValid, settled: driveAuthSettled } = useDriveAuthState();
+  const [reconnecting, setReconnecting] = useState(false);
   const syncingRef = useRef(false);
   const timerSaveRef = useRef(null); // WorkTimer의 autoSave 연결
 
@@ -71,12 +75,25 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
     }
   }, [loadFromDriveData, onSyncConflict]);
 
-  // 로그인 후 토큰 유효하면 Drive 동기화
+  // 로그인 후 토큰 유효하면 Drive 동기화 — 같은 사용자에 대해 1회만 (창 크기 변경 리마운트 가드).
   useEffect(() => {
-    if (authUser && isTokenValid() && driveStatus === 'none') {
-      runDriveSync();
-    }
+    if (!authUser || !isTokenValid() || driveStatus !== 'none') return;
+    if (!shouldRunInitialSync(authUser.email)) return;
+    markInitialSyncDone(authUser.email);
+    runDriveSync();
   }, [authUser]);
+
+  const handleDriveReconnect = useCallback(async () => {
+    if (reconnecting) return;
+    setReconnecting(true);
+    try {
+      const t = await refreshDriveToken();
+      if (t) { setDriveStatus('none'); runDriveSync(); }
+      else guardedSignInWithGoogle();
+    } finally {
+      setReconnecting(false);
+    }
+  }, [reconnecting, runDriveSync]);
 
   // Close dropdown when tapping outside + prevent body scroll
   useEffect(() => {
@@ -260,8 +277,29 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
           <ExternalLink size={10} strokeWidth={2} style={{ flexShrink: 0, opacity: 0.6 }} />
         </a>
 
-        {/* 오른쪽 spacer + timer */}
+        {/* 오른쪽 spacer + Drive 인디케이터 + timer */}
         <div style={{ flex: 1 }} />
+        {/* Drive 연결 인디케이터 — 끊김일 때만 노출(공간 제약). 정상은 햄버거 안 텍스트로 확인.
+            settled 가드: 부팅 직후 토큰 도착 전 잠깐 끊김 깜빡 방지. */}
+        {authUser && !driveTokenValid && driveAuthSettled && (
+          <button
+            type="button"
+            onClick={handleDriveReconnect}
+            disabled={reconnecting}
+            title="Drive 연결이 끊겼어요. 탭해서 재연결하세요"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 3,
+              background: 'transparent', border: 'none',
+              padding: '4px 6px', borderRadius: 4, flexShrink: 0,
+              color: '#f59e0b', fontSize: 11,
+              cursor: reconnecting ? 'wait' : 'pointer',
+              WebkitTapHighlightColor: 'transparent',
+            }}
+          >
+            <CloudOff size={13} strokeWidth={2} />
+            <span>{reconnecting ? '재연결…' : '끊김'}</span>
+          </button>
+        )}
         <div data-tour-id="mobile-timer" style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
           {activeProjectId && WorkTimer && (
             <WorkTimer
