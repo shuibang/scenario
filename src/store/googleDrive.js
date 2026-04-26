@@ -42,6 +42,8 @@ export function setAccessToken(token, expiresInSec) {
 export function clearAccessToken() {
   _accessToken = null;
   _tokenExpiry = 0;
+  // 다른 Google 계정으로 재로그인하면 이전 계정의 인덱스 fileId가 무효 → 미리 캐시 비움.
+  invalidateIndexIdCache();
   emitAuthChange();
 }
 
@@ -185,6 +187,99 @@ async function deleteFileByName(name) {
   });
 }
 
+// 검색 없이 직접 새 파일 생성. saveSnapshot의 데이터 파일처럼 매번 unique한 timestamp ID를 쓰는
+// 케이스에 사용 — upsertFile의 findFileByName(항상 결과 0)을 스킵해 1 RTT 절약.
+async function createNewFile(name, jsonContent) {
+  const metadata = { name, parents: ['appDataFolder'] };
+  return withAuthRetry(async () => {
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file',     new Blob([jsonContent],              { type: 'application/json' }));
+    const res = await fetch(`${UPLOAD_API}/files?uploadType=multipart&fields=id`, {
+      method:  'POST',
+      headers: { Authorization: `Bearer ${_accessToken}` },
+      body:    form,
+    });
+    if (!res.ok) await throwDriveError(res, 'Drive 파일 저장 실패');
+    return await res.json();
+  });
+}
+
+// ── 인덱스 파일 ID 캐싱 ────────────────────────────────────────────────────
+// 인덱스(drama_snapshots.json)의 fileId는 한 번 만들어지면 변하지 않음 → 매 호출 search 회피.
+// localStorage에 저장해 다음 세션에서도 재사용. 파일이 외부에서 삭제·재생성된 경우 404 처리로 invalidate.
+const INDEX_ID_CACHE_KEY = 'drama_snap_index_id';
+let _indexFileIdCache = null;
+
+function loadIndexIdFromLS() {
+  try { return localStorage.getItem(INDEX_ID_CACHE_KEY); } catch { return null; }
+}
+function saveIndexIdToLS(id) {
+  try { id ? localStorage.setItem(INDEX_ID_CACHE_KEY, id) : localStorage.removeItem(INDEX_ID_CACHE_KEY); } catch {}
+}
+function invalidateIndexIdCache() {
+  _indexFileIdCache = null;
+  saveIndexIdToLS(null);
+}
+
+async function getOrFindIndexFileId() {
+  if (_indexFileIdCache) return _indexFileIdCache;
+  const fromLs = loadIndexIdFromLS();
+  if (fromLs) { _indexFileIdCache = fromLs; return fromLs; }
+  const file = await findFileByName(SNAPSHOTS_INDEX);
+  if (file?.id) {
+    _indexFileIdCache = file.id;
+    saveIndexIdToLS(file.id);
+    return file.id;
+  }
+  return null;
+}
+
+// 인덱스 읽기 — 캐시된 ID로 바로 GET, 404면 invalidate 후 fallback 검색+읽기.
+async function readIndexFile() {
+  const cachedId = await getOrFindIndexFileId();
+  if (!cachedId) return null;
+  return withAuthRetry(async () => {
+    const res = await fetch(`${DRIVE_API}/files/${cachedId}?alt=media`, {
+      headers: { Authorization: `Bearer ${_accessToken}` },
+    });
+    if (res.status === 404) {
+      invalidateIndexIdCache();
+      return await readFileByName(SNAPSHOTS_INDEX); // fallback: 새 ID 검색
+    }
+    if (!res.ok) await throwDriveError(res, 'Drive 인덱스 읽기 실패');
+    return await res.json();
+  });
+}
+
+// 인덱스 쓰기 — 캐시된 ID로 PATCH, 없으면 새 파일 POST + ID 캐싱.
+async function writeIndexFile(jsonContent) {
+  const cachedId = await getOrFindIndexFileId();
+  if (cachedId) {
+    return withAuthRetry(async () => {
+      const form = new FormData();
+      form.append('metadata', new Blob([JSON.stringify({ name: SNAPSHOTS_INDEX })], { type: 'application/json' }));
+      form.append('file',     new Blob([jsonContent], { type: 'application/json' }));
+      const res = await fetch(`${UPLOAD_API}/files/${cachedId}?uploadType=multipart`, {
+        method:  'PATCH',
+        headers: { Authorization: `Bearer ${_accessToken}` },
+        body:    form,
+      });
+      if (res.status === 404) {
+        // 외부에서 삭제됨 → 캐시 비우고 새로 생성
+        invalidateIndexIdCache();
+        const created = await createNewFile(SNAPSHOTS_INDEX, jsonContent);
+        if (created?.id) { _indexFileIdCache = created.id; saveIndexIdToLS(created.id); }
+        return;
+      }
+      if (!res.ok) await throwDriveError(res, 'Drive 인덱스 저장 실패');
+    });
+  }
+  // 캐시 없음 + 검색도 없음 → 새 인덱스 파일 생성
+  const created = await createNewFile(SNAPSHOTS_INDEX, jsonContent);
+  if (created?.id) { _indexFileIdCache = created.id; saveIndexIdToLS(created.id); }
+}
+
 // ── Drive에 저장 ────────────────────────────────────────────────────────────
 // 여러 요청이 겹쳤을 때 응답 순서 역전으로 이전 savedAt이 최신을 덮어쓰는 사고를 막기 위해
 // 모든 호출을 Promise chain으로 직렬화한다.
@@ -252,11 +347,14 @@ export async function saveSnapshot(payload, label = '수동저장', type = 'manu
   const jsonStr = JSON.stringify({ ...payload, savedAt });
   const meta    = computeSnapshotMeta(payload, jsonStr);
 
-  // 1) 스냅샷 데이터 파일 저장
-  await upsertFile(`${SNAP_PREFIX}${id}.json`, jsonStr);
+  // 최적화: Step 1(스냅샷 데이터 업로드)와 Step 2(인덱스 읽기)는 독립이라 병렬화 가능.
+  // - 스냅샷 데이터 파일은 timestamp ID로 unique → upsertFile의 search 스킵하고 createNewFile 직접 사용.
+  // - 인덱스 file id는 캐싱(localStorage)해 매 호출 search 회피.
+  const [, existing] = await Promise.all([
+    createNewFile(`${SNAP_PREFIX}${id}.json`, jsonStr),
+    readIndexFile(),
+  ]);
 
-  // 2) 인덱스 갱신
-  const existing = await readFileByName(SNAPSHOTS_INDEX);
   const prev     = existing?.snapshots ?? [];
   const entry    = { id, savedAt, label, type, device, ...meta };
   const updated  = [entry, ...prev];
@@ -277,10 +375,10 @@ export async function saveSnapshot(payload, label = '수동저장', type = 'manu
   });
   toDelete.forEach(old => deleteFileByName(`${SNAP_PREFIX}${old.id}.json`).catch(() => {}));
 
-  // 4) 전체 목록 최신순 정렬 후 저장
+  // 4) 전체 목록 최신순 정렬 후 저장 — 캐싱된 인덱스 ID로 직접 PATCH (search 회피).
   const kept = Object.values(byType).flat()
     .sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt));
-  await upsertFile(SNAPSHOTS_INDEX, JSON.stringify({ snapshots: kept }));
+  await writeIndexFile(JSON.stringify({ snapshots: kept }));
   return entry;
 }
 

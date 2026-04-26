@@ -9,12 +9,25 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   setAccessToken,
+  clearAccessToken,
   setTokenRefresher,
   loadFromDrive,
   saveToDrive,
+  saveSnapshot,
   deleteFileById,
   loadDirectorScript,
 } from './googleDrive';
+
+// jsdom·node에 localStorage가 없을 수 있어 메모리 폴리필 — 인덱스 ID 캐시 LS 영속화 동작을 검증하기 위함.
+if (typeof globalThis.localStorage === 'undefined') {
+  const _store = new Map();
+  globalThis.localStorage = {
+    getItem: (k) => (_store.has(k) ? _store.get(k) : null),
+    setItem: (k, v) => { _store.set(k, String(v)); },
+    removeItem: (k) => { _store.delete(k); },
+    clear: () => { _store.clear(); },
+  };
+}
 
 // ───────────────────────────────────────────────────────────────
 // fetch 응답 헬퍼
@@ -181,5 +194,94 @@ describe('withAuthRetry — 401 자동 재발행', () => {
 
     await expect(deleteFileById('f1')).resolves.toBeUndefined();
     expect(refresher).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ───────────────────────────────────────────────────────────────
+// saveSnapshot 최적화 (A: 새 파일 search 스킵, B: 인덱스 ID 캐싱, C: Step1+Step2 병렬)
+// 기대 호출 수: 첫 저장(캐시 miss) = 4 (snap upload + 인덱스 search + 인덱스 read + 인덱스 PATCH).
+//              이후 저장(캐시 hit)  = 3 (snap upload + 인덱스 read + 인덱스 PATCH).
+//   * 기존 6회 대비 33-50% 절감.
+
+describe('saveSnapshot 최적화', () => {
+  beforeEach(() => {
+    // 인덱스 ID 캐시 정리 — clearAccessToken이 invalidateIndexIdCache 호출하므로 안전하게 리셋.
+    clearAccessToken();
+    setAccessToken('initial-token', 3600);
+  });
+
+  it('첫 저장(캐시 miss): snap upload + index search + index read + index PATCH = 4 fetch, search 1회만', async () => {
+    global.fetch
+      .mockResolvedValueOnce(jsonRes(200, { id: 'snap-1' }))                     // createNewFile (snap data)
+      .mockResolvedValueOnce(jsonRes(200, { files: [{ id: 'index-1' }] }))      // findFileByName(index)
+      .mockResolvedValueOnce(jsonRes(200, { snapshots: [] }))                   // GET index by id
+      .mockResolvedValueOnce(jsonRes(200, { id: 'index-1' }));                  // PATCH index
+
+    const entry = await saveSnapshot({ projects: [{ id: 'p' }] }, '백업', 'backup');
+    expect(entry).toMatchObject({ label: '백업', type: 'backup' });
+    expect(global.fetch).toHaveBeenCalledTimes(4);
+
+    // 호출 순서 검증: 1번째는 POST(snap upload). 2번째는 search(index). 두 호출은 Promise.all로 병렬.
+    const url0 = global.fetch.mock.calls[0][0];
+    const url1 = global.fetch.mock.calls[1][0];
+    // 병렬 실행이라 순서는 보장 안 됨 — 둘 중 하나는 upload, 하나는 search.
+    const urls01 = [url0, url1].sort();
+    expect(urls01[0]).toMatch(/files\?spaces=appDataFolder/);   // search
+    expect(urls01[1]).toMatch(/upload\/drive\/v3\/files\?uploadType=multipart&fields=id$/); // POST snap
+
+    // 3번째: GET index media
+    expect(global.fetch.mock.calls[2][0]).toMatch(/files\/index-1\?alt=media$/);
+    // 4번째: PATCH index
+    expect(global.fetch.mock.calls[3][0]).toMatch(/upload\/drive\/v3\/files\/index-1\?uploadType=multipart$/);
+    expect(global.fetch.mock.calls[3][1].method).toBe('PATCH');
+  });
+
+  it('두 번째 저장(캐시 hit): index search 스킵 → 3 fetch만', async () => {
+    // 첫 저장으로 캐시 워밍.
+    global.fetch
+      .mockResolvedValueOnce(jsonRes(200, { id: 'snap-1' }))
+      .mockResolvedValueOnce(jsonRes(200, { files: [{ id: 'index-1' }] }))
+      .mockResolvedValueOnce(jsonRes(200, { snapshots: [] }))
+      .mockResolvedValueOnce(jsonRes(200, { id: 'index-1' }));
+    await saveSnapshot({ projects: [] }, '백업', 'backup');
+    global.fetch.mockClear();
+
+    // 두 번째 저장: index search 호출 안 됨.
+    global.fetch
+      .mockResolvedValueOnce(jsonRes(200, { id: 'snap-2' }))                 // createNewFile (snap data)
+      .mockResolvedValueOnce(jsonRes(200, { snapshots: [] }))                // GET index by cached id (병렬)
+      .mockResolvedValueOnce(jsonRes(200, { id: 'index-1' }));               // PATCH index
+
+    await saveSnapshot({ projects: [] }, '백업', 'backup');
+    expect(global.fetch).toHaveBeenCalledTimes(3);
+    // 어떤 호출도 search endpoint 안 침
+    for (const call of global.fetch.mock.calls) {
+      expect(call[0]).not.toMatch(/files\?spaces=appDataFolder/);
+    }
+  });
+
+  it('캐시 stale: GET index 404 → invalidate + 재검색 fallback', async () => {
+    // 캐시 워밍.
+    global.fetch
+      .mockResolvedValueOnce(jsonRes(200, { id: 'snap-1' }))
+      .mockResolvedValueOnce(jsonRes(200, { files: [{ id: 'old-index-id' }] }))
+      .mockResolvedValueOnce(jsonRes(200, { snapshots: [] }))
+      .mockResolvedValueOnce(jsonRes(200, { id: 'old-index-id' }));
+    await saveSnapshot({ projects: [] }, '백업', 'backup');
+    global.fetch.mockClear();
+
+    // 두 번째: GET old-index-id가 404 → invalidate → readFileByName fallback.
+    global.fetch
+      .mockResolvedValueOnce(jsonRes(200, { id: 'snap-2' }))                       // createNewFile
+      .mockResolvedValueOnce(jsonRes(404, {}))                                    // GET cached id → 404
+      .mockResolvedValueOnce(jsonRes(200, { files: [{ id: 'new-index-id' }] }))  // fallback search (readFileByName)
+      .mockResolvedValueOnce(jsonRes(200, { snapshots: [] }))                    // fallback GET media
+      // writeIndexFile: getOrFindIndexFileId() — 캐시 비었지만 LS 캐시도 비었으므로 search.
+      .mockResolvedValueOnce(jsonRes(200, { files: [{ id: 'new-index-id' }] }))
+      .mockResolvedValueOnce(jsonRes(200, { id: 'new-index-id' }));              // PATCH new index
+
+    await saveSnapshot({ projects: [] }, '백업', 'backup');
+    // 호출 횟수는 5~6 (fallback이 더 비쌈) — 핵심은 stale 안전 처리.
+    expect(global.fetch.mock.calls.length).toBeGreaterThanOrEqual(5);
   });
 });
