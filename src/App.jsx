@@ -1038,7 +1038,20 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
             <div className="flex items-center gap-1.5">
               {authUser.picture && <img src={authUser.picture} alt="" style={{ width: 22, height: 22, borderRadius: 4 }} />}
               <span style={{ fontSize: 12, color: 'var(--c-text4)', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{authUser.name}</span>
-              <button onClick={async () => { timerSaveRef.current?.(); if (isPublicPcMode()) clearDramaStorage(); await supabaseSignOut(); clearAccessToken(); setDriveStatus('none'); setAuthUser(null); }}
+              <button onClick={async () => {
+                timerSaveRef.current?.();
+                // 공용 PC 모드는 메모리(React state)도 비워야 다음 사용자에게 직전 작품 노출 안 됨 → 가장 안전한 방법은 reload.
+                const isPublicPc = isPublicPcMode();
+                await supabaseSignOut();
+                clearAccessToken();
+                if (isPublicPc) {
+                  await clearDramaStorage();   // localStorage drama_* + IDB 모두 wipe (await로 IDB 완료 보장)
+                  window.location.reload();
+                  return;
+                }
+                setDriveStatus('none');
+                setAuthUser(null);
+              }}
                 style={{ height: 24, padding: '0 8px', fontSize: 11, background: 'transparent', border: '1px solid var(--c-border3)', borderRadius: 4, color: 'var(--c-text5)', cursor: 'pointer' }}>
                 로그아웃
               </button>

@@ -6,7 +6,7 @@ import AdBanner from '../AdBanner';
 import { mobileTbtnStyle } from '../../styles/tokens';
 import { applyInlineFormat } from '../../utils/textFormat';
 import { clearAccessToken, loadFromDrive, isTokenValid } from '../../store/googleDrive';
-import { isPublicPcMode, getAll, DB_KEYS } from '../../store/db';
+import { isPublicPcMode, getAll, DB_KEYS, clearDramaStorage } from '../../store/db';
 import { supabaseSignOut, refreshDriveToken } from '../../store/supabaseClient';
 import { guardedSignInWithGoogle } from '../../utils/guardedSignIn';
 import { useDriveAuthState } from '../../hooks/useDriveAuthState';
@@ -120,9 +120,15 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
 
   const handleLogout = async () => {
     timerSaveRef.current?.();
-    if (isPublicPcMode()) { try { localStorage.clear(); } catch {} }
+    // 공용 PC 모드는 메모리(React state)도 비워야 다음 사용자에게 직전 작품 노출 안 됨 → 가장 안전한 방법은 reload.
+    const isPublicPc = isPublicPcMode();
     await supabaseSignOut();
     clearAccessToken();
+    if (isPublicPc) {
+      await clearDramaStorage();   // localStorage drama_* + IDB 모두 wipe (이전 localStorage.clear()는 무관 사이트 키까지 날리는 위험 + IDB 미정리)
+      window.location.reload();
+      return;
+    }
     setDriveStatus('none');
     onLogout?.();
     setMenuOpen(false);
