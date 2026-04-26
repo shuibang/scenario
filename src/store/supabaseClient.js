@@ -7,7 +7,7 @@
  * - refreshDriveToken(): 토큰 갱신 후 provider_token 반환
  */
 import { createClient } from '@supabase/supabase-js';
-import { setAccessToken } from './googleDrive';
+import { setAccessToken, setTokenRefresher } from './googleDrive';
 
 export const supabase = (import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY)
   ? createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY)
@@ -57,3 +57,7 @@ export async function refreshDriveToken() {
   setAccessToken(data.session.provider_token, data.session.expires_in ?? 3600);
   return data.session.provider_token;
 }
+
+// googleDrive.js의 withAuthRetry가 401 발생 시 호출할 콜백 등록.
+// 모듈 로드 시점에 단 한 번 — 순환 import 없이 의존 주입.
+setTokenRefresher(refreshDriveToken);

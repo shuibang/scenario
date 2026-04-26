@@ -39,6 +39,39 @@ export function isTokenValid() {
   return !!_accessToken && Date.now() < _tokenExpiry;
 }
 
+// ── 401 자동 재발행 ─────────────────────────────────────────────────────────
+// 외부 모듈(supabaseClient)이 모듈 로드 시 setTokenRefresher로 주입한다.
+// 순환 import 방지를 위해 콜백 패턴 사용.
+let _tokenRefresher = null;
+let _refreshInFlight = null;
+
+export function setTokenRefresher(fn) {
+  _tokenRefresher = fn;
+}
+
+// 같은 op를 한 번만 재시도. refresh 자체가 실패하면 원래 401을 그대로 던진다.
+// 동시 진행 refresh는 _refreshInFlight로 dedupe — 여러 fetch가 동시 401일 때 refresh 한 번만.
+async function withAuthRetry(operation) {
+  try {
+    return await operation();
+  } catch (e) {
+    if (e?.driveStatus !== 401 || !_tokenRefresher) throw e;
+    if (!_refreshInFlight) {
+      _refreshInFlight = Promise.resolve()
+        .then(() => _tokenRefresher())
+        .finally(() => { _refreshInFlight = null; });
+    }
+    let token;
+    try {
+      token = await _refreshInFlight;
+    } catch {
+      throw e;
+    }
+    if (!token) throw e;
+    return await operation();
+  }
+}
+
 // ── 기기 정보 ──────────────────────────────────────────────────────────────
 export function getDeviceLabel() {
   const ua = navigator.userAgent;
@@ -73,59 +106,72 @@ async function throwDriveError(res, fallbackLabel) {
 }
 
 async function findFile() {
-  const res = await fetch(
-    `${DRIVE_API}/files?spaces=appDataFolder&q=name%3D%27${FILE_NAME}%27&fields=files(id,modifiedTime)`,
-    { headers: { Authorization: `Bearer ${_accessToken}` } }
-  );
-  if (!res.ok) throw new Error(`Drive 파일 검색 실패: ${res.status}`);
-  const data = await res.json();
-  return data.files?.[0] || null;
+  return withAuthRetry(async () => {
+    const res = await fetch(
+      `${DRIVE_API}/files?spaces=appDataFolder&q=name%3D%27${FILE_NAME}%27&fields=files(id,modifiedTime)`,
+      { headers: { Authorization: `Bearer ${_accessToken}` } }
+    );
+    if (!res.ok) await throwDriveError(res, 'Drive 파일 검색 실패');
+    const data = await res.json();
+    return data.files?.[0] || null;
+  });
 }
 
 async function findFileByName(name) {
   const encoded = encodeURIComponent(name).replace(/'/g, '%27');
-  const res = await fetch(
-    `${DRIVE_API}/files?spaces=appDataFolder&q=name%3D%27${encoded}%27&fields=files(id)`,
-    { headers: { Authorization: `Bearer ${_accessToken}` } }
-  );
-  if (!res.ok) throw new Error(`Drive 파일 검색 실패: ${res.status}`);
-  const data = await res.json();
-  return data.files?.[0] || null;
+  return withAuthRetry(async () => {
+    const res = await fetch(
+      `${DRIVE_API}/files?spaces=appDataFolder&q=name%3D%27${encoded}%27&fields=files(id)`,
+      { headers: { Authorization: `Bearer ${_accessToken}` } }
+    );
+    if (!res.ok) await throwDriveError(res, 'Drive 파일 검색 실패');
+    const data = await res.json();
+    return data.files?.[0] || null;
+  });
 }
 
 async function upsertFile(name, jsonContent) {
   const existing = await findFileByName(name);
   const metadata = { name, ...(!existing && { parents: ['appDataFolder'] }) };
-  const form = new FormData();
-  form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-  form.append('file',     new Blob([jsonContent],              { type: 'application/json' }));
   const url = existing
     ? `${UPLOAD_API}/files/${existing.id}?uploadType=multipart`
     : `${UPLOAD_API}/files?uploadType=multipart`;
-  const res = await fetch(url, {
-    method:  existing ? 'PATCH' : 'POST',
-    headers: { Authorization: `Bearer ${_accessToken}` },
-    body:    form,
+  return withAuthRetry(async () => {
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file',     new Blob([jsonContent],              { type: 'application/json' }));
+    const res = await fetch(url, {
+      method:  existing ? 'PATCH' : 'POST',
+      headers: { Authorization: `Bearer ${_accessToken}` },
+      body:    form,
+    });
+    if (!res.ok) await throwDriveError(res, 'Drive 파일 저장 실패');
   });
-  if (!res.ok) await throwDriveError(res, 'Drive 파일 저장 실패');
 }
 
 async function readFileByName(name) {
   const file = await findFileByName(name);
   if (!file) return null;
-  const res = await fetch(`${DRIVE_API}/files/${file.id}?alt=media`, {
-    headers: { Authorization: `Bearer ${_accessToken}` },
+  return withAuthRetry(async () => {
+    const res = await fetch(`${DRIVE_API}/files/${file.id}?alt=media`, {
+      headers: { Authorization: `Bearer ${_accessToken}` },
+    });
+    // 404는 "파일 없음" — 정상 null 반환. 401은 throwDriveError로 던져 wrapper가 재시도.
+    if (res.status === 404) return null;
+    if (!res.ok) await throwDriveError(res, 'Drive 파일 읽기 실패');
+    return await res.json();
   });
-  if (!res.ok) return null;
-  return await res.json();
 }
 
 async function deleteFileByName(name) {
   const file = await findFileByName(name);
   if (!file) return;
-  await fetch(`${DRIVE_API}/files/${file.id}`, {
-    method:  'DELETE',
-    headers: { Authorization: `Bearer ${_accessToken}` },
+  return withAuthRetry(async () => {
+    const res = await fetch(`${DRIVE_API}/files/${file.id}`, {
+      method:  'DELETE',
+      headers: { Authorization: `Bearer ${_accessToken}` },
+    });
+    if (!res.ok && res.status !== 404) await throwDriveError(res, 'Drive 파일 삭제 실패');
   });
 }
 
@@ -143,21 +189,22 @@ async function _doSaveToDrive(payload) {
   const existing = await findFile();
   const metadata = { name: FILE_NAME, ...(!existing && { parents: ['appDataFolder'] }) };
 
-  const form = new FormData();
-  form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-  form.append('file',     new Blob([content],                  { type: 'application/json' }));
-
   const url    = existing
     ? `${UPLOAD_API}/files/${existing.id}?uploadType=multipart`
     : `${UPLOAD_API}/files?uploadType=multipart`;
 
-  const res = await fetch(url, {
-    method:  existing ? 'PATCH' : 'POST',
-    headers: { Authorization: `Bearer ${_accessToken}` },
-    body:    form,
+  return withAuthRetry(async () => {
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file',     new Blob([content],                  { type: 'application/json' }));
+    const res = await fetch(url, {
+      method:  existing ? 'PATCH' : 'POST',
+      headers: { Authorization: `Bearer ${_accessToken}` },
+      body:    form,
+    });
+    if (!res.ok) await throwDriveError(res, 'Drive 저장 실패');
+    return await res.json();
   });
-  if (!res.ok) await throwDriveError(res, 'Drive 저장 실패');
-  return await res.json();
 }
 export async function saveToDrive(payload) {
   const next = _pendingSave.catch(() => {}).then(() => _doSaveToDrive(payload));
@@ -259,18 +306,19 @@ export async function saveDirectorScript(title, data) {
   const fileName  = `director_script_${Date.now()}_${safeTitle}.json`;
   const content   = JSON.stringify({ title, data, savedAt: new Date().toISOString() });
 
-  const form = new FormData();
-  form.append('metadata', new Blob([JSON.stringify({ name: fileName, parents: ['appDataFolder'] })], { type: 'application/json' }));
-  form.append('file',     new Blob([content], { type: 'application/json' }));
-
-  const res = await fetch(`${UPLOAD_API}/files?uploadType=multipart&fields=id`, {
-    method:  'POST',
-    headers: { Authorization: `Bearer ${_accessToken}` },
-    body:    form,
+  return withAuthRetry(async () => {
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify({ name: fileName, parents: ['appDataFolder'] })], { type: 'application/json' }));
+    form.append('file',     new Blob([content], { type: 'application/json' }));
+    const res = await fetch(`${UPLOAD_API}/files?uploadType=multipart&fields=id`, {
+      method:  'POST',
+      headers: { Authorization: `Bearer ${_accessToken}` },
+      body:    form,
+    });
+    if (!res.ok) await throwDriveError(res, 'Drive 저장 실패');
+    const json = await res.json();
+    return json.id;
   });
-  if (!res.ok) await throwDriveError(res, 'Drive 저장 실패');
-  const json = await res.json();
-  return json.id;
 }
 
 export async function saveFeedbackVersionSnapshot(title, data) {
@@ -286,21 +334,22 @@ export async function saveFeedbackVersionSnapshot(title, data) {
     savedAt: new Date().toISOString(),
   });
 
-  const form = new FormData();
-  form.append(
-    'metadata',
-    new Blob([JSON.stringify({ name: fileName, parents: ['appDataFolder'] })], { type: 'application/json' })
-  );
-  form.append('file', new Blob([content], { type: 'application/json' }));
-
-  const res = await fetch(`${UPLOAD_API}/files?uploadType=multipart&fields=id`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${_accessToken}` },
-    body: form,
+  return withAuthRetry(async () => {
+    const form = new FormData();
+    form.append(
+      'metadata',
+      new Blob([JSON.stringify({ name: fileName, parents: ['appDataFolder'] })], { type: 'application/json' })
+    );
+    form.append('file', new Blob([content], { type: 'application/json' }));
+    const res = await fetch(`${UPLOAD_API}/files?uploadType=multipart&fields=id`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${_accessToken}` },
+      body: form,
+    });
+    if (!res.ok) await throwDriveError(res, 'Drive save failed');
+    const json = await res.json();
+    return json.id;
   });
-  if (!res.ok) throw new Error(`Drive save failed: ${res.status}`);
-  const json = await res.json();
-  return json.id;
 }
 
 /**
@@ -309,14 +358,14 @@ export async function saveFeedbackVersionSnapshot(title, data) {
  */
 export async function deleteFileById(fileId) {
   if (!fileId || !isTokenValid()) return;
-  const res = await fetch(`${DRIVE_API}/files/${fileId}`, {
-    method:  'DELETE',
-    headers: { Authorization: `Bearer ${_accessToken}` },
+  return withAuthRetry(async () => {
+    const res = await fetch(`${DRIVE_API}/files/${fileId}`, {
+      method:  'DELETE',
+      headers: { Authorization: `Bearer ${_accessToken}` },
+    });
+    // 204 = 성공, 404 = 이미 없음 → 둘 다 정상 처리
+    if (!res.ok && res.status !== 404) await throwDriveError(res, 'Drive 파일 삭제 실패');
   });
-  // 204 = 성공, 404 = 이미 없음 → 둘 다 정상 처리
-  if (!res.ok && res.status !== 404) {
-    throw new Error(`Drive 파일 삭제 실패: ${res.status}`);
-  }
 }
 
 /**
@@ -326,12 +375,13 @@ export async function deleteFileById(fileId) {
  */
 export async function loadDirectorScript(fileId) {
   if (!isTokenValid()) throw new Error('DRIVE_AUTH_REQUIRED');
-
-  const res = await fetch(`${DRIVE_API}/files/${fileId}?alt=media`, {
-    headers: { Authorization: `Bearer ${_accessToken}` },
+  return withAuthRetry(async () => {
+    const res = await fetch(`${DRIVE_API}/files/${fileId}?alt=media`, {
+      headers: { Authorization: `Bearer ${_accessToken}` },
+    });
+    if (!res.ok) await throwDriveError(res, 'Drive 불러오기 실패');
+    return await res.json();
   });
-  if (!res.ok) await throwDriveError(res, 'Drive 불러오기 실패');
-  return await res.json();
 }
 
 // ── Drive에서 불러오기 ──────────────────────────────────────────────────────
@@ -341,9 +391,11 @@ export async function loadFromDrive() {
   const file = await findFile();
   if (!file) return null; // Drive에 저장된 데이터 없음
 
-  const res = await fetch(`${DRIVE_API}/files/${file.id}?alt=media`, {
-    headers: { Authorization: `Bearer ${_accessToken}` },
+  return withAuthRetry(async () => {
+    const res = await fetch(`${DRIVE_API}/files/${file.id}?alt=media`, {
+      headers: { Authorization: `Bearer ${_accessToken}` },
+    });
+    if (!res.ok) await throwDriveError(res, 'Drive 불러오기 실패');
+    return await res.json();
   });
-  if (!res.ok) await throwDriveError(res, 'Drive 불러오기 실패');
-  return await res.json();
 }
