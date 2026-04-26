@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:notices": "node scripts/buildNoticesHtml.js",
     "lint": "eslint .",
     "preview": "vite preview"
   },
