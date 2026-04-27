@@ -737,12 +737,23 @@ export default function TreatmentPage() {
   }, [selectedEpId, epId]);
 
   // ─── 대본으로 가져오기 (원본 유지, 화면 이동 없음, 단일 undo 단위) ─────────
+  // 이미 import된 항목(importedSceneId 보유)은 스킵 — 신규 항목만 추가.
+  // 단, 그 sceneId가 대본에서 사라졌다면(orphan) 다시 import 허용.
+  // 트리트먼트 텍스트 수정/순서 변경은 이 함수로 반영되지 않음 — 후속 커밋의 "전체 덮어쓰기" 예정.
   const handleImportToScript = () => {
     if (!epId) return;
-    const filled = items.filter(it => it.text.trim());
-    if (!filled.length) return;
-
     const epScenes = scenes.filter(s => s.episodeId === epId);
+    const importedIds = new Set(epScenes.map(s => s.id));
+    const filled = items.filter(it =>
+      it.text.trim() && (!it.importedSceneId || !importedIds.has(it.importedSceneId))
+    );
+    if (!filled.length) {
+      setImporting(false);
+      setImportMsg('이미 모든 항목이 대본에 있어요');
+      setTimeout(() => setImportMsg(''), 3000);
+      return;
+    }
+
     const lastSeq  = epScenes.length > 0 ? Math.max(...epScenes.map(s => s.sceneSeq || 0)) : 0;
     const epBlocks = scriptBlocks.filter(b => b.episodeId === epId);
 
