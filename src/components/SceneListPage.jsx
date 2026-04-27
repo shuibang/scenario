@@ -360,21 +360,30 @@ export default function SceneListPage() {
 
   const [remarkMode, setRemarkMode] = useState('all'); // 'all' | 'structure' | 'emotion' | 'empty'
 
-  // 씬별 감정태그 계산 (블록에서 추출, 중복 단어 제거)
+  // 씬별 감정태그 계산 (scene.emotionTags ∪ block.emotionTag, word 기준 dedup).
+  // scene_number 블록도 emotionTag 보유 가능(트리트먼트 가져오기) — sn 포함하여 segment 슬라이스.
   const sceneEmotionTags = useMemo(() => {
     const result = {};
     epScenes.forEach(scene => {
       const snBlock = epBlocks.find(b => b.type === 'scene_number' && b.sceneId === scene.id);
-      if (!snBlock) { result[scene.id] = []; return; }
-      const snIdx = epBlocks.indexOf(snBlock);
-      const nextSn = epBlocks.find((b, i) => i > snIdx && b.type === 'scene_number');
-      const endIdx = nextSn ? epBlocks.indexOf(nextSn) : epBlocks.length;
-      const seg = epBlocks.slice(snIdx + 1, endIdx);
       const seen = new Set();
-      result[scene.id] = seg
-        .filter(b => b.emotionTag?.color && b.emotionTag?.intensity)
-        .map(b => b.emotionTag)
-        .filter(t => { if (seen.has(t.word)) return false; seen.add(t.word); return true; });
+      const collected = [];
+      const push = (t) => {
+        if (!t || !t.word || !t.color || !t.intensity) return;
+        if (seen.has(t.word)) return;
+        seen.add(t.word);
+        collected.push(t);
+      };
+      // scene.emotionTags 우선 (트리트먼트 항목의 다중 감정 보존)
+      (Array.isArray(scene.emotionTags) ? scene.emotionTags : []).forEach(push);
+      if (snBlock) {
+        const snIdx = epBlocks.indexOf(snBlock);
+        const nextSn = epBlocks.find((b, i) => i > snIdx && b.type === 'scene_number');
+        const endIdx = nextSn ? epBlocks.indexOf(nextSn) : epBlocks.length;
+        // sn 포함 (scene_number block도 emotionTag 가질 수 있음)
+        epBlocks.slice(snIdx, endIdx).forEach(b => push(b.emotionTag));
+      }
+      result[scene.id] = collected;
     });
     return result;
   }, [epScenes, epBlocks]);
@@ -646,7 +655,7 @@ export default function SceneListPage() {
         }} />
         {epScenes.length === 0 ? (
           <div className="py-16 text-center text-sm" style={{ color: 'var(--c-text5)' }}>
-            씬이 없습니다. 대본 편집기에서 Ctrl+1로 씬번호를 추가하세요.
+            씬이 없습니다. 대본 편집기에서 Ctrl+Shift+1로 씬번호를 추가하세요.
           </div>
         ) : (
           <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%', minWidth: '640px' }}>

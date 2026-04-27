@@ -69,7 +69,7 @@ function TagEditor({ tags, onSave }) {
 }
 
 // ─── Scene Item ────────────────────────────────────────────────────────────────
-function SceneItem({ scene, sceneContent, isActive, onClick, onStatusChange, onTagsChange, emotionTag }) {
+function SceneItem({ scene, sceneContent, isActive, onClick, onStatusChange, onTagsChange, emotionTags }) {
   const [addingTag, setAddingTag] = useState(false);
   const [tagInput, setTagInput] = useState('');
   const tags = scene.tags || [];
@@ -112,11 +112,12 @@ function SceneItem({ scene, sceneContent, isActive, onClick, onStatusChange, onT
           </div>
           {/* Tags — one line, compact */}
           <div className="mt-0.5 flex flex-wrap items-center gap-1" onClick={e => e.stopPropagation()}>
-            {emotionTag && (
+            {(emotionTags || []).map((et, i) => (
               <span
-                style={{ ...getChipInlineStyle(emotionTag.color, emotionTag.intensity), fontSize: '10px', lineHeight: '1.4' }}
-              >{emotionTag.word}</span>
-            )}
+                key={`em-${et.word}-${i}`}
+                style={{ ...getChipInlineStyle(et.color, et.intensity), fontSize: '10px', lineHeight: '1.4' }}
+              >{et.word}</span>
+            ))}
             {tags.map(t => (
               <span
                 key={t}
@@ -517,21 +518,32 @@ export default function RightPanel({ onScrollToScene }) {
     return m;
   }, [epBlocksForOutline]);
 
-  const sceneFirstEmotionBySceneId = useMemo(() => {
+  // scene.emotionTags ∪ block.emotionTag (segment 안, sn 포함). word 기준 dedup.
+  const sceneAllEmotionsBySceneId = useMemo(() => {
     const m = {};
     const snBlocks = epBlocksForOutline.filter(b => b.type === 'scene_number');
+    const sceneById = new Map(
+      scenes.filter(s => s.episodeId === activeEpisodeId).map(s => [s.id, s])
+    );
     snBlocks.forEach((sn, idx) => {
       const next = snBlocks[idx + 1];
       const start = epBlocksForOutline.indexOf(sn);
       const end = next ? epBlocksForOutline.indexOf(next) : epBlocksForOutline.length;
-      const seg = epBlocksForOutline.slice(start + 1, end);
-      const withEmotion = seg.filter(b => b.emotionTag);
-      m[sn.sceneId] = withEmotion.length
-        ? withEmotion.reduce((a, b) => (b.updatedAt > a.updatedAt ? b : a)).emotionTag
-        : null;
+      const seen = new Set();
+      const collected = [];
+      const push = (t) => {
+        if (!t || !t.word) return;
+        if (seen.has(t.word)) return;
+        seen.add(t.word);
+        collected.push(t);
+      };
+      const sceneObj = sceneById.get(sn.sceneId);
+      (Array.isArray(sceneObj?.emotionTags) ? sceneObj.emotionTags : []).forEach(push);
+      epBlocksForOutline.slice(start, end).forEach(b => push(b.emotionTag));
+      m[sn.sceneId] = collected;
     });
     return m;
-  }, [epBlocksForOutline]);
+  }, [epBlocksForOutline, scenes, activeEpisodeId]);
 
   const isScriptView = activeDoc === 'script' && activeEpisodeId;
   const isCharView = activeDoc === 'characters';
@@ -677,7 +689,7 @@ export default function RightPanel({ onScrollToScene }) {
                   onClick={() => handleSceneClick(scene)}
                   onStatusChange={status => handleStatusChange(scene.id, status)}
                   onTagsChange={tags => handleTagsChange(scene.id, tags)}
-                  emotionTag={sceneFirstEmotionBySceneId[scene.id] || null}
+                  emotionTags={sceneAllEmotionsBySceneId[scene.id] || []}
                 />
               );
             })

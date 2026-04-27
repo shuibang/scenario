@@ -827,13 +827,14 @@ export default function TreatmentPage() {
       newBlocks.push({
         id: genId(), episodeId: targetEpId, projectId: activeProjectId,
         type: 'scene_number', label: '', content: sceneHeadingContent, sceneId,
+        emotionTag: firstEmotion,  // 컬러닷을 헤더(scene_number) 옆에 표시 — 트리트먼트 항목 = 씬 단위
         createdAt: now(), updatedAt: now(),
         ...parsedFields,
       });
       newBlocks.push({
         id: genId(), episodeId: targetEpId, projectId: activeProjectId,
         type: 'action', label: '', content: actionContent, sceneId,
-        emotionTag: firstEmotion,
+        // emotionTag 미부착 — scene_number에 박혀 있어 중복 닷 방지
         createdAt: now(), updatedAt: now(),
       });
     });
