@@ -16,6 +16,10 @@ const STATUS_LABEL = { imported: '변환됨', modified: '수정됨', deleted: '�
 const STATUS_BADGE = { imported: '✓', modified: '△', deleted: '✕' };
 const TREATMENT_HELP_AUTO_COUNT_KEY = 'drama_treatment_help_auto_count';
 const TREATMENT_HELP_AUTO_LAST_AT_KEY = 'drama_treatment_help_auto_last_at';
+// Shell이 isMobile/isTablet/PC 분기에서 다른 트리를 반환해 viewport 임계점 통과 시
+// TreatmentPage가 remount → useState reset되는 것을 방어. 다른 페이지에서 같은 패턴이
+// 필요하면 'drama_<page>_view_mode' 키 컨벤션을 따를 것.
+const TREATMENT_VIEW_MODE_KEY = 'drama_treatment_view_mode';
 
 // ─── Scene heading detector ────────────────────────────────────────────────────
 // "특수상황) 장소" 또는 "(시간대)" 패턴이 있으면 씬 헤딩으로 인식
@@ -79,7 +83,15 @@ export default function TreatmentPage() {
   const episode = episodes.find(e => e.id === epId);
 
   // 'list' | 'board' — Phase A: 보드는 표시 + 카드 클릭으로 리스트 전환만 (드래그 X)
-  const [viewMode, setViewMode] = useState('list');
+  // localStorage persist: viewport 임계점에서 Shell remount 발생해도 새 instance가 복원
+  const [viewMode, setViewMode] = useState(() => {
+    try {
+      return localStorage.getItem(TREATMENT_VIEW_MODE_KEY) === 'board' ? 'board' : 'list';
+    } catch { return 'list'; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem(TREATMENT_VIEW_MODE_KEY, viewMode); } catch {}
+  }, [viewMode]);
 
   useEffect(() => {
     setSelectedEpId('all');
