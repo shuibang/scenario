@@ -22,6 +22,8 @@ const TREATMENT_HELP_AUTO_LAST_AT_KEY = 'drama_treatment_help_auto_last_at';
 // TreatmentPage가 remount → useState reset되는 것을 방어. 다른 페이지에서 같은 패턴이
 // 필요하면 'drama_<page>_view_mode' 키 컨벤션을 따를 것.
 const TREATMENT_VIEW_MODE_KEY = 'drama_treatment_view_mode';
+// 회차 선택도 같은 이유로 persist. whitelist 검사로 회차 삭제/잘못된 값 fallback.
+const TREATMENT_SELECTED_EP_KEY = 'drama_treatment_selected_ep';
 
 // ─── Scene heading detector ────────────────────────────────────────────────────
 // "특수상황) 장소" 또는 "(시간대)" 패턴이 있으면 씬 헤딩으로 인식
@@ -80,7 +82,19 @@ export default function TreatmentPage() {
     ? Array.from({ length: visibleEpisodeCount }, (_, i) => i + 1).filter(n => !existingNums.has(n))
     : [];
 
-  const [selectedEpId, setSelectedEpId] = useState('all');
+  // localStorage persist — viewport 임계점에서 Shell remount 발생해도 새 instance가 복원.
+  // mount 시점 whitelist: 저장된 ID가 현재 episodes에 없으면 'all'로 fallback (회차 삭제 후 새로고침 등).
+  // 프로젝트 변경 시 'all'로 reset하는 useEffect는 그대로 유지 (의도된 동작).
+  const [selectedEpId, setSelectedEpId] = useState(() => {
+    try {
+      const saved = localStorage.getItem(TREATMENT_SELECTED_EP_KEY);
+      if (!saved || saved === 'all') return 'all';
+      return episodes.some(e => e.id === saved) ? saved : 'all';
+    } catch { return 'all'; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem(TREATMENT_SELECTED_EP_KEY, selectedEpId); } catch {}
+  }, [selectedEpId]);
   const epId   = selectedEpId === 'all' ? null : (selectedEpId || projectEpisodes[0]?.id);
   const episode = episodes.find(e => e.id === epId);
 
@@ -115,7 +129,12 @@ export default function TreatmentPage() {
   // 가져오기 다이얼로그 (대본에 사용자 추가 콘텐츠 있을 때 분기)
   const [importDialog, setImportDialog] = useState({ open: false, epId: null });
 
+  // activeProjectId 실제 변경 시만 'all'로 reset.
+  // useRef 가드로 mount/remount 시점의 발화는 무시 (lazy init이 복원한 값 존중).
+  const prevProjectIdRef = useRef(activeProjectId);
   useEffect(() => {
+    if (prevProjectIdRef.current === activeProjectId) return;
+    prevProjectIdRef.current = activeProjectId;
     setSelectedEpId('all');
   }, [activeProjectId]);
 
