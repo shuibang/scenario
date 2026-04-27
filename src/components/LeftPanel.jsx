@@ -678,6 +678,27 @@ export default function LeftPanel({ section = 'all', findMode = null, onFindClos
       </div>
 
       <FeedbackButtons />
+
+      <div
+        style={{
+          padding: '6px 10px 8px',
+          fontSize: 10,
+          color: 'var(--c-text6)',
+          textAlign: 'center',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          borderTop: '1px solid var(--c-border)',
+        }}
+      >
+        <a href="/about" target="_blank" rel="noopener" style={{ color: 'inherit', textDecoration: 'none' }}>소개</a>
+        {' · '}
+        <a href="/contact" target="_blank" rel="noopener" style={{ color: 'inherit', textDecoration: 'none' }}>문의</a>
+        {' · '}
+        <a href="/privacy" target="_blank" rel="noopener" style={{ color: 'inherit', textDecoration: 'none' }}>개인정보</a>
+        {' · '}
+        <a href="/terms" target="_blank" rel="noopener" style={{ color: 'inherit', textDecoration: 'none' }}>약관</a>
+      </div>
     </div>
   );
 }

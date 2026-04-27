@@ -7,7 +7,11 @@
     { "source": "/template.html", "destination": "/template",  "permanent": true },
     { "source": "/devlog-1.html", "destination": "/devlog-1",  "permanent": true },
     { "source": "/devlog-2.html", "destination": "/devlog-2",  "permanent": true },
-    { "source": "/devlog-3.html", "destination": "/devlog-3",  "permanent": true }
+    { "source": "/devlog-3.html", "destination": "/devlog-3",  "permanent": true },
+    { "source": "/about.html",    "destination": "/about",     "permanent": true },
+    { "source": "/contact.html",  "destination": "/contact",   "permanent": true },
+    { "source": "/privacy.html",  "destination": "/privacy",   "permanent": true },
+    { "source": "/terms.html",    "destination": "/terms",     "permanent": true }
   ],
   "rewrites": [
     { "source": "/",          "destination": "/landing.html"  },
@@ -18,6 +22,10 @@
     { "source": "/devlog-1",  "destination": "/devlog-1.html" },
     { "source": "/devlog-2",  "destination": "/devlog-2.html" },
     { "source": "/devlog-3",  "destination": "/devlog-3.html" },
+    { "source": "/about",     "destination": "/about.html"    },
+    { "source": "/contact",   "destination": "/contact.html"  },
+    { "source": "/privacy",   "destination": "/privacy.html"  },
+    { "source": "/terms",     "destination": "/terms.html"    },
     { "source": "/app",       "destination": "/index.html"    },
     { "source": "/app/(.*)",  "destination": "/index.html"    }
   ],

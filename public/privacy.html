@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>개인정보처리방침 — 대본 작업실</title>
+<meta name="description" content="대본 작업실 개인정보처리방침. 한국 개인정보 보호법 및 EU GDPR을 준수하여 수집·이용·보관 항목과 정보주체 권리를 안내합니다.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://daejak.kr/privacy">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:         #1a1a1a;
+    --header:     #111111;
+    --border:     #2e2e42;
+    --border2:    #3a3a52;
+    --text:       #e0e0e0;
+    --text2:      #bbbbbb;
+    --text3:      #888888;
+    --text4:      #666666;
+    --accent:     #5a5af5;
+    --accent2:    #a78bfa;
+    --card:       #1e1e2e;
+    --tip-bg:     #1e1e30;
+    --tip-border: #3a3aaa;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg:         #f8f8f8;
+      --header:     #f0f0f0;
+      --border:     #e0e0e0;
+      --border2:    #d0d0d0;
+      --text:       #1a1a1a;
+      --text2:      #333333;
+      --text3:      #555555;
+      --text4:      #777777;
+      --accent:     #4f46e5;
+      --accent2:    #7c3aed;
+      --card:       #f5f5f5;
+      --tip-bg:     #f0eeff;
+      --tip-border: #c4b5fd;
+    }
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.75; font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .site-header {
+    position: sticky; top: 0; z-index: 100;
+    background: var(--header); border-bottom: 1px solid var(--border);
+    padding: 0 24px; height: 52px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .site-logo { font-weight: 700; font-size: 16px; color: var(--accent); letter-spacing: 0.05em; text-decoration: none; }
+  .site-header-cta {
+    padding: 7px 18px; border-radius: 6px; font-size: 13px; font-weight: 600;
+    background: var(--accent); color: #fff; border: none; text-decoration: none;
+  }
+  .site-header-cta:hover { background: #6a6aff; color: #fff; }
+
+  .page-nav { display: flex; gap: 6px; padding: 12px 0 0; flex-wrap: wrap; }
+  .page-nav a {
+    font-size: 12px; color: var(--text3); text-decoration: none;
+    padding: 4px 12px; border-radius: 20px;
+    border: 1px solid var(--border2);
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .page-nav a:hover { color: var(--accent2); border-color: var(--accent2); }
+  .page-nav a.current { color: var(--accent); border-color: var(--accent); font-weight: 600; }
+
+  .page { max-width: 800px; margin: 0 auto; padding: 3rem 2rem 6rem; }
+
+  .hero { text-align: center; margin-bottom: 2rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
+  .hero-badge {
+    display: inline-block; background: var(--accent); color: #fff;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.1em;
+    padding: 4px 14px; border-radius: 20px; margin-bottom: 1rem;
+  }
+  .hero h1 { font-size: clamp(1.5rem, 4vw, 2rem); font-weight: 800; letter-spacing: -0.02em; margin-bottom: 0.4rem; }
+  .hero p { color: var(--text3); font-size: 14px; }
+
+  .toc {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 1rem 1.25rem; margin: 2rem 0;
+    font-size: 13.5px;
+  }
+  .toc-title { font-weight: 700; color: var(--accent2); font-size: 12px; letter-spacing: 0.06em; margin-bottom: 0.5rem; }
+  .toc ol { list-style: none; counter-reset: toc; padding: 0; columns: 2; column-gap: 1.5rem; }
+  .toc ol li { counter-increment: toc; padding: 2px 0; }
+  .toc ol li::before { content: counter(toc) ". "; color: var(--text4); }
+  .toc a { color: var(--text2); text-decoration: none; }
+  .toc a:hover { color: var(--accent2); }
+
+  .doc h2 {
+    font-size: 17px; font-weight: 700; color: var(--text);
+    margin: 2.5rem 0 0.75rem; padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    scroll-margin-top: 70px;
+  }
+  .doc h2:first-of-type { border-top: none; padding-top: 0; }
+  .doc h3 { font-size: 14.5px; font-weight: 700; color: var(--accent2); margin: 1.25rem 0 0.5rem; }
+  .doc p { color: var(--text2); margin-bottom: 0.75rem; font-size: 14.5px; }
+  .doc strong { color: var(--text); }
+  .doc ul { list-style: none; margin: 0.4rem 0 0.85rem; padding: 0; }
+  .doc ul li {
+    font-size: 14px; color: var(--text2); padding: 3px 0 3px 16px;
+    position: relative; line-height: 1.7;
+  }
+  .doc ul li::before { content: '·'; position: absolute; left: 4px; color: var(--accent); font-weight: 700; }
+  .doc table {
+    width: 100%; border-collapse: collapse; margin: 0.75rem 0 1.25rem;
+    font-size: 13.5px; background: var(--card); border-radius: 8px; overflow: hidden;
+  }
+  .doc th, .doc td {
+    padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border);
+    color: var(--text2);
+  }
+  .doc th { background: var(--bg); color: var(--text); font-weight: 700; font-size: 12.5px; }
+  .doc tr:last-child td { border-bottom: none; }
+
+  .tip {
+    background: var(--tip-bg); border-left: 3px solid var(--tip-border);
+    border-radius: 0 8px 8px 0; padding: 0.85rem 1rem;
+    margin: 1rem 0; font-size: 13.5px; color: var(--text2); line-height: 1.7;
+  }
+  .meta-row {
+    background: var(--card); border-radius: 8px;
+    padding: 0.75rem 1rem; margin: 1.5rem 0; font-size: 13px; color: var(--text3);
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;
+  }
+  .meta-row span { color: var(--text2); }
+
+  .site-footer {
+    background: var(--header); border-top: 1px solid var(--border);
+    padding: 28px 24px; text-align: center; font-size: 12px; color: var(--text4); line-height: 2;
+  }
+  .site-footer a { color: var(--text3); text-decoration: none; border-bottom: 1px solid var(--border2); padding-bottom: 1px; }
+  .site-footer a:hover { color: var(--accent2); }
+
+  @media (max-width: 600px) {
+    .page { padding: 2rem 1.25rem 4rem; }
+    .site-header { padding: 0 16px; }
+    .toc ol { columns: 1; }
+  }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <a href="/" class="site-logo">대본 작업실</a>
+  <a href="/" class="site-header-cta">바로 시작하기 →</a>
+</header>
+
+<div class="page">
+
+  <div class="hero">
+    <div class="hero-badge">PRIVACY POLICY</div>
+    <h1>개인정보처리방침</h1>
+    <p>한국 개인정보 보호법(PIPA) 및 EU GDPR을 준수합니다</p>
+  </div>
+
+  <nav class="page-nav" aria-label="정책 페이지">
+    <a href="/about">서비스 소개</a>
+    <a href="/contact">문의</a>
+    <a href="/privacy" class="current">개인정보처리방침</a>
+    <a href="/terms">이용약관</a>
+  </nav>
+
+  <div class="meta-row">
+    <span>시행일: 2026년 4월 27일</span>
+    <span>최종 개정: 2026년 4월 27일</span>
+  </div>
+
+  <p>"대본 작업실"(이하 "서비스")은 이용자의 개인정보를 중요하게 생각하며, 「개인정보 보호법」 및 EU 일반 개인정보 보호법(GDPR, Regulation (EU) 2016/679)에 따라 본 방침을 수립·공개합니다.</p>
+
+  <div class="toc">
+    <div class="toc-title">목차</div>
+    <ol>
+      <li><a href="#sec1">처리 목적</a></li>
+      <li><a href="#sec2">수집하는 항목</a></li>
+      <li><a href="#sec3">보유 및 이용 기간</a></li>
+      <li><a href="#sec4">제3자 제공</a></li>
+      <li><a href="#sec5">처리 위탁</a></li>
+      <li><a href="#sec6">쿠키 및 분석 도구</a></li>
+      <li><a href="#sec7">정보주체의 권리</a></li>
+      <li><a href="#sec8">GDPR 추가 사항 (EEA·UK 거주자)</a></li>
+      <li><a href="#sec9">국외 이전</a></li>
+      <li><a href="#sec10">안전성 확보 조치</a></li>
+      <li><a href="#sec11">아동의 개인정보</a></li>
+      <li><a href="#sec12">개인정보 보호책임자</a></li>
+      <li><a href="#sec13">방침의 변경</a></li>
+    </ol>
+  </div>
+
+  <div class="doc">
+
+    <h2 id="sec1">1. 처리 목적</h2>
+    <p>서비스는 다음 목적을 위해 최소한의 개인정보를 처리하며, 그 외의 용도로 사용하지 않습니다.</p>
+    <ul>
+      <li>회원 가입·로그인 및 본인 식별 (Google·Kakao 등 외부 OAuth 연동)</li>
+      <li>이용자가 작성한 대본·자료의 클라우드 저장 및 기기 간 동기화</li>
+      <li>서비스 안정성·오류 분석을 위한 접속 기록 처리</li>
+      <li>광고 게재 및 트래픽 측정 (Google AdSense, Google Analytics)</li>
+      <li>고객 문의 응대</li>
+    </ul>
+
+    <h2 id="sec2">2. 수집하는 항목</h2>
+    <table>
+      <thead><tr><th>구분</th><th>항목</th><th>수집 시점</th></tr></thead>
+      <tbody>
+        <tr><td>계정 정보</td><td>이메일, 표시 이름, 프로필 이미지 URL, OAuth 식별자</td><td>로그인 시</td></tr>
+        <tr><td>이용자 콘텐츠</td><td>대본·시놉시스·인물·자료·메모 등 작성 데이터</td><td>이용자가 작성·저장 시</td></tr>
+        <tr><td>드라이브 연동</td><td>Google Drive 액세스 토큰 (브라우저 내 저장)</td><td>드라이브 동기화 활성화 시</td></tr>
+        <tr><td>접속 기록</td><td>IP, 브라우저 정보, 접속 시각, 페이지 이동 경로</td><td>자동 수집</td></tr>
+        <tr><td>광고·분석</td><td>광고 식별자, 쿠키 ID</td><td>자동 수집</td></tr>
+      </tbody>
+    </table>
+    <div class="tip">이용자가 작성한 대본 본문은 원칙적으로 이용자의 브라우저(IndexedDB) 또는 이용자 본인의 Google Drive에만 저장되며, 운영자 서버에 보관되지 않습니다. Supabase에는 인증 정보와 공유 링크 메타데이터(<strong>review_links</strong>)만 저장됩니다.</div>
+
+    <h2 id="sec3">3. 보유 및 이용 기간</h2>
+    <ul>
+      <li>회원 정보: 회원 탈퇴 또는 마지막 로그인 후 1년까지</li>
+      <li>접속 기록: 최대 3개월 (통신비밀보호법 등 관련 법령에 따라 보관 의무가 있는 경우 해당 기간)</li>
+      <li>이용자 콘텐츠: 이용자가 직접 삭제하거나 브라우저 데이터를 초기화할 때까지</li>
+      <li>공유 링크 메타데이터: 링크 만료 또는 이용자가 삭제할 때까지</li>
+    </ul>
+
+    <h2 id="sec4">4. 제3자 제공</h2>
+    <p>서비스는 이용자의 개인정보를 제3자에게 제공하지 않습니다. 다만 다음의 경우에는 예외로 합니다.</p>
+    <ul>
+      <li>이용자가 사전에 동의한 경우</li>
+      <li>법령의 규정에 의하거나 수사 목적으로 법령에 정해진 절차와 방법에 따라 수사기관의 요구가 있는 경우</li>
+    </ul>
+
+    <h2 id="sec5">5. 처리 위탁</h2>
+    <p>안정적인 서비스 운영을 위해 다음 업체에 일부 처리를 위탁하고 있으며, 위탁 시 개인정보 보호를 위한 조치를 약정하고 있습니다.</p>
+    <table>
+      <thead><tr><th>수탁자</th><th>위탁 업무</th><th>국가</th></tr></thead>
+      <tbody>
+        <tr><td>Supabase, Inc.</td><td>인증·DB 호스팅</td><td>미국</td></tr>
+        <tr><td>Vercel Inc.</td><td>웹 호스팅·CDN</td><td>미국</td></tr>
+        <tr><td>Google LLC</td><td>OAuth 인증, Drive 연동, Analytics, AdSense, 폰트</td><td>미국</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="sec6">6. 쿠키 및 분석 도구</h2>
+    <p>서비스는 사용자 환경 설정 유지와 트래픽 분석을 위해 쿠키 및 유사 기술을 사용합니다.</p>
+    <ul>
+      <li><strong>필수 쿠키:</strong> 로그인 세션 유지 (Supabase Auth)</li>
+      <li><strong>분석 쿠키:</strong> Google Analytics (방문자 통계, 페이지 이동 분석)</li>
+      <li><strong>광고 쿠키:</strong> Google AdSense (관심사 기반 광고 게재)</li>
+    </ul>
+    <p>이용자는 브라우저 설정에서 쿠키 저장을 거부할 수 있으나, 일부 기능(로그인·동기화)이 제한될 수 있습니다. Google 광고 개인화는 <a href="https://adssettings.google.com" target="_blank" rel="noopener">adssettings.google.com</a>에서, GA 옵트아웃은 <a href="https://tools.google.com/dlpage/gaoptout" target="_blank" rel="noopener">tools.google.com/dlpage/gaoptout</a>에서 설정할 수 있습니다.</p>
+
+    <h2 id="sec7">7. 정보주체의 권리</h2>
+    <p>이용자는 언제든지 다음 권리를 행사할 수 있습니다.</p>
+    <ul>
+      <li>개인정보 열람·정정·삭제·처리정지 요구</li>
+      <li>동의 철회 (서비스 내 로그아웃·계정 연결 해제)</li>
+      <li>회원 탈퇴 요청</li>
+    </ul>
+    <p>권리 행사는 서면, 이메일 등을 통해 요청할 수 있으며, 운영자는 지체 없이 조치합니다. 만 14세 미만 아동의 경우 법정대리인이 권리를 행사할 수 있습니다.</p>
+
+    <h2 id="sec8">8. GDPR 추가 사항 (EEA·UK 거주자)</h2>
+    <p>EEA·UK·스위스 거주 이용자는 GDPR에 따라 다음 권리를 추가로 가집니다.</p>
+    <ul>
+      <li><strong>접근권(Article 15)·정정권(16)·삭제권(17, "잊혀질 권리")</strong></li>
+      <li><strong>처리 제한권(18)·이동권(20)·반대권(21)</strong></li>
+      <li><strong>자동화된 의사결정에 대한 거부권(22)</strong> — 본 서비스는 프로파일링이나 자동화된 의사결정을 수행하지 않습니다.</li>
+      <li><strong>동의 철회권(7(3))</strong> 및 감독기관에 대한 <strong>제소권(77)</strong></li>
+    </ul>
+    <p><strong>처리의 법적 근거:</strong> 계정 정보·콘텐츠는 GDPR 제6조 제1항 (b) 계약 이행, 접속 기록·보안 로그는 (f) 정당한 이익, 분석·광고 쿠키는 (a) 동의에 근거합니다.</p>
+    <p><strong>감독기관 제소:</strong> 거주국 데이터 보호 감독기관에 제소할 권리가 있습니다. (예: 한국 개인정보보호위원회, 아일랜드 DPC 등)</p>
+    <p><strong>EU 대리인:</strong> 현재 별도 EU 대리인을 지정하지 않았으며, 모든 문의는 아래 보호책임자에게 직접 연락하실 수 있습니다.</p>
+
+    <h2 id="sec9">9. 국외 이전</h2>
+    <p>제5조에 명시된 위탁사가 미국 등 국외에 위치함에 따라 개인정보가 국외로 이전됩니다. 이전되는 정보·이전 일시·방법(SSL/TLS 암호화 통신)은 본 방침에 명시된 바와 같으며, 수탁자는 표준계약조항(SCC) 등 적절한 보호 조치를 적용하고 있습니다.</p>
+
+    <h2 id="sec10">10. 안전성 확보 조치</h2>
+    <ul>
+      <li>전송 구간 TLS 암호화 (HTTPS)</li>
+      <li>인증 정보의 안전한 저장 및 권한 분리</li>
+      <li>접근 기록의 정기적 점검</li>
+      <li>운영자 단말 및 계정의 보안 관리</li>
+    </ul>
+
+    <h2 id="sec11">11. 아동의 개인정보</h2>
+    <p>본 서비스는 만 14세 미만 아동을 대상으로 하지 않으며, 의도적으로 아동의 개인정보를 수집하지 않습니다. 만 14세 미만 아동이 개인정보를 제공한 사실이 확인될 경우 즉시 삭제 조치합니다.</p>
+
+    <h2 id="sec12">12. 개인정보 보호책임자</h2>
+    <ul>
+      <li>책임자: 대본 작업실 운영자 (개인 운영)</li>
+      <li>이메일: <a href="mailto:daejak.official@gmail.com">daejak.official@gmail.com</a></li>
+    </ul>
+    <p>개인정보 관련 문의·민원은 위 이메일로 연락해 주시면 지체 없이 답변드리겠습니다.</p>
+
+    <h2 id="sec13">13. 방침의 변경</h2>
+    <p>본 방침은 법령·정책·서비스 변경에 따라 개정될 수 있으며, 변경 시 본 페이지를 통해 사전 공지합니다. 중대한 변경의 경우 시행일 7일 이전에 공지합니다.</p>
+
+  </div>
+
+</div>
+
+<footer class="site-footer">
+  © 2026 대본 작업실<br>
+  <a href="/about">서비스 소개</a> · <a href="/contact">문의</a> · <a href="/privacy">개인정보처리방침</a> · <a href="/terms">이용약관</a>
+</footer>
+
+</body>
+</html>

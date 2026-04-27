@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>문의 — 대본 작업실</title>
+<meta name="description" content="대본 작업실 문의 안내. 버그 제보, 기능 제안, 일반 문의를 위한 이메일 연락처와 자주 묻는 안내를 제공합니다.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://daejak.kr/contact">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:         #1a1a1a;
+    --header:     #111111;
+    --border:     #2e2e42;
+    --border2:    #3a3a52;
+    --text:       #e0e0e0;
+    --text2:      #bbbbbb;
+    --text3:      #888888;
+    --text4:      #666666;
+    --accent:     #5a5af5;
+    --accent2:    #a78bfa;
+    --card:       #1e1e2e;
+    --tip-bg:     #1e1e30;
+    --tip-border: #3a3aaa;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg:         #f8f8f8;
+      --header:     #f0f0f0;
+      --border:     #e0e0e0;
+      --border2:    #d0d0d0;
+      --text:       #1a1a1a;
+      --text2:      #333333;
+      --text3:      #555555;
+      --text4:      #777777;
+      --accent:     #4f46e5;
+      --accent2:    #7c3aed;
+      --card:       #f5f5f5;
+      --tip-bg:     #f0eeff;
+      --tip-border: #c4b5fd;
+    }
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.75; font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .site-header {
+    position: sticky; top: 0; z-index: 100;
+    background: var(--header); border-bottom: 1px solid var(--border);
+    padding: 0 24px; height: 52px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .site-logo { font-weight: 700; font-size: 16px; color: var(--accent); letter-spacing: 0.05em; text-decoration: none; }
+  .site-header-cta {
+    padding: 7px 18px; border-radius: 6px; font-size: 13px; font-weight: 600;
+    background: var(--accent); color: #fff; border: none; text-decoration: none;
+  }
+  .site-header-cta:hover { background: #6a6aff; color: #fff; }
+
+  .page-nav { display: flex; gap: 6px; padding: 12px 0 0; flex-wrap: wrap; }
+  .page-nav a {
+    font-size: 12px; color: var(--text3); text-decoration: none;
+    padding: 4px 12px; border-radius: 20px;
+    border: 1px solid var(--border2);
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .page-nav a:hover { color: var(--accent2); border-color: var(--accent2); }
+  .page-nav a.current { color: var(--accent); border-color: var(--accent); font-weight: 600; }
+
+  .page { max-width: 720px; margin: 0 auto; padding: 3rem 2rem 6rem; }
+
+  .hero { text-align: center; margin-bottom: 2.5rem; padding-bottom: 2rem; border-bottom: 1px solid var(--border); }
+  .hero-badge {
+    display: inline-block; background: var(--accent); color: #fff;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.1em;
+    padding: 4px 14px; border-radius: 20px; margin-bottom: 1rem;
+  }
+  .hero h1 { font-size: clamp(1.7rem, 4.5vw, 2.2rem); font-weight: 800; letter-spacing: -0.02em; margin-bottom: 0.5rem; }
+  .hero p { color: var(--text3); font-size: 14.5px; }
+
+  .email-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 2rem 1.5rem;
+    text-align: center; margin: 1.5rem 0 2.5rem;
+  }
+  .email-label { font-size: 12px; color: var(--text3); letter-spacing: 0.12em; font-weight: 600; margin-bottom: 0.5rem; }
+  .email-link {
+    display: inline-block; font-size: clamp(18px, 3.5vw, 22px); font-weight: 700;
+    color: var(--accent2); text-decoration: none; letter-spacing: -0.01em;
+    border-bottom: 2px solid var(--border2); padding-bottom: 4px;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .email-link:hover { color: var(--accent); border-color: var(--accent); }
+  .email-note { font-size: 12.5px; color: var(--text4); margin-top: 1rem; }
+
+  section { margin: 2.5rem 0; }
+  section h2 {
+    font-size: 16px; font-weight: 700; color: var(--text);
+    margin-bottom: 0.85rem; display: flex; align-items: center; gap: 0.5rem;
+  }
+  section h2::before {
+    content: ''; display: inline-block; width: 4px; height: 14px;
+    background: var(--accent); border-radius: 2px;
+  }
+  section p { color: var(--text2); margin-bottom: 0.85rem; font-size: 14.5px; }
+  section strong { color: var(--text); }
+
+  .topic-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+  }
+  .topic {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 1rem 1.1rem;
+  }
+  .topic h3 { font-size: 13.5px; font-weight: 700; color: var(--accent2); margin-bottom: 0.4rem; }
+  .topic p { font-size: 13px; color: var(--text3); line-height: 1.65; margin: 0; }
+
+  .checklist {
+    background: var(--tip-bg); border-left: 3px solid var(--tip-border);
+    border-radius: 0 8px 8px 0; padding: 1rem 1.2rem;
+    margin: 1rem 0; font-size: 13.5px; color: var(--text2); line-height: 1.85;
+  }
+  .checklist strong { color: var(--text); }
+  .checklist ul { list-style: none; margin: 0.4rem 0 0; padding: 0; }
+  .checklist ul li {
+    padding: 2px 0 2px 22px; position: relative;
+  }
+  .checklist ul li::before {
+    content: '✓'; position: absolute; left: 4px;
+    color: var(--accent); font-weight: 700;
+  }
+
+  .quick-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 0.5rem; }
+  .quick-link {
+    font-size: 13px; padding: 6px 14px; border-radius: 6px;
+    border: 1px solid var(--border2); color: var(--text2);
+    text-decoration: none; transition: color 0.15s, border-color 0.15s;
+  }
+  .quick-link:hover { color: var(--accent2); border-color: var(--accent2); }
+
+  .site-footer {
+    background: var(--header); border-top: 1px solid var(--border);
+    padding: 28px 24px; text-align: center; font-size: 12px; color: var(--text4); line-height: 2;
+  }
+  .site-footer a { color: var(--text3); text-decoration: none; border-bottom: 1px solid var(--border2); padding-bottom: 1px; }
+  .site-footer a:hover { color: var(--accent2); }
+
+  @media (max-width: 600px) {
+    .page { padding: 2rem 1.25rem 4rem; }
+    .site-header { padding: 0 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <a href="/" class="site-logo">대본 작업실</a>
+  <a href="/" class="site-header-cta">바로 시작하기 →</a>
+</header>
+
+<div class="page">
+
+  <div class="hero">
+    <div class="hero-badge">CONTACT</div>
+    <h1>문의</h1>
+    <p>버그 제보, 기능 제안, 일반 문의 모두 환영합니다</p>
+  </div>
+
+  <nav class="page-nav" aria-label="정책 페이지">
+    <a href="/about">서비스 소개</a>
+    <a href="/contact" class="current">문의</a>
+    <a href="/privacy">개인정보처리방침</a>
+    <a href="/terms">이용약관</a>
+  </nav>
+
+  <div class="email-card">
+    <div class="email-label">EMAIL</div>
+    <a href="mailto:daejak.official@gmail.com" class="email-link">daejak.official@gmail.com</a>
+    <div class="email-note">개인 운영 특성상 답변까지 며칠이 걸릴 수 있습니다. 양해 부탁드립니다.</div>
+  </div>
+
+  <section>
+    <h2>이런 내용으로 보내 주세요</h2>
+    <div class="topic-grid">
+      <div class="topic">
+        <h3>버그 제보</h3>
+        <p>오류 화면, 재현 방법, 사용 환경(브라우저·OS)을 알려주시면 가장 빠릅니다.</p>
+      </div>
+      <div class="topic">
+        <h3>기능 제안</h3>
+        <p>실제 작업 흐름에서 어떤 점이 불편했는지 함께 적어주시면 우선순위를 정하는 데 도움이 됩니다.</p>
+      </div>
+      <div class="topic">
+        <h3>데이터·계정 문의</h3>
+        <p>로그인, 동기화, 데이터 복구 관련 문의는 가능한 한 신속히 답변드립니다.</p>
+      </div>
+      <div class="topic">
+        <h3>개인정보 관련</h3>
+        <p>열람·정정·삭제·처리정지 요청 또는 GDPR 권리 행사 요청을 받습니다.</p>
+      </div>
+      <div class="topic">
+        <h3>제휴·인용 요청</h3>
+        <p>학교 수업, 작가 모임, 매체 인용 등 사용 사례를 알려주시면 좋습니다.</p>
+      </div>
+      <div class="topic">
+        <h3>일반 후기</h3>
+        <p>잘 되는 것, 안 되는 것, 어색한 것 — 어떤 의견이든 환영합니다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>버그 제보 시 함께 보내주시면 좋아요</h2>
+    <div class="checklist">
+      <strong>이런 정보가 있으면 훨씬 빠르게 해결됩니다</strong>
+      <ul>
+        <li>어떤 동작을 했을 때 발생했는지 (재현 순서)</li>
+        <li>오류 메시지 또는 화면 스크린샷</li>
+        <li>사용 중인 브라우저와 버전 (예: Chrome 120, Safari 17)</li>
+        <li>운영체제 (Windows / macOS / iOS / Android)</li>
+        <li>작품·회차·씬 등 어디서 발생했는지</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <h2>먼저 확인해보면 좋은 자료</h2>
+    <p>문의 전에 아래 페이지들을 둘러보시면 답을 더 빨리 찾으실 수 있습니다.</p>
+    <div class="quick-links">
+      <a href="/help" class="quick-link">사용 설명서</a>
+      <a href="/notice" class="quick-link">공지사항</a>
+      <a href="/changelog" class="quick-link">업데이트 내역</a>
+      <a href="/about" class="quick-link">서비스 소개</a>
+    </div>
+  </section>
+
+</div>
+
+<footer class="site-footer">
+  © 2026 대본 작업실<br>
+  <a href="/about">서비스 소개</a> · <a href="/contact">문의</a> · <a href="/privacy">개인정보처리방침</a> · <a href="/terms">이용약관</a>
+</footer>
+
+</body>
+</html>

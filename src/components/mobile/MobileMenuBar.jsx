@@ -244,6 +244,28 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
 
               <div style={{ height: 1, background: 'var(--c-border)', margin: '4px 0' }} />
               <AdBanner slot="mobile-bottom" mobileHide={false} height={32} />
+
+              <div
+                style={{
+                  padding: '8px 14px 4px',
+                  fontSize: 10,
+                  color: 'var(--c-text6)',
+                  textAlign: 'center',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  borderTop: '1px solid var(--c-border)',
+                  marginTop: 4,
+                }}
+              >
+                <a href="/about" target="_blank" rel="noopener" style={{ color: 'inherit', textDecoration: 'none' }}>소개</a>
+                {' · '}
+                <a href="/contact" target="_blank" rel="noopener" style={{ color: 'inherit', textDecoration: 'none' }}>문의</a>
+                {' · '}
+                <a href="/privacy" target="_blank" rel="noopener" style={{ color: 'inherit', textDecoration: 'none' }}>개인정보</a>
+                {' · '}
+                <a href="/terms" target="_blank" rel="noopener" style={{ color: 'inherit', textDecoration: 'none' }}>약관</a>
+              </div>
             </div>
           )}
         </div>

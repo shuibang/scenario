@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>서비스 소개 — 대본 작업실</title>
+<meta name="description" content="대본 작업실은 한국 드라마 작가를 위한 무료 온라인 대본 편집기입니다. 개인 개발자가 운영하는 비상업 사이드 프로젝트의 소개와 운영 정보를 안내합니다.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://daejak.kr/about">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:         #1a1a1a;
+    --header:     #111111;
+    --border:     #2e2e42;
+    --border2:    #3a3a52;
+    --text:       #e0e0e0;
+    --text2:      #bbbbbb;
+    --text3:      #888888;
+    --text4:      #666666;
+    --accent:     #5a5af5;
+    --accent2:    #a78bfa;
+    --card:       #1e1e2e;
+    --tip-bg:     #1e1e30;
+    --tip-border: #3a3aaa;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg:         #f8f8f8;
+      --header:     #f0f0f0;
+      --border:     #e0e0e0;
+      --border2:    #d0d0d0;
+      --text:       #1a1a1a;
+      --text2:      #333333;
+      --text3:      #555555;
+      --text4:      #777777;
+      --accent:     #4f46e5;
+      --accent2:    #7c3aed;
+      --card:       #f5f5f5;
+      --tip-bg:     #f0eeff;
+      --tip-border: #c4b5fd;
+    }
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.75; font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .site-header {
+    position: sticky; top: 0; z-index: 100;
+    background: var(--header); border-bottom: 1px solid var(--border);
+    padding: 0 24px; height: 52px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .site-logo { font-weight: 700; font-size: 16px; color: var(--accent); letter-spacing: 0.05em; text-decoration: none; }
+  .site-header-cta {
+    padding: 7px 18px; border-radius: 6px; font-size: 13px; font-weight: 600;
+    background: var(--accent); color: #fff; border: none; text-decoration: none;
+  }
+  .site-header-cta:hover { background: #6a6aff; color: #fff; }
+
+  .page-nav { display: flex; gap: 6px; padding: 12px 0 0; flex-wrap: wrap; }
+  .page-nav a {
+    font-size: 12px; color: var(--text3); text-decoration: none;
+    padding: 4px 12px; border-radius: 20px;
+    border: 1px solid var(--border2);
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .page-nav a:hover { color: var(--accent2); border-color: var(--accent2); }
+  .page-nav a.current { color: var(--accent); border-color: var(--accent); font-weight: 600; }
+
+  .page { max-width: 760px; margin: 0 auto; padding: 3rem 2rem 6rem; }
+
+  .hero { text-align: center; margin-bottom: 2.5rem; padding-bottom: 2rem; border-bottom: 1px solid var(--border); }
+  .hero-badge {
+    display: inline-block; background: var(--accent); color: #fff;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.1em;
+    padding: 4px 14px; border-radius: 20px; margin-bottom: 1rem;
+  }
+  .hero h1 { font-size: clamp(1.7rem, 4.5vw, 2.2rem); font-weight: 800; letter-spacing: -0.02em; margin-bottom: 0.5rem; }
+  .hero p { color: var(--text3); font-size: 14.5px; }
+
+  section { margin: 2.5rem 0; }
+  section h2 {
+    font-size: 17px; font-weight: 700; color: var(--text);
+    margin-bottom: 0.85rem; display: flex; align-items: center; gap: 0.5rem;
+  }
+  section h2::before {
+    content: ''; display: inline-block; width: 4px; height: 16px;
+    background: var(--accent); border-radius: 2px;
+  }
+  section p { color: var(--text2); margin-bottom: 0.85rem; font-size: 14.5px; line-height: 1.85; }
+  section strong { color: var(--text); }
+
+  .feature-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px; margin: 1rem 0;
+  }
+  .feature-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 1rem 1.1rem;
+  }
+  .feature-card h3 { font-size: 14px; font-weight: 700; color: var(--accent2); margin-bottom: 0.4rem; }
+  .feature-card p { font-size: 13px; color: var(--text3); margin: 0; line-height: 1.65; }
+
+  .info-table {
+    width: 100%; border-collapse: collapse; margin-top: 0.75rem;
+    font-size: 14px; background: var(--card);
+    border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+  }
+  .info-table th, .info-table td {
+    padding: 11px 14px; text-align: left; border-bottom: 1px solid var(--border);
+    color: var(--text2);
+  }
+  .info-table th {
+    background: var(--bg); color: var(--text3); font-weight: 600;
+    font-size: 12.5px; letter-spacing: 0.04em; width: 30%;
+  }
+  .info-table tr:last-child th, .info-table tr:last-child td { border-bottom: none; }
+  .info-table a { color: var(--accent2); text-decoration: none; border-bottom: 1px solid var(--border2); }
+  .info-table a:hover { color: var(--accent); }
+
+  .tip {
+    background: var(--tip-bg); border-left: 3px solid var(--tip-border);
+    border-radius: 0 8px 8px 0; padding: 0.85rem 1rem;
+    margin: 1rem 0; font-size: 13.5px; color: var(--text2); line-height: 1.7;
+  }
+
+  .cta {
+    text-align: center; margin: 3rem 0 0;
+    padding: 2rem 1.5rem; background: var(--card);
+    border: 1px solid var(--border); border-radius: 14px;
+  }
+  .cta h2 { font-size: 18px; font-weight: 700; margin-bottom: 0.4rem; justify-content: center; }
+  .cta h2::before { display: none; }
+  .cta p { color: var(--text3); font-size: 13.5px; margin-bottom: 1.25rem; }
+  .cta-btn {
+    display: inline-block; padding: 10px 28px; border-radius: 8px;
+    background: var(--accent); color: #fff; font-weight: 600; font-size: 14px;
+    text-decoration: none; transition: background 0.15s;
+  }
+  .cta-btn:hover { background: #6a6aff; }
+
+  .site-footer {
+    background: var(--header); border-top: 1px solid var(--border);
+    padding: 28px 24px; text-align: center; font-size: 12px; color: var(--text4); line-height: 2;
+  }
+  .site-footer a { color: var(--text3); text-decoration: none; border-bottom: 1px solid var(--border2); padding-bottom: 1px; }
+  .site-footer a:hover { color: var(--accent2); }
+
+  @media (max-width: 600px) {
+    .page { padding: 2rem 1.25rem 4rem; }
+    .site-header { padding: 0 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <a href="/" class="site-logo">대본 작업실</a>
+  <a href="/" class="site-header-cta">바로 시작하기 →</a>
+</header>
+
+<div class="page">
+
+  <div class="hero">
+    <div class="hero-badge">ABOUT</div>
+    <h1>대본 작업실</h1>
+    <p>한국 드라마 작가를 위한 무료 온라인 대본 편집기</p>
+  </div>
+
+  <nav class="page-nav" aria-label="정책 페이지">
+    <a href="/about" class="current">서비스 소개</a>
+    <a href="/contact">문의</a>
+    <a href="/privacy">개인정보처리방침</a>
+    <a href="/terms">이용약관</a>
+  </nav>
+
+  <section>
+    <h2>서비스 소개</h2>
+    <p>"대본 작업실"은 한국 드라마 작가를 위한 <strong>무료 웹 기반 대본 편집 도구</strong>입니다. 별도의 설치나 결제 없이 브라우저에서 바로 대본을 쓰고, PDF·DOCX·HWPX 형식으로 내보내며, 자신의 Google Drive에 안전하게 동기화할 수 있습니다.</p>
+    <p>씬 번호 자동 연동, 인물 관리, 트리트먼트, 자료수집, 공유 검토 링크 등 대본 작업에 실제로 필요한 기능에 집중했습니다. 데스크톱·태블릿·모바일 어떤 환경에서도 같은 작업을 이어서 할 수 있습니다.</p>
+  </section>
+
+  <section>
+    <h2>핵심 기능</h2>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <h3>대본 에디터</h3>
+        <p>씬 번호 자동 매김, 슬래시 메뉴, 블록 단위 편집과 키보드 친화적 단축키.</p>
+      </div>
+      <div class="feature-card">
+        <h3>다중 출력</h3>
+        <p>PDF·DOCX·HWPX 형식으로 한 번의 설정으로 정돈된 결과물을 내보냅니다.</p>
+      </div>
+      <div class="feature-card">
+        <h3>구글 드라이브 연동</h3>
+        <p>운영자 서버를 거치지 않고 본인의 드라이브에 직접 저장·동기화합니다.</p>
+      </div>
+      <div class="feature-card">
+        <h3>모바일 지원</h3>
+        <p>이동 중에도 같은 작품을 이어 쓸 수 있는 모바일·태블릿 레이아웃.</p>
+      </div>
+      <div class="feature-card">
+        <h3>공유 검토</h3>
+        <p>로그인 없이 열람 가능한 공유 링크로 동료·감독에게 검토를 요청합니다.</p>
+      </div>
+      <div class="feature-card">
+        <h3>설치 없이 시작</h3>
+        <p>웹 표준 기술로 빌드되어 어떤 OS·브라우저에서도 즉시 사용 가능합니다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>운영 방식</h2>
+    <p>"대본 작업실"은 <strong>개인 개발자가 운영하는 비상업 사이드 프로젝트</strong>입니다. 사용료는 받지 않으며, 사이트 운영비는 페이지에 표시되는 광고로 충당합니다.</p>
+    <p>이용자가 작성한 대본 본문은 원칙적으로 이용자 본인의 브라우저와 Google Drive에만 저장됩니다. 운영자 서버에는 콘텐츠가 보관되지 않으며, 인증 정보와 공유 링크 메타데이터만 처리됩니다. 자세한 내용은 <a href="/privacy" style="color: var(--accent2); border-bottom: 1px solid var(--border2);">개인정보처리방침</a>을 참고해 주세요.</p>
+    <div class="tip">개인이 운영하는 서비스 특성상 응답이나 업데이트가 다소 늦을 수 있습니다. 그래도 이용자분들이 보내주시는 의견은 모두 확인하고 반영하려 노력하고 있습니다.</div>
+  </section>
+
+  <section>
+    <h2>운영자 정보</h2>
+    <table class="info-table">
+      <tbody>
+        <tr><th>서비스명</th><td>대본 작업실 (Daejak)</td></tr>
+        <tr><th>운영 주체</th><td>개인 개발자 (비상업 사이드 프로젝트)</td></tr>
+        <tr><th>웹사이트</th><td><a href="https://daejak.kr">https://daejak.kr</a></td></tr>
+        <tr><th>이메일</th><td><a href="mailto:daejak.official@gmail.com">daejak.official@gmail.com</a></td></tr>
+        <tr><th>운영 시작</th><td>2025년</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>기술 스택</h2>
+    <p>오픈 웹 기술로 만들어진 정적 SPA입니다. React 19, Vite, Tailwind CSS, IndexedDB(로컬 저장), Supabase(인증), Vercel(호스팅)을 사용합니다. 모든 작업은 이용자의 기기에서 직접 처리됩니다.</p>
+  </section>
+
+  <div class="cta">
+    <h2>지금 바로 써 보세요</h2>
+    <p>설치도 회원가입 강제도 없이, 브라우저에서 곧바로 시작할 수 있습니다.</p>
+    <a href="/" class="cta-btn">대본 작업실 열기 →</a>
+  </div>
+
+</div>
+
+<footer class="site-footer">
+  © 2026 대본 작업실<br>
+  <a href="/about">서비스 소개</a> · <a href="/contact">문의</a> · <a href="/privacy">개인정보처리방침</a> · <a href="/terms">이용약관</a>
+</footer>
+
+</body>
+</html>
