@@ -17,6 +17,7 @@ function TreatmentBoardCard({ item, seqNum, onClick }) {
   return (
     <div
       onClick={onClick}
+      draggable={false}
       title="클릭하여 리스트 뷰로 이동"
       style={{
         background: 'var(--c-card)',
@@ -41,7 +42,11 @@ function TreatmentBoardCard({ item, seqNum, onClick }) {
           lineHeight: 1.5,
           color: hasText ? 'var(--c-text3)' : 'var(--c-text6)',
           fontStyle: hasText ? 'normal' : 'italic',
-          minHeight: '4em',
+          // 시각화 전용 — 본문은 max 3줄 ellipsis로 그리드 정렬. 자세한 내용은 클릭 → 리스트 뷰.
+          display: '-webkit-box',
+          WebkitLineClamp: 3,
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden',
           whiteSpace: 'pre-wrap',
           wordBreak: 'break-word',
           flex: 1,
