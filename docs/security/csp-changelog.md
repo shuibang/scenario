@@ -4,6 +4,17 @@ vercel.json의 Content-Security-Policy 헤더 변경 이력.
 
 ---
 
+## 2026-04-27 (2): Pretendard sourcemap 차단 수정
+
+연결 변경: connect-src에 cdn.jsdelivr.net 추가
+
+사유:
+DevTools가 Pretendard CSS의 sourcemap(.map)을 connect-src로
+fetch하는데 차단되어 콘솔 violation 발생. 폰트 자체는
+style-src/font-src로 정상 로드 중. 콘솔 정리 목적의 수정.
+
+---
+
 ## 2026-04-27: 외부 서비스 통합 (Pretendard / GA / AdSense)
 
 ### 변경 사항
