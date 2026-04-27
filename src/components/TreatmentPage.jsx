@@ -93,6 +93,23 @@ export default function TreatmentPage() {
     try { localStorage.setItem(TREATMENT_VIEW_MODE_KEY, viewMode); } catch {}
   }, [viewMode]);
 
+  // 데스크톱/모바일 분기 (App.jsx와 동일한 768px 임계점) — 핸들/▲▼ 버튼 토글용
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined' && window.innerWidth < 768
+  );
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+
+  // 드래그 reorder state (데스크톱 전용)
+  // dragInfo: dragstart에 저장 → dragover/drop 가드, dragend에 클리어
+  // overInfo: dragover indicator(2px accent borderTop) 위치 추적
+  // Phase B Commit 1: drop = 트리트먼트 순서만 변경 (경고 X). 대본 동기화는 "대본으로 가져오기" 시점에서 처리.
+  const [dragInfo, setDragInfo] = useState(null);       // { episodeId, fromIdx } | null
+  const [overInfo, setOverInfo] = useState(null);       // { episodeId, idx } | null
+
   useEffect(() => {
     setSelectedEpId('all');
   }, [activeProjectId]);
@@ -801,6 +818,49 @@ export default function TreatmentPage() {
     setTimeout(() => setImportMsg(''), 3000);
   };
 
+  // ─── 드래그 reorder 핸들러 (데스크톱 전용, 같은 회차 안에서만) ──────────────
+  // dragInfo: dragstart에 저장 → over/drop 가드, dragend에 클리어
+  // overInfo: dragover indicator(borderTop 2px accent) 위치
+  // 다른 회차로의 drop은 무시 (Phase C 범위)
+  const handleDragStart = useCallback((e, episodeId, fromIdx) => {
+    setDragInfo({ episodeId, fromIdx });
+    setOverInfo(null);
+    try { e.dataTransfer.effectAllowed = 'move'; } catch {}
+    try { e.dataTransfer.setData('text/plain', String(fromIdx)); } catch {}
+  }, []);
+
+  const handleDragOver = useCallback((e, episodeId, idx) => {
+    if (!dragInfo) return;                         // 외부 드래그 무시
+    if (dragInfo.episodeId !== episodeId) return;  // 다른 회차 무시
+    e.preventDefault();
+    if (overInfo?.episodeId !== episodeId || overInfo?.idx !== idx) {
+      setOverInfo({ episodeId, idx });
+    }
+  }, [dragInfo, overInfo]);
+
+  const handleDragEnd = useCallback(() => {
+    setDragInfo(null);
+    setOverInfo(null);
+  }, []);
+
+  const handleDrop = useCallback((e, episodeId, toIdx) => {
+    if (!dragInfo) return;
+    if (dragInfo.episodeId !== episodeId) return;
+    e.preventDefault();
+    const fromIdx = dragInfo.fromIdx;
+    if (fromIdx === toIdx) return;
+
+    const epItems = getLatestItemsForEp(episodeId);
+    if (fromIdx < 0 || fromIdx >= epItems.length) return;
+    const next = [...epItems];
+    const [moved] = next.splice(fromIdx, 1);
+    next.splice(Math.min(toIdx, next.length), 0, moved);
+
+    // 트리트먼트 순서만 즉시 변경 — 대본 동기화는 "대본으로 가져오기" 시점에서 처리
+    saveForEp(episodeId, next, true);
+    // dragInfo/overInfo 클리어는 handleDragEnd에서 일괄
+  }, [dragInfo, getLatestItemsForEp, saveForEp]);
+
   if (!activeProjectId) return null;
 
   const canImportToScript = selectedEpId !== 'all' && !!epId;
@@ -989,7 +1049,33 @@ export default function TreatmentPage() {
               <>
                 <div className="space-y-1.5">
                   {epItems.map((it, idx) => (
-                    <div key={it.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                    <div
+                      key={it.id}
+                      style={{
+                        display: 'flex', gap: 8, alignItems: 'flex-start',
+                        borderTop: (overInfo?.episodeId === ep.id && overInfo?.idx === idx)
+                          ? '2px solid var(--c-accent)' : '2px solid transparent',
+                      }}
+                      onDragOver={(e) => handleDragOver(e, ep.id, idx)}
+                      onDrop={(e) => handleDrop(e, ep.id, idx)}
+                      onDragEnd={handleDragEnd}
+                    >
+                      {!isMobile && (
+                        <div
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, ep.id, idx)}
+                          title="드래그로 순서 변경"
+                          style={{
+                            width: 16, flexShrink: 0,
+                            display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+                            paddingTop: 5,
+                            cursor: dragInfo ? 'grabbing' : 'grab',
+                            color: 'var(--c-text6)',
+                            opacity: (dragInfo?.episodeId === ep.id && dragInfo?.fromIdx === idx) ? 0.4 : 1,
+                            userSelect: 'none', fontSize: 13, lineHeight: 1,
+                          }}
+                        >≡</div>
+                      )}
                       <span style={{ fontSize: 11, color: 'var(--c-text6)', minWidth: 24, textAlign: 'right', marginTop: 6 }}>{idx + 1}.</span>
                       <div className="flex-1 flex flex-col gap-1 min-w-0">
                         <textarea
@@ -1085,7 +1171,33 @@ export default function TreatmentPage() {
         {/* 단일 회차 Items */}
         {viewMode === 'list' && !allEpItems && <div className="space-y-1.5">
           {items.map((it, idx) => (
-            <div key={it.id} className="flex items-start gap-2">
+            <div
+              key={it.id}
+              className="flex items-start gap-2"
+              style={{
+                borderTop: (overInfo?.episodeId === epId && overInfo?.idx === idx)
+                  ? '2px solid var(--c-accent)' : '2px solid transparent',
+              }}
+              onDragOver={(e) => handleDragOver(e, epId, idx)}
+              onDrop={(e) => handleDrop(e, epId, idx)}
+              onDragEnd={handleDragEnd}
+            >
+              {!isMobile && (
+                <div
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, epId, idx)}
+                  title="드래그로 순서 변경"
+                  style={{
+                    width: 20, flexShrink: 0,
+                    display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+                    paddingTop: 7,
+                    cursor: dragInfo ? 'grabbing' : 'grab',
+                    color: 'var(--c-text6)',
+                    opacity: (dragInfo?.episodeId === epId && dragInfo?.fromIdx === idx) ? 0.4 : 1,
+                    userSelect: 'none', fontSize: 14, lineHeight: 1,
+                  }}
+                >≡</div>
+              )}
               <div className="flex flex-col items-end shrink-0 mt-[7px] w-9">
                 <span
                   className="text-sm select-none tabular-nums"
@@ -1202,18 +1314,22 @@ export default function TreatmentPage() {
                 ) : null}
               </div>
               <div className="flex flex-col gap-0.5 shrink-0 mt-1">
-                <button
-                  onClick={() => moveItem(it.id, -1)}
-                  disabled={idx === 0}
-                  className="text-[10px] w-5 h-5 rounded flex items-center justify-center"
-                  style={{ color: 'var(--c-text6)', background: 'var(--c-tag)', border: 'none', cursor: idx === 0 ? 'not-allowed' : 'pointer', opacity: idx === 0 ? 0.3 : 1 }}
-                >▲</button>
-                <button
-                  onClick={() => moveItem(it.id, 1)}
-                  disabled={idx === items.length - 1}
-                  className="text-[10px] w-5 h-5 rounded flex items-center justify-center"
-                  style={{ color: 'var(--c-text6)', background: 'var(--c-tag)', border: 'none', cursor: idx === items.length - 1 ? 'not-allowed' : 'pointer', opacity: idx === items.length - 1 ? 0.3 : 1 }}
-                >▼</button>
+                {isMobile && (
+                  <>
+                    <button
+                      onClick={() => moveItem(it.id, -1)}
+                      disabled={idx === 0}
+                      className="text-[10px] w-5 h-5 rounded flex items-center justify-center"
+                      style={{ color: 'var(--c-text6)', background: 'var(--c-tag)', border: 'none', cursor: idx === 0 ? 'not-allowed' : 'pointer', opacity: idx === 0 ? 0.3 : 1 }}
+                    >▲</button>
+                    <button
+                      onClick={() => moveItem(it.id, 1)}
+                      disabled={idx === items.length - 1}
+                      className="text-[10px] w-5 h-5 rounded flex items-center justify-center"
+                      style={{ color: 'var(--c-text6)', background: 'var(--c-tag)', border: 'none', cursor: idx === items.length - 1 ? 'not-allowed' : 'pointer', opacity: idx === items.length - 1 ? 0.3 : 1 }}
+                    >▼</button>
+                  </>
+                )}
                 <button
                   onClick={() => removeItem(it.id)}
                   className="text-[10px] w-5 h-5 rounded flex items-center justify-center"
