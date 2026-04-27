@@ -7,8 +7,10 @@ import { isMultiEpisode } from '../utils/projectTypes';
 import UnifiedTagPicker from './UnifiedTagPicker';
 import EmotionTagPicker from './EmotionTagPicker';
 import TreatmentBoardView from './TreatmentBoardView';
+import Modal, { ModalBtn } from './Modals/Modal';
 import { getChipInlineStyle } from '../utils/emotionColor';
 import { BUILTIN_GUIDES } from '../data/structureTags';
+import { hasUserScriptContent } from '../utils/episodeScript';
 
 // ─── Import status ────────────────────────────────────────────────────────────
 const STATUS_COLOR = { imported: 'var(--c-accent2)', modified: '#f59e0b', deleted: '#ef4444' };
@@ -109,6 +111,9 @@ export default function TreatmentPage() {
   // Phase B Commit 1: drop = 트리트먼트 순서만 변경 (경고 X). 대본 동기화는 "대본으로 가져오기" 시점에서 처리.
   const [dragInfo, setDragInfo] = useState(null);       // { episodeId, fromIdx } | null
   const [overInfo, setOverInfo] = useState(null);       // { episodeId, idx } | null
+
+  // 가져오기 다이얼로그 (대본에 사용자 추가 콘텐츠 있을 때 분기)
+  const [importDialog, setImportDialog] = useState({ open: false, epId: null });
 
   useEffect(() => {
     setSelectedEpId('all');
@@ -737,16 +742,25 @@ export default function TreatmentPage() {
   }, [selectedEpId, epId]);
 
   // ─── 대본으로 가져오기 (원본 유지, 화면 이동 없음, 단일 undo 단위) ─────────
-  // 이미 import된 항목(importedSceneId 보유)은 스킵 — 신규 항목만 추가.
-  // 단, 그 sceneId가 대본에서 사라졌다면(orphan) 다시 import 허용.
-  // 트리트먼트 텍스트 수정/순서 변경은 이 함수로 반영되지 않음 — 후속 커밋의 "전체 덮어쓰기" 예정.
-  const handleImportToScript = () => {
-    if (!epId) return;
-    const epScenes = scenes.filter(s => s.episodeId === epId);
-    const importedIds = new Set(epScenes.map(s => s.id));
-    const filled = items.filter(it =>
-      it.text.trim() && (!it.importedSceneId || !importedIds.has(it.importedSceneId))
-    );
+  // performImport: 실제 import 처리 (mode 분기)
+  //   - 'append'   : 신규 항목만 추가 (importedSceneId 보유 항목은 스킵, orphan은 복원)
+  //   - 'overwrite': 회차 블록 통째 재생성 (모든 항목 새 sceneId, 기존 대본 폐기)
+  // handleImportToScript: 진입점 — 사용자 추가 콘텐츠(대사/지문) 있으면 다이얼로그, 없으면 조용히 append.
+  const performImport = (targetEpId, mode) => {
+    if (!targetEpId) return;
+    const epScenes = scenes.filter(s => s.episodeId === targetEpId);
+
+    let filled;
+    if (mode === 'overwrite') {
+      // 회차 통째 재생성 — 모든 비어있지 않은 항목
+      filled = items.filter(it => it.text.trim());
+    } else {
+      // append — 신규만 (importedSceneId 보유 + 그 씬 살아있음 항목 스킵)
+      const importedIds = new Set(epScenes.map(s => s.id));
+      filled = items.filter(it =>
+        it.text.trim() && (!it.importedSceneId || !importedIds.has(it.importedSceneId))
+      );
+    }
     if (!filled.length) {
       setImporting(false);
       setImportMsg('이미 모든 항목이 대본에 있어요');
@@ -754,8 +768,10 @@ export default function TreatmentPage() {
       return;
     }
 
-    const lastSeq  = epScenes.length > 0 ? Math.max(...epScenes.map(s => s.sceneSeq || 0)) : 0;
-    const epBlocks = scriptBlocks.filter(b => b.episodeId === epId);
+    // overwrite는 sceneSeq 1부터 새로 시작
+    const lastSeq = mode === 'overwrite' ? 0
+      : (epScenes.length > 0 ? Math.max(...epScenes.map(s => s.sceneSeq || 0)) : 0);
+    const epBlocks = scriptBlocks.filter(b => b.episodeId === targetEpId);
 
     const newBlocks = [];
     const newScenes = [];
@@ -780,7 +796,7 @@ export default function TreatmentPage() {
       const firstEmotion = emotionTags[0] || null;
 
       newScenes.push({
-        id: sceneId, episodeId: epId, projectId: activeProjectId,
+        id: sceneId, episodeId: targetEpId, projectId: activeProjectId,
         sourceTreatmentItemId: it.id,
         sceneSeq, status: 'draft',
         tags: [...structureTags],
@@ -790,27 +806,29 @@ export default function TreatmentPage() {
         ...parsedFields,
       });
       newBlocks.push({
-        id: genId(), episodeId: epId, projectId: activeProjectId,
+        id: genId(), episodeId: targetEpId, projectId: activeProjectId,
         type: 'scene_number', label: '', content: sceneHeadingContent, sceneId,
         createdAt: now(), updatedAt: now(),
         ...parsedFields,
       });
       newBlocks.push({
-        id: genId(), episodeId: epId, projectId: activeProjectId,
+        id: genId(), episodeId: targetEpId, projectId: activeProjectId,
         type: 'action', label: '', content: actionContent, sceneId,
         emotionTag: firstEmotion,
         createdAt: now(), updatedAt: now(),
       });
     });
 
-    const merged   = [...epBlocks, ...newBlocks];
-    let seq        = 0;
-    const labelled = merged.map(b => {
+    // overwrite: 기존 epBlocks 무시 / append: 기존 + 새 merge
+    const sourceBlocks = mode === 'overwrite' ? newBlocks : [...epBlocks, ...newBlocks];
+    let seq = 0;
+    const labelled = sourceBlocks.map(b => {
       if (b.type === 'scene_number') { seq++; return { ...b, label: `S#${seq}.` }; }
       return b;
     });
 
     // Update treatment items with import tracking (importedSceneId + importedText)
+    // overwrite 모드는 모든 filled가 itemToSceneId에 있어 모든 항목 갱신됨
     const updatedSummaryItems = items.map(it => {
       const sceneId = itemToSceneId.get(it.id);
       if (!sceneId) return it;
@@ -818,15 +836,49 @@ export default function TreatmentPage() {
     });
 
     // 단일 액션으로 dispatch → 단일 undo 단위 (IMPORT_TREATMENT_TO_SCRIPT은 AUTO_RECORD)
-    dispatch({ type: 'IMPORT_TREATMENT_TO_SCRIPT', payload: { episodeId: epId, newScenes, labelled, updatedSummaryItems } });
+    dispatch({
+      type: 'IMPORT_TREATMENT_TO_SCRIPT',
+      payload: {
+        episodeId: targetEpId, newScenes, labelled, updatedSummaryItems,
+        replaceScenes: mode === 'overwrite',
+      },
+    });
 
-    // Update local items state with tracking metadata
-    setItems(migrateItems(updatedSummaryItems));
+    // 단일 회차 뷰의 local items state 동기화 (전체뷰는 episodes 변화로 자동 반영)
+    if (targetEpId === epId) {
+      setItems(migrateItems(updatedSummaryItems));
+    }
 
-    // 원본 트리트먼트 유지 — 화면 이동 없음
-    setImporting(false);
-    setImportMsg(`${filled.length}개 항목 → ${episode?.number}회 대본에 추가됨`);
+    const epNum = episodes.find(e => e.id === targetEpId)?.number;
+    if (mode === 'overwrite') {
+      setImportMsg(`${epNum ? `${epNum}회 ` : ''}대본을 트리트먼트로 다시 만들었어요`);
+    } else {
+      setImporting(false);
+      setImportMsg(`${filled.length}개 항목 → ${epNum || ''}회 대본에 추가됨`);
+    }
     setTimeout(() => setImportMsg(''), 3000);
+  };
+
+  const handleImportToScript = () => {
+    if (!epId) return;
+    if (hasUserScriptContent(scriptBlocks, epId)) {
+      // 사용자가 추가한 대사/지문 있음 → 다이얼로그 분기
+      setImporting(false);
+      setImportDialog({ open: true, epId });
+    } else {
+      // 대본 비어있거나 트리트먼트 import 직후 상태 → 조용히 append
+      performImport(epId, 'append');
+    }
+  };
+
+  const closeImportDialog = () => setImportDialog({ open: false, epId: null });
+  const handleChooseAppend = () => {
+    if (importDialog.epId) performImport(importDialog.epId, 'append');
+    closeImportDialog();
+  };
+  const handleChooseOverwrite = () => {
+    if (importDialog.epId) performImport(importDialog.epId, 'overwrite');
+    closeImportDialog();
   };
 
   // ─── 드래그 reorder 핸들러 (데스크톱 전용, 같은 회차 안에서만) ──────────────
@@ -1422,6 +1474,67 @@ export default function TreatmentPage() {
         </>,
         document.body
       )}
+
+      {/* 가져오기 분기 다이얼로그 (대본에 사용자 추가 콘텐츠 있을 때) */}
+      <Modal
+        open={importDialog.open}
+        onClose={closeImportDialog}
+        title="⚠️ 대본에 추가 작성된 내용이 있어요"
+        size="sm"
+        footer={
+          <ModalBtn variant="secondary" onClick={closeImportDialog}>취소</ModalBtn>
+        }
+      >
+        <div style={{ fontSize: 13, color: 'var(--c-text2)', marginBottom: 12 }}>
+          어떻게 처리할까요?
+        </div>
+
+        {/* 옵션 1: 추가만 가져오기 (안전) */}
+        <button
+          onClick={handleChooseAppend}
+          style={{
+            display: 'block', width: '100%', textAlign: 'left',
+            padding: '12px 14px', marginBottom: 10,
+            border: '1px solid var(--c-border3)', borderRadius: 8,
+            background: 'var(--c-card)', color: 'var(--c-text)',
+            cursor: 'pointer', fontFamily: 'inherit', fontSize: 13,
+            transition: 'border-color 0.15s, background 0.15s',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--c-accent)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--c-border3)'; }}
+        >
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>추가만 가져오기</div>
+          <div style={{ fontSize: 12, color: 'var(--c-text4)', lineHeight: 1.6 }}>
+            새로 추가된 줄만 대본에 더합니다.<br />
+            대본의 대사·지문은 그대로 유지돼요.<br />
+            (트리트먼트 텍스트 수정·순서 변경은 반영되지 않아요)
+          </div>
+        </button>
+
+        {/* 옵션 2: 전체 덮어쓰기 (destructive) */}
+        <button
+          onClick={handleChooseOverwrite}
+          style={{
+            display: 'block', width: '100%', textAlign: 'left',
+            padding: '12px 14px',
+            border: '1px solid #ef4444', borderRadius: 8,
+            background: 'var(--c-card)', color: 'var(--c-text)',
+            cursor: 'pointer', fontFamily: 'inherit', fontSize: 13,
+            transition: 'border-color 0.15s, background 0.15s',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--c-card)'; }}
+        >
+          <div style={{ fontWeight: 600, marginBottom: 4, color: '#ef4444' }}>
+            ⚠️ 전체 덮어쓰기
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--c-text4)', lineHeight: 1.6 }}>
+            대본을 트리트먼트 내용으로 새로 만듭니다.<br />
+            추가 작성한 대사·지문은 사라져요.<br />
+            순서·텍스트 수정이 모두 반영됩니다.
+          </div>
+        </button>
+      </Modal>
       </div>
   );
 }

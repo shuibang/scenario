@@ -236,11 +236,16 @@ function reducer(state, action) {
 
 
     // Atomic import: multiple ADD_SCENE + SET_BLOCKS collapsed into one undo step
+    // replaceScenes=true → 트리트먼트 overwrite 모드: 기존 회차 scenes 제거 후 newScenes로 교체.
+    // 미지정/false → append 모드 (기존 동작)
     case 'IMPORT_TREATMENT_TO_SCRIPT': {
-      const { episodeId, newScenes, labelled, updatedSummaryItems } = action.payload;
+      const { episodeId, newScenes, labelled, updatedSummaryItems, replaceScenes = false } = action.payload;
+      const baseScenes = replaceScenes
+        ? state.scenes.filter(s => s.episodeId !== episodeId)
+        : state.scenes;
       return {
         ...state,
-        scenes: [...state.scenes, ...newScenes],
+        scenes: [...baseScenes, ...newScenes],
         scriptBlocks: [
           ...state.scriptBlocks.filter(b => b.episodeId !== episodeId),
           ...labelled,
