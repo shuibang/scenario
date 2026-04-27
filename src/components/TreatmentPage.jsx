@@ -6,6 +6,7 @@ import { parseSceneContent } from '../utils/sceneResolver';
 import { isMultiEpisode } from '../utils/projectTypes';
 import UnifiedTagPicker from './UnifiedTagPicker';
 import EmotionTagPicker from './EmotionTagPicker';
+import TreatmentBoardView from './TreatmentBoardView';
 import { getChipInlineStyle } from '../utils/emotionColor';
 import { BUILTIN_GUIDES } from '../data/structureTags';
 
@@ -76,6 +77,9 @@ export default function TreatmentPage() {
   const [selectedEpId, setSelectedEpId] = useState('all');
   const epId   = selectedEpId === 'all' ? null : (selectedEpId || projectEpisodes[0]?.id);
   const episode = episodes.find(e => e.id === epId);
+
+  // 'list' | 'board' — Phase A: 보드는 표시 + 카드 클릭으로 리스트 전환만 (드래그 X)
+  const [viewMode, setViewMode] = useState('list');
 
   useEffect(() => {
     setSelectedEpId('all');
@@ -337,13 +341,14 @@ export default function TreatmentPage() {
   // pendingFocus null 가드가 있어 미관련 렌더에서 발화해도 부작용 없음.
   useEffect(() => {
     if (!pendingFocus.current) return;
-    const { id, cursor } = pendingFocus.current;
-    pendingFocus.current = null;
+    const { id, cursor, scroll } = pendingFocus.current;
     const el = textareaRefs.current[id];
-    if (!el) return;
+    if (!el) return; // 아직 마운트 안 됨 → 다음 발화 대기 (보드→리스트 전환 후 발화 보장)
+    pendingFocus.current = null;
     el.focus();
     try { el.setSelectionRange(cursor, cursor); } catch {}
-  }, [items, episodes]);
+    if (scroll) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [items, episodes, viewMode]);
 
   // ─── Persist to episode.summaryItems ─────────────────────────────────────
   // record=true → structural change (split/merge/move/paste), recorded in undo stack
@@ -691,6 +696,17 @@ export default function TreatmentPage() {
     save(next, true);
   }, [items, save]);
 
+  // ─── 보드 카드 클릭 → 리스트 뷰로 전환 + 해당 항목 포커스 ─────────────────
+  // 단일 회차 보드: 같은 회차 리스트로
+  // 전체뷰 보드: 전체뷰 리스트로 (모든 textarea가 마운트되므로 ref로 직접 포커스)
+  const handleCardClick = useCallback((targetEpId, itemId) => {
+    if (selectedEpId !== 'all' && targetEpId && targetEpId !== epId) {
+      setSelectedEpId(targetEpId);
+    }
+    pendingFocus.current = { id: itemId, cursor: 0, scroll: true };
+    setViewMode('list');
+  }, [selectedEpId, epId]);
+
   // ─── 대본으로 가져오기 (원본 유지, 화면 이동 없음, 단일 undo 단위) ─────────
   const handleImportToScript = () => {
     if (!epId) return;
@@ -830,6 +846,29 @@ export default function TreatmentPage() {
           </button>
         )}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          {/* 뷰 모드 탭 (리스트/보드) */}
+          <div style={{ display: 'inline-flex', border: '1px solid var(--c-border3)', borderRadius: 4, overflow: 'hidden' }}>
+            <button
+              onClick={() => setViewMode('list')}
+              title="리스트 뷰"
+              style={{
+                padding: '3px 8px', fontSize: 11, lineHeight: 1.4,
+                background: viewMode === 'list' ? 'var(--c-active)' : 'transparent',
+                color: viewMode === 'list' ? 'var(--c-text2)' : 'var(--c-text5)',
+                border: 'none', cursor: 'pointer',
+              }}
+            >리스트</button>
+            <button
+              onClick={() => setViewMode('board')}
+              title="보드 뷰"
+              style={{
+                padding: '3px 8px', fontSize: 11, lineHeight: 1.4,
+                background: viewMode === 'board' ? 'var(--c-active)' : 'transparent',
+                color: viewMode === 'board' ? 'var(--c-text2)' : 'var(--c-text5)',
+                border: 'none', borderLeft: '1px solid var(--c-border3)', cursor: 'pointer',
+              }}
+            >보드</button>
+          </div>
           {importMsg && <span className="text-xs" style={{ color: 'var(--c-accent2)' }}>{importMsg}</span>}
           <button
             disabled={!canImportToScript}
@@ -883,8 +922,23 @@ export default function TreatmentPage() {
       <div className="flex-1 overflow-y-auto">
       <div style={{ padding: '10px 10px 40px' }}>
 
+        {/* 보드 뷰 — 표시 + 카드 클릭으로 리스트 전환 (Phase A) */}
+        {viewMode === 'board' && (
+          <TreatmentBoardView
+            groups={
+              allEpItems
+                ? allEpItems
+                : (episode
+                    ? [{ ep: episode, episodeNumber: episode.number, isMissing: false, items }]
+                    : [])
+            }
+            onCardClick={handleCardClick}
+            onCreateEpisode={createEpisodeForNumber}
+          />
+        )}
+
         {/* 전체 보기 */}
-        {allEpItems && allEpItems.map(({ ep, episodeNumber, isMissing, items: epItems }) => (
+        {viewMode === 'list' && allEpItems && allEpItems.map(({ ep, episodeNumber, isMissing, items: epItems }) => (
           <div key={ep?.id || `missing-${episodeNumber}`} style={{ marginBottom: 24 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text3)', marginBottom: 6, paddingBottom: 4, borderBottom: '1px solid var(--c-border2)' }}>
               {episodeNumber}회 {ep?.title || ''}
@@ -1017,7 +1071,7 @@ export default function TreatmentPage() {
         ))}
 
         {/* 단일 회차 Items */}
-        {!allEpItems && <div className="space-y-1.5">
+        {viewMode === 'list' && !allEpItems && <div className="space-y-1.5">
           {items.map((it, idx) => (
             <div key={it.id} className="flex items-start gap-2">
               <div className="flex flex-col items-end shrink-0 mt-[7px] w-9">
@@ -1158,7 +1212,7 @@ export default function TreatmentPage() {
           ))}
         </div>}
 
-        {!allEpItems && <button
+        {viewMode === 'list' && !allEpItems && <button
           onClick={addItem}
           className="mt-3 w-full py-2 rounded text-sm"
           style={{ color: 'var(--c-text4)', border: '1px dashed var(--c-border3)', background: 'transparent', cursor: 'pointer' }}
