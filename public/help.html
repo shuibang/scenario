@@ -433,7 +433,7 @@
       <a href="#character"><span class="toc-num">06</span>인물 관리</a>
       <a href="#treatment"><span class="toc-num">07</span>트리트먼트 &amp; 시놉시스</a>
       <a href="#resources"><span class="toc-num">08</span>자료 수집 &amp; 메모</a>
-      <a href="#export"><span class="toc-num">09</span>출력 (PDF / DOCX / HWP)</a>
+      <a href="#export"><span class="toc-num">09</span>출력 (PDF / DOCX / HWPX)</a>
       <a href="#share"><span class="toc-num">10</span>검토 링크 공유</a>
       <a href="#settings"><span class="toc-num">11</span>환경 설정</a>
     </div>
@@ -467,7 +467,7 @@
 
     <div class="tip">
       <strong>자동 저장 안내</strong><br>
-      작성 중인 내용은 30초마다 자동으로 저장됩니다. 화면 상단에서 저장 상태(방금 저장됨 / N분 전)를 확인할 수 있습니다.
+      작성하는 동안 변경 사항은 자동으로 저장됩니다. 추가로 10분마다 복원 가능한 스냅샷이 만들어지며 최근 10개까지 보관됩니다. 화면 상단에서 저장 상태(방금 저장됨 / N분 전)를 확인할 수 있습니다.
     </div>
   </div>
 
@@ -480,7 +480,7 @@
     <p>작품 단위로 대본을 관리합니다. 한 작품 안에 에디터, 씬리스트, 인물, 구조 등 모든 정보가 담깁니다.</p>
     <ul>
       <li>새 작품 만들기 — 제목과 포맷을 선택해 생성합니다.</li>
-      <li>지원 포맷: <span class="chip">드라마</span> <span class="chip">영화</span> <span class="chip">웹드라마</span> <span class="chip">단막극</span></li>
+      <li>지원 포맷: <span class="chip">영화</span> <span class="chip">단막</span> <span class="chip">드라마</span> <span class="chip">웹드라마</span> <span class="chip">숏폼드라마</span> <span class="chip">기타</span></li>
       <li>작품 목록에서 선택해 전환하거나, 더 이상 필요 없는 작품은 삭제할 수 있습니다.</li>
     </ul>
     <div class="tip">
@@ -521,7 +521,7 @@
       <span class="shortcut-key">1.</span>
       <span class="shortcut-desc">빈 줄 시작에 <code>1.</code>을 치면 씬 헤딩으로 전환</span>
       <span class="shortcut-key">/</span>
-      <span class="shortcut-desc">빈 줄에서 슬래시를 치면 블록 팔레트 열림</span>
+      <span class="shortcut-desc">슬래시를 치면 블록 팔레트 열림</span>
       <span class="shortcut-key">/ + 1</span>
       <span class="shortcut-desc">지문</span>
       <span class="shortcut-key">/ + 2</span>
@@ -535,7 +535,7 @@
       <span class="shortcut-key">/ + 6</span>
       <span class="shortcut-desc">태그</span>
       <span class="shortcut-key">Space × 2</span>
-      <span class="shortcut-desc">빈 줄에서 씬 구분자 삽입 / 지문·대사 안에서는 괄호체 시작</span>
+      <span class="shortcut-desc">씬 헤딩에서 장소·시간대 구분자 삽입 / 지문·대사에서 괄호체 시작</span>
       <span class="shortcut-key">인물명 + Enter</span>
       <span class="shortcut-desc">해당 인물의 대사 블록으로 전환</span>
       <span class="shortcut-key">Ctrl+B / I / U</span>
@@ -565,7 +565,7 @@
     <p>글을 쓸 때 현재 커서 위치가 항상 화면 중앙에 고정되는 집중 모드입니다. 긴 대본을 쓸 때 시선 이동 없이 편하게 작성할 수 있습니다.</p>
 
     <p><strong>인라인 서식 · 정렬</strong></p>
-    <p>에디터 툴바에서 <strong>굵게(B)</strong>, <em>기울임(I)</em>, 밑줄(U), <span style="text-decoration: line-through;">취소선(S)</span>을 적용할 수 있고, 블록 단위로 왼쪽·가운데·오른쪽·양끝 정렬을 지정할 수 있습니다. 적용한 서식·정렬은 HWPX·DOCX 출력에도 그대로 반영됩니다. (PDF 출력은 품질 개선 중이라 일시 비활성화 상태입니다.)</p>
+    <p>에디터 툴바에서 <strong>굵게(B)</strong>, <em>기울임(I)</em>, 밑줄(U), <span style="text-decoration: line-through;">취소선(S)</span>을 적용할 수 있고, 블록 단위로 왼쪽·가운데·오른쪽·양끝 정렬을 지정할 수 있습니다. 적용한 서식·정렬은 HWPX·DOCX 출력에도 그대로 반영됩니다.</p>
   </div>
 
   <!-- 04 씬 리스트 -->
@@ -672,15 +672,16 @@
   <div class="section" id="export">
     <div class="section-header">
       <span class="section-num">09</span>
-      <span class="section-title">출력 (PDF / DOCX / HWP)</span>
+      <span class="section-title">출력 (PDF / DOCX / HWPX)</span>
     </div>
-    <p>완성된 작업물을 파일로 내보낼 수 있습니다. 세 가지 형식을 지원합니다.</p>
+    <p>완성된 작업물을 파일로 내보낼 수 있습니다. 네 가지 형식을 지원합니다.</p>
 
     <table class="simple-table">
       <thead><tr><th>형식</th><th>특징</th></tr></thead>
       <tbody>
         <tr><td>PDF</td><td>어디서나 같은 모양으로 열립니다. 제출이나 공유에 적합합니다.</td></tr>
         <tr><td>DOCX</td><td>Word 호환 파일입니다. 추가 편집이 필요할 때 사용하세요.</td></tr>
+        <tr><td>한글 호환 DOCX</td><td>함초롱바탕 글꼴로 출력되는 DOCX입니다. 한컴오피스(HWP 2014+)에서 열 수 있습니다.</td></tr>
         <tr><td>HWPX</td><td>한글(HWP) 네이티브 파일입니다. 한국 방송사 제출 표준에 맞습니다.</td></tr>
       </tbody>
     </table>
