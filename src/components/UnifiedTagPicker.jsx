@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { ALL_EMOTIONS as EMOTION_ALL } from '../data/emotionTags';
 import { BUILTIN_GUIDES } from '../data/structureTags';
+import { getPickerPosition, measureBottomReserved } from '../utils/pickerPosition';
 
 export default function UnifiedTagPicker({
-  position,
+  anchorRect,
+  position, // legacy: anchorRect 미사용 호출자(TreatmentPage 등) 폴백용 — 보정 없는 raw 좌표
   currentStructureTags = [],
   onAddStructure,
   onOpenFullPicker,
@@ -12,9 +14,46 @@ export default function UnifiedTagPicker({
 }) {
   const [query, setQuery] = useState('');
   const [selIdx, setSelIdx] = useState(0);
+  // anchorRect 모드: 측정 전엔 null로 두고 visibility:hidden → 깜빡임 방지
+  // legacy position 모드: 부모가 좌표 책임 → 즉시 가시
+  const [pos, setPos] = useState(anchorRect ? null : position || null);
   const inputRef = useRef(null);
   const listRef = useRef(null);
+  const panelRef = useRef(null);
   useEffect(() => { requestAnimationFrame(() => inputRef.current?.focus()); }, []);
+
+  // 마운트/리사이즈/anchor 변경 시 위치 재계산 (anchorRect 모드)
+  useLayoutEffect(() => {
+    if (!anchorRect || !panelRef.current) return;
+    const rect = panelRef.current.getBoundingClientRect();
+    setPos(getPickerPosition({
+      anchorRect,
+      pickerSize: { width: rect.width || 260, height: rect.height || 360 },
+      bottomReserved: measureBottomReserved(),
+    }));
+  }, [anchorRect]);
+
+  // 스크롤/리사이즈 시 자동 닫기 (anchor 기반일 때만)
+  // capture: true 필수 — 페이지/에디터 scroll은 bubbling되지 않음. 단 picker 내부(검색 결과 목록 등) scroll은 무시.
+  useEffect(() => {
+    if (!anchorRect) return;
+    const onScroll = (e) => {
+      // picker 내부(검색 결과 목록 등) 스크롤은 무시
+      if (panelRef.current && e.target && panelRef.current.contains(e.target)) return;
+      onClose?.();
+    };
+    const onResize = () => onClose?.();
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', onResize);
+    window.visualViewport?.addEventListener('resize', onResize);
+    window.visualViewport?.addEventListener('scroll', onScroll);
+    return () => {
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onResize);
+      window.visualViewport?.removeEventListener('resize', onResize);
+      window.visualViewport?.removeEventListener('scroll', onScroll);
+    };
+  }, [anchorRect, onClose]);
 
   const q = query.trim().toLowerCase();
 
@@ -78,8 +117,11 @@ export default function UnifiedTagPicker({
     <>
       <div style={{ position: 'fixed', inset: 0, zIndex: 299 }} onMouseDown={onClose} />
       <div
+        ref={panelRef}
         style={{
-          position: 'fixed', top: position.top, left: position.left,
+          position: 'fixed',
+          top: pos?.top ?? -9999, left: pos?.left ?? -9999,
+          visibility: (anchorRect && !pos) ? 'hidden' : 'visible',
           zIndex: 300, background: 'var(--c-panel)', border: '1px solid var(--c-border2)',
           borderRadius: 10, boxShadow: '0 6px 24px rgba(0,0,0,0.22)',
           width: 260, maxHeight: 360, display: 'flex', flexDirection: 'column', overflow: 'hidden',

@@ -95,6 +95,7 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, on
 
   return (
     <div
+      data-mobile-bottom-panel
       style={{
         flexShrink: 0,
         borderTop: '1px solid var(--c-border)',

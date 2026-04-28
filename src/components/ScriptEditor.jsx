@@ -16,6 +16,7 @@ import { getLayoutMetrics } from '../print/LineTokenizer';
 import EmotionTagPicker from './EmotionTagPicker';
 import UnifiedTagPicker from './UnifiedTagPicker';
 import { BUILTIN_GUIDES } from '../data/structureTags';
+import { resolveAnchorRect } from '../utils/pickerPosition';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const CHAR_SUGGEST_KEY = 'drama_charSuggestInAction';
@@ -2931,13 +2932,14 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
       surfaceApiRef.current?.parse();
       const blockId = blockEl?.dataset.blockId;
       const sceneId = getCurrentSceneIdRef.current?.();
-      const rect2 = blockEl?.getBoundingClientRect() || { bottom: 120, left: 200 };
       // picker가 input.focus()로 selection을 강탈하므로 미리 caret range 저장 → 닫힐 때 복원
       const sel2 = window.getSelection();
       const savedRange = sel2?.rangeCount ? sel2.getRangeAt(0).cloneRange() : null;
       if (blockId || sceneId) {
         requestAnimationFrame(() => {
-          setSlashUnifiedTag({ blockId, sceneId, top: rect2.bottom + 4, left: rect2.left, savedRange });
+          // anchorRect는 layout flush 후 rAF 안에서 측정 — removeSlashOnly로 변경된 caret 위치 반영
+          const anchorRect = resolveAnchorRect(savedRange, blockEl);
+          setSlashUnifiedTag({ blockId, sceneId, anchorRect, savedRange });
         });
       }
     } else if (cmd.action === 'parenthetical') {
@@ -3158,9 +3160,9 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     if (!blockEl) return;
     const blockId = blockEl.dataset.blockId;
     const sceneId = getCurrentSceneIdRef.current?.();
-    const rect = blockEl.getBoundingClientRect();
     const savedRange = sel?.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
-    setSlashUnifiedTag({ blockId, sceneId, top: rect.bottom + 4, left: rect.left, savedRange });
+    const anchorRect = resolveAnchorRect(savedRange, blockEl);
+    setSlashUnifiedTag({ blockId, sceneId, anchorRect, savedRange });
   }, []);
 
   // ── 기타 피커 열기 (버튼/단축키 공통) ─────────────────────────────────────
@@ -3804,37 +3806,31 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
               restoreEditorSelection(sr);
             }}
           />
-          <div style={{
-            position: 'fixed',
-            top: slashEmotionPicker.top,
-            left: Math.min(slashEmotionPicker.left, window.innerWidth - 296),
-            zIndex: 300,
-          }}>
-            <EmotionTagPicker
-              existingTag={slashEmotionPicker.existingTag}
-              initialWord={slashEmotionPicker.initialWord || ''}
-              onSelect={(tag) => {
-                const bid = slashEmotionPicker.blockId;
-                // anchor = 슬래시 첫 감지 시점에 handleSlashInput이 기록한 인덱스
-                // collapse가 anchor 부터 모두 제거하므로 슬래시/단어/emotion 전체가 1 undo로 묶임.
-                const anchorIdx = slashAnchorIdxRef.current;
-                const savedRange = slashEmotionPicker.savedRange;
-                surfaceApiRef.current?.updateEmotionTag(bid, tag);
-                const finalBlocks = blocks.map(b => b.id === bid ? { ...b, emotionTag: tag } : b);
-                setBlocks(finalBlocks);
-                dispatch({ type: 'UPDATE_BLOCK_EMOTION', blockId: bid, emotionTag: tag });
-                collapseAndPushFinal(anchorIdx, finalBlocks);
-                setSlashEmotionPicker(null);
-                // picker 닫힌 후 caret 복원 — picker가 input.focus()로 강탈한 selection을 에디터로 되돌림
-                restoreEditorSelection(savedRange);
-              }}
-              onClose={() => {
-                const sr = slashEmotionPicker.savedRange;
-                setSlashEmotionPicker(null);
-                restoreEditorSelection(sr);
-              }}
-            />
-          </div>
+          <EmotionTagPicker
+            anchorRect={slashEmotionPicker.anchorRect}
+            existingTag={slashEmotionPicker.existingTag}
+            initialWord={slashEmotionPicker.initialWord || ''}
+            onSelect={(tag) => {
+              const bid = slashEmotionPicker.blockId;
+              // anchor = 슬래시 첫 감지 시점에 handleSlashInput이 기록한 인덱스
+              // collapse가 anchor 부터 모두 제거하므로 슬래시/단어/emotion 전체가 1 undo로 묶임.
+              const anchorIdx = slashAnchorIdxRef.current;
+              const savedRange = slashEmotionPicker.savedRange;
+              surfaceApiRef.current?.updateEmotionTag(bid, tag);
+              const finalBlocks = blocks.map(b => b.id === bid ? { ...b, emotionTag: tag } : b);
+              setBlocks(finalBlocks);
+              dispatch({ type: 'UPDATE_BLOCK_EMOTION', blockId: bid, emotionTag: tag });
+              collapseAndPushFinal(anchorIdx, finalBlocks);
+              setSlashEmotionPicker(null);
+              // picker 닫힌 후 caret 복원 — picker가 input.focus()로 강탈한 selection을 에디터로 되돌림
+              restoreEditorSelection(savedRange);
+            }}
+            onClose={() => {
+              const sr = slashEmotionPicker.savedRange;
+              setSlashEmotionPicker(null);
+              restoreEditorSelection(sr);
+            }}
+          />
         </>,
         document.body
       )}
@@ -3843,10 +3839,9 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
       {slashUnifiedTag && (() => {
         const tagScene = episodeScenes.find(s => s.id === slashUnifiedTag.sceneId);
         const currentStructureTags = tagScene?.tags || [];
-        const safeLeft = Math.min(slashUnifiedTag.left, window.innerWidth - 272);
         return (
           <UnifiedTagPicker
-            position={{ top: slashUnifiedTag.top, left: safeLeft }}
+            anchorRect={slashUnifiedTag.anchorRect}
             currentStructureTags={currentStructureTags}
             onAddStructure={(beat) => {
               if (tagScene) {
@@ -3861,11 +3856,11 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
               restoreEditorSelection(sr);
             }}
             onOpenFullPicker={(word) => {
-              const { blockId, top, left, savedRange } = slashUnifiedTag;
+              const { blockId, anchorRect, savedRange } = slashUnifiedTag;
               const existing = scriptBlocks.find(b => b.id === blockId)?.emotionTag || null;
-              // savedRange를 EmotionTagPicker로 인계 → 최종 close/select 시 에디터 caret 복원
+              // savedRange/anchorRect를 EmotionTagPicker로 인계 → 같은 caret 기준으로 2단계 자체 사이즈로 재계산.
               skipUnifiedTagRestoreRef.current = true; // 뒤따르는 onClose의 caret 복원 스킵 (다음 picker가 focus 가져감)
-              setSlashEmotionPicker({ blockId, top, left, existingTag: existing, initialWord: word, savedRange });
+              setSlashEmotionPicker({ blockId, anchorRect, existingTag: existing, initialWord: word, savedRange });
               setSlashUnifiedTag(null);
             }}
             onClose={() => {

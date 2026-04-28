@@ -2067,7 +2067,7 @@ function Shell({ authUser, setAuthUser }) {
         </div>
         {/* 광고 + 하단탭: 집중 모드에서 CSS로 숨김 (언마운트 방지) */}
         <div style={{ display: focusMode ? 'none' : 'contents' }}>
-          <div style={{ flexShrink: 0, height: (keyboardUp || mobileBottomOpen) ? 0 : 20, overflow: 'hidden', transition: 'height 0.2s ease' }}>
+          <div data-mobile-bottom-ad style={{ flexShrink: 0, height: (keyboardUp || mobileBottomOpen) ? 0 : 20, overflow: 'hidden', transition: 'height 0.2s ease' }}>
             <AdBanner slot="mobile-bottom" mobileHide={false} height={20} />
           </div>
           <MobileBottomPanel

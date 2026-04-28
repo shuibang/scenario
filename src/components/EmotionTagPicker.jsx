@@ -1,6 +1,7 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useLayoutEffect } from 'react';
 import { EMOTION_CATEGORIES, ALL_EMOTIONS, getRecommendedTag } from '../data/emotionTags';
 import { getChipInlineStyle } from '../utils/emotionColor';
+import { getPickerPosition, measureBottomReserved } from '../utils/pickerPosition';
 
 /**
  * EmotionTagPicker — 3단계 감정태그 선택 UI
@@ -10,26 +11,65 @@ import { getChipInlineStyle } from '../utils/emotionColor';
  *   onClose()             — 닫기
  *   initialWord?          — 초기 단어 (슬래시 팝업에서 넘길 때)
  *   existingTag?          — 수정 시 기존 태그 ({ word, color, intensity })
+ *   anchorRect?           — 있으면 caret/block 기준으로 fixed 위치 자동 계산. 없으면 부모가 위치 책임.
  */
-export default function EmotionTagPicker({ onSelect, onClose, initialWord = '', existingTag = null }) {
+export default function EmotionTagPicker({ onSelect, onClose, initialWord = '', existingTag = null, anchorRect = null }) {
   const _initRec = initialWord && !existingTag ? getRecommendedTag(initialWord) : null;
   const [step, setStep] = useState(existingTag ? 2 : (initialWord ? 2 : 1));
   const [query, setQuery] = useState(existingTag?.word ?? initialWord);
   const [selectedWord, setSelectedWord] = useState(existingTag?.word ?? (initialWord || ''));
   const [selectedColor, setSelectedColor] = useState(existingTag?.color ?? _initRec?.color ?? '');
   const [selectedIntensity, setSelectedIntensity] = useState(existingTag?.intensity ?? _initRec?.score ?? 3);
+  const [pos, setPos] = useState(null); // anchorRect 사용 시 측정 전 깜빡임 방지
   const searchRef = useRef(null);
   const colorContainerRef = useRef(null);
+  const panelRef = useRef(null);
 
-  // step 1 진입 시 검색창 포커스
+  // step 진입 시 포커스. step 2 focus는 rAF로 다음 frame에 호출 —
+  // useLayoutEffect의 setPos 리렌더 사이클이 끝난 뒤에야 focus가 BODY로 떨어지지 않고 살아남음.
   useEffect(() => {
     if (step === 1 && searchRef.current) {
       searchRef.current.focus();
+      return;
     }
     if (step === 2 && colorContainerRef.current) {
-      colorContainerRef.current.focus();
+      const id = requestAnimationFrame(() => colorContainerRef.current?.focus());
+      return () => cancelAnimationFrame(id);
     }
   }, [step]);
+
+  // anchorRect가 주어지면 자체 fixed positioning. step 전환 시 사이즈가 바뀌므로 재계산.
+  useLayoutEffect(() => {
+    if (!anchorRect || !panelRef.current) return;
+    const rect = panelRef.current.getBoundingClientRect();
+    setPos(getPickerPosition({
+      anchorRect,
+      pickerSize: { width: rect.width || 280, height: rect.height || 280 },
+      bottomReserved: measureBottomReserved(),
+    }));
+  }, [anchorRect, step]);
+
+  // 스크롤/리사이즈 시 자동 닫기 (anchor 기반일 때만 — 위치가 anchor에 묶여있는 경우 따라감보다 닫는 게 일관됨)
+  // capture: true 필수. 단 picker 내부 scroll은 무시 (검색 목록/내부 컨테이너 자체 스크롤이 발생해도 닫히면 안 됨).
+  useEffect(() => {
+    if (!anchorRect) return;
+    const onScroll = (e) => {
+      // picker 내부(검색 목록 등) 스크롤은 무시
+      if (panelRef.current && e.target && panelRef.current.contains(e.target)) return;
+      onClose?.();
+    };
+    const onResize = () => onClose?.();
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', onResize);
+    window.visualViewport?.addEventListener('resize', onResize);
+    window.visualViewport?.addEventListener('scroll', onScroll);
+    return () => {
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onResize);
+      window.visualViewport?.removeEventListener('resize', onResize);
+      window.visualViewport?.removeEventListener('scroll', onScroll);
+    };
+  }, [anchorRect, onClose]);
 
   // 단어 목록 필터링
   const filtered = useMemo(() => {
@@ -65,6 +105,7 @@ export default function EmotionTagPicker({ onSelect, onClose, initialWord = '', 
 
   return (
     <div
+      ref={panelRef}
       className="emotion-tag-picker"
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
@@ -76,6 +117,13 @@ export default function EmotionTagPicker({ onSelect, onClose, initialWord = '', 
         boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
         overflow: 'hidden',
         userSelect: 'none',
+        ...(anchorRect ? {
+          position: 'fixed',
+          top: pos?.top ?? -9999,
+          left: pos?.left ?? -9999,
+          visibility: pos ? 'visible' : 'hidden',
+          zIndex: 300,
+        } : null),
       }}
     >
       {/* 헤더 */}
