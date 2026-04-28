@@ -310,12 +310,35 @@ export function tokenizeSection(section, metrics) {
     tokens.push(B());
     section.characters.forEach(c => {
       tokens.push(T('char_name', c.name, { bold: true }));
-      c.items.forEach(item => {
-        const line = `${item.year ? item.year + '  ' : ''}${item.event || ''}`;
-        wrapText(line, charsPerLine - 2).forEach(t =>
-          tokens.push(T('body', '  ' + t))
-        );
+
+      const traits = c.traits || [];
+      const items  = c.items  || [];
+
+      // Traits: [라벨] / 들여쓴 멀티라인 본문
+      traits.forEach(t => {
+        const label = t.label || '특성';
+        tokens.push(T('body', '  [' + label + ']'));
+        (t.content || '').split('\n').forEach(line => {
+          wrapText(line, charsPerLine - 4).forEach(wrapped =>
+            tokens.push(T('body', '    ' + wrapped))
+          );
+        });
       });
+
+      if (traits.length && items.length) tokens.push(B());
+
+      // 시기별 이력 — 폴백: period ?? year, content ?? event
+      items.forEach(item => {
+        const period  = item.period  ?? item.year  ?? '';
+        const content = item.content ?? item.event ?? '';
+        if (period) tokens.push(T('body', '  ' + period));
+        content.split('\n').forEach(line => {
+          wrapText(line, charsPerLine - 4).forEach(wrapped =>
+            tokens.push(T('body', '    ' + wrapped))
+          );
+        });
+      });
+
       tokens.push(B());
     });
     return tokens;

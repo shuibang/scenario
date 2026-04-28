@@ -127,13 +127,29 @@ function renderCharacters(section, isFirst) {
 
 function renderBiography(section, isFirst) {
   const breakClass = isFirst ? '' : ' page-break';
+  const renderMultiline = (text) => esc(text || '').replace(/\n/g, '<br>');
   return `<div class="${breakClass.trim() || 'block'}">
   <div class="heading" style="margin-bottom:8pt">인물이력서</div>
-  ${section.characters.map(c => `
+  ${section.characters.map(c => {
+    const traits = c.traits || [];
+    const items  = c.items  || [];
+    return `
     <div class="char-entry">
       <div class="char-entry-name">${esc(c.name)}</div>
-      ${c.items.map(it => `<div class="body-text">${esc(it.text || '')}</div>`).join('')}
-    </div>`).join('')}
+      ${traits.map(t => `
+        <div class="body-text"><strong>[${esc(t.label || '특성')}]</strong></div>
+        <div class="body-text" style="padding-left:1em">${renderMultiline(t.content)}</div>
+      `).join('')}
+      ${items.map(it => {
+        const period  = it.period  ?? it.year  ?? '';
+        const content = it.content ?? it.event ?? '';
+        return `
+          ${period ? `<div class="body-text"><strong>${esc(period)}</strong></div>` : ''}
+          <div class="body-text" style="padding-left:1em">${renderMultiline(content)}</div>
+        `;
+      }).join('')}
+    </div>`;
+  }).join('')}
 </div>`;
 }
 

@@ -183,14 +183,22 @@ export function buildPrintModel(appState, selections, preset) {
 
   // ── 5. Biography (인물이력서)
   if (selections.biography) {
-    const charsWithBio = projectChars.filter(c => c.biographyItems?.length > 0);
+    const hasBio = (c) => (c.biographyItems?.length > 0) || (c.bioTraits?.length > 0);
+    const charsWithBio = projectChars.filter(hasBio);
     if (charsWithBio.length) {
       sections.push({
         type: 'biography',
         characters: charsWithBio.map(c => ({
-          id:    c.id,
-          name:  charFullName(c),
-          items: [...(c.biographyItems || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+          id:     c.id,
+          name:   charFullName(c),
+          traits: (c.bioTraits || []).map(t => ({
+            label:   t.label   || '',
+            content: t.content || '',
+          })),
+          items: (c.biographyItems || []).map(it => ({
+            period:  it.period  ?? it.year  ?? '',
+            content: it.content ?? it.event ?? '',
+          })),
         })),
       });
     }
