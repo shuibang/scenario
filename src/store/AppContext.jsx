@@ -87,6 +87,18 @@ export const DEFAULT_STYLE_PRESET = {
   },
 };
 
+// ─── Trash 빈 객체 (마이그레이션·폴백 공용) ─────────────────────────────────
+const EMPTY_TRASH = {
+  projects:     [],
+  episodes:     [],
+  characters:   [],
+  scenes:       [],
+  scriptBlocks: [],
+  coverDocs:    [],
+  synopsisDocs: [],
+  resources:    [],
+};
+
 // ─── State shape ────────────────────────────────────────────────────────────
 const initialState = {
   initialized: false,
@@ -100,6 +112,7 @@ const initialState = {
   resources: [],
   workTimeLogs: [],
   checklistItems: [],
+  trash: { ...EMPTY_TRASH },
   stylePreset: DEFAULT_STYLE_PRESET,
   // UI
   activeProjectId: null,
@@ -141,20 +154,64 @@ function reducer(state, action) {
     case 'UPDATE_PROJECT':
       return { ...state, projects: state.projects.map(p =>
         p.id === action.payload.id ? { ...p, ...action.payload, updatedAt: now() } : p) };
-    case 'DELETE_PROJECT':
+    case 'MOVE_PROJECT_TO_TRASH': {
+      const id = action.id;
+      const target = state.projects.find(p => p.id === id);
+      if (!target) return state;
+      const split = (arr) => ({
+        keep:  arr.filter(it => it.projectId !== id),
+        moved: arr.filter(it => it.projectId === id),
+      });
+      const ep = split(state.episodes);
+      const ch = split(state.characters);
+      const sc = split(state.scenes);
+      const sb = split(state.scriptBlocks);
+      const cv = split(state.coverDocs);
+      const sy = split(state.synopsisDocs);
+      const rs = split(state.resources);
+      // Orphan 안전장치 — 작품 ID와 매칭 안 되는 캐스케이드 데이터(예: 4/22-23 동기화 사고 등의
+      // 예외 잔존)를 감지해 경고만 출력. 데이터는 state에 그대로 남겨 손실 방지 (보수 정책).
+      const projectIdSet = new Set(state.projects.map(p => p.id));
+      const orphanCount = {
+        episodes:     state.episodes    .filter(e => !projectIdSet.has(e.projectId)).length,
+        characters:   state.characters  .filter(c => !projectIdSet.has(c.projectId)).length,
+        scenes:       state.scenes      .filter(s => !projectIdSet.has(s.projectId)).length,
+        scriptBlocks: state.scriptBlocks.filter(b => !projectIdSet.has(b.projectId)).length,
+        coverDocs:    state.coverDocs   .filter(d => !projectIdSet.has(d.projectId)).length,
+        synopsisDocs: state.synopsisDocs.filter(d => !projectIdSet.has(d.projectId)).length,
+        resources:    state.resources   .filter(r => !projectIdSet.has(r.projectId)).length,
+      };
+      if (Object.values(orphanCount).some(n => n > 0)) {
+        console.warn('[trash] orphan data detected', {
+          orphanCount,
+          message: '작품과 연결되지 않은 데이터가 감지되었습니다. 보존됨.',
+        });
+      }
+      const trash = state.trash || EMPTY_TRASH;
       return {
         ...state,
-        projects: state.projects.filter(p => p.id !== action.id),
-        episodes: state.episodes.filter(e => e.projectId !== action.id),
-        characters: state.characters.filter(c => c.projectId !== action.id),
-        scenes: state.scenes.filter(s => s.projectId !== action.id),
-        scriptBlocks: state.scriptBlocks.filter(b => b.projectId !== action.id),
-        coverDocs: state.coverDocs.filter(d => d.projectId !== action.id),
-        synopsisDocs: state.synopsisDocs.filter(d => d.projectId !== action.id),
-        resources: state.resources.filter(r => r.projectId !== action.id),
-        activeProjectId: state.activeProjectId === action.id ? null : state.activeProjectId,
-        activeEpisodeId: state.episodes.find(e => e.projectId === action.id && e.id === state.activeEpisodeId) ? null : state.activeEpisodeId,
+        projects:     state.projects.filter(p => p.id !== id),
+        episodes:     ep.keep,
+        characters:   ch.keep,
+        scenes:       sc.keep,
+        scriptBlocks: sb.keep,
+        coverDocs:    cv.keep,
+        synopsisDocs: sy.keep,
+        resources:    rs.keep,
+        trash: {
+          projects:     [...(trash.projects     || []), { ...target, deletedAt: now() }],
+          episodes:     [...(trash.episodes     || []), ...ep.moved],
+          characters:   [...(trash.characters   || []), ...ch.moved],
+          scenes:       [...(trash.scenes       || []), ...sc.moved],
+          scriptBlocks: [...(trash.scriptBlocks || []), ...sb.moved],
+          coverDocs:    [...(trash.coverDocs    || []), ...cv.moved],
+          synopsisDocs: [...(trash.synopsisDocs || []), ...sy.moved],
+          resources:    [...(trash.resources    || []), ...rs.moved],
+        },
+        activeProjectId: state.activeProjectId === id ? null : state.activeProjectId,
+        activeEpisodeId: state.episodes.find(e => e.projectId === id && e.id === state.activeEpisodeId) ? null : state.activeEpisodeId,
       };
+    }
 
     case 'ADD_EPISODE':
       return { ...state, episodes: [...state.episodes, action.payload] };
@@ -362,6 +419,9 @@ function reducer(state, action) {
         resources:      p.resources?.length      > 0 ? p.resources      : state.resources,
         workTimeLogs:   p.workTimeLogs?.length   > 0 ? p.workTimeLogs   : state.workTimeLogs,
         checklistItems: p.checklistItems?.length > 0 ? p.checklistItems : state.checklistItems,
+        trash:          (p.trash && typeof p.trash === 'object' && !Array.isArray(p.trash))
+                          ? { ...EMPTY_TRASH, ...p.trash }
+                          : (state.trash || EMPTY_TRASH),
         stylePreset:    p.stylePreset            ?? state.stylePreset,
         activeProjectId: projectStillExists ? state.activeProjectId : null,
         activeEpisodeId: epStillExists ? state.activeEpisodeId : null,
@@ -469,7 +529,7 @@ export function AppProvider({ children }) {
         const migratedEpisodes = rawEpisodes.map(({ subtitle, ...ep }) => ep);
         skipSavedAtRef.current  = true; // INIT은 사용자 편집이 아님 → savedAt 갱신 건너뜀
         skipDriveSaveRef.current = true; // INIT 직후 Drive 덮어쓰기 방지
-        const [characters, scenes, scriptBlocks, coverDocs, synopsisDocs, resources, workTimeLogs, checklistItems] =
+        const [characters, scenes, scriptBlocks, coverDocs, synopsisDocs, resources, workTimeLogs, checklistItems, trashRaw] =
           await Promise.all([
             getAll(DB_KEYS.characters),
             getAll(DB_KEYS.scenes),
@@ -479,7 +539,12 @@ export function AppProvider({ children }) {
             getAll(DB_KEYS.resources),
             getAll(DB_KEYS.workTimeLogs),
             getAll(DB_KEYS.checklistItems),
+            getAll(DB_KEYS.trash),
           ]);
+        // trash는 단일 객체 — getAll의 [] 폴백 또는 누락 시 EMPTY_TRASH 사용 (마이그레이션 안전망)
+        const trash = (trashRaw && !Array.isArray(trashRaw) && typeof trashRaw === 'object')
+          ? { ...EMPTY_TRASH, ...trashRaw }
+          : { ...EMPTY_TRASH };
         const savedPreset = getItem(DB_KEYS.stylePresets);
         dispatch({
           type: 'INIT',
@@ -494,6 +559,7 @@ export function AppProvider({ children }) {
             resources,
             workTimeLogs,
             checklistItems,
+            trash,
             stylePreset: savedPreset || DEFAULT_STYLE_PRESET,
           },
         });
@@ -622,6 +688,7 @@ export function AppProvider({ children }) {
           setAll(DB_KEYS.resources,     state.resources),
           setAll(DB_KEYS.workTimeLogs,  state.workTimeLogs),
           setAll(DB_KEYS.checklistItems, state.checklistItems),
+          setAll(DB_KEYS.trash,          state.trash || EMPTY_TRASH),
         ]);
         if (localStorage.getItem('drama_auth_user')) {
           setItem(DB_KEYS.stylePresets, state.stylePreset);
@@ -660,6 +727,7 @@ export function AppProvider({ children }) {
           resources:      state.resources,
           workTimeLogs:   state.workTimeLogs,
           checklistItems: state.checklistItems,
+          trash:          state.trash || EMPTY_TRASH,
           stylePreset:    state.stylePreset,
           savedAt,
         })

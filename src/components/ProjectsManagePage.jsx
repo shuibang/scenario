@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
+import DeleteConfirmModal from './Modals/DeleteConfirmModal';
 
 // ─── ProjectsManagePage — 작품 관리 (Phase X.1) ────────────────────────────
 // 카드 클릭 = 작품 진입(SET_ACTIVE_PROJECT → activeDoc 'cover')
@@ -17,8 +18,9 @@ function formatDateTime(ts) {
 
 export default function ProjectsManagePage({ onNewProject }) {
   const { state, dispatch } = useApp();
-  const [editingId, setEditingId] = useState(null);
-  const [draft, setDraft]         = useState('');
+  const [editingId, setEditingId]     = useState(null);
+  const [draft, setDraft]             = useState('');
+  const [deleteTarget, setDeleteTarget] = useState(null); // project 객체
   const inputRef = useRef(null);
 
   const projects = [...(state.projects || [])]
@@ -107,6 +109,17 @@ export default function ProjectsManagePage({ onNewProject }) {
 
   return (
     <div className="h-full flex flex-col overflow-hidden" style={{ background: 'var(--c-bg)' }}>
+      {/* 삭제 확정 모달 */}
+      <DeleteConfirmModal
+        open={!!deleteTarget}
+        title={deleteTarget?.title || '제목 없음'}
+        onConfirm={() => {
+          if (deleteTarget) dispatch({ type: 'MOVE_PROJECT_TO_TRASH', id: deleteTarget.id });
+          setDeleteTarget(null);
+        }}
+        onCancel={() => setDeleteTarget(null)}
+      />
+
       {/* Header */}
       <div className="shrink-0" style={{ padding: '16px 20px', borderBottom: '1px solid var(--c-border2)' }}>
         <div className="text-lg font-bold" style={{ color: 'var(--c-text)' }}>작품 관리</div>
@@ -186,6 +199,12 @@ export default function ProjectsManagePage({ onNewProject }) {
                       className="md:opacity-50 md:group-hover:opacity-100 transition-opacity"
                       style={iconBtnStyle}
                     >✏️</button>
+                    <button
+                      onClick={() => setDeleteTarget(p)}
+                      title="삭제"
+                      className="md:opacity-50 md:group-hover:opacity-100 transition-opacity"
+                      style={iconBtnStyle}
+                    >🗑</button>
                   </div>
                 </div>
               );

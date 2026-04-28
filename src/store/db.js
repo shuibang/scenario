@@ -19,6 +19,7 @@ export const DB_KEYS = {
   resources: 'resources',
   workTimeLogs: 'workTimeLogs',
   checklistItems: 'checklistItems',
+  trash: 'trash',
 };
 
 export const getItem = (key) => {

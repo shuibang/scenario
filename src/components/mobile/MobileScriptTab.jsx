@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useApp } from '../../store/AppContext';
 import { genId, now } from '../../store/db';
 import { isMultiEpisode } from '../../utils/projectTypes';
+import DeleteConfirmModal from '../Modals/DeleteConfirmModal';
 
 export default function MobileScriptTab({ onClose }) {
   const { state, dispatch } = useApp();
@@ -12,7 +13,6 @@ export default function MobileScriptTab({ onClose }) {
 
   const [swipedId, setSwipedId] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null); // { id, type: 'project'|'episode' }
-  const [deleteText, setDeleteText] = useState('');
   const [editingEpId, setEditingEpId] = useState(null);
   const touchStartX = useRef({});
 
@@ -36,16 +36,32 @@ export default function MobileScriptTab({ onClose }) {
     e.stopPropagation();
     setSwipedId(null);
     setDeleteTarget({ id, type });
-    setDeleteText('');
   };
 
   const confirmDelete = () => {
-    if (deleteText !== '삭제' || !deleteTarget) return;
-    if (deleteTarget.type === 'project') dispatch({ type: 'DELETE_PROJECT', id: deleteTarget.id });
-    else dispatch({ type: 'DELETE_EPISODE', id: deleteTarget.id });
+    if (!deleteTarget) return;
+    if (deleteTarget.type === 'project') {
+      dispatch({ type: 'MOVE_PROJECT_TO_TRASH', id: deleteTarget.id });
+    } else {
+      dispatch({ type: 'DELETE_EPISODE', id: deleteTarget.id });
+    }
     setDeleteTarget(null);
-    setDeleteText('');
   };
+
+  // 모달 표시용 — 삭제 대상 메타
+  const targetMeta = (() => {
+    if (!deleteTarget) return null;
+    if (deleteTarget.type === 'project') {
+      const p = projects.find(p => p.id === deleteTarget.id);
+      return {
+        title: p?.title || '제목 없음',
+        description: '30일간 휴지통에 보관됩니다.',
+      };
+    }
+    const ep = episodes.find(e => e.id === deleteTarget.id);
+    const epTitle = ep ? (ep.title?.trim() || `${ep.number}회`) : '회차';
+    return { title: epTitle, description: '이 작업은 되돌릴 수 없습니다.' };
+  })();
 
   const submitNewProject = () => {
     if (!newProjName.trim()) return;
@@ -59,46 +75,14 @@ export default function MobileScriptTab({ onClose }) {
 
   return (
     <div style={{ paddingBottom: 16 }}>
-      {/* 삭제 확인 모달 */}
-      {deleteTarget && (
-        <div
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 24px' }}
-          onClick={() => { setDeleteTarget(null); setDeleteText(''); }}
-        >
-          <div
-            style={{ background: 'var(--c-panel)', borderRadius: 12, padding: 20, width: '100%', maxWidth: 320, display: 'flex', flexDirection: 'column', gap: 12 }}
-            onClick={e => e.stopPropagation()}
-          >
-            <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--c-text)' }}>정말 삭제하시겠어요?</div>
-            <div style={{ fontSize: 13, color: 'var(--c-text4)' }}>아래에 <strong>삭제</strong>를 입력하면 삭제됩니다</div>
-            <input
-              autoFocus
-              className="m-input"
-              value={deleteText}
-              onChange={e => setDeleteText(e.target.value)}
-              placeholder="삭제"
-              onKeyDown={e => {
-                if (e.key === 'Enter') confirmDelete();
-                if (e.key === 'Escape') { setDeleteTarget(null); setDeleteText(''); }
-              }}
-            />
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="m-btn" style={{ flex: 1 }} onClick={() => { setDeleteTarget(null); setDeleteText(''); }}>취소</button>
-              <button
-                className="m-btn"
-                style={{
-                  flex: 1,
-                  background: deleteText === '삭제' ? '#e53935' : 'var(--c-border3)',
-                  color: deleteText === '삭제' ? '#fff' : 'var(--c-text6)',
-                  cursor: deleteText === '삭제' ? 'pointer' : 'not-allowed',
-                  border: 'none',
-                }}
-                onClick={confirmDelete}
-              >삭제</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* 삭제 확인 모달 (공통) */}
+      <DeleteConfirmModal
+        open={!!deleteTarget}
+        title={targetMeta?.title}
+        description={targetMeta?.description}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
 
       {/* 새 작품 */}
       <div className="m-item accent" onClick={() => { setAddingProject(true); setNewProjName(''); setNewProjType('series'); }}>+ 새 작품</div>
