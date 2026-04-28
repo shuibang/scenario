@@ -408,7 +408,7 @@ function ScriptWithTimeline({ scrollToSceneId, onScrollHandled, keyboardUp, isMo
 }
 
 // ─── Center panel ─────────────────────────────────────────────────────────────
-function CenterPanel({ scrollToSceneId, onScrollHandled, keyboardUp, isMobile, focusMode, setFocusMode }) {
+function CenterPanel({ scrollToSceneId, onScrollHandled, keyboardUp, isMobile, focusMode, setFocusMode, onNewProject }) {
   const { state } = useApp();
   const { activeDoc, activeEpisodeId, activeProjectId, initialized } = state;
 
@@ -421,7 +421,7 @@ function CenterPanel({ scrollToSceneId, onScrollHandled, keyboardUp, isMobile, f
   }
   // MyPage / 작품 관리는 프로젝트와 무관하게 열람 가능 — 빈 상태에서도 진입할 수 있어야 함
   if (activeDoc === 'mypage') return <MyPage />;
-  if (activeDoc === 'projects') return <ProjectsManagePage />;
+  if (activeDoc === 'projects') return <ProjectsManagePage onNewProject={onNewProject} />;
   if (!activeProjectId) {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-4" style={{ background: 'var(--c-bg)' }}>
@@ -2061,7 +2061,7 @@ function Shell({ authUser, setAuthUser }) {
         <div data-tour-id="center-panel" className="flex-1 min-h-0"
           style={{ paddingLeft: 'env(safe-area-inset-left, 0px)', paddingRight: 'env(safe-area-inset-right, 0px)', display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0, position: 'relative' }}
         >
-          <CenterPanel scrollToSceneId={scrollToSceneId} onScrollHandled={() => setScrollToSceneId(null)} keyboardUp={keyboardUp} isMobile={isMobile} focusMode={focusMode} setFocusMode={setFocusMode} />
+          <CenterPanel scrollToSceneId={scrollToSceneId} onScrollHandled={() => setScrollToSceneId(null)} keyboardUp={keyboardUp} isMobile={isMobile} focusMode={focusMode} setFocusMode={setFocusMode} onNewProject={() => handleMenuAction('file:new')} />
         </div>
         {/* 광고 + 하단탭: 집중 모드에서 CSS로 숨김 (언마운트 방지) */}
         <div style={{ display: focusMode ? 'none' : 'contents' }}>
@@ -2121,7 +2121,7 @@ function Shell({ authUser, setAuthUser }) {
               </div>
               <SplitViewPanel
                 defaultTab="main"
-                centerPanelNode={<CenterPanel scrollToSceneId={scrollToSceneId} onScrollHandled={() => setScrollToSceneId(null)} focusMode={focusMode} setFocusMode={setFocusMode} />}
+                centerPanelNode={<CenterPanel scrollToSceneId={scrollToSceneId} onScrollHandled={() => setScrollToSceneId(null)} focusMode={focusMode} setFocusMode={setFocusMode} onNewProject={() => handleMenuAction('file:new')} />}
                 borderRight
               />
               <SplitViewPanel defaultTab="characters" />
@@ -2129,7 +2129,7 @@ function Shell({ authUser, setAuthUser }) {
           ) : (
             <>
               <div data-tour-id="center-panel" className="flex-1 min-w-0 overflow-hidden" style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
-                <CenterPanel scrollToSceneId={scrollToSceneId} onScrollHandled={() => setScrollToSceneId(null)} focusMode={focusMode} setFocusMode={setFocusMode} />
+                <CenterPanel scrollToSceneId={scrollToSceneId} onScrollHandled={() => setScrollToSceneId(null)} focusMode={focusMode} setFocusMode={setFocusMode} onNewProject={() => handleMenuAction('file:new')} />
               </div>
               <div style={{ display: focusMode ? 'none' : 'contents' }}>
                 <CollapseButton side="right" collapsed={rightCollapsed} onToggle={() => setRightCollapsed(v => !v)} />
@@ -2196,6 +2196,7 @@ function Shell({ authUser, setAuthUser }) {
                   onScrollHandled={() => setScrollToSceneId(null)}
                   focusMode={focusMode}
                   setFocusMode={setFocusMode}
+                  onNewProject={() => handleMenuAction('file:new')}
                 />
               }
               borderRight
@@ -2223,6 +2224,7 @@ function Shell({ authUser, setAuthUser }) {
                 onScrollHandled={() => setScrollToSceneId(null)}
                 focusMode={focusMode}
                 setFocusMode={setFocusMode}
+                onNewProject={() => handleMenuAction('file:new')}
               />
             </div>
 

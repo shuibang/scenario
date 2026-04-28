@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
 
-// ─── ProjectsManagePage — 작품 관리 (Phase X.1 골격) ─────────────────────────
-// 단일 목록(state.projects) + 최근 수정 순. 이름변경/삭제는 후속 커밋.
+// ─── ProjectsManagePage — 작품 관리 (Phase X.1) ────────────────────────────
+// 카드 클릭 = 작품 진입(SET_ACTIVE_PROJECT → activeDoc 'cover')
+// ✏️ = 인라인 이름 변경. Enter 확정 / Esc 취소 / blur 시 비어있으면 원복
 
 const TYPE_LABEL = { series: '시리즈', single: '단막' };
 
@@ -14,10 +15,95 @@ function formatDateTime(ts) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export default function ProjectsManagePage() {
-  const { state } = useApp();
+export default function ProjectsManagePage({ onNewProject }) {
+  const { state, dispatch } = useApp();
+  const [editingId, setEditingId] = useState(null);
+  const [draft, setDraft]         = useState('');
+  const inputRef = useRef(null);
+
   const projects = [...(state.projects || [])]
     .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
+
+  // ── Handlers ─────────────────────────────────────────────────────────────
+  const enterProject = (project) => {
+    dispatch({ type: 'SET_ACTIVE_PROJECT', id: project.id });
+  };
+
+  const startEdit = (project) => {
+    setEditingId(project.id);
+    setDraft(project.title || '');
+  };
+
+  const finishEdit = () => {
+    setEditingId(null);
+    setDraft('');
+  };
+
+  const saveDraft = (project) => {
+    const trimmed = draft.trim();
+    if (!trimmed) return false;
+    if (trimmed !== (project.title || '')) {
+      dispatch({ type: 'UPDATE_PROJECT', payload: { id: project.id, title: trimmed } });
+    }
+    return true;
+  };
+
+  // Enter: 확정 (빈값이면 편집 모드 유지)
+  // Esc:   취소 (원복)
+  const handleKeyDown = (e, project) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (saveDraft(project)) finishEdit();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      finishEdit();
+    }
+  };
+
+  // blur: 비어있지 않으면 확정 / 비어있으면 원복(편집 종료)
+  const handleBlur = (project) => {
+    saveDraft(project);
+    finishEdit();
+  };
+
+  useEffect(() => {
+    if (editingId && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editingId]);
+
+  // ── Styles ────────────────────────────────────────────────────────────────
+  const cardStyle = {
+    padding: '10px 14px',
+    background: 'var(--c-card)',
+    border: '1px solid var(--c-border2)',
+    borderRadius: 8,
+    cursor: 'pointer',
+    transition: 'background 0.12s',
+  };
+
+  const editInputStyle = {
+    width: '100%',
+    background: 'var(--c-input)',
+    color: 'var(--c-text)',
+    border: '1px solid var(--c-accent)',
+    borderRadius: 4,
+    outline: 'none',
+    padding: '4px 8px',
+    fontSize: 14,
+    fontWeight: 500,
+    fontFamily: 'inherit',
+    boxSizing: 'border-box',
+  };
+
+  const iconBtnStyle = {
+    width: 28, height: 28, borderRadius: 4,
+    border: '1px solid var(--c-border3)', background: 'transparent',
+    color: 'var(--c-text4)', fontSize: 13, cursor: 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    padding: 0, flexShrink: 0,
+  };
 
   return (
     <div className="h-full flex flex-col overflow-hidden" style={{ background: 'var(--c-bg)' }}>
@@ -25,7 +111,7 @@ export default function ProjectsManagePage() {
       <div className="shrink-0" style={{ padding: '16px 20px', borderBottom: '1px solid var(--c-border2)' }}>
         <div className="text-lg font-bold" style={{ color: 'var(--c-text)' }}>작품 관리</div>
         <div className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--c-text5)' }}>
-          작성한 작품을 한눈에 정리하세요. 이름 변경·삭제는 다음 업데이트에서 제공됩니다.
+          작품 카드를 누르면 해당 작품으로 이동합니다. ✏️ 버튼으로 이름을 바꿀 수 있어요.
         </div>
       </div>
 
@@ -35,42 +121,75 @@ export default function ProjectsManagePage() {
           <div className="text-center py-16">
             <div className="text-sm" style={{ color: 'var(--c-text5)' }}>아직 작품이 없습니다.</div>
             <div className="mt-2 text-xs" style={{ color: 'var(--c-text6)' }}>
-              상단 [파일] → 새 작품 또는 좌측 패널에서 새 작품을 만들어보세요.
+              새 작품을 만들어 첫 회차를 시작해보세요.
             </div>
+            <button
+              onClick={() => onNewProject?.()}
+              style={{
+                marginTop: 16, padding: '8px 18px', borderRadius: 6,
+                border: '1px solid var(--c-border3)', background: 'var(--c-card)',
+                color: 'var(--c-text)', fontSize: 13, cursor: 'pointer',
+              }}
+            >+ 새 작품 만들기</button>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {projects.map(p => (
-              <div
-                key={p.id}
-                className="flex flex-wrap md:flex-nowrap items-center gap-2 md:gap-4"
-                style={{
-                  padding: '10px 14px',
-                  background: 'var(--c-card)',
-                  border: '1px solid var(--c-border2)',
-                  borderRadius: 8,
-                }}
-              >
-                {/* 제목 + 메타 */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="text-sm font-medium truncate" style={{ color: 'var(--c-text)' }}>
-                    {p.title || '제목 없음'}
+            {projects.map(p => {
+              const isEditing = editingId === p.id;
+              return (
+                <div
+                  key={p.id}
+                  className="group flex flex-wrap md:flex-nowrap items-center gap-2 md:gap-4"
+                  style={cardStyle}
+                  onClick={() => { if (!isEditing) enterProject(p); }}
+                  onMouseEnter={e => { if (!isEditing) e.currentTarget.style.background = 'var(--c-hover)'; }}
+                  onMouseLeave={e => { if (!isEditing) e.currentTarget.style.background = 'var(--c-card)'; }}
+                >
+                  {/* 제목 + 메타 */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {isEditing ? (
+                      <input
+                        ref={inputRef}
+                        value={draft}
+                        onChange={e => setDraft(e.target.value)}
+                        onKeyDown={e => handleKeyDown(e, p)}
+                        onBlur={() => handleBlur(p)}
+                        onClick={e => e.stopPropagation()}
+                        placeholder="작품 제목"
+                        style={editInputStyle}
+                      />
+                    ) : (
+                      <div className="text-sm font-medium truncate" style={{ color: 'var(--c-text)' }}>
+                        {p.title || '제목 없음'}
+                      </div>
+                    )}
+                    <div className="text-[11px] mt-0.5 truncate" style={{ color: 'var(--c-text5)' }}>
+                      {p.genre || '장르 없음'}
+                      {p.projectType ? ` · ${TYPE_LABEL[p.projectType] || p.projectType}` : ''}
+                    </div>
                   </div>
-                  <div className="text-[11px] mt-0.5 truncate" style={{ color: 'var(--c-text5)' }}>
-                    {p.genre || '장르 없음'}
-                    {p.projectType ? ` · ${TYPE_LABEL[p.projectType] || p.projectType}` : ''}
+
+                  {/* 작성 / 수정 시각 */}
+                  <div className="text-[11px] shrink-0 md:text-right" style={{ color: 'var(--c-text5)', lineHeight: 1.5 }}>
+                    <div>작성: {formatDateTime(p.createdAt)}</div>
+                    <div>수정: {formatDateTime(p.updatedAt || p.createdAt)}</div>
+                  </div>
+
+                  {/* 액션 버튼 — 데스크톱 호버 강조 / 모바일 항상 노출 */}
+                  <div
+                    className="flex gap-1 shrink-0"
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <button
+                      onClick={() => startEdit(p)}
+                      title="이름 변경"
+                      className="md:opacity-50 md:group-hover:opacity-100 transition-opacity"
+                      style={iconBtnStyle}
+                    >✏️</button>
                   </div>
                 </div>
-
-                {/* 작성 / 수정 시각 */}
-                <div className="text-[11px] shrink-0 md:text-right" style={{ color: 'var(--c-text5)', lineHeight: 1.5 }}>
-                  <div>작성: {formatDateTime(p.createdAt)}</div>
-                  <div>수정: {formatDateTime(p.updatedAt || p.createdAt)}</div>
-                </div>
-
-                {/* 액션 버튼 자리 — 다음 커밋에서 이름변경/삭제 추가 예정 */}
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
