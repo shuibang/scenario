@@ -584,7 +584,10 @@ export function SettingsTab() {
         <div className="flex-1">
           <div className="text-sm font-medium mb-0.5" style={{ color: 'var(--c-text)' }}>공용 PC 모드</div>
           <div className="text-xs" style={{ color: 'var(--c-text5)' }}>
-            로그아웃 시 localStorage 데이터를 삭제합니다. 공용 컴퓨터 사용 시 활성화하세요.
+            로그아웃하면 이 브라우저에 저장된 작업 데이터가 삭제됩니다. 공용 컴퓨터에서만 켜세요.
+          </div>
+          <div style={{ marginTop: 4, fontSize: 11, color: 'var(--c-text6)', lineHeight: 1.5 }}>
+            ※ Google 계정 세션은 별도로 끊어지지 않습니다. 사용 후 Google 계정에서도 직접 로그아웃해주세요.
           </div>
         </div>
         <button
