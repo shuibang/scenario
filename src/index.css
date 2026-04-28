@@ -486,12 +486,12 @@ textarea {
 }
 
 /* ─── Emotion dot (감정태그 컬러 dot) ───────────────────────────────────────── */
-/* action/dialogue/parenthetical 블록의 왼쪽에 컬러 dot
-   scene_number::before 는 라벨용이라 제외
+/* action/parenthetical 블록의 왼쪽에 컬러 dot
+   scene_number::before 는 라벨용, dialogue::before 는 인물명용이라 제외 → 자식 span으로 표시
    pointer-events: none → 텍스트 선택 방해 금지
    CSS :hover::after tooltip → JS mousemove 없이 동작 (크래시 방지)
    실제 색상은 JS에서 --emotion-dot-color CSS 변수로 설정 */
-.ce-block[data-emotion-color]:not([data-block-type="scene_number"])::before {
+.ce-block[data-emotion-color]:not([data-block-type="scene_number"]):not([data-block-type="dialogue"])::before {
   content: '';
   position: absolute;
   left: -14px;
@@ -505,7 +505,26 @@ textarea {
   z-index: 1;
 }
 
-.ce-block[data-emotion-color]:not([data-block-type="scene_number"]):hover::after {
+/* scene_number는 ::before(라벨)/::after(char-tags)가, dialogue는 ::before(인물명)가 점유 →
+   dot은 자식 span으로 표시. 다른 block dot과 동일한 위치(-14px) + 동일 크기로 시각 일관성 유지.
+   클래스명은 'header-emotion-dot' 그대로 — dialogue도 같은 스타일 공유. */
+.ce-block[data-block-type="scene_number"] {
+  position: relative;
+}
+.header-emotion-dot {
+  position: absolute;
+  left: -14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  pointer-events: none;
+  user-select: none;
+  z-index: 1;
+}
+
+.ce-block[data-emotion-color]:not([data-block-type="scene_number"]):not([data-block-type="dialogue"]):hover::after {
   content: attr(data-emotion-word);
   position: absolute;
   left: -4px;
@@ -523,7 +542,8 @@ textarea {
 /* 인쇄 시 dot 숨김 */
 @media print {
   .ce-block[data-emotion-color]::before,
-  .ce-block[data-emotion-color]:hover::after {
+  .ce-block[data-emotion-color]:hover::after,
+  .header-emotion-dot {
     display: none !important;
   }
 }

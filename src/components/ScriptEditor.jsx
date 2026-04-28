@@ -1294,31 +1294,49 @@ const EditorSurface = forwardRef(function EditorSurface({
     const m = {};
     blocks.forEach(b => { m[b.id] = b; });
     metaRef.current = m;
-    // 감정 dot DOM 동기화 — doParse 경로에서는 생략 (updateEmotionTag가 직접 처리)
-    if (!syncDom) return;
     const el = surfaceRef.current;
-    if (el) {
-      blocks.forEach(b => {
-        const div = el.querySelector(`[data-block-id="${b.id}"]`);
-        if (!div) return;
+    if (!el) return;
+    blocks.forEach(b => {
+      const div = el.querySelector(`[data-block-id="${b.id}"]`);
+      if (!div) return;
+      // emotion dataset/CSS변수는 항상 sync — doParse가 ce-block을 재생성해도 dot 보존.
+      // (updateEmotionTag만으론 doParse 경로에서 dataset 누락 발생 — 별개 버그 fix)
+      if (b.emotionTag) {
+        div.dataset.emotionColor = b.emotionTag.color;
+        div.dataset.emotionWord = b.emotionTag.word;
+        div.style.setProperty('--emotion-dot-color', b.emotionTag.color);
+      } else {
+        delete div.dataset.emotionColor;
+        delete div.dataset.emotionWord;
+        div.style.removeProperty('--emotion-dot-color');
+      }
+      // scene_number는 ::before(라벨)/::after(char-tags)가, dialogue는 ::before(인물명)가
+      // 점유 → dot은 자식 span으로. contenteditable=false로 편집·선택·클릭 영향 없음.
+      if (b.type === 'scene_number' || b.type === 'dialogue') {
+        let dotEl = div.querySelector('.header-emotion-dot');
         if (b.emotionTag) {
-          div.dataset.emotionColor = b.emotionTag.color;
-          div.dataset.emotionWord = b.emotionTag.word;
-          div.style.setProperty('--emotion-dot-color', b.emotionTag.color);
-        } else {
-          delete div.dataset.emotionColor;
-          delete div.dataset.emotionWord;
-          div.style.removeProperty('--emotion-dot-color');
+          if (!dotEl) {
+            dotEl = document.createElement('span');
+            dotEl.className = 'header-emotion-dot';
+            dotEl.setAttribute('contenteditable', 'false');
+            dotEl.setAttribute('aria-hidden', 'true');
+            div.insertBefore(dotEl, div.firstChild);
+          }
+          dotEl.style.background = b.emotionTag.color;
+        } else if (dotEl) {
+          dotEl.remove();
         }
-        if (b.alignment) {
-          div.dataset.alignment = b.alignment;
-          div.style.textAlign = b.alignment;
-        } else {
-          delete div.dataset.alignment;
-          div.style.textAlign = '';
-        }
-      });
-    }
+      }
+      // alignment는 doParse가 별도 처리 → syncDom=true일 때만 sync
+      if (!syncDom) return;
+      if (b.alignment) {
+        div.dataset.alignment = b.alignment;
+        div.style.textAlign = b.alignment;
+      } else {
+        delete div.dataset.alignment;
+        div.style.textAlign = '';
+      }
+    });
   }, []);
 
   // ── Initialize DOM on episode change ONLY ──────────────────────────────────
@@ -1485,12 +1503,16 @@ const EditorSurface = forwardRef(function EditorSurface({
       const synced = parseSurface(el, metaRef, epIdRef.current, projIdRef.current);
       // parseSurface re-parses display text which may lose structured fields for some timeFmt values
       // (e.g. space-separated "주막 - 안 낮" cannot be reliably re-parsed). Restore from originals.
+      // emotionTag도 input blocks에서 보존 — innerHTML이 dataset.emotionColor 안 박고
+      // metaRef는 신규 블록에 대해 stale (가져오기/undo로 새 ID 들어올 때).
       const origMap = new Map(blocks.map(b => [b.id, b]));
       const preserved = synced.map(b => {
-        if (b.type !== 'scene_number') return b;
         const orig = origMap.get(b.id);
-        if (!orig || (!orig.location && !orig.specialSituation)) return b;
-        return { ...b, location: orig.location, subLocation: orig.subLocation, timeOfDay: orig.timeOfDay, specialSituation: orig.specialSituation };
+        if (!orig) return b;
+        const next = { ...b, emotionTag: orig.emotionTag ?? null };
+        if (b.type !== 'scene_number') return next;
+        if (!orig.location && !orig.specialSituation) return next;
+        return { ...next, location: orig.location, subLocation: orig.subLocation, timeOfDay: orig.timeOfDay, specialSituation: orig.specialSituation };
       });
       syncMeta(preserved);
       onBlocksChange(preserved);
@@ -1540,6 +1562,23 @@ const EditorSurface = forwardRef(function EditorSurface({
             delete div.dataset.emotionColor;
             delete div.dataset.emotionWord;
             div.style.removeProperty('--emotion-dot-color');
+          }
+          // scene_number/dialogue는 ::before가 다른 용도로 점유 → 자식 span으로 dot 표시
+          const blockType = div.dataset.blockType;
+          if (blockType === 'scene_number' || blockType === 'dialogue') {
+            let dotEl = div.querySelector('.header-emotion-dot');
+            if (emotionTag) {
+              if (!dotEl) {
+                dotEl = document.createElement('span');
+                dotEl.className = 'header-emotion-dot';
+                dotEl.setAttribute('contenteditable', 'false');
+                dotEl.setAttribute('aria-hidden', 'true');
+                div.insertBefore(dotEl, div.firstChild);
+              }
+              dotEl.style.background = emotionTag.color;
+            } else if (dotEl) {
+              dotEl.remove();
+            }
           }
         }
       }
@@ -2135,6 +2174,14 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   const [slashUnifiedTag, setSlashUnifiedTag] = useState(null); // null | { blockId, sceneId, top, left }
   const slashOpenRef = useRef(false);
   slashOpenRef.current = slashPalette !== null; // 매 렌더마다 ref 동기화
+  // 슬래시 흐름의 모든 picker가 닫히면 anchor ref 초기화 (다음 슬래시 흐름 위해).
+  // picker.onSelect의 collapseAndPushFinal는 ref 값을 사용한 후 setPicker(null) 호출 →
+  // 이 effect가 다음 사이클에 ref 초기화. cancel(외부 클릭/ESC) 흐름도 동일.
+  useEffect(() => {
+    if (!slashPalette && !slashEmotionPicker && !slashUnifiedTag) {
+      slashAnchorIdxRef.current = null;
+    }
+  }, [slashPalette, slashEmotionPicker, slashUnifiedTag]);
   const slashPaletteRef = useRef(null);
   slashPaletteRef.current = slashPalette; // executeSlashAction 클로저에서 최신 query 접근용
   const slashSelectionRef = useRef(null);
@@ -2154,6 +2201,10 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   const redoStack = useRef([]);
   const undoActive = useRef(false);
   const undoPushTimer = useRef(null);
+  // 슬래시 picker 흐름의 anchor 인덱스. 슬래시 처음 감지 시점에 "다음 push될 인덱스"를
+  // 기억해두고, picker.onSelect 시 anchor 이후(=슬래시/단어 입력의 디바운스 push 모두) collapse.
+  // → "슬래시→단어→감정선택" 전체가 1 undo 단위로 묶임.
+  const slashAnchorIdxRef = useRef(null);
   const isSavingRef = useRef(false); // SET_SAVE_STATUS 중복 dispatch 방지
   // Mount 직후 첫 debounced save effect 실행에서는 'saving' dispatch 스킵.
   // 이유: load effect가 setBlocks(loaded) 직후 deps[blocks]가 변경되어 effect가 fire하지만
@@ -2210,6 +2261,9 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     try { currentBlocks = JSON.parse(currentSerialized); } catch { undoActive.current = false; return; }
     try { restored = JSON.parse(prev); } catch { undoActive.current = false; return; }
     setBlocks(restored);
+    // 전역 state.scriptBlocks 동기화 — 우측 패널 chip 등 다른 뷰가 stale 안 되도록.
+    // SET_BLOCKS는 AUTO_RECORD에 없어 전역 history에 entry 안 만듦 → redo 흐름 안전.
+    dispatch({ type: 'SET_BLOCKS', episodeId: activeEpisodeId, payload: restored });
     requestAnimationFrame(() => {
       surfaceApiRef.current?.loadBlocks(restored);
       undoActive.current = false;
@@ -2218,7 +2272,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
         detail: { canUndo: undoStack.current.length > 1, canRedo: redoStack.current.length > 0 },
       }));
     });
-  }, [flashChangedBlock]);
+  }, [flashChangedBlock, dispatch, activeEpisodeId]);
 
   const handleRedo = useCallback(() => {
     if (!redoStack.current.length) return;
@@ -2231,6 +2285,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     try { currentBlocks = currentSerialized ? JSON.parse(currentSerialized) : []; } catch { currentBlocks = []; }
     try { restored = JSON.parse(next); } catch { undoActive.current = false; return; }
     setBlocks(restored);
+    dispatch({ type: 'SET_BLOCKS', episodeId: activeEpisodeId, payload: restored });
     requestAnimationFrame(() => {
       surfaceApiRef.current?.loadBlocks(restored);
       undoActive.current = false;
@@ -2239,7 +2294,27 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
         detail: { canUndo: undoStack.current.length > 1, canRedo: redoStack.current.length > 0 },
       }));
     });
-  }, [flashChangedBlock]);
+  }, [flashChangedBlock, dispatch, activeEpisodeId]);
+
+  // anchor 인덱스부터 모두 제거하고 최종 상태 1개 push.
+  // 슬래시 감정 태그 같이 "한 작가 액션 = 1 undo 단위"로 묶어야 할 때 사용.
+  // anchor 자체도 제거 → undo 1회로 슬래시 직전 안정 snap으로 복귀.
+  const collapseAndPushFinal = useCallback((anchorIdx, finalBlocks) => {
+    clearTimeout(undoPushTimer.current);
+    if (typeof anchorIdx === 'number' && anchorIdx >= 0 && anchorIdx <= undoStack.current.length) {
+      undoStack.current.splice(anchorIdx);
+    }
+    const serialized = JSON.stringify(finalBlocks);
+    const last = undoStack.current[undoStack.current.length - 1];
+    if (last !== serialized) {
+      undoStack.current.push(serialized);
+      if (undoStack.current.length > 20) undoStack.current.shift();
+      redoStack.current = [];
+    }
+    window.dispatchEvent(new CustomEvent('scriptundostate', {
+      detail: { canUndo: undoStack.current.length > 1, canRedo: redoStack.current.length > 0 },
+    }));
+  }, []);
 
   // Keep refs in sync every render so unmount-flush sees latest values
   blocksRef.current = blocks;
@@ -2703,6 +2778,11 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
 
   // ── Slash palette handlers
   const handleSlashInput = useCallback(({ blockEl, query }) => {
+    // 슬래시 처음 감지된 시점(query=='' 또는 anchor 미설정)에만 anchor 인덱스 기억.
+    // 이후 query 변화로 재호출되어도 anchor 유지 → 한 번의 슬래시 흐름 = 1 undo 단위.
+    if (slashAnchorIdxRef.current === null) {
+      slashAnchorIdxRef.current = undoStack.current.length;
+    }
     const sel = window.getSelection();
     slashSelectionRef.current = sel?.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
     const rect = blockEl.getBoundingClientRect();
@@ -3722,9 +3802,14 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
               initialWord={slashEmotionPicker.initialWord || ''}
               onSelect={(tag) => {
                 const bid = slashEmotionPicker.blockId;
+                // anchor = 슬래시 첫 감지 시점에 handleSlashInput이 기록한 인덱스
+                // collapse가 anchor 부터 모두 제거하므로 슬래시/단어/emotion 전체가 1 undo로 묶임.
+                const anchorIdx = slashAnchorIdxRef.current;
                 surfaceApiRef.current?.updateEmotionTag(bid, tag);
-                setBlocks(prev => prev.map(b => b.id === bid ? { ...b, emotionTag: tag } : b));
+                const finalBlocks = blocks.map(b => b.id === bid ? { ...b, emotionTag: tag } : b);
+                setBlocks(finalBlocks);
                 dispatch({ type: 'UPDATE_BLOCK_EMOTION', blockId: bid, emotionTag: tag });
+                collapseAndPushFinal(anchorIdx, finalBlocks);
                 setSlashEmotionPicker(null);
               }}
               onClose={() => setSlashEmotionPicker(null)}
