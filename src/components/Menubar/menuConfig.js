@@ -30,6 +30,7 @@ export const menuConfig = [
       { id: 'share',    label: '링크 공유…',   shortcut: 'Ctrl+Alt+L', action: 'file:share' },
       { id: 'snapshot', label: '백업 / 복원…',                          action: 'file:snapshot' },
       { id: 'recent',   label: '최근 작품',    hasSubmenu: true, dynamic: 'recentProjects', submenu: [] },
+      { id: 'project-mgmt', label: '작품 관리…', action: 'file:projectMgmt' },
       'separator',
       { id: 'project-info', label: '작품 정보…', action: 'file:projectInfo' },
     ],

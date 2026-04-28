@@ -224,6 +224,18 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
 
               <div style={{ height: 1, background: 'var(--c-border)', margin: '4px 0' }} />
 
+              <button
+                style={dropItemStyle}
+                onClick={() => {
+                  dispatch({ type: 'SET_ACTIVE_DOC', payload: 'projects' });
+                  setMenuOpen(false);
+                }}
+              >
+                <span>📁</span><span>작품 관리</span>
+              </button>
+
+              <div style={{ height: 1, background: 'var(--c-border)', margin: '4px 0' }} />
+
               {[
                 { icon: '👤', label: '작업현황', tab: 'stats' },
                 { icon: '🐞', label: '오류보고',  tab: 'errors' },

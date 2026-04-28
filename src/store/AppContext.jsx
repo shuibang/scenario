@@ -12,7 +12,7 @@ import { detectScriptBlockDuplicates } from '../utils/dedupBlocks';
 const ALLOWED_ACTIVE_DOCS = new Set([
   'cover', 'synopsis', 'characters', 'resources', 'structure',
   'scenelist', 'director_notes', 'treatment', 'biography',
-  'relationships', 'mypage', 'script',
+  'relationships', 'mypage', 'projects', 'script',
 ]);
 
 // ─── Work log merge helper ───────────────────────────────────────────────────

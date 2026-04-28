@@ -5,7 +5,10 @@ const BASE = '/app';
 
 // activeDoc + projectId + episodeId → URL pathname
 export function buildPath({ activeDoc, activeProjectId, activeEpisodeId }) {
-  if (!activeDoc || !activeProjectId) return BASE;
+  if (!activeDoc) return BASE;
+  // projectId 무관 라우트 (가드 위에서 처리)
+  if (activeDoc === 'projects') return `${BASE}/projects`;
+  if (!activeProjectId) return BASE;
   switch (activeDoc) {
     case 'script':
       return activeEpisodeId
@@ -49,6 +52,7 @@ export function parsePath(pathname) {
     case 'biography':    return projectId ? { activeDoc: 'biography',     activeProjectId: projectId, activeEpisodeId: null } : null;
     case 'relationships':return projectId ? { activeDoc: 'relationships', activeProjectId: projectId, activeEpisodeId: null } : null;
     case 'mypage':       return { activeDoc: 'mypage', activeProjectId: null, activeEpisodeId: null };
+    case 'projects':     return { activeDoc: 'projects', activeProjectId: null, activeEpisodeId: null };
     default:             return null;
   }
 }
