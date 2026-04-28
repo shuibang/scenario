@@ -27,6 +27,7 @@ import BiographyPage from './components/BiographyPage';
 import RelationshipsPage from './components/RelationshipsPage';
 import MyPage from './components/MyPage';
 import ProjectsManagePage from './components/ProjectsManagePage';
+import TrashPage from './components/TrashPage';
 import OnboardingTour from './components/OnboardingTour';
 import MobileOnboardingTour from './components/mobile/MobileOnboardingTour';
 import SharedReviewView from './components/SharedReviewView';
@@ -422,6 +423,7 @@ function CenterPanel({ scrollToSceneId, onScrollHandled, keyboardUp, isMobile, f
   // MyPage / 작품 관리는 프로젝트와 무관하게 열람 가능 — 빈 상태에서도 진입할 수 있어야 함
   if (activeDoc === 'mypage') return <MyPage />;
   if (activeDoc === 'projects') return <ProjectsManagePage onNewProject={onNewProject} />;
+  if (activeDoc === 'trash')    return <TrashPage />;
   if (!activeProjectId) {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-4" style={{ background: 'var(--c-bg)' }}>

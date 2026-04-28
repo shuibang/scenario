@@ -12,7 +12,7 @@ import { detectScriptBlockDuplicates } from '../utils/dedupBlocks';
 const ALLOWED_ACTIVE_DOCS = new Set([
   'cover', 'synopsis', 'characters', 'resources', 'structure',
   'scenelist', 'director_notes', 'treatment', 'biography',
-  'relationships', 'mypage', 'projects', 'script',
+  'relationships', 'mypage', 'projects', 'trash', 'script',
 ]);
 
 // ─── Work log merge helper ───────────────────────────────────────────────────
@@ -210,6 +210,96 @@ function reducer(state, action) {
         },
         activeProjectId: state.activeProjectId === id ? null : state.activeProjectId,
         activeEpisodeId: state.episodes.find(e => e.projectId === id && e.id === state.activeEpisodeId) ? null : state.activeEpisodeId,
+      };
+    }
+
+    case 'RESTORE_PROJECT': {
+      const id = action.id;
+      const trash = state.trash || EMPTY_TRASH;
+      const target = (trash.projects || []).find(p => p.id === id);
+      if (!target) return state;
+      // deletedAt 제거
+      const { deletedAt: _purged, ...restored } = target; // eslint-disable-line no-unused-vars
+      const splitOut = (key) => {
+        const arr = trash[key] || [];
+        return {
+          keep:     arr.filter(it => it.projectId !== id),
+          restored: arr.filter(it => it.projectId === id),
+        };
+      };
+      const ep = splitOut('episodes');
+      const ch = splitOut('characters');
+      const sc = splitOut('scenes');
+      const sb = splitOut('scriptBlocks');
+      const cv = splitOut('coverDocs');
+      const sy = splitOut('synopsisDocs');
+      const rs = splitOut('resources');
+      return {
+        ...state,
+        projects:     [...state.projects,     restored],
+        episodes:     [...state.episodes,     ...ep.restored],
+        characters:   [...state.characters,   ...ch.restored],
+        scenes:       [...state.scenes,       ...sc.restored],
+        scriptBlocks: [...state.scriptBlocks, ...sb.restored],
+        coverDocs:    [...state.coverDocs,    ...cv.restored],
+        synopsisDocs: [...state.synopsisDocs, ...sy.restored],
+        resources:    [...state.resources,    ...rs.restored],
+        trash: {
+          projects:     (trash.projects || []).filter(p => p.id !== id),
+          episodes:     ep.keep,
+          characters:   ch.keep,
+          scenes:       sc.keep,
+          scriptBlocks: sb.keep,
+          coverDocs:    cv.keep,
+          synopsisDocs: sy.keep,
+          resources:    rs.keep,
+        },
+      };
+    }
+
+    // PURGE_PROJECT — trash 한정. state.*는 안 건드림. trash 안 orphan도 보존.
+    case 'PURGE_PROJECT': {
+      const id = action.id;
+      const trash = state.trash || EMPTY_TRASH;
+      return {
+        ...state,
+        trash: {
+          projects:     (trash.projects     || []).filter(p => p.id !== id),
+          episodes:     (trash.episodes     || []).filter(e => e.projectId !== id),
+          characters:   (trash.characters   || []).filter(c => c.projectId !== id),
+          scenes:       (trash.scenes       || []).filter(s => s.projectId !== id),
+          scriptBlocks: (trash.scriptBlocks || []).filter(b => b.projectId !== id),
+          coverDocs:    (trash.coverDocs    || []).filter(d => d.projectId !== id),
+          synopsisDocs: (trash.synopsisDocs || []).filter(d => d.projectId !== id),
+          resources:    (trash.resources    || []).filter(r => r.projectId !== id),
+        },
+      };
+    }
+
+    // PURGE_EXPIRED_TRASH — 만료된 project.id 집합과 매칭되는 trash.* 만 제거.
+    // trash 안 orphan(어떤 trash.project와도 매칭 안 되는 데이터)은 그대로 보존.
+    case 'PURGE_EXPIRED_TRASH': {
+      const RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+      const cutoff = Date.now() - RETENTION_MS;
+      const trash = state.trash || EMPTY_TRASH;
+      const expiredIds = (trash.projects || [])
+        .filter(p => (p.deletedAt || 0) < cutoff)
+        .map(p => p.id);
+      if (expiredIds.length === 0) return state;
+      console.log(`[trash] expired ${expiredIds.length} items purged`);
+      const expired = new Set(expiredIds);
+      return {
+        ...state,
+        trash: {
+          projects:     (trash.projects     || []).filter(p => !expired.has(p.id)),
+          episodes:     (trash.episodes     || []).filter(e => !expired.has(e.projectId)),
+          characters:   (trash.characters   || []).filter(c => !expired.has(c.projectId)),
+          scenes:       (trash.scenes       || []).filter(s => !expired.has(s.projectId)),
+          scriptBlocks: (trash.scriptBlocks || []).filter(b => !expired.has(b.projectId)),
+          coverDocs:    (trash.coverDocs    || []).filter(d => !expired.has(d.projectId)),
+          synopsisDocs: (trash.synopsisDocs || []).filter(d => !expired.has(d.projectId)),
+          resources:    (trash.resources    || []).filter(r => !expired.has(r.projectId)),
+        },
       };
     }
 
@@ -630,6 +720,12 @@ export function AppProvider({ children }) {
       }
     })();
   }, []);
+
+  // 부팅 후 1회: 휴지통 30일 만료 정리 (사용자 알림 X — 조용히)
+  useEffect(() => {
+    if (!state.initialized) return;
+    dispatch({ type: 'PURGE_EXPIRED_TRASH' });
+  }, [state.initialized]);
 
   useEffect(() => {
     if (!state.initialized) return;

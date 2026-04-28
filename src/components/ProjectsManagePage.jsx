@@ -25,6 +25,7 @@ export default function ProjectsManagePage({ onNewProject }) {
 
   const projects = [...(state.projects || [])]
     .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
+  const trashCount = (state.trash?.projects || []).length;
 
   // ── Handlers ─────────────────────────────────────────────────────────────
   const enterProject = (project) => {
@@ -122,7 +123,18 @@ export default function ProjectsManagePage({ onNewProject }) {
 
       {/* Header */}
       <div className="shrink-0" style={{ padding: '16px 20px', borderBottom: '1px solid var(--c-border2)' }}>
-        <div className="text-lg font-bold" style={{ color: 'var(--c-text)' }}>작품 관리</div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
+          <div className="text-lg font-bold" style={{ color: 'var(--c-text)' }}>작품 관리</div>
+          <button
+            onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'trash' })}
+            title="휴지통"
+            style={{
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              color: trashCount > 0 ? 'var(--c-text4)' : 'var(--c-text6)',
+              fontSize: 12, padding: 0,
+            }}
+          >🗑 휴지통{trashCount > 0 ? ` (${trashCount})` : ''}</button>
+        </div>
         <div className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--c-text5)' }}>
           작품 카드를 누르면 해당 작품으로 이동합니다. ✏️ 버튼으로 이름을 바꿀 수 있어요.
         </div>
