@@ -1046,8 +1046,13 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
                 timerSaveRef.current?.();
                 // 공용 PC 모드는 메모리(React state)도 비워야 다음 사용자에게 직전 작품 노출 안 됨 → 가장 안전한 방법은 reload.
                 const isPublicPc = isPublicPcMode();
-                await supabaseSignOut();
-                clearAccessToken();
+                try {
+                  await supabaseSignOut();
+                } catch (e) {
+                  console.warn('signOut failed, proceeding with cleanup', e);
+                } finally {
+                  clearAccessToken();
+                }
                 if (isPublicPc) {
                   await clearDramaStorage();   // localStorage drama_* + IDB 모두 wipe (await로 IDB 완료 보장)
                   window.location.reload();
@@ -1283,6 +1288,11 @@ function Shell({ authUser, setAuthUser }) {
 
   // Panel widths with localStorage persistence
   const [panelWidths, setPanelWidths] = useState(() => loadPanelWidths());
+
+  // 분할 뷰 너비 — updateSplitWidth 클램프 범위(240~700 px)와 일관
+  const [splitViewWidth, setSplitViewWidth] = useState(() =>
+    Math.min(700, Math.max(240, Math.round(window.innerWidth * 0.3)))
+  );
 
   // ── Responsive breakpoint: track window width
   const [windowWidth, setWindowWidth] = useState(() => window.innerWidth);
@@ -2431,6 +2441,18 @@ export default function App() {
     return () => window.removeEventListener('hashchange', handler);
   }, []);
 
+  // Shell 렌더 시 플래그 확정 — React remount/state 리셋 무관 유지
+  useEffect(() => {
+    _shellEverRendered = true;
+  }, []);
+
+  // #sl= 공유 링크 hash 정리 — replaceState로 hashchange 미발사 (이중 렌더 방지)
+  useEffect(() => {
+    if (window.location.hash.startsWith('#sl=')) {
+      window.history.replaceState(null, '', '#director');
+    }
+  }, []);
+
   // Supabase 세션 복원 + 상태 변화 구독
   useEffect(() => {
     if (!supabase) return;
@@ -2476,7 +2498,6 @@ export default function App() {
         localStorage.setItem(key, JSON.stringify([data, ...existing]));
       }
     } catch {}
-    window.location.hash = '#director';
     return <DirectorApp authUser={authUser} />;
   }
 
@@ -2530,9 +2551,6 @@ export default function App() {
       />
     );
   }
-
-  // Shell 렌더 시 플래그 확정
-  _shellEverRendered = true;
 
   return (
     <AppProvider>

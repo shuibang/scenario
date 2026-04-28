@@ -122,8 +122,13 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
     timerSaveRef.current?.();
     // 공용 PC 모드는 메모리(React state)도 비워야 다음 사용자에게 직전 작품 노출 안 됨 → 가장 안전한 방법은 reload.
     const isPublicPc = isPublicPcMode();
-    await supabaseSignOut();
-    clearAccessToken();
+    try {
+      await supabaseSignOut();
+    } catch (e) {
+      console.warn('signOut failed, proceeding with cleanup', e);
+    } finally {
+      clearAccessToken();
+    }
     if (isPublicPc) {
       await clearDramaStorage();   // localStorage drama_* + IDB 모두 wipe (이전 localStorage.clear()는 무관 사이트 키까지 날리는 위험 + IDB 미정리)
       window.location.reload();
@@ -160,7 +165,7 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
               position: 'fixed', top: 'calc(var(--mobile-header-h, 44px) + 4px)', left: 14,
               background: 'var(--c-panel)', border: '1px solid var(--c-border)',
               borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
-              zIndex: 300, minWidth: 200,
+              zIndex: 300,
               maxHeight: 'min(420px, calc(100dvh - var(--mobile-header-h, 44px) - 24px))',
               width: '40vw', minWidth: 192, maxWidth: 264,
               overflowY: 'auto', padding: '6px 0',

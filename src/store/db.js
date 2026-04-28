@@ -36,6 +36,9 @@ export const setItem = (key, value) => {
 const IDB_NAME    = 'drama_workspace';
 const IDB_VERSION = 1;
 const IDB_STORE   = 'keyval';
+const FONT_IDB_NAME    = 'drama_fonts_db';
+const FONT_IDB_VERSION = 1;
+const FONT_IDB_STORE   = 'fonts';
 
 let _idb = null;
 
@@ -99,22 +102,60 @@ export const migrateFromLocalStorage = async () => {
 
 // ─── 전체 삭제 (공용 PC 로그아웃 등) ─────────────────────────────────────────
 export async function clearDramaStorage() {
-  // localStorage 정리
+  let preservedPublicPc = null;
   try {
-    Object.keys(localStorage)
-      .filter(k => k.startsWith(PREFIX))
-      .forEach(k => localStorage.removeItem(k));
+    preservedPublicPc = localStorage.getItem(PUBLIC_PC_KEY);
   } catch {}
-  // IndexedDB 정리
+
+  try { localStorage.clear(); } catch {}
+
+  try {
+    if (preservedPublicPc !== null) {
+      localStorage.setItem(PUBLIC_PC_KEY, preservedPublicPc);
+    }
+  } catch {}
+
+  try { sessionStorage.clear(); } catch {}
+
   try {
     const db = await openIDB();
     await new Promise((resolve) => {
       const tx = db.transaction(IDB_STORE, 'readwrite');
       tx.objectStore(IDB_STORE).clear();
       tx.oncomplete = resolve;
-      tx.onerror    = resolve; // 실패해도 무시
+      tx.onerror    = resolve;
+      tx.onabort    = resolve;
     });
-    _idb = null;
+    try { db.close(); } catch {}
+  } catch {}
+  _idb = null;
+
+  try {
+    const fontDb = await new Promise((resolve, reject) => {
+      const req = indexedDB.open(FONT_IDB_NAME, FONT_IDB_VERSION);
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(FONT_IDB_STORE)) {
+          db.createObjectStore(FONT_IDB_STORE, { keyPath: 'id' });
+        }
+      };
+      req.onsuccess = (e) => resolve(e.target.result);
+      req.onerror   = (e) => reject(e.target.error);
+    });
+
+    await new Promise((resolve) => {
+      try {
+        const tx = fontDb.transaction(FONT_IDB_STORE, 'readwrite');
+        tx.objectStore(FONT_IDB_STORE).clear();
+        tx.oncomplete = resolve;
+        tx.onerror    = resolve;
+        tx.onabort    = resolve;
+      } catch {
+        resolve();
+      }
+    });
+
+    try { fontDb.close(); } catch {}
   } catch {}
 }
 
