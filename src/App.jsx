@@ -841,6 +841,9 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
         setDriveStatus('synced');
       } else if (tsLooksSame) {
         setDriveStatus('synced');
+      } else if (driveData?.deviceId && getDeviceId() === driveData.deviceId) {
+        // 같은 기기 — 시간 비교 무의미 (drama_saved_at race로 발생하는 단일기기 오탐 차단)
+        setDriveStatus('synced');
       } else {
         // "나중에 결정"으로 모달을 닫은 세션에서는 재출현하지 않는다.
         // sessionStorage는 탭 단위로 유지되므로 브라우저/탭을 새로 열면 자동 초기화 → 다시 판정.

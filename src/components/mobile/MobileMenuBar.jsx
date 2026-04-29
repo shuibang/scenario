@@ -11,6 +11,7 @@ import { supabaseSignOut, refreshDriveToken } from '../../store/supabaseClient';
 import { guardedSignInWithGoogle } from '../../utils/guardedSignIn';
 import { useDriveAuthState } from '../../hooks/useDriveAuthState';
 import { shouldRunInitialSync, markInitialSyncDone } from '../../store/driveSyncGate';
+import { getDeviceId } from '../../utils/deviceId';
 import Menubar from '../Menubar/Menubar';
 import PublicPcBadge from '../PublicPcBadge';
 
@@ -52,6 +53,9 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
         loadFromDriveData(driveData);
         setDriveStatus('synced');
       } else if (tsLooksSame) {
+        setDriveStatus('synced');
+      } else if (driveData?.deviceId && getDeviceId() === driveData.deviceId) {
+        // 같은 기기 — 시간 비교 무의미 (drama_saved_at race로 발생하는 단일기기 오탐 차단)
         setDriveStatus('synced');
       } else {
         onSyncConflict?.({ localSavedAt, driveData, localProjectCount: localProjects.length });
