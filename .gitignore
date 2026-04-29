@@ -29,3 +29,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Claude Code 런타임 락 (sessionId/pid — 세션 부산물)
+.claude/scheduled_tasks.lock
