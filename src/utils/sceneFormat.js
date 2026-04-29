@@ -164,14 +164,16 @@ export function composeSceneHeader(block, fmt = DEFAULT_FORMAT) {
 }
 
 // 모든 씬번호 prefix 형식 인식 (longest-match 순서)
-const SCENE_LABEL_PREFIX_RE = /^(?:Scene #\d+\.|S#\d+\.|씬\d+\.|#\d+\.|INT\.|EXT\.|\d+\.)\s*/i;
+// 선행 공백·탭만 허용 — 개행은 본문 흐름이라 거부 (회상 씬 표기 보호)
+// 마침표 선택적(\.?)·한국어 변형(씬 1 / 1씬) 포함. \d+\. 분기는 공백 lookahead로 본문 "5.시작" 오인식 방지.
+const SCENE_LABEL_PREFIX_RE = /^[ \t]*(?:Scene #\d+\.?|S#\d+\.?|씬\s*\d+\.?|\d+씬\.?|#\d+\.?|INT\.|EXT\.|\d+\.(?=\s))\s*/i;
 
 /** content에서 씬번호 prefix와 body를 분리 */
 export function splitScenePrefix(content) {
   if (!content) return { prefix: '', body: '' };
   const m = content.match(SCENE_LABEL_PREFIX_RE);
-  if (!m) return { prefix: '', body: content };
-  return { prefix: m[0].trimEnd(), body: content.slice(m[0].length).trim() };
+  if (!m) return { prefix: '', body: content.trim() };
+  return { prefix: m[0].trim(), body: content.slice(m[0].length).trim() };
 }
 
 /**

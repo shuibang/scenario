@@ -54,20 +54,30 @@ export async function parseHwpxFile(file) {
 
 /**
  * <hp:p> 노드에서 텍스트 추출
- * hp:t 텍스트 노드만 수집 (서식 무시)
+ * hp:t 안의 텍스트 노드는 그대로, <hp:tab/>은 \t로 보존 (대사 인식용 구분자)
+ * t 외부의 sibling tab도 처리. 다른 컨테이너(run 등)는 재귀 순회.
  */
-function extractText(pNode) {
-  // hp:run > hp:t 구조 — 네임스페이스 무관하게 localName으로 매칭
-  const tNodes = [];
-  walkElements(pNode, (el) => {
-    if (el.localName === 't') tNodes.push(el);
-  });
-  return tNodes.map(t => t.textContent ?? '').join('');
-}
-
-function walkElements(node, cb) {
-  for (const child of node.children ?? []) {
-    cb(child);
-    walkElements(child, cb);
+export function extractText(pNode) {
+  const parts = [];
+  function walk(node) {
+    for (const child of node.children ?? []) {
+      if (child.localName === 't') {
+        for (const sub of child.childNodes) {
+          if (sub.nodeType === 3 /* TEXT_NODE */) {
+            parts.push(sub.nodeValue ?? '');
+          } else if (sub.localName === 'tab') {
+            parts.push('\t');
+          } else {
+            walk(sub);
+          }
+        }
+      } else if (child.localName === 'tab') {
+        parts.push('\t');
+      } else {
+        walk(child);
+      }
+    }
   }
+  walk(pNode);
+  return parts.join('');
 }

@@ -4,9 +4,9 @@
  * paste와 HWPX/DOCX 가져오기 모두 이 함수를 사용해 파싱 품질 일관성 확보.
  */
 import { buildSceneLabel } from './scenePrefix';
+import { splitScenePrefix } from './sceneFormat';
 import { genId, now } from '../store/db';
 
-const SCENE_RE = /^(S#\d+\.?|s#\d+\.?|씬\s*\d+\.?|\d+씬\.?|#\d+\.?|\d+\.\s)/i;
 const PAREN_RE = /^\s*\(.*\)\s*$/;
 
 function detectDialogue(line, charNameSet) {
@@ -52,14 +52,14 @@ export function parseScriptText(text, { episodeId, projectId, characters = [] })
     const s = line.trim();
     if (!s) return null;
 
-    if (SCENE_RE.test(s)) {
+    const { prefix, body } = splitScenePrefix(s);
+    if (prefix) {
       currentSceneId = genId();
       sceneSeq++;
-      const content = s.replace(SCENE_RE, '').trim();
       return {
         ...makeBase(currentSceneId),
         type: 'scene_number',
-        content,
+        content: body,
         label: buildSceneLabel(sceneSeq),
       };
     }
