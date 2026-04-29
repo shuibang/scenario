@@ -12,6 +12,7 @@ import { guardedSignInWithGoogle } from '../../utils/guardedSignIn';
 import { useDriveAuthState } from '../../hooks/useDriveAuthState';
 import { shouldRunInitialSync, markInitialSyncDone } from '../../store/driveSyncGate';
 import Menubar from '../Menubar/Menubar';
+import PublicPcBadge from '../PublicPcBadge';
 
 export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, WorkTimer, authUser, onLogout, onMenuAction, onSyncConflict, recentProjects = [], checkedItems = {} }) {
   const { state, dispatch, loadFromDriveData } = useApp();
@@ -345,6 +346,7 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
             <span>{reconnecting ? '재연결…' : '끊김'}</span>
           </button>
         )}
+        <PublicPcBadge compact onClick={() => onMenuAction?.('tools:settings')} />
         <div data-tour-id="mobile-timer" style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
           {activeProjectId && WorkTimer && (
             <WorkTimer

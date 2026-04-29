@@ -13,6 +13,7 @@ import AdBanner from './AdBanner';
 import { ANNOUNCEMENTS } from './UpdateBanner';
 import { SCENE_PREFIX_OPTIONS, getScenePrefix, setScenePrefix } from '../utils/scenePrefix';
 import { getSceneFormat, setSceneFormat, LOC_SEP_PRESETS, TIME_FMT_PRESETS, isCustomLocSep, previewFormat } from '../utils/sceneFormat';
+import { setPublicPcMode } from '../store/db';
 
 // ─── Log PDF ──────────────────────────────────────────────────────────────────
 const LOG_PDF_FONT = '함초롱바탕';
@@ -560,7 +561,7 @@ export function SettingsTab() {
   const togglePublicPc = () => {
     const next = !publicPc;
     setPublicPc(next);
-    localStorage.setItem(PUBLIC_PC_KEY, String(next));
+    setPublicPcMode(next);
   };
 
   const handleDesignTool = (val) => {

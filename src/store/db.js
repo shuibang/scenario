@@ -6,6 +6,17 @@ export function isPublicPcMode() {
   try { return localStorage.getItem(PUBLIC_PC_KEY) === 'true'; } catch { return false; }
 }
 
+export function setPublicPcMode(enabled) {
+  try {
+    localStorage.setItem(PUBLIC_PC_KEY, String(enabled));
+  } catch { /* ignore: localStorage 접근 차단 환경 */ }
+  try {
+    window.dispatchEvent(
+      new CustomEvent('public-pc-changed', { detail: { enabled } })
+    );
+  } catch { /* ignore: localStorage 접근 차단 환경 */ }
+}
+
 export const DB_KEYS = {
   projects: 'projects',
   episodes: 'episodes',

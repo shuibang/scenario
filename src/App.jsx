@@ -46,6 +46,7 @@ import FindReplaceMobileModal from './components/FindReplaceMobileModal';
 import SnapshotPanel from './components/SnapshotPanel';
 import SplitViewPanel from './components/SplitViewPanel';
 import StatusBar from './components/StatusBar';
+import PublicPcBadge from './components/PublicPcBadge';
 import { getLayoutMetrics } from './print/LineTokenizer';
 import { createFeedbackVersionShare } from './utils/reviewShare';
 import { buildFeedbackSnapshot } from './utils/feedbackVersions';
@@ -1033,6 +1034,7 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
           )}
           <RealtimeClock />
           {activeProjectId && <WorkTimer key={activeProjectId} projectId={activeProjectId} documentId={state.activeEpisodeId || state.activeDoc} saveRef={timerSaveRef} />}
+          <PublicPcBadge onClick={() => onMenuAction?.('tools:settings')} />
 
 
           <div style={{ width: 1, height: 16, background: 'var(--c-border3)', flexShrink: 0 }} />
