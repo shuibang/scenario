@@ -1917,6 +1917,7 @@ function Shell({ authUser, setAuthUser }) {
                 resources:      state.resources,
                 workTimeLogs:   state.workTimeLogs,
                 checklistItems: state.checklistItems,
+                trash:          state.trash,
                 stylePreset:    state.stylePreset,
                 savedAt,
               });
@@ -1952,6 +1953,7 @@ function Shell({ authUser, setAuthUser }) {
                 resources:      state.resources,
                 workTimeLogs:   state.workTimeLogs,
                 checklistItems: state.checklistItems,
+                trash:          state.trash,
                 stylePreset:    state.stylePreset,
               };
               if ((localSnap.projects?.length ?? 0) > 0) {
