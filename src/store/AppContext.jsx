@@ -808,11 +808,17 @@ export function AppProvider({ children }) {
       skipDriveSaveRef.current = false;
       // skipDrive (INIT/LOAD_FROM_DRIVE 직후 한 사이클): drama_saved_at 즉시 동기화.
       // 토큰 만료/비로그인은 Drive 호출 안 하므로 drama_saved_at도 갱신 보류 →
-      // 토큰 복구 후 .then으로 Drive savedAt과 함께 갱신. 그래야 재로그인 시 충돌 모달 안 뜸.
+      // 토큰 복구 후 다음 사이클의 PATCH 발사 직전에 갱신. 그래야 재로그인 시 충돌 모달 안 뜸.
       if (shouldUpdateSavedAt && skipDrive) {
         try { localStorage.setItem('drama_saved_at', savedAt); } catch {}
       }
       if (isTokenValid() && !skipDrive) {
+        // PATCH 발사 직전 갱신 — .then() 미도달 윈도우(unload/OAuth redirect)에서
+        // 옛 시각으로 동결되어 Drive와 어긋나는 케이스 차단.
+        // 의미: "마지막 업로드 시도 시각" — 실패 시 다음 사이클 성공으로 자연 회복.
+        if (shouldUpdateSavedAt) {
+          try { localStorage.setItem('drama_saved_at', savedAt); } catch {}
+        }
         saveToDrive({
           projects:       state.projects,
           episodes:       state.episodes,
@@ -829,12 +835,6 @@ export function AppProvider({ children }) {
           deviceId:       getDeviceId(),
           savedAt,
         })
-          .then(() => {
-            // Drive 쓰기 성공 시에만 drama_saved_at 갱신 → 실패 시 local-Drive 불일치 방지
-            if (shouldUpdateSavedAt) {
-              try { localStorage.setItem('drama_saved_at', savedAt); } catch {}
-            }
-          })
           .catch(e => {
             // DRIVE_AUTH_REQUIRED: isTokenValid() 로컬 감지 — 서버 호출 전 정상 흐름, 무해하게 스킵
             if (e.message === 'DRIVE_AUTH_REQUIRED') return;
