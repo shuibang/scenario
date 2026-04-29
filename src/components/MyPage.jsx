@@ -252,14 +252,37 @@ function StatsTab() {
   };
 
   const handleLinkCopy = async () => {
-    const url = buildLogShareUrl(workTimeLogs, projects);
+    let url;
+    try {
+      url = await buildLogShareUrl(workTimeLogs, projects);
+    } catch (err) {
+      console.error('[handleLinkCopy] buildLogShareUrl failed:', err);
+      setExportMsg('링크 생성에 실패했어요. 잠시 후 다시 시도해주세요.');
+      setTimeout(() => setExportMsg(''), 5000);
+      return;
+    }
+
     try {
       await navigator.clipboard.writeText(url);
     } catch {
+      // navigator.clipboard 실패 → DOM fallback 시도
       const inp = document.createElement('input');
-      inp.value = url; document.body.appendChild(inp);
-      inp.select(); document.execCommand('copy');
-      document.body.removeChild(inp);
+      try {
+        inp.value = url;
+        document.body.appendChild(inp);
+        inp.select();
+        const copied = document.execCommand('copy');
+        if (!copied) throw new Error('execCommand returned false');
+      } catch (err) {
+        console.error('[handleLinkCopy] copy failed:', err);
+        setExportMsg('링크 복사에 실패했어요. URL을 직접 복사해주세요.');
+        setTimeout(() => setExportMsg(''), 5000);
+        return;
+      } finally {
+        if (inp.parentNode) {
+          inp.parentNode.removeChild(inp);
+        }
+      }
     }
     setExportMsg('링크 복사됨');
     setTimeout(() => setExportMsg(''), 2500);
