@@ -33,7 +33,11 @@ export default function ImportDocxModal({ open, onClose }) {
       const arrayBuffer = await file.arrayBuffer();
       const mammoth = await import('mammoth');
       const result  = await mammoth.extractRawText({ arrayBuffer });
-      setParsedText(result.value);
+      // mammoth.extractRawText는 워드 paragraph 사이에 \n\n을 출력 →
+      // 단순 paragraph 구분(작가 빈 줄 0개)도 빈 줄로 보이는 문제.
+      // \n\n은 \n으로, \n\n\n+는 \n\n으로 정규화하여 작가 화면 1:1 재현.
+      const normalized = result.value.replace(/\n{2,}/g, m => m.length >= 3 ? '\n\n' : '\n');
+      setParsedText(normalized);
       setFileName(file.name);
       setMode(hasContent ? 'new' : 'append');
       setStep('confirm');
