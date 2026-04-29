@@ -1517,6 +1517,7 @@ function Shell({ authUser, setAuthUser }) {
           resources:      s.resources,
           workTimeLogs:   s.workTimeLogs,
           checklistItems: s.checklistItems,
+          trash:          s.trash,
           stylePreset:    s.stylePreset,
         }, '자동저장', 'auto');
       } catch {}
@@ -1554,6 +1555,7 @@ function Shell({ authUser, setAuthUser }) {
       resources:      state.resources,
       workTimeLogs:   state.workTimeLogs,
       checklistItems: state.checklistItems,
+      trash:          state.trash,
       stylePreset:    state.stylePreset,
     };
     (async () => {

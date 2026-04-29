@@ -170,6 +170,7 @@ export default function SnapshotPanel({ onClose }) {
         resources:      state.resources,
         workTimeLogs:   state.workTimeLogs,
         checklistItems: state.checklistItems,
+        trash:          state.trash,
         stylePreset:    state.stylePreset,
       }, '복원 전 자동저장', 'restore');
 
@@ -210,6 +211,7 @@ export default function SnapshotPanel({ onClose }) {
         resources:      state.resources,
         workTimeLogs:   state.workTimeLogs,
         checklistItems: state.checklistItems,
+        trash:          state.trash,
         stylePreset:    state.stylePreset,
       }, '백업', 'backup');
       await refresh();
