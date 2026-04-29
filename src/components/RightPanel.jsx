@@ -163,11 +163,11 @@ function CharacterUsagePanel({ charId, onScrollToScene }) {
   const { characters, scriptBlocks, episodes } = state;
 
   const char = characters.find(c => c.id === charId);
-  if (!char) return null;
-
   const dialogueBlocks = scriptBlocks.filter(b => b.type === 'dialogue' && b.characterId === charId);
+
   // 패널에 표시되는 씬 기준으로 카운트 (선행 scene_number 블록 ID 기준)
   const sceneCount = useMemo(() => {
+    if (!char) return 0;
     const seenSceneBlockIds = new Set();
     dialogueBlocks.forEach(b => {
       const epBlocks = scriptBlocks.filter(x => x.episodeId === b.episodeId);
@@ -177,10 +177,11 @@ function CharacterUsagePanel({ charId, onScrollToScene }) {
       }
     });
     return seenSceneBlockIds.size;
-  }, [dialogueBlocks, scriptBlocks]);
+  }, [char, dialogueBlocks, scriptBlocks]);
 
   // Group by episode
   const byEpisode = useMemo(() => {
+    if (!char) return {};
     const map = {};
     dialogueBlocks.forEach(b => {
       const epId = b.episodeId || '_';
@@ -188,7 +189,9 @@ function CharacterUsagePanel({ charId, onScrollToScene }) {
       map[epId].push(b);
     });
     return map;
-  }, [dialogueBlocks]);
+  }, [char, dialogueBlocks]);
+
+  if (!char) return null;
 
   const handleNav = (epId, blockId) => {
     dispatch({ type: 'SET_ACTIVE_EPISODE', id: epId });
