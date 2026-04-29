@@ -58,6 +58,15 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
         // 같은 기기 — 시간 비교 무의미 (drama_saved_at race로 발생하는 단일기기 오탐 차단)
         setDriveStatus('synced');
       } else {
+        // "나중에 결정"으로 모달을 닫은 세션에서는 재출현하지 않는다.
+        // sessionStorage는 탭 단위로 유지되므로 브라우저/탭을 새로 열면 자동 초기화 → 다시 판정.
+        let dismissedThisSession = false;
+        try { dismissedThisSession = sessionStorage.getItem('sync-conflict-dismissed') === '1'; } catch {}
+        if (dismissedThisSession) {
+          setDriveStatus('synced');
+          syncingRef.current = false;
+          return;
+        }
         onSyncConflict?.({ localSavedAt, driveData, localProjectCount: localProjects.length });
         setDriveStatus('none');
         syncingRef.current = false;
