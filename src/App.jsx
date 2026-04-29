@@ -57,6 +57,7 @@ import { useDriveAuthState } from './hooks/useDriveAuthState';
 import { shouldRunInitialSync, markInitialSyncDone, resetInitialSyncGate } from './store/driveSyncGate';
 import { guardedSignInWithGoogle } from './utils/guardedSignIn';
 import { describeDriveError } from './utils/driveError';
+import { getDeviceId } from './utils/deviceId';
 import Menubar from './components/Menubar/Menubar';
 import useKeyboardShortcuts from './hooks/useKeyboardShortcuts';
 import OpenProjectModal  from './components/Modals/OpenProjectModal';
@@ -1919,6 +1920,7 @@ function Shell({ authUser, setAuthUser }) {
                 checklistItems: state.checklistItems,
                 trash:          state.trash,
                 stylePreset:    state.stylePreset,
+                deviceId:       getDeviceId(),
                 savedAt,
               });
               // 3) 성공 후에만 localStorage 갱신 → 다음 runDriveSync 에서 tsLooksSame = true

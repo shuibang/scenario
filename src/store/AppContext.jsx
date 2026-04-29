@@ -7,6 +7,7 @@ import { sharePayloadSchema } from '../utils/urlSchemas';
 import { parsePath, syncUrl } from '../utils/urlSync';
 import { describeDriveError } from '../utils/driveError';
 import { detectScriptBlockDuplicates } from '../utils/dedupBlocks';
+import { getDeviceId } from '../utils/deviceId';
 
 // 복원 가능한 activeDoc 값 whitelist — localStorage에 주입된 예상 밖의 값 차단
 const ALLOWED_ACTIVE_DOCS = new Set([
@@ -825,6 +826,7 @@ export function AppProvider({ children }) {
           checklistItems: state.checklistItems,
           trash:          state.trash || EMPTY_TRASH,
           stylePreset:    state.stylePreset,
+          deviceId:       getDeviceId(),
           savedAt,
         })
           .then(() => {
