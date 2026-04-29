@@ -1,3 +1,5 @@
+/* eslint-disable */
+// v2-core rebuild 시도 잔재 (2026-03-31). 향후 참고용 보관.
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { AppProvider, useApp } from './store/AppContext';
 import { logShareSchema } from './utils/urlSchemas';
