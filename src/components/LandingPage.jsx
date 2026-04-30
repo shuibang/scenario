@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { guardedSignInWithGoogle } from '../utils/guardedSignIn';
 import Footer from './Footer';
 
+// 로고 SVG의 빨간 룰러 라인 색상 (#e2526d) — 히어로 액센트로 차용
+const LOGO_RED = '#e2526d';
+
 // ─── 데이터 ────────────────────────────────────────────────────────────────────
 const COMPARE_ROWS = [
   { label: '가격',              vals: ['무료', '약 30~37만원 ($199~$249)', '₩88,000~₩141,000 ($59~$94)', '월 ₩7,500~₩15,000 ($5~$9.92)', '무료(2편 제한)~연 ₩149,000 ($99)'] },
@@ -363,7 +366,9 @@ function SceneRefDemo() {
   );
 }
 
-// ─── CSS 인젝션 (keyframes) ────────────────────────────────────────────────────
+// ─── CSS 인젝션 (keyframes + 로고 다크모드 필터) ───────────────────────────────
+// 로고 SVG는 #1c2a3a(네이비) + #e2526d(레드)로 하드코딩됨.
+// 다크모드에서는 invert+hue-rotate로 명도만 반전(색상 보존) → 레드는 레드, 네이비는 라이트 톤으로.
 function InjectStyles() {
   useEffect(() => {
     const id = 'landing-keyframes';
@@ -375,6 +380,16 @@ function InjectStyles() {
       @keyframes slideDown { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
       @keyframes fadeUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
       @keyframes lp-fadein { from{opacity:0} to{opacity:1} }
+      @keyframes lp-logo-fade { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
+      .lp-logo-mark { transition: filter 0.2s ease; }
+      .lp-logo-mark { filter: invert(0.92) hue-rotate(180deg) saturate(0.95); }
+      [data-theme="light"] .lp-logo-mark { filter: none; }
+      .lp-brand-link { display: flex; align-items: center; gap: 10px; text-decoration: none; cursor: pointer; }
+      .lp-brand-link:hover .lp-brand-text { opacity: 0.85; }
+      .lp-rule {
+        width: 64px; height: 2px; background: ${LOGO_RED};
+        margin: 0 auto 20px; border-radius: 1px;
+      }
     `;
     document.head.appendChild(s);
     return () => document.getElementById(id)?.remove();
@@ -397,8 +412,11 @@ export default function LandingPage({ onStart, onLogin }) {
       <InjectStyles />
 
       {/* ── 헤더 ── */}
-      <header style={{ position: 'sticky', top: 0, zIndex: 100, background: 'var(--c-header)', borderBottom: '1px solid var(--c-border)', padding: '0 24px', height: 52, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--c-accent)', letterSpacing: '0.05em' }}>대본 작업실</span>
+      <header style={{ position: 'sticky', top: 0, zIndex: 100, background: 'var(--c-header)', borderBottom: '1px solid var(--c-border)', padding: '0 24px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <a href="/" className="lp-brand-link" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>
+          <img src="/logo.svg" alt="" className="lp-logo-mark" style={{ height: 36, width: 'auto', display: 'block' }} />
+          <span className="lp-brand-text" style={{ fontWeight: 700, fontSize: 16, color: 'var(--c-text)', letterSpacing: '0.04em' }}>대본 작업실</span>
+        </a>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={() => { window.location.hash = '#director'; }} style={{ ...headerBtnStyle, color: 'var(--c-accent2)', borderColor: 'var(--c-accent2)' }}>연출 작업실</button>
           <button onClick={() => setLoginOpen(true)} style={headerBtnStyle}>로그인</button>
@@ -407,8 +425,15 @@ export default function LandingPage({ onStart, onLogin }) {
       </header>
 
       {/* ── 히어로 ── */}
-      <section style={{ padding: '72px 32px 56px', maxWidth: 720, margin: '0 auto', textAlign: 'center', animation: 'fadeUp 0.7s ease both' }}>
-        <div style={{ display: 'inline-block', background: 'var(--c-accent)', color: '#fff', fontSize: 11, fontWeight: 600, padding: '3px 12px', borderRadius: 20, marginBottom: 20, letterSpacing: '0.05em' }}>
+      <section style={{ padding: '64px 32px 56px', maxWidth: 720, margin: '0 auto', textAlign: 'center', animation: 'fadeUp 0.7s ease both' }}>
+        <img
+          src="/logo.svg"
+          alt="대본 작업실"
+          className="lp-logo-mark"
+          style={{ width: 'min(160px, 36vw)', height: 'auto', display: 'block', margin: '0 auto 22px', animation: 'lp-logo-fade 0.7s ease both' }}
+        />
+        <div className="lp-rule" />
+        <div style={{ display: 'inline-block', background: LOGO_RED, color: '#fff', fontSize: 11, fontWeight: 600, padding: '3px 12px', borderRadius: 20, marginBottom: 20, letterSpacing: '0.05em' }}>
           무료 베타 공개 중
         </div>
         <h1 style={{ fontSize: 'clamp(28px, 5vw, 48px)', fontWeight: 800, lineHeight: 1.2, marginBottom: 18, color: 'var(--c-text)' }}>
