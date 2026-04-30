@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { guardedSignInWithGoogle } from '../utils/guardedSignIn';
+import Footer from './Footer';
 
 // ─── 데이터 ────────────────────────────────────────────────────────────────────
 const COMPARE_ROWS = [
@@ -574,26 +575,9 @@ export default function LandingPage({ onStart, onLogin }) {
       </Reveal>
 
       {/* ── 푸터 ── */}
-      <footer style={{ background: 'var(--c-header)', borderTop: '1px solid var(--c-border)', padding: '24px', textAlign: 'center', fontSize: 12, color: 'var(--c-text6)' }}>
-        <p style={{ margin: 0 }}>대본 작업실 — 드라마 작가를 위한 무료 대본 편집기</p>
-        <p style={{ margin: '6px 0 0' }}>버그 제보 및 피드백은 서비스 내 QnA 또는 이메일로 알려주세요</p>
-        <p style={{ margin: '10px 0 0', display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap' }}>
-          {[
-            { href: '/notice.html', label: '공지사항' },
-            { href: '/changelog.html', label: '업데이트 내역' },
-            { href: '/help.html', label: '사용 설명서' },
-            { href: '/devlog-1.html', label: '개발기 읽기', underline: true },
-          ].map(({ href, label, underline }) => (
-            <a
-              key={href}
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: 'var(--c-text4)', textDecoration: underline ? 'underline' : 'none', borderBottom: underline ? 'none' : '1px solid var(--c-border3)', paddingBottom: 1 }}
-            >{label}</a>
-          ))}
-        </p>
-      </footer>
+      <div style={{ background: 'var(--c-header)', borderTop: '1px solid var(--c-border)' }}>
+        <Footer />
+      </div>
 
       {loginOpen && <LandingLoginModal onClose={() => setLoginOpen(false)} />}
     </div>

@@ -85,6 +85,7 @@
     footer a { color: var(--text4); }
     footer p + p { margin-top: 6px; }
   </style>
+<link rel="stylesheet" href="/footer.css" />
 </head>
 <body>
 
@@ -128,10 +129,26 @@
     </div>
   </div>
 
-  <footer>
-    <p><a href="/notice.html">공지사항</a> · <a href="/changelog.html">업데이트 내역</a> · <a href="/help.html">사용 설명서</a> · <a href="/devlog-1.html">개발기 읽기</a></p>
-    <p style="margin-top:6px;font-size:11px;"><a href="/about">서비스 소개</a> · <a href="/contact">문의</a> · <a href="/privacy">개인정보처리방침</a> · <a href="/terms">이용약관</a></p>
-    <p style="margin-top:6px;">© 2026 대본 작업실</p>
+  <footer class="dj-footer">
+    <p class="dj-footer__tagline">대본 작업실 — 드라마 작가를 위한 무료 대본 편집기</p>
+    <div class="dj-footer__row">
+      <a class="dj-footer__link" href="/notice">공지사항</a>
+      <span class="dj-footer__sep" aria-hidden="true">·</span>
+      <a class="dj-footer__link" href="/changelog">업데이트 내역</a>
+      <span class="dj-footer__sep" aria-hidden="true">·</span>
+      <a class="dj-footer__link" href="/help">사용 설명서</a>
+      <span class="dj-footer__sep" aria-hidden="true">·</span>
+      <a class="dj-footer__link" href="/">홈으로</a>
+    </div>
+    <div class="dj-footer__row">
+      <a class="dj-footer__link" href="/about">서비스 소개</a>
+      <span class="dj-footer__sep" aria-hidden="true">·</span>
+      <a class="dj-footer__link" href="/contact">문의</a>
+      <span class="dj-footer__sep" aria-hidden="true">·</span>
+      <a class="dj-footer__link" href="/privacy">개인정보처리방침</a>
+      <span class="dj-footer__sep" aria-hidden="true">·</span>
+      <a class="dj-footer__link" href="/terms">이용약관</a>
+    </div>
   </footer>
 
 </body>

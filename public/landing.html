@@ -318,6 +318,7 @@
       .price-box { padding: 28px 32px; }
     }
   </style>
+<link rel="stylesheet" href="/footer.css" />
 </head>
 <body>
 
@@ -609,29 +610,26 @@
   </div>
 
   <!-- 푸터 -->
-  <footer>
-    <p>대본 작업실 — 드라마 작가를 위한 무료 대본 편집기</p>
-    <p>버그 제보 및 피드백은 서비스 내 QnA 또는 이메일로 알려주세요</p>
-    <p>
-      <a href="/notice.html" style="color:var(--text4);text-decoration:none;border-bottom:1px solid var(--border3);padding-bottom:1px;">공지사항</a>
-      &nbsp;·&nbsp;
-      <a href="/changelog.html" style="color:var(--text4);text-decoration:none;border-bottom:1px solid var(--border3);padding-bottom:1px;">업데이트 내역</a>
-      &nbsp;·&nbsp;
-      <a href="/help.html" style="color:var(--text4);text-decoration:none;border-bottom:1px solid var(--border3);padding-bottom:1px;">사용 설명서</a>
-      &nbsp;·&nbsp;
-      <a href="/template.html" style="color:var(--text4);text-decoration:none;border-bottom:1px solid var(--border3);padding-bottom:1px;">대본 양식</a>
-      &nbsp;·&nbsp;
-      <a href="/devlog-1.html" style="color:var(--text4);text-decoration:underline;">개발기 읽기</a>
-    </p>
-    <p style="margin-top:8px;font-size:11px;">
-      <a href="/about" style="color:var(--text5);text-decoration:none;border-bottom:1px solid var(--border3);padding-bottom:1px;">서비스 소개</a>
-      &nbsp;·&nbsp;
-      <a href="/contact" style="color:var(--text5);text-decoration:none;border-bottom:1px solid var(--border3);padding-bottom:1px;">문의</a>
-      &nbsp;·&nbsp;
-      <a href="/privacy" style="color:var(--text5);text-decoration:none;border-bottom:1px solid var(--border3);padding-bottom:1px;">개인정보처리방침</a>
-      &nbsp;·&nbsp;
-      <a href="/terms" style="color:var(--text5);text-decoration:none;border-bottom:1px solid var(--border3);padding-bottom:1px;">이용약관</a>
-    </p>
+  <footer class="dj-footer">
+    <p class="dj-footer__tagline">대본 작업실 — 드라마 작가를 위한 무료 대본 편집기</p>
+    <div class="dj-footer__row">
+      <a class="dj-footer__link" href="/notice">공지사항</a>
+      <span class="dj-footer__sep" aria-hidden="true">·</span>
+      <a class="dj-footer__link" href="/changelog">업데이트 내역</a>
+      <span class="dj-footer__sep" aria-hidden="true">·</span>
+      <a class="dj-footer__link" href="/help">사용 설명서</a>
+      <span class="dj-footer__sep" aria-hidden="true">·</span>
+      <a class="dj-footer__link" href="/">홈으로</a>
+    </div>
+    <div class="dj-footer__row">
+      <a class="dj-footer__link" href="/about">서비스 소개</a>
+      <span class="dj-footer__sep" aria-hidden="true">·</span>
+      <a class="dj-footer__link" href="/contact">문의</a>
+      <span class="dj-footer__sep" aria-hidden="true">·</span>
+      <a class="dj-footer__link" href="/privacy">개인정보처리방침</a>
+      <span class="dj-footer__sep" aria-hidden="true">·</span>
+      <a class="dj-footer__link" href="/terms">이용약관</a>
+    </div>
   </footer>
 
   <script>
