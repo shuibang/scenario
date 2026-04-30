@@ -83,6 +83,8 @@
       display: flex; align-items: center; justify-content: space-between;
     }
     .logo { font-weight: 700; font-size: 16px; color: var(--accent); letter-spacing: 0.05em; }
+    .logo-link { display: flex; align-items: center; cursor: pointer; background: none; border: none; padding: 0; }
+    .logo-img { height: 40px; width: auto; display: block; }
     .header-btns { display: flex; gap: 8px; }
     .btn-outline {
       padding: 5px 14px; border-radius: 6px; font-size: 12px;
@@ -113,36 +115,51 @@
     }
 
     /* ── 히어로 ── */
+    .hero-section {
+      background-color: #FFFFFF;
+      background-image:
+        linear-gradient(to right,  #F5F5F5 1px, transparent 1px),
+        linear-gradient(to bottom, #F5F5F5 1px, transparent 1px);
+      background-size: 30px 30px;
+      border-bottom: 1px solid #ECECEC;
+    }
     .hero {
-      padding: 72px 32px 56px;
+      padding: 64px 32px 56px;
       max-width: 720px; margin: 0 auto; text-align: center;
       animation: fadeUp 0.7s ease both;
     }
+    .hero-logo-full {
+      width: 90%; max-width: 500px; height: auto; display: block;
+      margin: 0 auto 28px;
+    }
     .hero-badge {
-      display: inline-block; background: var(--accent); color: #fff;
+      display: inline-block; background: #1B2A4E; color: #fff;
       font-size: 11px; font-weight: 600; padding: 3px 12px;
       border-radius: 20px; margin-bottom: 20px; letter-spacing: 0.05em;
     }
     .hero h1 {
-      font-size: clamp(28px, 5vw, 48px); font-weight: 800;
-      line-height: 1.2; margin-bottom: 18px; color: var(--text);
+      font-size: clamp(28px, 5vw, 44px); font-weight: 800;
+      line-height: 1.25; margin-bottom: 16px; color: #1B2A4E;
     }
     .hero p {
-      font-size: clamp(14px, 2vw, 17px); color: var(--text4);
+      font-size: clamp(14px, 2vw, 17px); color: #444;
       line-height: 1.75; margin-bottom: 32px;
     }
-    .hero-cta { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+    .hero-cta { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
     .btn-hero-primary {
       padding: 13px 28px; border-radius: 8px; font-size: 15px; font-weight: 700;
-      background: var(--accent); color: #fff; border: none;
+      background: #1B2A4E; color: #fff; border: 1px solid #1B2A4E;
+      transition: background 0.2s ease, transform 0.1s ease;
     }
-    .btn-hero-primary:hover { background: #6a6aff; }
+    .btn-hero-primary:hover { background: #243762; }
+    .btn-hero-primary:active { transform: translateY(1px); }
     .btn-hero-secondary {
       padding: 13px 28px; border-radius: 8px; font-size: 15px; font-weight: 600;
-      background: transparent; color: var(--text3); border: 1px solid var(--border3);
+      background: transparent; color: #1B2A4E; border: 1px solid #1B2A4E;
+      transition: background 0.2s ease;
     }
-    .btn-hero-secondary:hover { border-color: var(--accent); color: var(--accent); }
-    .hero-note { font-size: 11px; color: var(--text6); margin-top: 12px; }
+    .btn-hero-secondary:hover { background: rgba(27, 42, 78, 0.06); }
+    .hero-note { font-size: 11px; color: #888; margin-top: 14px; }
 
     /* ── 기능 그리드 ── */
     .feature-grid {
@@ -306,7 +323,9 @@
 
   <!-- 헤더 -->
   <header class="site-header">
-    <span class="logo">대본 작업실</span>
+    <button class="logo-link" type="button" aria-label="맨 위로" onclick="window.scrollTo({ top: 0, behavior: 'smooth' });">
+      <img class="logo-img" src="/logo.svg" alt="대본 작업실" />
+    </button>
     <div class="header-btns">
       <a href="https://daejak.kr/app"><button class="btn-outline">로그인</button></a>
       <a href="https://daejak.kr/app"><button class="btn-primary">바로 시작하기</button></a>
@@ -314,19 +333,21 @@
   </header>
 
   <!-- 히어로 -->
-  <div class="hero">
-    <span class="hero-badge">무료 베타 공개 중</span>
-    <h1>드라마 대본,<br>이제 편하게, 어디서든</h1>
-    <p>
-      한국 드라마 작가를 위해 직접 만든 무료 온라인 드라마 대본 편집기.<br>
-      설치 없이, 로그인 없이, 완전 무료로 지금 바로 시작하세요.
-    </p>
-    <div class="hero-cta">
-      <a href="https://daejak.kr/app"><button class="btn-hero-primary">로그인 없이 시작하기 →</button></a>
-      <a href="https://daejak.kr/app"><button class="btn-hero-secondary">구글 로그인 (자동저장)</button></a>
+  <section class="hero-section">
+    <div class="hero">
+      <img class="hero-logo-full" src="/logo-full.svg" alt="대본 작업실 — 드라마 작가를 위한 무료 대본 편집기" />
+      <h1>드라마 대본,<br>이제 편하게, 어디서든</h1>
+      <p>
+        한국 드라마 작가를 위해 직접 만든 무료 온라인 드라마 대본 편집기.<br>
+        설치 없이, 로그인 없이, 완전 무료로 지금 바로 시작하세요.
+      </p>
+      <div class="hero-cta">
+        <a href="https://daejak.kr/app"><button class="btn-hero-primary">지금 시작하기</button></a>
+        <a href="#features"><button class="btn-hero-secondary">기능 둘러보기</button></a>
+      </div>
+      <p class="hero-note">로그인 없이도 이 기기에 자동저장 — 구글 로그인 시 어디서든 이어서 작업</p>
     </div>
-    <p class="hero-note">로그인 없이도 이 기기에 자동저장 — 구글 로그인 시 어디서든 이어서 작업</p>
-  </div>
+  </section>
 
   <!-- 버튼/단축키 포맷 데모 -->
   <section class="reveal section" style="padding: 0 24px 64px;">
@@ -456,7 +477,7 @@
   </section>
 
   <!-- 주요 기능 -->
-  <section class="reveal section">
+  <section id="features" class="reveal section" style="scroll-margin-top: 60px;">
     <div class="section-inner">
       <h2 class="section-title">주요 기능</h2>
       <div class="feature-grid">
