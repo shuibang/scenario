@@ -303,7 +303,7 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
 
         {/* 브랜드: FileText 아이콘 + 대본 작업실 */}
         <button
-          onClick={() => { window.location.hash = '#landing'; }}
+          onClick={() => { window.location.href = '/'; }}
           style={{
             display: 'flex', alignItems: 'center', gap: 5,
             background: 'transparent', border: 'none', cursor: 'pointer',

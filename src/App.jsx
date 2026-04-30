@@ -924,7 +924,7 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
 
         {/* 로고 */}
         <button
-          onClick={() => { window.location.hash = '#landing'; }}
+          onClick={() => { window.location.href = '/'; }}
           title="홈으로"
           className="flex items-center gap-1.5 shrink-0 rounded px-2 py-1"
           style={{ background: 'transparent', border: 'none', cursor: 'pointer', transition: 'background 120ms' }}
@@ -2445,7 +2445,7 @@ export default function App() {
     return () => window.removeEventListener('show-webview-modal', handler);
   }, []);
 
-  // hash 변경 시 재렌더 (#director, #landing 등 이동 즉시 반영)
+  // hash 변경 시 재렌더 (#director, #review=, #delivery= 등 이동 즉시 반영)
   useEffect(() => {
     const handler = () => forceUpdate(n => n + 1);
     window.addEventListener('hashchange', handler);
@@ -2525,21 +2525,6 @@ export default function App() {
   if (window.location.hash === '#preview-landing' && import.meta.env.DEV) return <LandingPreview />;
   // public — 베타 설문 (인증 불필요, 의도적)
   if (window.location.hash === '#survey')          return <SurveyPage />;
-  // 헤더 '대본 작업실' 클릭 시 랜딩 페이지로
-  if (window.location.hash === '#landing') return (
-    <LandingPage
-      onStart={() => { window.location.hash = ''; forceUpdate(n => n + 1); }}
-      onLogin={(userData) => {
-        if (userData) {
-          try { localStorage.setItem('drama_auth_user', JSON.stringify(userData)); } catch {}
-          _shellEverRendered = true;
-          setAuthUser(userData);
-        }
-        window.location.hash = '';
-        forceUpdate(n => n + 1);
-      }}
-    />
-  );
 
   // 매 렌더마다 localStorage 직접 확인 + 모듈 플래그 — 어떤 state 리셋에도 안전
   const lsAuth    = (() => { try { return !!localStorage.getItem('drama_auth_user'); } catch { return false; } })();
