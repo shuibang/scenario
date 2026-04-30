@@ -351,7 +351,7 @@ export default function FindReplaceMobileModal({ open, initialMode, onClose }) {
                       </span>
                     )}
                     <mark style={{
-                      background: 'rgba(90,90,245,0.2)', color: 'var(--c-accent)',
+                      background: 'rgba(141,160,187,0.2)', color: 'var(--c-accent)',
                       fontWeight: 600, borderRadius: 2, padding: '0 1px',
                     }}>
                       {m.context.match}

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { FileText, Clapperboard, ExternalLink, CloudOff } from 'lucide-react';
+import { Clapperboard, ExternalLink, CloudOff } from 'lucide-react';
 import { useApp } from '../../store/AppContext';
 import { FONTS } from '../../print/FontRegistry';
 import AdBanner from '../AdBanner';
@@ -301,7 +301,7 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
           )}
         </div>
 
-        {/* 브랜드: FileText 아이콘 + 대본 작업실 */}
+        {/* 브랜드: favicon 아이콘 + 대본 작업실 */}
         <button
           onClick={() => { window.location.href = '/'; }}
           style={{
@@ -311,7 +311,7 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
             WebkitTapHighlightColor: 'transparent',
           }}
         >
-          <FileText size={15} strokeWidth={2} style={{ color: 'var(--c-accent)', flexShrink: 0 }} />
+          <img src="/favicon.svg" alt="" className="editor-brand-favicon" />
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-text2)', letterSpacing: '-0.015em', whiteSpace: 'nowrap' }}>대본 작업실</span>
         </button>
 

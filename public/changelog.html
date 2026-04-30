@@ -23,8 +23,8 @@
     --text2:      #bbbbbb;
     --text3:      #888888;
     --text4:      #666666;
-    --accent:     #5a5af5;
-    --accent2:    #a78bfa;
+    --accent:     #8DA0BB;
+    --accent2:    #B58993;
     --card:       #1e1e2e;
     --tip-bg:     #1e1e30;
     --tip-border: #3a3aaa;
@@ -41,11 +41,11 @@
       --text2:      #333333;
       --text3:      #555555;
       --text4:      #777777;
-      --accent:     #4f46e5;
-      --accent2:    #7c3aed;
+      --accent:     #3D5070;
+      --accent2:    #7E4A56;
       --card:       #f5f5f5;
       --tip-bg:     #f0eeff;
-      --tip-border: #c4b5fd;
+      --tip-border: #A3B4CB;
     }
   }
 
@@ -72,7 +72,7 @@
     padding: 7px 18px; border-radius: 6px; font-size: 13px; font-weight: 600;
     background: var(--accent); color: #fff; border: none; text-decoration: none;
   }
-  .site-header-cta:hover { background: #6a6aff; color: #fff; }
+  .site-header-cta:hover { background: #A2B5D0; color: #fff; }
 
   /* ── Page nav ── */
   .page-nav { display: flex; gap: 6px; padding: 12px 0 0; flex-wrap: wrap; }
@@ -111,7 +111,7 @@
     background: var(--accent); border: 2px solid var(--bg);
     flex-shrink: 0;
   }
-  .cl-entry:first-child .cl-dot { background: var(--accent); box-shadow: 0 0 0 3px rgba(90,90,245,0.25); }
+  .cl-entry:first-child .cl-dot { background: var(--accent); box-shadow: 0 0 0 3px rgba(141,160,187,0.25); }
   .cl-entry.archive .cl-dot { background: var(--border2); }
 
   /* ── Entry card (details/summary) ── */
@@ -208,17 +208,67 @@
 
   <div class="timeline">
 
-    <!-- v23 (2026-04-29) -->
+    <!-- v24 (2026-04-30) -->
     <div class="cl-entry">
       <div class="cl-dot"></div>
       <div class="cl-card">
         <details open>
           <summary>
             <div class="cl-meta">
+              <div class="cl-date">2026-04-30</div>
+              <div class="cl-title">🎨 새 로고·랜딩 리뉴얼 · 다크/라이트 토글 · 사이트 컬러 통일</div>
+            </div>
+            <span class="new-badge">최신</span>
+            <span class="arrow">▶</span>
+          </summary>
+          <div class="cl-body">
+            <div class="cl-section">
+              <div class="cl-section-head">새 로고·랜딩 페이지 리뉴얼</div>
+              <ul>
+                <li>새 로고(워드마크·아이콘·favicon)를 사이트 전체에 적용했어요</li>
+                <li>원고지 모티프를 살린 랜딩 디자인으로 새 단장했어요 — 섹션 타이틀 하단 얇은+굵은 더블 라인, 빨간 룰러 액센트</li>
+                <li>비교표를 원고지 스타일로 정리했어요 — 빨간 외곽 굵은 보더, 컬럼 사이 얇은 세로선, 행간 더블 라인(세로선은 갭 영역에서 끊김)</li>
+                <li>가격 박스를 네이비 프레임 + 빨간 "무료" 스탬프로 편집기 톤에 맞췄어요</li>
+                <li>에디터 헤더 좌측 브랜드 아이콘을 favicon으로 교체했어요 (라이트 모드는 색상 반전으로 검정 펜촉 + 흰 잉크)</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">다크/라이트 토글</div>
+              <ul>
+                <li>랜딩 페이지 헤더에 다크/라이트 토글 버튼이 추가됐어요</li>
+                <li>에디터의 테마 설정과 자동 동기화돼요 — 한쪽 탭에서 바꾸면 다른 탭/페이지도 즉시 따라가요</li>
+                <li>실제 서비스 화면 스크린샷이 라이트/다크에 맞춰 자동 전환돼요</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">사이트 전역 포인트 컬러 통일</div>
+              <ul>
+                <li>포인트 컬러를 보라색 → 차분한 네이비·마룬 톤으로 정리했어요 (로고 색에 맞춰 명도를 낮춘 에디토리얼 톤)</li>
+                <li>에디터·랜딩·도움말·공지·약관 등 모든 페이지의 액센트가 한 톤으로 정렬됐어요</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">기타</div>
+              <ul>
+                <li>랜딩 페이지에 연출 작업실 진입 버튼이 복구됐어요 (헤더 + 히어로 보조 CTA)</li>
+                <li>HTML 페이지의 캐시 정책을 정리해 배포 직후 변경사항이 더 빨리 반영되도록 했어요</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- v23 (2026-04-29) -->
+    <div class="cl-entry">
+      <div class="cl-dot"></div>
+      <div class="cl-card">
+        <details>
+          <summary>
+            <div class="cl-meta">
               <div class="cl-date">2026-04-29</div>
               <div class="cl-title">🛡️ 동기화 안정성 강화 · HWPX 가져오기 개선 · 데이터 안전성</div>
             </div>
-            <span class="new-badge">최신</span>
             <span class="arrow">▶</span>
           </summary>
           <div class="cl-body">

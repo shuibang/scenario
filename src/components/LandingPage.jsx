@@ -283,7 +283,7 @@ function SceneRefDemo() {
               {phase >= 1 && (
                 <div style={{
                   color: 'var(--c-accent)', fontWeight: 700,
-                  background: phase === 1 ? 'rgba(90,90,245,0.08)' : 'transparent',
+                  background: phase === 1 ? 'rgba(141,160,187,0.10)' : 'transparent',
                   borderRadius: 3, transition: 'background 0.5s',
                 }}>
                   {NEW_SCENE_TITLE.slice(0, typedLen)}
@@ -313,7 +313,7 @@ function SceneRefDemo() {
             </div>
             <div style={{
               paddingLeft: '1.4rem', color: 'var(--c-text3)',
-              background: refUpdated ? 'rgba(90,90,245,0.18)' : 'transparent',
+              background: refUpdated ? 'rgba(141,160,187,0.22)' : 'transparent',
               borderRadius: 3, transition: 'background 0.35s ease',
             }}>
               {'S#'}<span style={{
@@ -335,7 +335,7 @@ function SceneRefDemo() {
             <div key={s.num + s.title} style={{
               padding: '7px 12px', borderBottom: '1px solid var(--c-border2)',
               display: 'flex', gap: 8, alignItems: 'center',
-              background: s.isNew ? 'rgba(90,90,245,0.08)' : 'transparent',
+              background: s.isNew ? 'rgba(141,160,187,0.10)' : 'transparent',
               transition: 'all 0.45s ease',
               animation: s.isNew && numbersShifted ? 'slideDown 0.35s ease' : 'none',
             }}>

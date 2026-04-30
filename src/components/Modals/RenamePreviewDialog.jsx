@@ -22,7 +22,7 @@ function HighlightContext({ context }) {
           {context.before.length > 15 ? '…' + context.before.slice(-15) : context.before}
         </span>
       )}
-      <mark style={{ background: 'rgba(90,90,245,0.2)', color: 'var(--c-accent)', fontWeight: 600, borderRadius: 2, padding: '0 1px' }}>
+      <mark style={{ background: 'rgba(141,160,187,0.2)', color: 'var(--c-accent)', fontWeight: 600, borderRadius: 2, padding: '0 1px' }}>
         {context.match}
       </mark>
       {context.after && (

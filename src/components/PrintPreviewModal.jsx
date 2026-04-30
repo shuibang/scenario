@@ -266,7 +266,7 @@ export default function PrintPreviewModal({ onClose, defaultFormat }) {
                   value={value}
                   checked={format === value}
                   onChange={() => setFormat(value)}
-                  className="accent-[#5a5af5]"
+                  className="accent-[#8DA0BB]"
                 />
                 <span className="text-xs" style={{ color: 'var(--c-text2)' }}>{label}</span>
               </label>
@@ -371,7 +371,7 @@ function Checkbox({ label, checked, onChange, indent, disabled }) {
         checked={checked}
         onChange={onChange}
         disabled={disabled}
-        className="accent-[#5a5af5]"
+        className="accent-[#8DA0BB]"
       />
       <span className="text-xs" style={{ color: 'var(--c-text2)' }}>{label}</span>
     </label>

@@ -306,7 +306,7 @@ export default function SharedReviewView() {
             disabled={pdfExporting}
             style={{
               ...zoomButtonStyle,
-              background: '#5a5af5',
+              background: '#8DA0BB',
               color: '#fff',
               border: 'none',
               padding: '3px 12px',

@@ -302,7 +302,7 @@ function HintCard({ title, desc, rect, placement, footer, onClick }) {
             borderRadius: 8,
             boxShadow: '0 0 0 9999px rgba(0,0,0,0.6)',
             border: '2px solid var(--c-accent)',
-            outline: '4px solid rgba(90,90,245,0.2)',
+            outline: '4px solid rgba(141,160,187,0.2)',
             zIndex: 9001,
             pointerEvents: 'none',
             transition: 'all 0.25s ease',

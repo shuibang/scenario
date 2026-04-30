@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { FileText, Undo2, Redo2, Sun, Moon, User, Clapperboard, ExternalLink, ChevronLeft, ChevronRight, Strikethrough, AlignLeft, AlignCenter, AlignRight, AlignJustify, Cloud, CloudOff } from 'lucide-react';
+import { Undo2, Redo2, Sun, Moon, User, Clapperboard, ExternalLink, ChevronLeft, ChevronRight, Strikethrough, AlignLeft, AlignCenter, AlignRight, AlignJustify, Cloud, CloudOff } from 'lucide-react';
 import LandingPage from './components/LandingPage';
 import { logShareSchema } from './utils/urlSchemas';
 import { getTimelineColor } from './utils/color';
@@ -931,7 +931,7 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
           onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-hover)'; }}
           onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
         >
-          <FileText size={15} strokeWidth={2} style={{ color: 'var(--c-accent)', flexShrink: 0 }} />
+          <img src="/favicon.svg" alt="" className="editor-brand-favicon" />
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-text2)', letterSpacing: '-0.015em', whiteSpace: 'nowrap' }}>대본 작업실</span>
         </button>
 
@@ -2370,7 +2370,7 @@ function LogShareView() {
                   </div>
                 )}
               </div>
-              <span style={{ fontSize: 13, fontWeight: 600, color: '#5a5af5', flexShrink: 0 }}>{fmt(log.activeDurationSec || 0)}</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: '#8DA0BB', flexShrink: 0 }}>{fmt(log.activeDurationSec || 0)}</span>
             </div>
           );
         })}

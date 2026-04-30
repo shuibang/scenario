@@ -1025,7 +1025,7 @@ function LogShareView() {
                   </div>
                 )}
               </div>
-              <span style={{ fontSize: 13, fontWeight: 600, color: '#5a5af5', flexShrink: 0 }}>{fmt(log.activeDurationSec || 0)}</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: '#8DA0BB', flexShrink: 0 }}>{fmt(log.activeDurationSec || 0)}</span>
             </div>
           );
         })}
