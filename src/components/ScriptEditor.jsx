@@ -1425,6 +1425,22 @@ const EditorSurface = forwardRef(function EditorSurface({
   // ── Imperative API for parent ──────────────────────────────────────────────
   useImperativeHandle(ref, () => ({
     parse() { doParse(); },
+    // pagehide flush 전용: setState 우회하고 DOM에서 즉시 blocks 추출.
+    // IME 게이트(handleInput의 composingRef early-return)와 React 렌더 사이클
+    // 양쪽을 모두 우회 — DOM이 진실값.
+    parseToBlocks() {
+      const el = surfaceRef.current;
+      if (!el) return null;
+      try {
+        return parseSurface(el, metaRef, epIdRef.current, projIdRef.current);
+      } catch {
+        return null;
+      }
+    },
+    blurSurface() {
+      const el = surfaceRef.current;
+      if (el && document.activeElement === el) el.blur();
+    },
     applyBlockType(type) {
       const el = surfaceRef.current;
       if (!el) return false;
@@ -2151,8 +2167,11 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   // Refs for unmount-flush and episode-switch flush (always up-to-date)
   const blocksRef = useRef([]);
   const activeEpisodeIdRef = useRef(null);
+  const activeProjectIdRef = useRef(null);
   const scenesRef = useRef([]);
   const prevEpisodeIdRef = useRef(null);
+  // pagehide 후 다음 진입 시 1회만 emergency_backup 복구 시도
+  const recoveryAttemptedRef = useRef(false);
   const [charPickerState, setCharPickerState] = useState(null); // { blockId, top, left, fromDialogue?, savedRange? }
   const [charPickerNoSel, setCharPickerNoSel] = useState(null); // { top, left } — 선택안함 표시
   const [nextTypePicker, setNextTypePicker] = useState(null); // { blockId, top, left, onSelect } — 다음 형식 선택
@@ -2324,6 +2343,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   // Keep refs in sync every render so unmount-flush sees latest values
   blocksRef.current = blocks;
   activeEpisodeIdRef.current = activeEpisodeId;
+  activeProjectIdRef.current = activeProjectId;
   scenesRef.current = scenes;
 
   const episode = state.episodes.find(e => e.id === activeEpisodeId);
@@ -2392,6 +2412,63 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeEpisodeId, initialized]);
+
+  // ── emergency_backup 복구 — pagehide 핸들러가 IME/디바운스 잔여분을 localStorage에
+  //    동기로 백업한 게 있으면, 다음 진입 시 IndexedDB 시각과 비교해 자동 복구.
+  //    충돌 시 정책: 백업이 IndexedDB의 max(updatedAt)보다 1초 이상 새것일 때만
+  //    덮어쓰기. 그 외(backup이 더 오래된 경우, 사용자가 다른 기기에서 작업해
+  //    state가 더 신선한 경우)는 백업 폐기. 이중 안전장치: 7일 이상 묵은 백업도 폐기.
+  useEffect(() => {
+    if (recoveryAttemptedRef.current) return;
+    if (!activeEpisodeId || !initialized) return;
+
+    let raw;
+    try { raw = localStorage.getItem('drama_emergency_backup'); } catch { return; }
+    if (!raw) return;
+
+    let backup;
+    try { backup = JSON.parse(raw); }
+    catch {
+      try { localStorage.removeItem('drama_emergency_backup'); } catch {}
+      return;
+    }
+    if (!backup?.episodeId || !Array.isArray(backup.blocks) || !backup.ts) {
+      try { localStorage.removeItem('drama_emergency_backup'); } catch {}
+      return;
+    }
+
+    // 7일 초과 — episode가 삭제됐거나 잊혀진 백업. 폐기.
+    if (Date.now() - backup.ts > 7 * 24 * 60 * 60 * 1000) {
+      try { localStorage.removeItem('drama_emergency_backup'); } catch {}
+      return;
+    }
+
+    // 다른 episode의 백업이면 그대로 두기 — 사용자가 그 episode를 열 때 처리.
+    if (backup.episodeId !== activeEpisodeId) return;
+
+    // 이번 episode의 백업 — 1회만 시도.
+    recoveryAttemptedRef.current = true;
+
+    const currentEpBlocks = scriptBlocks.filter(b => b.episodeId === activeEpisodeId);
+    const currentMaxUpdate = currentEpBlocks.reduce(
+      (max, b) => Math.max(max, b.updatedAt || 0), 0
+    );
+
+    // 백업이 1초 이상 새것이어야 적용 (race condition 방지).
+    if (backup.ts <= currentMaxUpdate + 1000) {
+      try { localStorage.removeItem('drama_emergency_backup'); } catch {}
+      return;
+    }
+
+    // 복구.
+    dispatch({ type: 'SET_BLOCKS', episodeId: activeEpisodeId, payload: backup.blocks });
+    dispatch({ type: 'SET_SAVE_STATUS', payload: 'saved' });
+    try { localStorage.removeItem('drama_emergency_backup'); } catch {}
+
+    setPasteToast('이전 세션의 마지막 변경분을 복구했습니다');
+    setTimeout(() => setPasteToast(null), 4000);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeEpisodeId, initialized, scriptBlocks]);
 
   useEffect(() => {
     const isAsciiPrintable = (key) => key.length === 1 && /^[\x20-\x7E]$/.test(key);
@@ -2563,6 +2640,82 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     };
     window.addEventListener('editor:flush', handler);
     return () => window.removeEventListener('editor:flush', handler);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── pagehide flush — protect the last 800ms of typing on full reload,
+  // tab close, or mobile background entry. Use pagehide instead of beforeunload
+  // — beforeunload is unreliable on mobile (iOS Safari rarely fires it on
+  // backgrounding).
+  //
+  // 핵심 우회: handleInput은 IME 조립 중(composingRef.current)이면 early-return
+  // 하므로 blocksRef.current가 마지막 한국어 글자를 못 받는 경우가 있음.
+  // → blur로 IME 강제 commit 시도 + parseSurface로 DOM 직접 추출(state/ref 우회).
+  // IndexedDB write는 async라 페이지 navigate에 따라잡힐 수 있어 localStorage
+  // 비상 백업도 동기로 같이 기록.
+  useEffect(() => {
+    const handler = () => {
+      const epId = activeEpisodeIdRef.current;
+      const projId = activeProjectIdRef.current;
+      if (!epId) return;
+
+      // 1) IME 강제 commit — 브라우저가 contentEditable에서 blur 시 조립 중인
+      //    음절을 자동으로 확정함. blur가 compositionend를 트리거하므로
+      //    ScriptSurface 내부 composingRef도 자연스럽게 해제됨. mobile Gboard/
+      //    Samsung Keyboard도 동일 동작 (blur가 IME 세션을 끊음).
+      try { surfaceApiRef.current?.blurSurface?.(); } catch {}
+
+      // 2) DOM에서 최신 blocks 직접 추출 (handleInput의 IME early-return 우회)
+      //    실패 시 blocksRef.current로 fallback.
+      let latestBlocks = null;
+      try { latestBlocks = surfaceApiRef.current?.parseToBlocks?.() ?? null; } catch {}
+      if (!latestBlocks || !latestBlocks.length) latestBlocks = blocksRef.current;
+      if (!latestBlocks.length) return;
+
+      const serialized = JSON.stringify(latestBlocks);
+      if (serialized === lastSavedBlocks.current) return;
+      clearTimeout(saveTimer.current);
+
+      // 3) Scene 메타 동기화 (unmount-flush와 동일 로직)
+      const currentScenes = scenesRef.current;
+      const sceneBlocks = latestBlocks.filter(b => b.type === 'scene_number');
+      const updatedScenes = sceneBlocks.map((b, idx) => {
+        const existing = currentScenes.find(s => s.id === b.sceneId);
+        return {
+          ...(existing || {}),
+          id: b.sceneId || existing?.id || genId(),
+          episodeId: epId, projectId: b.projectId,
+          sceneSeq: idx + 1, label: buildSceneLabel(idx + 1),
+          status: existing?.status || 'draft',
+          tags: existing?.tags || [], characters: existing?.characters || [],
+          characterIds: existing?.characterIds || [],
+          content: b.content,
+          location: existing?.location ?? '', subLocation: existing?.subLocation ?? '',
+          timeOfDay: existing?.timeOfDay ?? '', specialSituation: existing?.specialSituation ?? '',
+          sourceTreatmentItemId: existing?.sourceTreatmentItemId ?? null,
+          sceneListContent: existing?.sceneListContent ?? '',
+          createdAt: existing?.createdAt || now(), updatedAt: now(),
+        };
+      });
+
+      // 4) 글로벌 state로 dispatch (sync). IndexedDB write는 effect 안이라 async,
+      //    페이지 navigate에 못 미칠 수 있음 → 5)의 localStorage가 안전망.
+      dispatch({ type: 'SET_BLOCKS', episodeId: epId, payload: latestBlocks });
+      dispatch({ type: 'SYNC_SCENES', episodeId: epId, payload: updatedScenes, removeOrphans: true });
+      dispatch({ type: 'SET_SAVE_STATUS', payload: 'saved' });
+      lastSavedBlocks.current = serialized;
+
+      // 5) 동기 비상 백업 — 다음 진입 시 mount-effect가 IndexedDB 시각과 비교해 복구.
+      //    localStorage write는 sync (IndexedDB와 달리 즉시 디스크 반영).
+      try {
+        localStorage.setItem('drama_emergency_backup', JSON.stringify({
+          episodeId: epId, projectId: projId || null,
+          blocks: latestBlocks, ts: Date.now(),
+        }));
+      } catch {}
+    };
+    window.addEventListener('pagehide', handler);
+    return () => window.removeEventListener('pagehide', handler);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
