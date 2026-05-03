@@ -2523,11 +2523,12 @@ function StyleOnboardingGate() {
     try {
       if (localStorage.getItem('drama_styleOnboarded') === 'true') return;
 
+      // episodes/projects는 createSeedData()가 신규 사용자에게도 자동 생성하므로
+      // 판정 기준에서 제외. scriptBlocks는 seed에서 빈 배열이라 안전한 신호.
       const isExistingUser =
         localStorage.getItem('drama_onboardingDone') === 'true' ||
         localStorage.getItem('drama_mobileOnboardingDone') === 'true' ||
         !!localStorage.getItem('drama_auth_user') ||
-        (state.episodes && state.episodes.length > 0) ||
         (state.scriptBlocks && state.scriptBlocks.length > 0);
 
       if (isExistingUser) {
