@@ -1,6 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Undo2, Redo2, Sun, Moon, User, Clapperboard, ExternalLink, ChevronLeft, ChevronRight, Strikethrough, AlignLeft, AlignCenter, AlignRight, AlignJustify, Cloud, CloudOff } from 'lucide-react';
-import LandingPage from './components/LandingPage';
 import { logShareSchema } from './utils/urlSchemas';
 import { getTimelineColor } from './utils/color';
 import { loadLogPayload, isShortReviewId as isUUID } from './utils/reviewShare';
@@ -2380,26 +2379,6 @@ function LogShareView() {
   );
 }
 
-// ─── LandingPreview — 디자인 확인용 (#preview-landing) ────────────────────────
-function LandingPreview() {
-  useEffect(() => {
-    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
-  }, []);
-  return (
-    <LandingPage
-      onStart={() => { window.location.hash = ''; window.location.reload(); }}
-      onLogin={() => { window.location.hash = ''; window.location.reload(); }}
-    />
-  );
-}
-
-// 모듈-레벨 플래그: Shell이 한 번이라도 렌더됐으면 true — React remount·state 리셋 무관하게 유지
-let _shellEverRendered = (() => {
-  try { return !!localStorage.getItem('drama_auth_user') || localStorage.getItem('drama_editor_entered') === 'true'; }
-  catch { return false; }
-})();
-
 // ─── WebView 안내 모달 ────────────────────────────────────────────────────────
 function WebViewModal({ onClose }) {
   return (
@@ -2452,11 +2431,6 @@ export default function App() {
     return () => window.removeEventListener('hashchange', handler);
   }, []);
 
-  // Shell 렌더 시 플래그 확정 — React remount/state 리셋 무관 유지
-  useEffect(() => {
-    _shellEverRendered = true;
-  }, []);
-
   // #sl= 공유 링크 hash 정리 — replaceState로 hashchange 미발사 (이중 렌더 방지)
   useEffect(() => {
     if (window.location.hash.startsWith('#sl=')) {
@@ -2472,7 +2446,6 @@ export default function App() {
         const userData = extractUserData(session);
         if (userData) {
           try { localStorage.setItem('drama_auth_user', JSON.stringify(userData)); } catch {}
-          _shellEverRendered = true;
           setAuthUser(userData);
         }
         if (session.provider_token) {
@@ -2521,32 +2494,8 @@ export default function App() {
   if (window.location.hash.startsWith('#review=')) return <SharedReviewView />;
   // public — 작업기록 공유 (인증 불필요, 의도적)
   if (window.location.hash.startsWith('#log='))    return <LogShareView />;
-  // dev-only — 랜딩 디자인 확인용, production에서 노출 차단
-  if (window.location.hash === '#preview-landing' && import.meta.env.DEV) return <LandingPreview />;
   // public — 베타 설문 (인증 불필요, 의도적)
   if (window.location.hash === '#survey')          return <SurveyPage />;
-
-  // 매 렌더마다 localStorage 직접 확인 + 모듈 플래그 — 어떤 state 리셋에도 안전
-  const lsAuth    = (() => { try { return !!localStorage.getItem('drama_auth_user'); } catch { return false; } })();
-  const lsEntered = (() => { try { return localStorage.getItem('drama_editor_entered') === 'true'; } catch { return false; } })();
-  const canEnter  = !!authUser || lsAuth || lsEntered || _shellEverRendered;
-
-  if (!canEnter) {
-    return (
-      <LandingPage
-        onStart={() => {
-          try { localStorage.setItem('drama_editor_entered', 'true'); } catch {}
-          _shellEverRendered = true;
-          forceUpdate(n => n + 1);
-        }}
-        onLogin={(userData) => {
-          try { localStorage.setItem('drama_editor_entered', 'true'); } catch {}
-          _shellEverRendered = true;
-          setAuthUser(userData);
-        }}
-      />
-    );
-  }
 
   return (
     <AppProvider>
