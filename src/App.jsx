@@ -69,6 +69,7 @@ import ImportDocxModal       from './components/Modals/ImportDocxModal';
 import ImportHwpxModal       from './components/Modals/ImportHwpxModal';
 import StyleSettingsModal    from './components/Modals/StyleSettingsModal';
 import UserSettingsModal     from './components/Modals/UserSettingsModal';
+import InitialUserSettingsModal from './components/Modals/InitialUserSettingsModal';
 import TagManageModal        from './components/Modals/TagManageModal';
 import AppSettingsModal      from './components/Modals/AppSettingsModal';
 import NoticesModal          from './components/Modals/NoticesModal';
@@ -2500,7 +2501,25 @@ export default function App() {
   return (
     <AppProvider>
       <Shell authUser={authUser} setAuthUser={setAuthUser} />
+      <StyleOnboardingGate />
       {webViewModal && <WebViewModal onClose={() => setWebViewModal(false)} />}
     </AppProvider>
   );
+}
+
+// 처음 사용자에게만 1회 표시되는 스타일 마법사 게이트.
+// state.initialized 시점에 localStorage 확인 후 결정 — IndexedDB 로드 전에는
+// stylePreset이 DEFAULT라 모달이 잘못된 값을 보여줄 수 있어 기다림.
+function StyleOnboardingGate() {
+  const { state } = useApp();
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!state.initialized) return;
+    try {
+      if (localStorage.getItem('drama_styleOnboarded') !== 'true') setOpen(true);
+    } catch {}
+  }, [state.initialized]);
+
+  return <InitialUserSettingsModal open={open} onClose={() => setOpen(false)} />;
 }
