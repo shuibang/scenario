@@ -2510,6 +2510,10 @@ export default function App() {
 // 처음 사용자에게만 1회 표시되는 스타일 마법사 게이트.
 // state.initialized 시점에 localStorage 확인 후 결정 — IndexedDB 로드 전에는
 // stylePreset이 DEFAULT라 모달이 잘못된 값을 보여줄 수 있어 기다림.
+//
+// 기존 사용자(이전 투어 완료 / 로그인 / 회차·대본 데이터 존재) 마이그레이션:
+// styleOnboarded=true를 자동 설정하여 모달이 뜨지 않도록 한다. 진짜 신규
+// 사용자(완전 빈 상태)에게만 모달 표시.
 function StyleOnboardingGate() {
   const { state } = useApp();
   const [open, setOpen] = useState(false);
@@ -2517,7 +2521,21 @@ function StyleOnboardingGate() {
   useEffect(() => {
     if (!state.initialized) return;
     try {
-      if (localStorage.getItem('drama_styleOnboarded') !== 'true') setOpen(true);
+      if (localStorage.getItem('drama_styleOnboarded') === 'true') return;
+
+      const isExistingUser =
+        localStorage.getItem('drama_onboardingDone') === 'true' ||
+        localStorage.getItem('drama_mobileOnboardingDone') === 'true' ||
+        !!localStorage.getItem('drama_auth_user') ||
+        (state.episodes && state.episodes.length > 0) ||
+        (state.scriptBlocks && state.scriptBlocks.length > 0);
+
+      if (isExistingUser) {
+        localStorage.setItem('drama_styleOnboarded', 'true');
+        return;
+      }
+
+      setOpen(true);
     } catch {}
   }, [state.initialized]);
 
