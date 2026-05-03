@@ -23,7 +23,7 @@ export async function signInWithGoogle() {
     options: {
       scopes: DRIVE_SCOPE,
       queryParams: { access_type: 'offline', prompt: 'consent' },
-      redirectTo: window.location.origin + window.location.pathname,
+      redirectTo: window.location.origin + '/app',
     },
   });
 }
