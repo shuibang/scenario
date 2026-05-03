@@ -27,8 +27,22 @@ function Tag({ children, color = 'accent' }) {
   );
 }
 
-// ── Initial 3-step tour ────────────────────────────────────────────────────────
+// ── Initial 4-step tour ────────────────────────────────────────────────────────
 const STEPS = [
+  {
+    tourId: 'menubar',
+    title: '먼저 작품을 만들어 보세요',
+    desc: (
+      <>
+        상단 메뉴 <Tag>파일 → 새 작품</Tag> (단축키 <Tag color="blue">Ctrl+Alt+N</Tag>)으로<br/>
+        회차 수와 분량을 입력하면 바로 대본 작성으로 넘어갑니다.<br/>
+        <span style={{ fontSize: 11, color: 'var(--c-text5)' }}>
+          작품을 만들어야 표지·시놉시스·대본 편집을 시작할 수 있어요.
+        </span>
+      </>
+    ),
+    placement: 'bottom',
+  },
   {
     tourId: 'left-panel',
     navigateTo: 'cover',
