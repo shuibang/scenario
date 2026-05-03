@@ -113,7 +113,7 @@ function BlockStyleRow({ label, blockKey, showIndent = true }) {
 }
 
 // ─── Tab 1: 씬 헤더 스타일 ───────────────────────────────────────────────────
-function SceneHeaderTab() {
+export function SceneHeaderTab() {
   const { state } = useApp();
   const blockStyles  = state.stylePreset?.blockStyles || {};
   const snBs         = blockStyles.sceneNumber || {};
@@ -245,7 +245,7 @@ function SceneHeaderTab() {
 }
 
 // ─── Tab 2: 블록 스타일 ───────────────────────────────────────────────────────
-function BlockStyleTab() {
+export function BlockStyleTab() {
   const { state, dispatch } = useApp();
   const blockStyles = state.stylePreset?.blockStyles || {};
   const dialogueGap = state.stylePreset?.dialogueGap || '7em';
