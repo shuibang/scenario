@@ -33,6 +33,26 @@ function noticesPlugin() {
   };
 }
 
+// dev/preview에서 vercel.json의 /app → /app.html rewrite를 시뮬레이션.
+// production은 vercel CDN이 처리하므로 build 결과엔 영향 없음.
+function appHtmlAlias() {
+  return {
+    name: 'app-html-alias',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const url = req.url || '';
+        if (url === '/app' || url.startsWith('/app?')) {
+          req.url = '/app.html' + url.slice(4);
+        } else if (url.startsWith('/app/')) {
+          req.url = '/app.html';
+        }
+        next();
+      });
+    },
+  };
+}
+
 // 개발 서버와 빌드 결과물에서 동일한 버전 응답을 제공한다.
 function versionPlugin(version) {
   const payload = JSON.stringify({ version });
@@ -62,6 +82,7 @@ export default defineConfig({
     tailwindcss(),
     versionPlugin(buildVersion),
     noticesPlugin(),
+    appHtmlAlias(),
     // PWA는 베타 종료 후 활성화 예정
   ],
   define: {
