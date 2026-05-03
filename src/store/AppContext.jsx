@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
 import { getAll, setAll, getItem, setItem, DB_KEYS, genId, now, migrateFromLocalStorage } from './db';
-import { createSeedData } from '../data/seed';
 import { isTokenValid, saveToDrive, clearAccessToken } from './googleDrive';
 import { computeSizeGuard } from './sizeGuard';
 import { sharePayloadSchema } from '../utils/urlSchemas';
@@ -713,11 +712,10 @@ export function AppProvider({ children }) {
             }
           } catch { /* fallthrough to seed */ }
         }
-        const seed = createSeedData();
-        await Promise.all(
-          Object.entries(seed).map(([key, data]) => setAll(DB_KEYS[key], data))
-        );
-        dispatch({ type: 'INIT', payload: seed });
+        // 신규 사용자는 빈 상태로 시작 — 더미 작품/인물 자동 생성 X.
+        // CenterPanel·LeftPanel·ProjectsManagePage가 빈 상태 안내 UI를 충분히
+        // 제공하고, 사용자가 명시적으로 "새 작품"을 만들도록 유도한다.
+        dispatch({ type: 'INIT', payload: {} });
       }
     })();
   }, []);
