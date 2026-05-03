@@ -402,12 +402,21 @@ export default function MobileOnboardingTour() {
     return () => window.removeEventListener('resize', handler);
   }, [tourVisible, step]);
 
-  // 첫 방문 시 투어 표시
+  // 첫 방문 시 투어 표시 — 단, 처음 사용자 스타일 모달이 닫힌 후에만
   useEffect(() => {
-    const shouldShow = isPublicPcMode()
-      ? !sessionStorage.getItem(SESSION_KEY)
-      : !getItem(DONE_KEY);
-    if (shouldShow) setTourVisible(true);
+    const tryShow = () => {
+      const styleDone = (() => {
+        try { return localStorage.getItem('drama_styleOnboarded') === 'true'; }
+        catch { return false; }
+      })();
+      const tourDone = isPublicPcMode()
+        ? sessionStorage.getItem(SESSION_KEY)
+        : getItem(DONE_KEY);
+      if (styleDone && !tourDone) setTourVisible(true);
+    };
+    tryShow();
+    window.addEventListener('drama:styleOnboarded', tryShow);
+    return () => window.removeEventListener('drama:styleOnboarded', tryShow);
   }, []);
 
   // 수동 투어 실행 이벤트 수신

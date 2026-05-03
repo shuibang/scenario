@@ -379,10 +379,19 @@ export default function OnboardingTour() {
   }, [tourVisible, tourStep, currentStep?.tourId]);
 
   useEffect(() => {
-    const shouldShow = isPublicPcMode()
-      ? !sessionStorage.getItem(SESSION_KEY)
-      : !getItem(DONE_KEY);
-    if (shouldShow) setTourVisible(true);
+    const tryShow = () => {
+      const styleDone = (() => {
+        try { return localStorage.getItem('drama_styleOnboarded') === 'true'; }
+        catch { return false; }
+      })();
+      const tourDone = isPublicPcMode()
+        ? sessionStorage.getItem(SESSION_KEY)
+        : getItem(DONE_KEY);
+      if (styleDone && !tourDone) setTourVisible(true);
+    };
+    tryShow();
+    window.addEventListener('drama:styleOnboarded', tryShow);
+    return () => window.removeEventListener('drama:styleOnboarded', tryShow);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {

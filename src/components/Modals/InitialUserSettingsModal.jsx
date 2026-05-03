@@ -7,6 +7,8 @@ const STORAGE_KEY = 'drama_styleOnboarded';
 export default function InitialUserSettingsModal({ open, onClose }) {
   const finish = () => {
     try { localStorage.setItem(STORAGE_KEY, 'true'); } catch {}
+    // OnboardingTour가 모달 닫힘을 감지해 투어를 시작할 수 있도록 알림
+    try { window.dispatchEvent(new CustomEvent('drama:styleOnboarded')); } catch {}
     onClose();
   };
 
