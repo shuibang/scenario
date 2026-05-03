@@ -100,7 +100,7 @@ export default function FeedbackButtons() {
       >
         <button
           onClick={() => {
-            window.location.href = '/#survey';
+            window.location.href = '/app#survey';
           }}
           style={{
             ...btnBase,

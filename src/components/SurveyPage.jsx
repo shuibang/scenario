@@ -1,6 +1,6 @@
 /**
  * SurveyPage — 대본 작업실 베타 테스트 설문
- * 접근: /#survey
+ * 접근: /app#survey
  * DB: supabase > survey_responses
  */
 import React, { useState, useEffect } from 'react';

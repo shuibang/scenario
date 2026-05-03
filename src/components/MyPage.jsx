@@ -897,7 +897,7 @@ function ErrorReportTab() {
 
       {/* 설문 바로가기 */}
       <button
-        onClick={() => { window.location.href = '/#survey'; }}
+        onClick={() => { window.location.href = '/app#survey'; }}
         style={{
           width: '100%', padding: '13px 16px', borderRadius: 10,
           border: '1px solid var(--c-border3)', background: 'var(--c-input)',
