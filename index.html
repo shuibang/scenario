@@ -1,66 +1,1195 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-visual" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="작업실" />
-    <meta name="theme-color" content="#1B2A4E" />
-    <title>대본 작업실 - 쉽게 쓰는 무료 대본 편집기</title>
-    <link rel="canonical" href="https://daejak.kr/" />
-    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5479563960989185"
-     crossorigin="anonymous"></script>
-    <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-J4KZ1QPJD7"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'G-J4KZ1QPJD7');
-    </script>
-    <style>
-      .initial-loader {
-        position: fixed; inset: 0;
-        display: flex; flex-direction: column;
-        align-items: center; justify-content: center;
-        gap: 18px; padding: 24px; box-sizing: border-box;
-        background: #fff;
-      }
-      .initial-loader__logo {
-        width: 100%; max-width: 200px; height: auto;
-        animation: initial-loader-float 2s ease-in-out infinite;
-        will-change: transform;
-      }
-      .initial-loader__text {
-        margin: 0; font-size: 13px; color: #888888; letter-spacing: 0.02em;
-      }
-      @keyframes initial-loader-float {
-        0%, 100% { transform: translateY(-4px); }
-        50%      { transform: translateY(4px); }
-      }
-      @media (max-width: 600px) {
-        .initial-loader__logo { max-width: 60vw; }
-        .initial-loader__text { font-size: 12px; }
-      }
-      @media (prefers-reduced-motion: reduce) {
-        .initial-loader__logo { animation: none; }
-      }
-    </style>
-  </head>
-  <body>
-    <div id="root">
-      <noscript>이 페이지를 보려면 JavaScript를 사용 설정해 주세요.</noscript>
-      <div class="initial-loader" aria-hidden="true">
-        <img class="initial-loader__logo" src="/logo.svg" alt="" />
-        <p class="initial-loader__text">불러오는 중...</p>
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="index, follow" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+  <meta name="theme-color" content="#1B2A4E" />
+  <!-- Legacy 공유 링크 호환: 구 형식 /#xxx 해시는 React 앱(/app)으로 즉시 이전.
+       페인트 전에 동기 실행되어야 깜빡임 없이 redirect됨. -->
+  <script>
+    (function() {
+      var h = window.location.hash;
+      if (!h) return;
+      var prefixes = ['#review=', '#delivery=', '#log=', '#sl='];
+      var exacts = ['#director', '#survey'];
+      var match = prefixes.some(function(p) { return h.indexOf(p) === 0; })
+               || exacts.indexOf(h) !== -1;
+      if (match) window.location.replace('/app' + h);
+    })();
+  </script>
+  <!-- 테마 부트스트랩: 에디터(/app)와 동일한 'drama_theme' localStorage 키 공유.
+       paint 전에 동기 실행되어야 FOUC 방지 — 따라서 head 최상단에 inline으로 둠. -->
+  <script>
+    (function() {
+      try {
+        var saved = localStorage.getItem('drama_theme');
+        var theme = (saved === 'dark' || saved === 'light')
+          ? saved
+          : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (e) {}
+    })();
+  </script>
+  <title>대본 편집기 | 대본 작업실 — 드라마 작가를 위한 무료 온라인 대본 편집 도구</title>
+  <meta name="description" content="한국 드라마 작가를 위한 무료 온라인 대본 편집기. 드라마 대본 편집에 꼭 필요한 씬번호 자동 연동, HWPX·DOCX·PDF 내보내기, 모바일·태블릿 완벽 지원. 설치도 로그인도 없이 바로 시작하세요." />
+  <meta property="og:title" content="대본 편집기 | 대본 작업실 — 무료 온라인 드라마 대본 편집 도구" />
+  <meta property="og:description" content="한국 드라마 작가를 위한 무료 온라인 대본 편집기. 씬번호 자동 연동, HWPX·DOCX·PDF 내보내기, 모바일 지원. 설치·로그인 없이 바로 시작." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://daejak.kr" />
+  <link rel="canonical" href="https://daejak.kr" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5479563960989185"
+   crossorigin="anonymous"></script>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-J4KZ1QPJD7"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-J4KZ1QPJD7');
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "대본 작업실",
+    "description": "한국 드라마 작가를 위한 무료 온라인 대본 편집기. 씬번호 자동 연동, HWPX·DOCX·PDF 내보내기, 모바일 지원.",
+    "url": "https://daejak.kr",
+    "applicationCategory": "DesignApplication",
+    "operatingSystem": "Any",
+    "inLanguage": "ko",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "KRW"
+    }
+  }
+  </script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* === 라이트 모드 (기본값) === */
+    :root {
+      --bg:      #f8f8f8;
+      --panel:   #ffffff;
+      --header:  #ffffff;
+      --input:   #e8e8e8;
+      --card:    #ffffff;
+      --border:  #e2e2e2;
+      --border2: #ececec;
+      --border3: #d8d8d8;
+      --text:    #1a1a1a;
+      --text2:   #333333;
+      --text3:   #555555;
+      --text4:   #666666;
+      --text5:   #888888;
+      --text6:   #aaaaaa;
+      --accent:  #3D5070;
+      --accent2: #7E4A56;
+      --success: #16a34a;
+      --warn:    #d97706;
+      --ms-red:  #D85565;
+
+      /* 히어로 영역 (라이트) */
+      --hero-bg:           #FFFFFF;
+      --hero-grid:         #F2F2F2;
+      --hero-text:         #1B2A4E;
+      --hero-text-soft:    #4A5568;
+      --hero-text-muted:   #8B95A6;
+      --hero-btn-fill-bg:  #1B2A4E;
+      --hero-btn-fill-tx:  #FFFFFF;
+      --hero-btn-out-tx:   #1B2A4E;
+      --hero-btn-out-bd:   #1B2A4E;
+      --hero-badge-bg:     rgba(216, 85, 101, 0.10);
+      --hero-badge-tx:     #C03A52;
+      --hero-hl-bg:        rgba(216, 85, 101, 0.32);
+      --hero-bullet-dot:   #C8CDD6;
+      --hero-logo-shadow:  rgba(27, 42, 78, 0.18);
+    }
+
+    /* === 다크 모드 (data-theme="dark" 명시 또는 OS 다크) === */
+    [data-theme="dark"] {
+      --bg:      #1a1a1a;
+      --panel:   #171717;
+      --header:  #111111;
+      --input:   #242424;
+      --card:    #1e1e1e;
+      --border:  #252525;
+      --border2: #2a2a2a;
+      --border3: #333333;
+      --text:    #e0e0e0;
+      --text2:   #bbbbbb;
+      --text3:   #888888;
+      --text4:   #666666;
+      --text5:   #555555;
+      --text6:   #444444;
+      --accent:  #8DA0BB;
+      --accent2: #B58993;
+      --success: #22c55e;
+      --warn:    #f59e0b;
+
+      --hero-bg:          #161616;
+      --hero-grid:        #232323;
+      --hero-text:        #E8EDF3;
+      --hero-text-soft:   #B7BFCC;
+      --hero-text-muted:  #6E7785;
+      --hero-btn-fill-bg: #E8EDF3;
+      --hero-btn-fill-tx: #1B2A4E;
+      --hero-btn-out-tx:  #E8EDF3;
+      --hero-btn-out-bd:  #4A5675;
+      --hero-badge-bg:    rgba(216, 85, 101, 0.18);
+      --hero-badge-tx:    #E27A8B;
+      --hero-hl-bg:       rgba(216, 85, 101, 0.42);
+      --hero-bullet-dot:  #444;
+      --hero-logo-shadow: rgba(0, 0, 0, 0.5);
+    }
+
+    body {
+      font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    a { color: inherit; text-decoration: none; }
+    button { cursor: pointer; font-family: inherit; }
+    img { max-width: 100%; }
+
+    /* ── 헤더 ── */
+    .site-header {
+      position: sticky; top: 0; z-index: 100;
+      background: var(--header);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px; height: 60px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    /* 헤더 브랜드 — "대본 작업실" 워드마크 텍스트 단독 */
+    .logo-link {
+      display: flex; align-items: center;
+      cursor: pointer; background: none; border: none; padding: 0;
+    }
+    .logo-text {
+      font-weight: 700; font-size: 16px;
+      color: var(--text);
+      letter-spacing: -0.01em;
+      white-space: nowrap;
+    }
+
+    /* 히어로 풀 로고 — logo-full.svg (와이드 워드마크) */
+    .hero-logo-mark {
+      width: 90%; max-width: 480px; height: auto;
+      display: block;
+      margin: 0 auto 22px;
+      transform-origin: center top;
+      will-change: transform, opacity;
+    }
+    /* 다크 모드에서 워드마크 명도 반전 — 빨간 액센트는 보존 */
+    [data-theme="dark"] .hero-logo-mark {
+      filter: invert(0.92) hue-rotate(180deg) saturate(0.95);
+    }
+    .header-btns { display: flex; gap: 8px; }
+    .btn-outline {
+      padding: 5px 14px; border-radius: 6px; font-size: 12px;
+      border: 1px solid var(--border3); background: transparent;
+      color: var(--text3);
+    }
+    .btn-outline:hover { border-color: var(--ms-red); color: var(--ms-red); }
+    .btn-primary {
+      padding: 5px 14px; border-radius: 6px; font-size: 12px;
+      background: var(--hero-btn-fill-bg); color: var(--hero-btn-fill-tx); border: none;
+    }
+    .btn-primary:hover { filter: brightness(1.1); }
+
+    /* 헤더 - 연출 작업실 버튼 (감독 사용자용 별도 진입, 원고지 빨강으로 메인 CTA와 구분) */
+    .btn-director {
+      padding: 5px 14px; border-radius: 6px; font-size: 12px;
+      border: 1px solid var(--ms-red); background: transparent;
+      color: var(--ms-red); font-weight: 500;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+    .btn-director:hover { background: var(--ms-red); color: #fff; }
+
+    /* 히어로 하단 - 연출 작업실 진입 링크 (작가 본 흐름에서 살짝 분리된 보조 CTA) */
+    .hero-director-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      margin-top: 14px;
+      font-size: 12.5px; font-weight: 500;
+      color: var(--ms-red);
+      text-decoration: none;
+      border: 1px solid var(--ms-red);
+      padding: 7px 16px; border-radius: 20px;
+      opacity: 0.85;
+      transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+    }
+    .hero-director-link:hover {
+      opacity: 1;
+      background: var(--ms-red);
+      color: #fff;
+    }
+
+    /* 다크/라이트 토글 버튼 — 에디터와 'drama_theme' localStorage 공유 */
+    .btn-theme-toggle {
+      width: 32px; height: 32px; border-radius: 6px;
+      border: 1px solid var(--border3); background: transparent;
+      color: var(--text3);
+      display: inline-flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      transition: color 0.2s ease, border-color 0.2s ease;
+      padding: 0;
+    }
+    .btn-theme-toggle:hover { color: var(--ms-red); border-color: var(--ms-red); }
+    .btn-theme-toggle .ti-sun, .btn-theme-toggle .ti-moon { display: none; }
+    [data-theme="dark"] .btn-theme-toggle .ti-sun  { display: block; }
+    [data-theme="light"] .btn-theme-toggle .ti-moon { display: block; }
+
+    /* ── 섹션 공통 ── */
+    .section { padding: 64px 24px; }
+    .section-inner { max-width: 1080px; margin: 0 auto; }
+    .section-inner-sm { max-width: 720px; margin: 0 auto; }
+    .section-inner-md { max-width: 800px; margin: 0 auto; }
+
+    .section-label {
+      text-align: center; font-size: 11px; color: var(--text4);
+      font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    .section-title {
+      /* display: table 로 텍스트 너비에 맞춰 줄어들고, margin auto 로 중앙 정렬.
+         이렇게 하면 ::after 의 left:0/right:0 이 정확히 타이틀 텍스트 너비에 매칭됨 */
+      display: table;
+      text-align: center; font-size: clamp(20px, 4vw, 28px);
+      font-weight: 700; color: var(--text);
+      margin: 0 auto 32px;
+    }
+    /* .ms-rule 디바이더는 사용 중지 — 섹션 디바이더 역할은
+       .section-title::after / .story-card h2::after / .cta-section h2::after 의
+       "얇은선 + 굵은선" 처리가 담당함 */
+    .ms-rule { display: none; }
+
+    /* 섹션 타이틀 하단 — 얇은 선 + 굵은 선 (원고지 더블 룰)
+       ::after 의 left:0; right:0 이 부모(display: table)의 텍스트 너비를 차지 */
+    .section-title { position: relative; padding-bottom: 22px; }
+    .section-title::after,
+    .story-card h2::after,
+    .cta-section h2::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 5px;
+      /* 얇은 1px 선(위) + 갭 + 굵은 3px 선(아래) */
+      background:
+        linear-gradient(var(--ms-red), var(--ms-red)) 0 0 / 100% 1px no-repeat,
+        linear-gradient(var(--ms-red), var(--ms-red)) 0 100% / 100% 3px no-repeat;
+    }
+    .story-card h2 {
+      display: table;          /* 좌측 정렬 — margin auto 없음 */
+      position: relative;
+      padding-bottom: 18px;
+    }
+    .cta-section h2 {
+      display: table;
+      margin: 0 auto 14px;     /* 중앙 정렬 + 기존 하단 마진 유지 */
+      position: relative;
+      padding-bottom: 22px;
+    }
+
+    /* ── 히어로 ── */
+    .hero-section {
+      position: relative;
+      background-color: var(--hero-bg);
+      background-image:
+        linear-gradient(to right,  var(--hero-grid) 1px, transparent 1px),
+        linear-gradient(to bottom, var(--hero-grid) 1px, transparent 1px);
+      background-size: 30px 30px;
+      border-bottom: 1px solid var(--hero-grid);
+    }
+    .hero {
+      padding: 64px 32px 56px;
+      max-width: 720px; margin: 0 auto; text-align: center;
+      animation: fadeUp 0.7s ease both;
+    }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 7px;
+      background: var(--hero-badge-bg);
+      color: var(--hero-badge-tx);
+      font-size: 12px; font-weight: 600;
+      padding: 5px 13px; border-radius: 20px;
+      margin-bottom: 22px; letter-spacing: 0.02em;
+    }
+    .hero-badge::before {
+      content: ''; width: 6px; height: 6px; border-radius: 50%;
+      background: var(--ms-red);
+      flex-shrink: 0;
+    }
+    .hero h1 {
+      font-size: clamp(28px, 5vw, 44px); font-weight: 800;
+      line-height: 1.25; margin-bottom: 18px; color: var(--hero-text);
+      letter-spacing: -0.01em;
+      word-break: keep-all;
+    }
+    .hero-h1-hl {
+      background: linear-gradient(transparent 60%, var(--hero-hl-bg) 60%);
+      padding: 0 4px;
+    }
+    .hero-desc {
+      font-size: clamp(14px, 2vw, 16px); color: var(--hero-text-soft);
+      line-height: 1.75; margin-bottom: 30px;
+      word-break: keep-all;
+    }
+    .hero-cta { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+    .btn-hero-primary {
+      padding: 13px 28px; border-radius: 10px; font-size: 15px; font-weight: 700;
+      background: var(--hero-btn-fill-bg); color: var(--hero-btn-fill-tx);
+      border: 1px solid var(--hero-btn-fill-bg);
+      transition: filter 0.2s ease, transform 0.1s ease;
+    }
+    .btn-hero-primary:hover { filter: brightness(1.1); }
+    .btn-hero-primary:active { transform: translateY(1px); }
+    .btn-hero-secondary {
+      padding: 13px 28px; border-radius: 10px; font-size: 15px; font-weight: 600;
+      background: transparent;
+      color: var(--hero-btn-out-tx);
+      border: 1px solid var(--hero-btn-out-bd);
+      transition: background 0.2s ease;
+    }
+    .btn-hero-secondary:hover { background: rgba(255, 255, 255, 0.04); }
+    @media (prefers-color-scheme: light) {
+      .btn-hero-secondary:hover { background: rgba(27, 42, 78, 0.06); }
+    }
+    .hero-bullets {
+      font-size: 12px; color: var(--hero-text-muted);
+      margin-top: 18px;
+      display: inline-flex; align-items: center; gap: 0;
+      flex-wrap: wrap; justify-content: center;
+      letter-spacing: 0.02em;
+    }
+    .hero-bullets > span:not(.hero-bullet-dot) { padding: 0 4px; }
+    .hero-bullet-dot {
+      width: 4px; height: 4px; border-radius: 50%;
+      background: var(--hero-bullet-dot); display: inline-block;
+      margin: 0 8px;
+    }
+
+    /* ── 기능 그리드 ── */
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 18px; margin-top: 32px;
+    }
+    .feature-card {
+      background: var(--card); border: 1px solid var(--border2);
+      border-radius: 10px; padding: 24px 20px;
+    }
+    .feature-icon { font-size: 26px; margin-bottom: 10px; }
+    .feature-title { font-size: 14px; font-weight: 700; margin-bottom: 8px; color: var(--text); }
+    .feature-desc { font-size: 13px; color: var(--text4); line-height: 1.7; }
+
+    /* ── 기타 기능 ── */
+    .extra-section {
+      background: var(--card);
+      border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+      padding: 40px 24px;
+    }
+    .extra-list { list-style: none; display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+    .extra-list li { font-size: 13px; color: var(--text3); display: flex; gap: 8px; align-items: flex-start; }
+    .extra-dot { color: var(--ms-red); flex-shrink: 0; margin-top: 2px; }
+
+    /* ── 만든 이유 ── */
+    .story-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 36px 40px;
+    }
+    .story-card h2 { font-size: 17px; font-weight: 700; margin-bottom: 18px; color: var(--text2); }
+    .story-p { font-size: 14px; color: var(--text3); line-height: 1.85; margin-bottom: 14px; }
+
+    /* ── 스크린샷 ── */
+    .screenshot-wrap {
+      position: relative; display: flex; align-items: flex-start;
+      justify-content: center;
+    }
+    .desktop-frame {
+      flex: 0 0 auto; width: min(780px, 85vw);
+      border-radius: 10px; overflow: hidden;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.35);
+      border: 1px solid var(--border);
+    }
+    .frame-bar {
+      height: 28px; background: var(--header);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; padding: 0 12px; gap: 6px;
+    }
+    .mac-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .mobile-frame {
+      flex: 0 0 auto; width: clamp(110px, 13vw, 170px);
+      margin-left: clamp(-55px, -6.5vw, -85px);
+      margin-top: clamp(28px, 5vw, 56px);
+      border-radius: 22px; overflow: hidden;
+      box-shadow: 0 16px 48px rgba(0,0,0,0.4);
+      border: 1px solid var(--border); background: #111;
+      position: relative; z-index: 2;
+    }
+    .mobile-notch {
+      height: 16px; background: #111;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .mobile-notch-bar { width: 44px; height: 7px; background: #222; border-radius: 4px; }
+
+    /* 스크린샷 테마별 스왑 — 라이트/다크 토글 시 자동 전환 */
+    .ss-light, .ss-dark { width: 100%; display: block; }
+    .ss-dark { display: none; }
+    [data-theme="dark"] .ss-light { display: none; }
+    [data-theme="dark"] .ss-dark  { display: block; }
+
+    /* ── 비교표 (원고지 스타일: 외곽 굵은 빨간 선 + 행간 얇은 더블 빨간 선) ── */
+    .compare-wrap {
+      overflow-x: auto; margin-top: 32px;
+      /* 가장자리 굵은 빨간 마무리 */
+      border: 3px solid var(--ms-red);
+    }
+    .compare-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 560px; }
+    .compare-table thead tr { background: var(--card); }
+    .compare-table th {
+      padding: 12px 16px; font-weight: 600;
+      /* 헤더 아래 굵은 빨간 선 (상단 굵게 마무리의 두 번째 라인 역할) */
+      border-bottom: 3px solid var(--ms-red);
+      /* 컬럼 사이 얇은 빨간 세로선 */
+      border-right: 1px solid var(--ms-red);
+      white-space: nowrap;
+    }
+    .compare-table th:first-child { text-align: left; font-size: 11px; color: var(--text3); }
+    .compare-table th:not(:first-child) { text-align: center; }
+    .compare-table th:nth-child(2) { color: var(--hero-text); }
+    .compare-table th:last-child { border-right: none; }
+    .compare-table td {
+      padding: 11px 16px 19px;
+      text-align: center;
+      /* 라인 3개를 gradient 로 그림 — 원고지 세로선은 갭을 가로지르지 않으므로
+         세로선 높이를 calc(100% - 10px) 로 제한해 더블 가로선 위에서 정확히 멈춤
+         (1px 선 + 8px 갭 + 1px 선 = 총 10px 영역) */
+      background-image:
+        linear-gradient(var(--ms-red), var(--ms-red)),  /* 우측 세로선 (위까지만) */
+        linear-gradient(var(--ms-red), var(--ms-red)),  /* 하단 가로선 (아래쪽 1px) */
+        linear-gradient(var(--ms-red), var(--ms-red));  /* 더블의 위쪽 1px (9px 위) */
+      background-size:
+        1px calc(100% - 10px),
+        100% 1px,
+        100% 1px;
+      background-position:
+        right top,
+        left bottom,
+        left bottom 9px;
+      background-repeat: no-repeat, no-repeat, no-repeat;
+    }
+    .compare-table td:last-child {
+      /* 마지막 컬럼은 외곽 보더가 마무리 — 세로선 제거, 가로 더블만 유지 */
+      background-image:
+        linear-gradient(var(--ms-red), var(--ms-red)),
+        linear-gradient(var(--ms-red), var(--ms-red));
+      background-size: 100% 1px, 100% 1px;
+      background-position: left bottom, left bottom 9px;
+      background-repeat: no-repeat, no-repeat;
+    }
+    .compare-table td:first-child { text-align: left; color: var(--text3); font-weight: 500; font-size: 12px; }
+    /* 짝수 행 배경 (TR 레벨에서 적용 — TD의 gradient 라인은 그 위에 그려짐) */
+    .compare-table tr:nth-child(even) { background: var(--card); }
+    .val-yes { color: var(--success); font-weight: 600; }
+    .val-no  { color: var(--text6); }
+    .val-warn { color: var(--warn); }
+    .val-our { color: var(--ms-red); font-weight: 600; }
+    .compare-note { font-size: 11px; color: var(--text6); margin-top: 12px; text-align: center; }
+
+    /* ── 가격 ── */
+    .price-section {
+      background: var(--card);
+      border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+      padding: 64px 24px; text-align: center;
+    }
+    .price-box {
+      display: inline-block; margin-top: 28px;
+      padding: 36px 56px; background: var(--bg);
+      border: 2px solid var(--hero-text); border-radius: 16px;
+    }
+    /* "무료" — 원고지 빨강으로 스탬프처럼 강조 */
+    .price-num { font-size: 48px; font-weight: 800; color: var(--ms-red); line-height: 1; }
+    .price-desc { font-size: 13px; color: var(--text4); margin-top: 12px; line-height: 1.9; }
+    .price-note {
+      margin-top: 18px; padding: 10px 14px;
+      background: var(--input); border-radius: 8px;
+      font-size: 12px; color: var(--text5);
+    }
+
+    /* ── CTA ── */
+    .cta-section { padding: 72px 24px; text-align: center; }
+    .cta-section h2 {
+      font-size: clamp(22px, 4vw, 32px); font-weight: 700;
+      margin-bottom: 14px; color: var(--text);
+    }
+    .cta-section p { font-size: 14px; color: var(--text4); margin-bottom: 32px; }
+    .cta-btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+    /* ── 푸터 ── */
+    footer {
+      background: var(--header); border-top: 1px solid var(--border);
+      padding: 24px; text-align: center; font-size: 12px; color: var(--text6);
+    }
+    footer p + p { margin-top: 6px; }
+
+    /* ── 애니메이션 ── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+    @keyframes slideDown { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
+
+    .demo-btn {
+      font-size: 11px; padding: 2px 10px; border-radius: 12px;
+      border: 1px solid var(--border3); background: transparent;
+      color: var(--text4); transition: all 0.25s ease; user-select: none;
+    }
+    .demo-btn.active {
+      border-color: var(--accent); background: var(--accent);
+      color: #fff; font-weight: 600;
+    }
+    .blink-cursor {
+      display: inline-block; width: 2px; height: 0.85em;
+      background: var(--accent); vertical-align: middle; margin-left: 1px;
+      animation: blink 1s step-end infinite;
+    }
+    .reveal {
+      opacity: 0; transform: translateY(28px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+
+    /* ── 모바일 ── */
+    @media (max-width: 600px) {
+      .story-card { padding: 24px 20px; }
+      .price-box { padding: 28px 32px; }
+    }
+  </style>
+<link rel="stylesheet" href="/footer.css" />
+</head>
+<body>
+
+  <!-- 헤더 -->
+  <header class="site-header">
+    <button class="logo-link" type="button" aria-label="맨 위로" onclick="window.scrollTo({ top: 0, behavior: 'smooth' });">
+      <span class="logo-text">대본 작업실</span>
+    </button>
+    <div class="header-btns">
+      <button id="theme-toggle" class="btn-theme-toggle" type="button" aria-label="다크/라이트 모드 전환" title="다크/라이트 모드 전환">
+        <svg class="ti-sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <circle cx="12" cy="12" r="4" fill="currentColor"/>
+          <g stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none">
+            <line x1="12" y1="2" x2="12" y2="5"/>
+            <line x1="12" y1="19" x2="12" y2="22"/>
+            <line x1="2" y1="12" x2="5" y2="12"/>
+            <line x1="19" y1="12" x2="22" y2="12"/>
+            <line x1="4.93" y1="4.93" x2="7.05" y2="7.05"/>
+            <line x1="16.95" y1="16.95" x2="19.07" y2="19.07"/>
+            <line x1="4.93" y1="19.07" x2="7.05" y2="16.95"/>
+            <line x1="16.95" y1="7.05" x2="19.07" y2="4.93"/>
+          </g>
+        </svg>
+        <svg class="ti-moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path d="M21 13.5A8.5 8.5 0 0 1 10.5 3a8.5 8.5 0 1 0 10.5 10.5z" fill="currentColor"/>
+        </svg>
+      </button>
+      <a href="https://daejak.kr/app#director"><button class="btn-director" type="button">연출 작업실</button></a>
+      <a href="https://daejak.kr/app"><button class="btn-outline">로그인</button></a>
+      <a href="https://daejak.kr/app"><button class="btn-primary">바로 시작하기</button></a>
+    </div>
+  </header>
+
+  <!-- 히어로 -->
+  <section class="hero-section">
+    <div class="hero">
+      <img class="hero-logo-mark" src="/logo-full.svg" alt="대본 작업실 — 드라마 작가를 위한 무료 대본 편집기" />
+      <span class="hero-badge">무료 베타 공개 중</span>
+      <h1>드라마 대본,<br>이제 <span class="hero-h1-hl">편하게</span>, 어디서든.</h1>
+      <p class="hero-desc">
+        한국 드라마 작가를 위해 직접 만든 무료 온라인 대본 편집기.<br>
+        씬헤더·지문·대사 한국식 포맷, HWPX·DOCX·PDF 내보내기까지.
+      </p>
+      <div class="hero-cta">
+        <a href="https://daejak.kr/app"><button class="btn-hero-primary">지금 시작하기</button></a>
+        <a href="#features"><button class="btn-hero-secondary">기능 둘러보기</button></a>
+      </div>
+      <div>
+        <a href="https://daejak.kr/app#director" class="hero-director-link">🎬 감독이신가요? 연출 작업실 입장 →</a>
+      </div>
+      <p class="hero-bullets">
+        <span>설치 없음</span>
+        <span class="hero-bullet-dot" aria-hidden="true"></span>
+        <span>로그인 없음</span>
+        <span class="hero-bullet-dot" aria-hidden="true"></span>
+        <span>완전 무료</span>
+      </p>
+    </div>
+  </section>
+
+  <!-- 버튼/단축키 포맷 데모 -->
+  <section class="reveal section" style="padding: 0 24px 64px;">
+    <div style="max-width: 540px; margin: 0 auto;">
+      <div style="background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.22);">
+        <!-- 툴바 -->
+        <div style="background: var(--header); border-bottom: 1px solid var(--border); padding: 5px 10px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+          <span style="font-size:11px; color:var(--text4); padding:2px 10px; border:1px solid var(--border3); border-radius:12px; margin-right:2px;">1회</span>
+          <span id="btn-s" class="demo-btn">S#</span>
+          <span id="btn-action" class="demo-btn">지문</span>
+          <span id="btn-dia" class="demo-btn">대사</span>
+          <span class="demo-btn">등장</span>
+          <span class="demo-btn">연결</span>
+          <span class="demo-btn">기타</span>
+          <div style="flex:1;"></div>
+          <span style="font-size:10px; color:var(--text5); white-space:nowrap;">1/1 &nbsp;●&nbsp; 저장됨</span>
+        </div>
+        <!-- 편집 영역 -->
+        <div style="padding:14px 20px; font-family:monospace; font-size:12.5px; line-height:2.1; min-height:160px; background:var(--bg);">
+          <div id="demo-scene" style="transition: all 0.3s;"></div>
+          <div id="demo-action" style="transition: all 0.35s;"></div>
+          <div id="demo-dia" style="transition: all 0.35s;"></div>
+        </div>
+      </div>
+      <div id="demo-caption" style="text-align:center; margin-top:14px; font-size:12px; min-height:20px; color:var(--text5);"></div>
+    </div>
+  </section>
+
+  <!-- 씬번호 자동연동 데모 -->
+  <section class="reveal" style="background:var(--card); border-top:1px solid var(--border); border-bottom:1px solid var(--border); padding:64px 24px;">
+    <div style="max-width:800px; margin:0 auto;">
+      <div class="ms-rule" aria-hidden="true"></div>
+      <p class="section-label">핵심 기능 시연</p>
+      <h2 class="section-title" style="margin-bottom:10px;">회상 씬 번호, 자동으로 따라갑니다</h2>
+      <p style="text-align:center; font-size:14px; color:var(--text4); margin-bottom:40px; line-height:1.7;">
+        "S#3씬에서 봤던 그 기억처럼—" 씬 순서가 바뀌어도<br>지문 속 참조 번호가 자동으로 갱신됩니다.
+      </p>
+      <div class="reveal" style="display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap; justify-content:center;">
+        <!-- 편집기 -->
+        <div style="flex:1 1 320px; max-width:420px; background:var(--bg); border:1px solid var(--border); border-radius:8px; overflow:hidden;">
+          <div style="height:28px; background:var(--header); border-bottom:1px solid var(--border); display:flex; align-items:center; padding:0 10px; gap:6px;">
+            <span style="font-size:10px; color:var(--text5); font-weight:600;">대본 편집기 — 1회차</span>
+            <div style="flex:1;"></div>
+            <span style="font-size:8.5px; padding:1px 5px; border:1px solid var(--border3); border-radius:3px; color:var(--text6);">Ctrl+1</span>
+            <span style="font-size:8.5px; padding:1px 5px; border:1px solid var(--border3); border-radius:3px; color:var(--text6);">Ctrl+2</span>
+            <span style="font-size:8.5px; padding:1px 5px; border:1px solid var(--border3); border-radius:3px; color:var(--text6);">Ctrl+3</span>
+          </div>
+          <div style="padding:12px 16px; font-family:monospace; font-size:12px; line-height:1.95;">
+            <div style="color:var(--accent); font-weight:700;">S#1. 카페 — 낮</div>
+            <div style="padding-left:1.4rem; color:var(--text3);">민준, 창가에 앉아 커피를 마신다.</div>
+            <div style="color:var(--text); white-space:pre;">민준     오늘따라 왜 이리 설레지.</div>
+            <div id="ref-new-scene" style="min-height:1.95em; margin-top:2px;"></div>
+            <div id="ref-scene2">
+              <span id="ref-s2-num" style="color:var(--accent); font-weight:700; transition:all 0.4s;">S#2</span><span style="color:var(--accent); font-weight:700;">. 골목 — 낮</span>
+              <span id="ref-shift-badge" style="display:none; font-size:9px; color:#f59e0b; margin-left:7px; font-weight:500;">↑ 번호 밀림</span>
+            </div>
+            <div style="padding-left:1.4rem; color:var(--text3);">서진이 걸어온다.</div>
+            <div style="margin-top:2px;">
+              <span id="ref-s3-num" style="color:var(--accent); font-weight:700; transition:all 0.4s;">S#3</span><span style="color:var(--accent); font-weight:700;">. 민준의 방 — 밤</span>
+            </div>
+            <div id="ref-action" style="padding-left:1.4rem; color:var(--text3); border-radius:3px; transition:background 0.35s ease;">
+              S#<span id="ref-num" style="transition:color 0.35s;">2</span>에서 봤던 그 눈빛이—
+            </div>
+          </div>
+        </div>
+        <!-- 씬리스트 -->
+        <div style="flex:0 0 auto; width:200px; background:var(--panel); border:1px solid var(--border); border-radius:8px; overflow:hidden;">
+          <div style="height:28px; background:var(--header); border-bottom:1px solid var(--border); display:flex; align-items:center; padding:0 10px;">
+            <span style="font-size:10px; color:var(--text5); font-weight:600; flex:1;">씬 리스트</span>
+            <span style="font-size:9px; color:var(--text6); background:var(--input); padding:1px 6px; border-radius:10px;">자동 연동</span>
+          </div>
+          <div id="ref-scenelist"></div>
+          <div style="padding:8px 12px; font-size:10px; color:var(--text6); text-align:center;">편집기에서 자동 생성됨</div>
+        </div>
+      </div>
+      <div id="ref-caption" style="text-align:center; margin-top:18px; font-size:12.5px; min-height:22px; color:var(--text5);">S#1 아래 줄에서 새 씬을 입력하면…</div>
+    </div>
+  </section>
+
+  <!-- 스크린샷 -->
+  <div class="reveal section" style="padding-top: 0;">
+    <div class="section-inner">
+      <div class="ms-rule" aria-hidden="true"></div>
+      <p class="section-label" style="margin-bottom: 24px;">실제 서비스 화면</p>
+      <div class="screenshot-wrap">
+        <div class="desktop-frame">
+          <div class="frame-bar">
+            <span class="mac-dot" style="background:#ff5f57;"></span>
+            <span class="mac-dot" style="background:#febc2e;"></span>
+            <span class="mac-dot" style="background:#28c840;"></span>
+            <div style="flex:1; margin-left:12px; height:16px; background:var(--input); border-radius:4px; max-width:280px;"></div>
+          </div>
+          <img class="ss-light" src="/screenshots/desktop.png" alt="대본 작업실 데스크톱 화면" loading="lazy" />
+          <img class="ss-dark"  src="/screenshots/desktop-dark.png" alt="대본 작업실 데스크톱 화면 (다크모드)" loading="lazy" onerror="this.onerror=null; this.src='/screenshots/desktop.png';" />
+        </div>
+        <div class="mobile-frame">
+          <div class="mobile-notch"><div class="mobile-notch-bar"></div></div>
+          <img class="ss-light" src="/screenshots/mobile.jpg" alt="대본 작업실 모바일 화면" loading="lazy" />
+          <img class="ss-dark"  src="/screenshots/mobile-dark.jpg" alt="대본 작업실 모바일 화면 (다크모드)" loading="lazy" onerror="this.onerror=null; this.src='/screenshots/mobile.jpg';" />
+        </div>
       </div>
     </div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+  </div>
+
+  <!-- 만든 이유 -->
+  <div class="reveal section" style="padding: 56px 24px;">
+    <div class="section-inner-sm">
+      <div class="story-card">
+        <div class="ms-rule left" aria-hidden="true"></div>
+        <h2>대본 쓰다 불편해서 직접 만들었어요</h2>
+        <p class="story-p">안녕하세요, 드라마 작가 지망생이자 개발자입니다.</p>
+        <p class="story-p">대본을 쓰면서 늘 불편했던 것들이 있었어요. 수정할 때마다 지문 속 씬 번호가 밀리진 않았는지 하나하나 고치고 확인하고… Final Draft는 너무 비싸고, Scrivener는 태그 문법을 배워야 하고, 따로 구입해야 하는 아이패드 버전에선 아예 적용도 안 되고.</p>
+        <p class="story-p" style="margin-bottom:0;">그래서 직접 만들었어요. 현재 베타 버전입니다. 버그나 불편한 점 피드백 주시면 빠르게 반영할게요!</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 왜 대본 작업실인가 -->
+  <section class="reveal section">
+    <div class="section-inner-sm">
+      <div class="ms-rule" aria-hidden="true"></div>
+      <p class="section-label">온라인 드라마 대본 편집기</p>
+      <h2 class="section-title">대본 편집, 이렇게 달라집니다</h2>
+      <p style="text-align:center; font-size:15px; color:var(--text3); max-width:580px; margin:0 auto 10px; line-height:1.85; word-break:keep-all;">
+        드라마 대본 편집에서 가장 번거로운 건 씬 번호가 밀릴 때마다 직접 수정하는 일이에요.
+        대본 작업실은 그 문제부터 먼저 해결했습니다.
+        씬 순서가 바뀌면 지문 속 참조 번호가 자동으로 갱신되고, 완성된 대본은 HWPX·DOCX·PDF로 바로 내보낼 수 있어요.
+      </p>
+      <p style="text-align:center; margin-top:16px;">
+        <a href="/template.html" style="font-size:13px; color:var(--ms-red); text-decoration:underline; text-underline-offset:3px;">드라마 대본 양식 알아보기 →</a>
+      </p>
+    </div>
+  </section>
+
+  <!-- 주요 기능 -->
+  <section id="features" class="reveal section" style="scroll-margin-top: 60px;">
+    <div class="section-inner">
+      <div class="ms-rule" aria-hidden="true"></div>
+      <h2 class="section-title">주요 기능</h2>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <div class="feature-icon">🔗</div>
+          <h3 class="feature-title">회상 씬 번호 자동 연동</h3>
+          <p class="feature-desc">지문에서 씬을 참조할 때, 씬 순서가 바뀌면 그 번호도 실시간으로 자동으로 따라 바뀝니다. Final Draft도, Scrivener도 지원하지 않는 기능입니다.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">✍️</div>
+          <h3 class="feature-title">버튼 + 단축키로 바로 쓰기</h3>
+          <p class="feature-desc">씬 헤딩, 지문, 대사, 씬 연결 — Ctrl+1/2/3으로 바로 전환됩니다. 태그 문법을 외울 필요 없고, 영어 표기도 단축키로 입력할 수 있어요.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🇰🇷</div>
+          <h3 class="feature-title">한국 대본 포맷 특화</h3>
+          <p class="feature-desc">공모전 당선 서식·드라마 대본집 기준의 "인물(여백)대사" 형식을 구현했습니다. PDF, DOCX, HWPX 내보내기를 지원합니다.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📱</div>
+          <h3 class="feature-title">모바일·태블릿 완벽 지원</h3>
+          <p class="feature-desc">아이패드, 폰에서도 편집 가능합니다. 구글 로그인만 하면 구글 드라이브에 자동저장됩니다. 언제 어디서나 이어서 쓰세요.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔒</div>
+          <h3 class="feature-title">AI 없음 — 단순 편집기</h3>
+          <p class="feature-desc">내 이야기가 어딘가에 쌓이는 찜찜함 없이, 온전히 내 것으로만 남아있어요. 편집 기능에만 집중했습니다.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📦</div>
+          <h3 class="feature-title">표지·시놉시스·구조 통합</h3>
+          <p class="feature-desc">표지, 시놉시스, 인물 관리, 씬리스트, 트리트먼트, 구조 점검까지 — 하나의 작업실에서 대본 작업의 전 과정을 관리하세요.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 기타 기능 -->
+  <div class="reveal extra-section">
+    <div class="section-inner-sm">
+      <h2 style="font-size:15px; font-weight:700; color:var(--text);">그 외 기능</h2>
+      <ul class="extra-list">
+        <li><span class="extra-dot">•</span>로그인 없이도 이 기기에 자동저장 (구글 로그인 시 어디서든 이어서 작업)</li>
+        <li><span class="extra-dot">•</span>다크모드 지원 (현재 기기 설정과 자동 연동)</li>
+        <li><span class="extra-dot">•</span>검토 링크 공유 기능 (읽기 전용)</li>
+        <li><span class="extra-dot">•</span>협업·공유 기능 예정 (베타버전 미지원)</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 비교표 -->
+  <section class="reveal section">
+    <div class="section-inner">
+      <div class="ms-rule" aria-hidden="true"></div>
+      <h2 class="section-title">타 프로그램 비교</h2>
+      <div class="compare-wrap">
+        <table class="compare-table">
+          <thead>
+            <tr>
+              <th></th>
+              <th>대본 작업실</th>
+              <th>Final Draft</th>
+              <th>Scrivener</th>
+              <th>WriterDuet</th>
+              <th>Arc Studio</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>가격</td>
+              <td class="val-our">무료</td>
+              <td class="val-no">약 37만원 ($249)</td>
+              <td class="val-no">₩88,000~₩141,000</td>
+              <td class="val-no">월 ₩7,500~₩15,000</td>
+              <td class="val-no">무료(2편)~연 ₩149,000</td>
+            </tr>
+            <tr>
+              <td>한국어 포맷</td>
+              <td class="val-yes">✅</td><td class="val-no">❌</td><td class="val-no">❌</td><td class="val-no">❌</td><td class="val-no">❌</td>
+            </tr>
+            <tr>
+              <td>HWPX 내보내기</td>
+              <td class="val-yes">✅</td><td class="val-no">❌</td><td class="val-no">❌</td><td class="val-no">❌</td><td class="val-no">❌</td>
+            </tr>
+            <tr>
+              <td>씬번호 실시간 연동</td>
+              <td class="val-yes">✅</td><td class="val-no">❌</td><td class="val-warn">△</td><td class="val-no">❌</td><td class="val-no">❌</td>
+            </tr>
+            <tr>
+              <td>로그인 없이 사용</td>
+              <td class="val-yes">✅</td><td class="val-no">❌</td><td class="val-no">❌</td><td class="val-no">❌</td><td class="val-no">❌</td>
+            </tr>
+            <tr>
+              <td>모바일 편집</td>
+              <td class="val-yes">✅</td><td class="val-no">❌</td><td class="val-no">❌</td><td class="val-yes">✅</td><td class="val-warn">△ (iOS만)</td>
+            </tr>
+            <tr>
+              <td>시놉시스 통합편집</td>
+              <td class="val-yes">✅</td><td class="val-warn">△</td><td class="val-no">❌</td><td class="val-no">❌</td><td class="val-no">❌</td>
+            </tr>
+            <tr>
+              <td>인물 관리 패널</td>
+              <td class="val-yes">✅</td><td class="val-no">❌</td><td class="val-warn">△</td><td class="val-no">❌</td><td class="val-warn">△</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="compare-note">가격 기준: 2026년 기준, 환율 1,500원/USD 적용. Final Draft 정가 $249 / Scrivener 데스크톱 ₩88,000·번들 ₩140,800 / WriterDuet 월 $5~$9.92 / Arc Studio 무료(2편)~연 $99.</p>
+    </div>
+  </section>
+
+  <!-- 가격 -->
+  <div class="reveal price-section">
+    <div class="ms-rule" aria-hidden="true"></div>
+    <h2 class="section-title" style="margin-bottom:0;">가격</h2>
+    <div class="price-box">
+      <div class="price-num">무료</div>
+      <div class="price-desc">로그인도, 설치도, 결제도 없어요.<br>광고만 조금 달았어요.</div>
+      <div class="price-note">추후 광고 제거 + 추가 기능을 담은 유료 앱을 플레이스토어/앱스토어에 출시 예정</div>
+    </div>
+  </div>
+
+  <!-- CTA -->
+  <div class="reveal cta-section">
+    <div class="ms-rule" aria-hidden="true"></div>
+    <h2>지금 바로 시작해보세요</h2>
+    <p>설치 없이, 로그인 없이, 브라우저에서 바로 시작할 수 있어요.</p>
+    <div class="cta-btns">
+      <a href="https://daejak.kr/app"><button class="btn-hero-primary">무료로 시작하기 →</button></a>
+      <a href="https://daejak.kr/app"><button class="btn-hero-secondary">구글 로그인 (자동저장)</button></a>
+    </div>
+  </div>
+
+  <!-- 푸터 -->
+  <footer class="dj-footer">
+    <p class="dj-footer__tagline">대본 작업실 — 드라마 작가를 위한 무료 대본 편집기</p>
+    <div class="dj-footer__row">
+      <a class="dj-footer__link" href="/notice">공지사항</a>
+      <span class="dj-footer__sep" aria-hidden="true">·</span>
+      <a class="dj-footer__link" href="/changelog">업데이트 내역</a>
+      <span class="dj-footer__sep" aria-hidden="true">·</span>
+      <a class="dj-footer__link" href="/help">사용 설명서</a>
+      <span class="dj-footer__sep" aria-hidden="true">·</span>
+      <a class="dj-footer__link" href="/">홈으로</a>
+    </div>
+    <div class="dj-footer__row">
+      <a class="dj-footer__link" href="/about">서비스 소개</a>
+      <span class="dj-footer__sep" aria-hidden="true">·</span>
+      <a class="dj-footer__link" href="/contact">문의</a>
+      <span class="dj-footer__sep" aria-hidden="true">·</span>
+      <a class="dj-footer__link" href="/privacy">개인정보처리방침</a>
+      <span class="dj-footer__sep" aria-hidden="true">·</span>
+      <a class="dj-footer__link" href="/terms">이용약관</a>
+    </div>
+  </footer>
+
+  <script>
+    // ── 다크/라이트 토글 (에디터와 'drama_theme' localStorage 공유) ────────
+    (function() {
+      const btn = document.getElementById('theme-toggle');
+      if (!btn) return;
+      btn.addEventListener('click', () => {
+        const cur = document.documentElement.getAttribute('data-theme');
+        const next = cur === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', next);
+        try { localStorage.setItem('drama_theme', next); } catch (e) {}
+      });
+      // 다른 탭에서 에디터가 테마를 바꾸면 이 페이지도 따라가도록
+      window.addEventListener('storage', (e) => {
+        if (e.key === 'drama_theme' && (e.newValue === 'dark' || e.newValue === 'light')) {
+          document.documentElement.setAttribute('data-theme', e.newValue);
+        }
+      });
+    })();
+
+    // ── 히어로 로고 스크롤 페이드아웃 (헤더는 처음부터 항상 표시) ────────
+    (function() {
+      const heroLogo = document.querySelector('.hero-logo-mark');
+      if (!heroLogo) return;
+
+      const FADE_START = 60;
+      const FADE_RANGE = 220;
+      let ticking = false;
+
+      function update() {
+        const scrollY = window.scrollY || window.pageYOffset || 0;
+        const t = Math.max(0, Math.min(1, (scrollY - FADE_START) / FADE_RANGE));
+        heroLogo.style.opacity   = String(1 - t);
+        heroLogo.style.transform = `scale(${1 - 0.3 * t})`;
+        ticking = false;
+      }
+
+      window.addEventListener('scroll', () => {
+        if (!ticking) {
+          requestAnimationFrame(update);
+          ticking = true;
+        }
+      }, { passive: true });
+      update();
+    })();
+
+    // ── 스크롤 리빌 ──────────────────────────────────────────────
+    const revealObs = new IntersectionObserver((entries) => {
+      entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.reveal').forEach(el => revealObs.observe(el));
+
+    // ── 유틸 ─────────────────────────────────────────────────────
+    function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    async function typeInto(el, text, speed = 46) {
+      el.textContent = '';
+      for (let i = 0; i < text.length; i++) {
+        el.textContent = text.slice(0, i + 1);
+        await wait(speed);
+      }
+    }
+
+    // ── 데모 1: 버튼/단축키 포맷 데모 ────────────────────────────
+    async function runFormatDemo() {
+      const elScene  = document.getElementById('demo-scene');
+      const elAction = document.getElementById('demo-action');
+      const elDia    = document.getElementById('demo-dia');
+      const caption  = document.getElementById('demo-caption');
+      const btnS     = document.getElementById('btn-s');
+      const btnA     = document.getElementById('btn-action');
+      const btnD     = document.getElementById('btn-dia');
+
+      const reset = () => {
+        elScene.innerHTML = '';
+        elAction.innerHTML = '';
+        elDia.innerHTML = '';
+        elScene.style.cssText = '';
+        elAction.style.cssText = '';
+        elDia.style.cssText = '';
+        [btnS, btnA, btnD].forEach(b => b.classList.remove('active'));
+        caption.style.color = 'var(--text5)';
+      };
+
+      while (true) {
+        reset();
+        await wait(700);
+
+        // Phase 1: scene 타이핑
+        caption.textContent = '텍스트 입력 후 버튼을 누르면…';
+        const sceneText = '카페 내부, 낮';
+        elScene.innerHTML = '<span class="blink-cursor"></span>';
+        for (let i = 0; i <= sceneText.length; i++) {
+          elScene.innerHTML = sceneText.slice(0, i) + '<span class="blink-cursor"></span>';
+          await wait(56);
+        }
+        await wait(480);
+
+        // Phase 2: S# 버튼 클릭
+        btnS.classList.add('active');
+        caption.style.color = 'var(--accent)';
+        caption.textContent = 'S# 클릭 → 씬 헤딩 포맷으로 변환';
+        elScene.style.color = 'var(--accent)';
+        elScene.style.fontWeight = '700';
+        elScene.textContent = 'S#1. ' + sceneText;
+        await wait(850);
+        btnS.classList.remove('active');
+
+        // Phase 3: action 타이핑
+        caption.style.color = 'var(--text5)';
+        caption.textContent = '텍스트 입력 후 버튼을 누르면…';
+        const actionText = '민준이 들어서며 주위를 둘러본다.';
+        elAction.style.color = 'var(--text)';
+        for (let i = 0; i <= actionText.length; i++) {
+          elAction.innerHTML = actionText.slice(0, i) + '<span class="blink-cursor"></span>';
+          await wait(46);
+        }
+        await wait(480);
+
+        // Phase 4: 지문 버튼 클릭
+        btnA.classList.add('active');
+        caption.style.color = 'var(--accent)';
+        caption.textContent = '지문 클릭 → 지문 포맷으로 변환';
+        elAction.style.paddingLeft = '1.5rem';
+        elAction.style.color = 'var(--text3)';
+        elAction.style.transition = 'all 0.35s';
+        elAction.textContent = actionText;
+        await wait(850);
+        btnA.classList.remove('active');
+
+        // Phase 5: dialogue 타이핑
+        caption.style.color = 'var(--text5)';
+        caption.textContent = '텍스트 입력 후 버튼을 누르면…';
+        const diaText = '민준   오늘 여기서 쓰는 거야.';
+        elDia.style.color = 'var(--text)';
+        for (let i = 0; i <= diaText.length; i++) {
+          elDia.innerHTML = diaText.slice(0, i) + '<span class="blink-cursor"></span>';
+          await wait(46);
+        }
+        await wait(480);
+
+        // Phase 6: 대사 버튼 클릭
+        btnD.classList.add('active');
+        caption.style.color = 'var(--accent)';
+        caption.textContent = '대사 클릭 → 한국 대본 대사 포맷으로 변환';
+        elDia.innerHTML = '<span style="font-weight:700;color:var(--text);min-width:7em;display:inline-block;">민준</span><span style="color:var(--text);">오늘 여기서 쓰는 거야.</span>';
+        elDia.style.display = 'flex';
+        await wait(850);
+        btnD.classList.remove('active');
+
+        // Phase 7: 완료
+        caption.style.color = 'var(--success, #22c55e)';
+        caption.textContent = '태그 문법 없이, 버튼·단축키로 바로 씁니다 ✓';
+        await wait(3000);
+      }
+    }
+
+    // ── 데모 2: 씬번호 자동연동 데모 ─────────────────────────────
+    function renderSceneList(shifted) {
+      const el = document.getElementById('ref-scenelist');
+      const scenes = shifted
+        ? [
+            { num: 1, title: '카페 — 낮', isNew: false },
+            { num: 2, title: '골목 — 저녁', isNew: true },
+            { num: 3, title: '골목 — 낮', isNew: false },
+            { num: 4, title: '민준의 방 — 밤', isNew: false },
+          ]
+        : [
+            { num: 1, title: '카페 — 낮', isNew: false },
+            { num: 2, title: '골목 — 낮', isNew: false },
+            { num: 3, title: '민준의 방 — 밤', isNew: false },
+          ];
+
+      el.innerHTML = scenes.map(s => `
+        <div style="padding:7px 12px; border-bottom:1px solid var(--border2); display:flex; gap:8px; align-items:center;
+          background:${s.isNew ? 'rgba(141,160,187,0.10)' : 'transparent'}; transition:all 0.45s ease;
+          ${s.isNew ? 'animation:slideDown 0.35s ease;' : ''}">
+          <span style="font-size:10px; font-weight:700; min-width:28px; color:${s.isNew ? 'var(--accent)' : 'var(--text6)'}; flex-shrink:0;">S#${s.num}</span>
+          <span style="font-size:11px; color:${s.isNew ? 'var(--accent)' : 'var(--text3)'}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${s.title}</span>
+          ${s.isNew ? '<span style="font-size:8px; color:var(--accent); font-weight:700; flex-shrink:0;">NEW</span>' : ''}
+        </div>
+      `).join('');
+    }
+
+    async function runRefDemo() {
+      const newScene  = document.getElementById('ref-new-scene');
+      const s2num     = document.getElementById('ref-s2-num');
+      const s3num     = document.getElementById('ref-s3-num');
+      const badge     = document.getElementById('ref-shift-badge');
+      const refNum    = document.getElementById('ref-num');
+      const refAction = document.getElementById('ref-action');
+      const caption   = document.getElementById('ref-caption');
+
+      const reset = () => {
+        newScene.innerHTML = '';
+        s2num.textContent = 'S#2';
+        s3num.textContent = 'S#3';
+        badge.style.display = 'none';
+        refNum.textContent = '2';
+        refNum.style.color = 'inherit';
+        refNum.style.fontWeight = '400';
+        refAction.style.background = 'transparent';
+        caption.style.color = 'var(--text5)';
+        caption.textContent = 'S#1 아래 줄에서 새 씬을 입력하면…';
+        renderSceneList(false);
+      };
+
+      while (true) {
+        reset();
+        await wait(1400);
+
+        // Phase 1: 타이핑
+        caption.textContent = '새 씬 헤딩 입력 중…';
+        caption.style.color = 'var(--accent)';
+        const newTitle = 'S#2. 골목 — 저녁';
+        newScene.style.color = 'var(--accent)';
+        newScene.style.fontWeight = '700';
+        for (let i = 0; i <= newTitle.length; i++) {
+          newScene.innerHTML = newTitle.slice(0, i) + '<span class="blink-cursor"></span>';
+          await wait(50);
+        }
+        await wait(650);
+
+        // Phase 2: 번호 밀림
+        caption.style.color = 'var(--text3)';
+        caption.textContent = '씬 번호가 자동으로 밀립니다 (S#2→S#3, S#3→S#4)';
+        newScene.textContent = newTitle;
+        s2num.textContent = 'S#3';
+        s3num.textContent = 'S#4';
+        badge.style.display = 'inline';
+        badge.style.animation = 'slideDown 0.3s ease';
+        renderSceneList(true);
+        await wait(1000);
+
+        // Phase 3: 참조 갱신
+        caption.style.color = 'var(--accent)';
+        caption.textContent = '지문 속 씬 참조도 자동 갱신 S#2→S#3 ✓';
+        refNum.textContent = '3';
+        refNum.style.color = 'var(--accent)';
+        refNum.style.fontWeight = '700';
+        refAction.style.background = 'rgba(141,160,187,0.22)';
+        await wait(1400);
+
+        // Phase 4: 완료
+        caption.style.color = '#22c55e';
+        caption.textContent = '씬리스트에도 실시간 반영 — Final Draft·Scrivener에 없는 기능 ✓';
+        await wait(3200);
+      }
+    }
+
+    // ── IntersectionObserver로 뷰포트 진입 시 데모 시작 ──────────
+    function startOnVisible(id, fn) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      let started = false;
+      const obs = new IntersectionObserver(entries => {
+        if (entries[0].isIntersecting && !started) {
+          started = true;
+          obs.disconnect();
+          fn();
+        }
+      }, { threshold: 0.2 });
+      obs.observe(el);
+    }
+
+    startOnVisible('demo-scene', runFormatDemo);
+    startOnVisible('ref-new-scene', runRefDemo);
+  </script>
+</body>
 </html>

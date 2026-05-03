@@ -67,4 +67,12 @@ export default defineConfig({
   define: {
     'import.meta.env.VITE_BUILD_VERSION': JSON.stringify(buildVersion),
   },
+  build: {
+    rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, 'index.html'),  // 정적 랜딩 (SEO 진입점)
+        app:  path.resolve(__dirname, 'app.html'),    // React 앱 (vercel rewrite: /app)
+      },
+    },
+  },
 })

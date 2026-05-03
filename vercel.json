@@ -14,7 +14,6 @@
     { "source": "/terms.html",    "destination": "/terms",     "permanent": true }
   ],
   "rewrites": [
-    { "source": "/",          "destination": "/landing.html"  },
     { "source": "/help",      "destination": "/help.html"     },
     { "source": "/notice",    "destination": "/notice.html"   },
     { "source": "/changelog", "destination": "/changelog.html"},
@@ -26,8 +25,8 @@
     { "source": "/contact",   "destination": "/contact.html"  },
     { "source": "/privacy",   "destination": "/privacy.html"  },
     { "source": "/terms",     "destination": "/terms.html"    },
-    { "source": "/app",       "destination": "/index.html"    },
-    { "source": "/app/(.*)",  "destination": "/index.html"    }
+    { "source": "/app",       "destination": "/app.html"      },
+    { "source": "/app/(.*)",  "destination": "/app.html"      }
   ],
   "headers": [
     {
