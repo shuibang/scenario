@@ -7,6 +7,19 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <meta name="theme-color" content="#1B2A4E" />
+  <!-- Legacy 공유 링크 호환: 구 형식 /#xxx 해시는 React 앱(/app)으로 즉시 이전.
+       페인트 전에 동기 실행되어야 깜빡임 없이 redirect됨. -->
+  <script>
+    (function() {
+      var h = window.location.hash;
+      if (!h) return;
+      var prefixes = ['#review=', '#delivery=', '#log=', '#sl='];
+      var exacts = ['#director', '#survey'];
+      var match = prefixes.some(function(p) { return h.indexOf(p) === 0; })
+               || exacts.indexOf(h) !== -1;
+      if (match) window.location.replace('/app' + h);
+    })();
+  </script>
   <!-- 테마 부트스트랩: 에디터(/app)와 동일한 'drama_theme' localStorage 키 공유.
        paint 전에 동기 실행되어야 FOUC 방지 — 따라서 head 최상단에 inline으로 둠. -->
   <script>
