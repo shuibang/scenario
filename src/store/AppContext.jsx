@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
 import { getAll, setAll, getItem, setItem, DB_KEYS, genId, now, migrateFromLocalStorage } from './db';
-import { isTokenValid, saveToDrive, clearAccessToken } from './googleDrive';
+import { isTokenValid, saveToDrive, clearAccessToken, saveProjectsIndex, saveProjectToDrive } from './googleDrive';
+import { serializeProject } from '../utils/projectSerializer';
 import { computeSizeGuard } from './sizeGuard';
 import { sharePayloadSchema } from '../utils/urlSchemas';
 import { parsePath, syncUrl } from '../utils/urlSync';
@@ -851,6 +852,28 @@ export function AppProvider({ children }) {
               console.warn('[Drive] 자동저장 실패:', e);
             }
           });
+
+        // Phase 1.2 — 신 형식(작품별 파일 + 인덱스) 병행 저장.
+        // 구 형식이 source of truth이므로 실패해도 silent + console.warn만.
+        // Phase 1.3에서 신 형식이 안정화되면 구 형식 호출은 Phase 4.3에서 제거.
+        const deviceId = getDeviceId();
+        const projectsMeta = state.projects.map(p => ({
+          id: p.id,
+          title: p.title,
+          updatedAt: p.updatedAt,
+          savedAt,
+        }));
+        Promise.all([
+          saveProjectsIndex({ projects: projectsMeta, savedAt, deviceId }),
+          ...state.projects.map(p =>
+            saveProjectToDrive(p.id, serializeProject(state, p.id, {
+              drive: { savedAt, deviceId },
+            }))
+          ),
+        ]).catch(e => {
+          if (e?.message === 'DRIVE_AUTH_REQUIRED') return;
+          console.warn('[Drive] 작품별 신 형식 저장 실패 (구 형식 정상):', e?.message || e);
+        });
       }
     }, 300);
   }, [
