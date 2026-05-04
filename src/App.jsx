@@ -7,7 +7,7 @@ import { AppProvider, useApp, mergeWorkLog } from './store/AppContext';
 import { getSceneFormat, rebuildSceneContent } from './utils/sceneFormat';
 import { FONTS, FONT_STATUS, checkFontsAvailability, getFontPdfStatus, getFontByCssFamily } from './print/FontRegistry';
 import { getItem, setItem, getAll, setAll, DB_KEYS, clearDramaStorage, isPublicPcMode, genId, now } from './store/db';
-import { setAccessToken, clearAccessToken, loadFromDrive, isTokenValid, saveSnapshot } from './store/googleDrive';
+import { setAccessToken, clearAccessToken, loadFromDrive, loadAllProjectsFromDrive, isTokenValid, saveSnapshot } from './store/googleDrive';
 import { supabase, signInWithGoogle, supabaseSignOut, extractUserData, refreshDriveToken } from './store/supabaseClient';
 import LeftPanel from './components/LeftPanel';
 import RightPanel from './components/RightPanel';
@@ -819,7 +819,7 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
     _driveSyncing = true;
     setDriveStatus('syncing');
     try {
-      const driveData = await loadFromDrive();
+      const driveData = await loadAllProjectsFromDrive();
       const localSavedAt = localStorage.getItem('drama_saved_at') || null;
       // IndexedDB 기반 로컬 데이터 유무 판정 — localStorage('drama_projects')만 보던 예전 로직은
       //   IndexedDB 마이그레이션 이후 항상 false로 떨어져 Drive가 로컬을 덮어쓰는 문제가 있었음.

@@ -177,3 +177,36 @@ export function mergeImportedProject(state, imported, policy = 'newId') {
   for (const k of CASCADING_KEYS) next[k] = [...(state[k] || []), ...(data[k] || [])];
   return next;
 }
+
+// ── 작품별 payloads → 통합 state 형태로 결합 ─────────────────────────────────
+// loadAllProjectsFromDrive에서 사용. LOAD_FROM_DRIVE reducer가 받는 형태와 호환.
+// 인덱스의 savedAt/deviceId는 메타로 보존.
+export function combineProjectsToState(payloads, { index } = {}) {
+  const result = {
+    projects: [],
+    episodes: [],
+    characters: [],
+    scenes: [],
+    scriptBlocks: [],
+    coverDocs: [],
+    synopsisDocs: [],
+    resources: [],
+    workTimeLogs: [],
+    checklistItems: [],
+    trash: {},
+  };
+  for (const p of payloads) {
+    if (!p?.project) continue;
+    result.projects.push(p.project);
+    for (const k of CASCADING_KEYS) {
+      result[k].push(...(p[k] || []));
+    }
+    for (const [tk, items] of Object.entries(p.trash || {})) {
+      if (!result.trash[tk]) result.trash[tk] = [];
+      if (Array.isArray(items)) result.trash[tk].push(...items);
+    }
+  }
+  if (index?.savedAt)  result.savedAt  = index.savedAt;
+  if (index?.deviceId) result.deviceId = index.deviceId;
+  return result;
+}

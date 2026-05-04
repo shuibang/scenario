@@ -5,7 +5,7 @@ import { FONTS } from '../../print/FontRegistry';
 import AdBanner from '../AdBanner';
 import { mobileTbtnStyle } from '../../styles/tokens';
 import { applyInlineFormat } from '../../utils/textFormat';
-import { clearAccessToken, loadFromDrive, isTokenValid } from '../../store/googleDrive';
+import { clearAccessToken, loadAllProjectsFromDrive, isTokenValid } from '../../store/googleDrive';
 import { isPublicPcMode, getAll, DB_KEYS, clearDramaStorage } from '../../store/db';
 import { supabaseSignOut, refreshDriveToken } from '../../store/supabaseClient';
 import { guardedSignInWithGoogle } from '../../utils/guardedSignIn';
@@ -35,7 +35,7 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
     syncingRef.current = true;
     setDriveStatus('syncing');
     try {
-      const driveData = await loadFromDrive();
+      const driveData = await loadAllProjectsFromDrive();
       const localSavedAt = localStorage.getItem('drama_saved_at') || null;
       let localProjects = [];
       try {

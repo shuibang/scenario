@@ -578,3 +578,42 @@ export async function deleteProjectFromDrive(projectId) {
   if (!isTokenValid()) return;
   return deleteFileByName(projectFileName(projectId));
 }
+
+/**
+ * Drive에서 모든 작품 로드 — 신 형식 우선, 없거나 누락 시 구 형식 fallback.
+ *
+ * 신 형식 사용 조건: 인덱스 존재 AND 인덱스의 모든 작품 파일이 정상 로드됨.
+ * 하나라도 누락되면 구 형식(drama_workspace.json)으로 fallback (안전 정책).
+ *
+ * 반환 포맷은 LOAD_FROM_DRIVE reducer가 받는 형태와 동일 (구 형식과 호환).
+ *
+ * @returns {object|null} 통합 state 또는 null (Drive에 데이터 전혀 없음)
+ */
+export async function loadAllProjectsFromDrive() {
+  if (!isTokenValid()) throw new Error('DRIVE_AUTH_REQUIRED');
+
+  // 1) 신 형식 시도
+  try {
+    const index = await loadProjectsIndex();
+    if (index?.projects?.length) {
+      const payloads = await Promise.all(
+        index.projects.map(meta => loadProjectFromDrive(meta.id).catch(() => null))
+      );
+      const missing = payloads.filter(p => !p).length;
+      if (missing === 0) {
+        // 동적 import — 순환 의존 회피
+        const { combineProjectsToState } = await import('../utils/projectSerializer');
+        return combineProjectsToState(payloads, { index });
+      }
+      console.warn('[Drive] 신 형식 작품 일부 누락 → 구 형식 fallback', {
+        total: index.projects.length, missing,
+      });
+    }
+  } catch (e) {
+    if (e?.message === 'DRIVE_AUTH_REQUIRED') throw e;
+    console.warn('[Drive] 신 형식 로드 실패 → 구 형식 fallback:', e?.message || e);
+  }
+
+  // 2) 구 형식 fallback
+  return loadFromDrive();
+}
