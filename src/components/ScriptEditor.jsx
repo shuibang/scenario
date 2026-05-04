@@ -1286,6 +1286,9 @@ const EditorSurface = forwardRef(function EditorSurface({
   const slashOffsetRef = useRef(null); // { blockId, offset } — '/' 위치 추적
   const lastKeyRef = useRef(null); // 더블스페이스 감지용
   const fromParseRef = useRef(false); // doParse 직후엔 DOM 이미 최신 → useEffect 동기화 불필요
+  // Backspace/Delete 머지처럼 직접 DOM 조작 후 명시적으로 doParse를 호출했을 때,
+  // 그 직후 자동 발동되는 onInput이 cleanupBr + doParse를 또 돌려 race로 줄이 복제되는 버그 가드.
+  const suppressNextInputRef = useRef(false);
   const epIdRef = useRef(activeEpisodeId);
   const projIdRef = useRef(activeProjectId);
   epIdRef.current = activeEpisodeId;
@@ -1675,6 +1678,10 @@ const EditorSurface = forwardRef(function EditorSurface({
   // ── Input handler ─────────────────────────────────────────────────────────
   const handleInput = useCallback(() => {
     if (composingRef.current) return;
+    if (suppressNextInputRef.current) {
+      suppressNextInputRef.current = false;
+      return;
+    }
 
     // 씬연결 피커가 열려있으면 타이핑 시 자동 닫기
     onCloseSceneRef?.();
@@ -2056,6 +2063,7 @@ const EditorSurface = forwardRef(function EditorSurface({
           blockEl.remove();
           setCaret(prev, prevText.length);
         }
+        suppressNextInputRef.current = true;
         doParse();
         return;
       }
@@ -2087,6 +2095,7 @@ const EditorSurface = forwardRef(function EditorSurface({
           next.remove();
           setCaret(blockEl, curText.length);
         }
+        suppressNextInputRef.current = true;
         doParse();
         return;
       }
