@@ -1992,7 +1992,10 @@ const EditorSurface = forwardRef(function EditorSurface({
         if (!sel2?.rangeCount) return;
         const range2 = sel2.getRangeAt(0);
         const blockEl2 = findBlockEl(range2.startContainer, el);
-        if (!blockEl2) return;
+        // 삭제로 블록이 사라져 stale reference가 되면 setCaret이 첫 블록으로
+        // 점프하는 부작용이 있어 조용히 종료한다 (사용자 보고: "여러 줄 삭제 후
+        // 커서가 맨 위로 이동").
+        if (!blockEl2 || !el.contains(blockEl2)) return;
         const nextType2 = blockEl2.dataset.blockType === 'scene_number' ? 'action' : blockEl2.dataset.blockType;
         const isRich2 = blockEl2.dataset.blockType === 'action' || blockEl2.dataset.blockType === 'dialogue';
         if (isRich2) {
