@@ -615,5 +615,53 @@ export async function loadAllProjectsFromDrive() {
   }
 
   // 2) 구 형식 fallback
-  return loadFromDrive();
+  const legacy = await loadFromDrive();
+  if (!legacy) return null;
+
+  // Phase 1.4 — 백그라운드 마이그레이션. fire-and-forget.
+  // 한 번이라도 성공하면 다음부터 신 형식 사용 → fallback 미발생 → 자연 종료.
+  // 실패해도 다음 fallback 진입 시 재시도. 데이터 손실 위험 없음 (구 형식 그대로 보존).
+  migrateLegacyToProjectFiles(legacy).catch(e => {
+    console.warn('[Drive] 구→신 마이그레이션 실패 (다음 진입 시 재시도):', e?.message || e);
+  });
+
+  return legacy;
+}
+
+/**
+ * 구 단일 파일(drama_workspace.json) → 신 형식(인덱스 + 작품별 파일) 변환.
+ * Phase 1.4 — loadAllProjectsFromDrive의 구 형식 fallback 시 백그라운드 호출.
+ *
+ * 구 형식 파일은 삭제하지 않음 — backward-compat (Phase 4.3에서 폐기).
+ */
+async function migrateLegacyToProjectFiles(legacy) {
+  if (!legacy?.projects?.length) return;
+  if (!isTokenValid()) return;
+
+  // 동적 import — 순환 의존 회피
+  const { serializeProject } = await import('../utils/projectSerializer');
+  const { getDeviceId } = await import('../utils/deviceId');
+
+  const deviceId = legacy.deviceId || getDeviceId();
+  const savedAt = legacy.savedAt || new Date().toISOString();
+
+  const projectsMeta = [];
+  await Promise.all(legacy.projects.map(async (project) => {
+    // legacy 자체가 state와 같은 평탄한 형태이므로 그대로 직렬화에 전달
+    const payload = serializeProject(legacy, project.id, {
+      drive: { savedAt, deviceId },
+    });
+    if (!payload) return;
+    await saveProjectToDrive(project.id, payload);
+    projectsMeta.push({
+      id: project.id,
+      title: project.title,
+      updatedAt: project.updatedAt,
+      savedAt,
+    });
+  }));
+
+  if (projectsMeta.length > 0) {
+    await saveProjectsIndex({ projects: projectsMeta, savedAt, deviceId });
+  }
 }
