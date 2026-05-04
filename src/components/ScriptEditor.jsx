@@ -3493,7 +3493,14 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     const text = e.clipboardData?.getData('text/plain') || '';
     const lines = text.split('\n');
     const nonEmpty = lines.filter(l => l.trim());
-    if (nonEmpty.length <= 1) return; // 단일 행은 기본 동작
+    // 단일 행은 평문으로 강제 삽입 — 브라우저 기본 paste를 그대로 두면
+    // HTML 클립보드의 inline style(padding 등)이 들어와 새 블록의 CSS 변수
+    // (--action-indent 등)와 중첩 적용되어 들여쓰기가 2배가 되는 버그 방지.
+    if (nonEmpty.length <= 1) {
+      e.preventDefault();
+      document.execCommand('insertText', false, text);
+      return;
+    }
 
     e.preventDefault();
 
