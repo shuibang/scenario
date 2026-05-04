@@ -22,13 +22,13 @@ export const FONT_STATUS = {
 
 // ─── Font catalog ──────────────────────────────────────────────────────────────
 export const FONTS = [
-  // ── Bundled: 함초롱바탕 ─────────────────────────────────────────────────────
+  // ── Bundled: 함초롬바탕 ─────────────────────────────────────────────────────
   // italic/boldItalic 파일 미제공 → null
   {
     id:          'hcr-batang',
-    displayName: '함초롱바탕',
+    displayName: '함초롬바탕',
     sourceType:  'bundled',
-    cssFamily:   '함초롱바탕',
+    cssFamily:   '함초롬바탕',
     pdfFiles: {
       normal:     '/fonts/HCRBatang.ttf',
       bold:       '/fonts/HCRBatang-Bold.ttf',
@@ -123,11 +123,17 @@ export function getFontById(id) {
   return FONTS.find(f => f.id === id) ?? FONTS.find(f => f.id === DEFAULT_FONT_ID);
 }
 
+// 호환성: 기존 저장 데이터에 '함초롱바탕'으로 들어간 값을 새 표기 '함초롬바탕'으로 매핑.
+const CSS_FAMILY_ALIASES = {
+  '함초롱바탕': '함초롬바탕',
+};
+
 export function getFontByCssFamily(cssFamily) {
   if (!cssFamily) return getFontById(DEFAULT_FONT_ID);
+  const normalized = CSS_FAMILY_ALIASES[cssFamily] ?? cssFamily;
   return (
-    FONTS.find(f => f.cssFamily === cssFamily) ??
-    FONTS.find(f => f.displayName === cssFamily) ??
+    FONTS.find(f => f.cssFamily === normalized) ??
+    FONTS.find(f => f.displayName === normalized) ??
     getFontById(DEFAULT_FONT_ID)
   );
 }
@@ -230,7 +236,7 @@ const STYLE_LABELS = { bold: '굵게', italic: '기울임', boldItalic: '굵은 
  * Empty array = no warnings.
  */
 export function getFontWarnings(stylePreset, availability) {
-  const family = stylePreset?.fontFamily || '함초롱바탕';
+  const family = stylePreset?.fontFamily || '함초롬바탕';
   const font   = getFontByCssFamily(family);
   const warnings = [];
 
@@ -278,7 +284,7 @@ export function getFontWarnings(stylePreset, availability) {
  * Differs from preset.fontFamily when system font or unavailable bundled font.
  */
 export function getEffectivePdfFontName(stylePreset, availability) {
-  const family = stylePreset?.fontFamily || '함초롱바탕';
+  const family = stylePreset?.fontFamily || '함초롬바탕';
   const font   = getFontByCssFamily(family);
 
   if (font.sourceType === 'system') {
@@ -301,7 +307,7 @@ export function getEffectivePdfFontName(stylePreset, availability) {
  * 'docx'             → { fontName: string, fallbackFontName: string|null }
  */
 export function resolveFont(stylePreset, target) {
-  const family = stylePreset?.fontFamily || '함초롱바탕';
+  const family = stylePreset?.fontFamily || '함초롬바탕';
   const font   = getFontByCssFamily(family);
 
   if (target === 'pdf') {

@@ -16,7 +16,7 @@ import { getSceneFormat, setSceneFormat, LOC_SEP_PRESETS, TIME_FMT_PRESETS, isCu
 import { setPublicPcMode } from '../store/db';
 
 // ─── Log PDF ──────────────────────────────────────────────────────────────────
-const LOG_PDF_FONT = '함초롱바탕';
+const LOG_PDF_FONT = '함초롬바탕';
 
 const logPdfStyles = StyleSheet.create({
   page:    { padding: '30mm 25mm', fontFamily: LOG_PDF_FONT, fontSize: 10 },

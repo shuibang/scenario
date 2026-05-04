@@ -116,7 +116,7 @@ export function buildPrintHTML({
   synopsisDoc = null,
   margins = { top: 35, right: 30, bottom: 30, left: 30 },
   dialogueGap = '7em',
-  fontFamily = '함초롱바탕',
+  fontFamily = '함초롬바탕',
   fontSize = 11,
   lineHeight = 1.6,
 }) {
@@ -171,7 +171,7 @@ export function buildPrintHTML({
     @page { @bottom-center { content: "- " counter(page) " -"; font-size: 9pt; color: #555; } }
     * { box-sizing: border-box; }
     body {
-      font-family: '함초롱바탕', 'HCR Batang', 'Malgun Gothic', sans-serif;
+      font-family: '함초롬바탕', 'HCR Batang', 'Malgun Gothic', sans-serif;
       font-size: ${fontSize}pt;
       line-height: ${lineHeight};
       color: #000;

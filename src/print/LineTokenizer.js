@@ -51,7 +51,7 @@ export function getLayoutMetrics(preset) {
   const m = (preset?.dialogueGap || '7em').match(/^([\d.]+)em$/);
   if (m) dialogueGapPt = parseFloat(m[1]) * fontSize;
 
-  // 함초롱바탕 한글 평균 자폭 ≈ fontSize * 0.55 (실측 기준)
+  // 함초롬바탕 한글 평균 자폭 ≈ fontSize * 0.55 (실측 기준)
   const avgCharPt      = fontSize * 0.55;
   const charsPerLine   = Math.floor(contentWpt / avgCharPt);
   const speechWpt      = contentWpt - dialogueGapPt;

@@ -13,6 +13,7 @@
 
 import JSZip from 'jszip';
 import { buildPrintModel } from './PrintModel';
+import { getFontByCssFamily } from './FontRegistry';
 
 // ─── XML helpers ────────────────────────────────────────────────────────────
 const stripHtml = (s) => String(s ?? '').replace(/<[^>]+>/g, '');
@@ -564,26 +565,19 @@ ${paras.join('\n')}
  * buildHwpx(appState, selections) → Promise<Blob>
  * Returns a Blob with MIME type application/hwp+zip.
  */
-// CSS 폰트 패밀리명 → HWP가 인식하는 실제 폰트 face 이름 매핑
-// (HWP는 TTF 내부 name 테이블의 영문 패밀리명을 기준으로 인식)
-const CSS_TO_HWPX_FONT = {
-  '함초롱바탕':    'HCRBatang',
-  'HCR Batang':   'HCRBatang',
-  'HCRBatang':    'HCRBatang',
-  '함초롱돋움':    'HCRDotum',
-  'HCR Dotum':    'HCRDotum',
-  '맑은 고딕':     '맑은 고딕',
-  'Malgun Gothic': '맑은 고딕',
-};
-
-const HWPX_SERIF_FALLBACKS = ['Noto Serif KR', 'Apple SD Gothic Neo', 'Malgun Gothic', '맑은 고딕'];
-const HWPX_SANS_FALLBACKS = ['Apple SD Gothic Neo', 'Malgun Gothic', '맑은 고딕', 'Noto Sans KR'];
+// HWP는 TTF의 한글 설치명 기준으로 face를 매칭함.
+// FontRegistry.docxFontName이 HWP 설치명과 동일하므로(DOCX와 HWPX 둘 다 HWP 타겟)
+// 그대로 primary face로 사용한다. 영문명(예: "HCRBatang")을 쓰면 HWP가 인식 못해
+// 폰트가 공란으로 표시되고 기본 글꼴로 렌더링됨.
+const HWPX_SERIF_FALLBACKS = ['함초롬바탕', 'Noto Serif KR', '맑은 고딕'];
+const HWPX_SANS_FALLBACKS = ['맑은 고딕', 'Noto Sans KR', '함초롬바탕'];
 
 function toHwpxFontNames(cssFontFamily) {
-  const primary = CSS_TO_HWPX_FONT[cssFontFamily] ?? cssFontFamily ?? 'HCRBatang';
-  const serifFamilies = new Set(['함초롱바탕', 'HCR Batang', 'HCRBatang', 'Noto Serif KR', '나눔명조']);
-  const fallbacks = serifFamilies.has(cssFontFamily) ? HWPX_SERIF_FALLBACKS : HWPX_SANS_FALLBACKS;
-  return Array.from(new Set([primary, cssFontFamily, ...fallbacks])).filter(Boolean);
+  const font = getFontByCssFamily(cssFontFamily);
+  const primary = font?.docxFontName || cssFontFamily || '함초롬바탕';
+  const isSerif = font?.cssFallback?.includes('serif') ?? false;
+  const fallbacks = isSerif ? HWPX_SERIF_FALLBACKS : HWPX_SANS_FALLBACKS;
+  return Array.from(new Set([primary, ...fallbacks])).filter(Boolean);
 }
 
 export async function buildHwpx(appState, selections) {

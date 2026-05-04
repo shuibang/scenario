@@ -90,7 +90,7 @@ export default function PrintPreviewModal({ onClose, defaultFormat }) {
     [stylePreset, fontAvailability]
   );
 
-  const selectedFontName  = getFontByCssFamily(stylePreset?.fontFamily)?.displayName ?? stylePreset?.fontFamily ?? '함초롱바탕';
+  const selectedFontName  = getFontByCssFamily(stylePreset?.fontFamily)?.displayName ?? stylePreset?.fontFamily ?? '함초롬바탕';
   const effectivePdfFont  = getEffectivePdfFontName(stylePreset, fontAvailability);
 
   const toggle = useCallback((key, sub) => {
@@ -281,7 +281,7 @@ export default function PrintPreviewModal({ onClose, defaultFormat }) {
           )}
           {format === 'hancom' && (
             <p className="text-[10px] mb-3" style={{ color: 'var(--c-text5)', lineHeight: 1.5 }}>
-              함초롱바탕 글꼴로 출력됩니다. HWP 2014+ 및 한컴오피스에서 열 수 있습니다.
+              함초롬바탕 글꼴로 출력됩니다. HWP 2014+ 및 한컴오피스에서 열 수 있습니다.
             </p>
           )}
           {format === 'hwpx' && (

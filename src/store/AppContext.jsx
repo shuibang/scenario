@@ -46,7 +46,7 @@ export function mergeWorkLog(logs, entry) {
 // ─── Default style preset ────────────────────────────────────────────────────
 export const DEFAULT_STYLE_PRESET = {
   dialogueGap: '7em',
-  fontFamily: '함초롱바탕',
+  fontFamily: '함초롬바탕',
   fontSize: 11,                // pt
   lineHeight: 1.6,             // 160%
   characterWidth: 100,         // 장평 %

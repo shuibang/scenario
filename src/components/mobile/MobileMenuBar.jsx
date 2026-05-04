@@ -413,7 +413,7 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
         <div style={{ width: 1, height: 16, background: 'var(--c-border3)', margin: '0 2px', flexShrink: 0 }} />
         <span style={{ fontSize: 'clamp(9px, 2.4vw, 11px)', color: 'var(--c-text6)', flexShrink: 0 }}>글꼴</span>
         <select
-          value={stylePreset?.fontFamily ?? '함초롱바탕'}
+          value={stylePreset?.fontFamily ?? '함초롬바탕'}
           onChange={e => dispatch({ type: 'SET_STYLE_PRESET', payload: { fontFamily: e.target.value } })}
           style={{ ...mobileTbtnStyle, padding: '2px 4px', maxWidth: 90 }}
         >

@@ -552,7 +552,7 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave }) {
         {sep}
 
         <label className="text-[10px] shrink-0" style={{ color: 'var(--c-text6)' }}>글꼴</label>
-        <select value={stylePreset?.fontFamily ?? '함초롱바탕'} onChange={handleFontFamily}
+        <select value={stylePreset?.fontFamily ?? '함초롬바탕'} onChange={handleFontFamily}
           style={{ ...selectStyle, maxWidth: '110px' }}
         >
           <optgroup label="내장 글꼴">

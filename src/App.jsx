@@ -1116,7 +1116,7 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
 
         {/* 글꼴 */}
         <span style={{ fontSize: 11, color: 'var(--c-text5)', flexShrink: 0, letterSpacing: '-0.01em' }}>글꼴</span>
-        <select value={stylePreset?.fontFamily ?? '함초롱바탕'} onChange={handleFontFamily} style={{ ...selectStyle, maxWidth: 110 }}>
+        <select value={stylePreset?.fontFamily ?? '함초롬바탕'} onChange={handleFontFamily} style={{ ...selectStyle, maxWidth: 110 }}>
           <optgroup label="내장 글꼴">
             {FONTS.filter(f => f.sourceType === 'bundled').map(f => {
               const status = getFontPdfStatus(f.id, fontAvailability);
@@ -1625,13 +1625,13 @@ function Shell({ authUser, setAuthUser }) {
 
   const menuCheckedItems = useMemo(() => {
     const sp = activeProject?.stylePreset || {};
-    const fontFamily  = sp.fontFamily  ?? '함초롱바탕';
+    const fontFamily  = sp.fontFamily  ?? '함초롬바탕';
     const fontSize    = sp.fontSize    ?? 11;
     const lineHeightPct = Math.round((sp.lineHeight ?? 1.6) * 100);
     const dgap        = Math.round(parseFloat(sp.dialogueGap ?? '7'));
     return {
       ...viewCheckedItems,
-      'font-hamcho':     fontFamily === '함초롱바탕',
+      'font-hamcho':     fontFamily === '함초롬바탕' || fontFamily === '함초롱바탕',
       'font-noto-serif': fontFamily === 'Noto Serif KR',
       'font-noto-sans':  fontFamily === 'Noto Sans KR',
       'font-malgun':     fontFamily === 'Malgun Gothic',
