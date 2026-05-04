@@ -507,3 +507,74 @@ export async function loadFromDrive() {
     return await res.json();
   });
 }
+
+// ── 작품 단위 저장 (Phase 1 — Drive 작품별 동기화) ─────────────────────────
+// 기존 단일 drama_workspace.json은 backward-compat용으로 그대로 유지하고,
+// 새 동기화 흐름은 인덱스 + 작품별 파일 N개로 분리한다.
+//   drama_projects_index.json — 작품 메타 목록 (id/title/savedAt/...)
+//   drama_project_<projectId>.json — 한 작품의 모든 데이터 (projectSerializer)
+const PROJECTS_INDEX_FILE = 'drama_projects_index.json';
+const PROJECT_FILE_PREFIX = 'drama_project_';
+const PROJECTS_INDEX_FORMAT = 'djs-index';
+const PROJECTS_INDEX_VERSION = 1;
+
+function projectFileName(projectId) {
+  return `${PROJECT_FILE_PREFIX}${projectId}.json`;
+}
+
+/**
+ * 작품 인덱스 저장 — 작품 목록 메타 + deviceId + 전체 savedAt
+ * @param {object} args
+ * @param {Array<{id, title, updatedAt, savedAt}>} args.projects - 작품 메타 배열
+ * @param {string} [args.savedAt] - 인덱스 저장 시각 (미지정 시 현재)
+ * @param {string} args.deviceId
+ */
+export async function saveProjectsIndex({ projects, savedAt, deviceId }) {
+  if (!isTokenValid()) throw new Error('DRIVE_AUTH_REQUIRED');
+  const content = JSON.stringify({
+    format: PROJECTS_INDEX_FORMAT,
+    version: PROJECTS_INDEX_VERSION,
+    projects: projects || [],
+    savedAt: savedAt || new Date().toISOString(),
+    deviceId,
+  });
+  return upsertFile(PROJECTS_INDEX_FILE, content);
+}
+
+/**
+ * 작품 인덱스 로드
+ * @returns {object|null} { format, version, projects, savedAt, deviceId } | 신 형식 없으면 null
+ */
+export async function loadProjectsIndex() {
+  if (!isTokenValid()) throw new Error('DRIVE_AUTH_REQUIRED');
+  return readFileByName(PROJECTS_INDEX_FILE);
+}
+
+/**
+ * 한 작품을 Drive에 저장 — payload는 projectSerializer.serializeProject() 결과
+ * @param {string} projectId
+ * @param {object} payload - { format:'djs', version:1, project, episodes, ..., drive:{savedAt,deviceId} }
+ */
+export async function saveProjectToDrive(projectId, payload) {
+  if (!isTokenValid()) throw new Error('DRIVE_AUTH_REQUIRED');
+  const content = JSON.stringify(payload);
+  return upsertFile(projectFileName(projectId), content);
+}
+
+/**
+ * 한 작품을 Drive에서 로드
+ * @returns {object|null} 작품 payload | 없으면 null
+ */
+export async function loadProjectFromDrive(projectId) {
+  if (!isTokenValid()) throw new Error('DRIVE_AUTH_REQUIRED');
+  return readFileByName(projectFileName(projectId));
+}
+
+/**
+ * 한 작품의 Drive 파일 삭제 (작품 영구 삭제 시 호출)
+ * 파일이 없으면 조용히 무시.
+ */
+export async function deleteProjectFromDrive(projectId) {
+  if (!isTokenValid()) return;
+  return deleteFileByName(projectFileName(projectId));
+}
