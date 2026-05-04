@@ -67,7 +67,37 @@ function DataCard({ title, savedAt, projectCount, highlight, onClick, label }) {
   );
 }
 
-export default function SyncConflictModal({ localSavedAt, driveData, localProjectCount = 0, onKeepLocal, onLoadDrive, onDismiss, busy = false, busyMessage = '동기화 중…' }) {
+function ConflictList({ conflicts }) {
+  if (!conflicts || conflicts.length === 0) return null;
+  const kindLabel = (k) => k === 'conflict' ? '양쪽 모두 변경' : k === 'localOnly' ? '이 기기에만' : 'Drive에만';
+  const kindColor = (k) => k === 'conflict' ? 'var(--c-accent2)' : k === 'localOnly' ? 'var(--c-accent)' : 'var(--c-text5)';
+  return (
+    <div style={{ marginBottom: 16, padding: '12px 14px', borderRadius: 8, background: 'var(--c-input)', border: '1px solid var(--c-border3)' }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text4)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        변경된 작품 {conflicts.length}개
+      </div>
+      <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+        {conflicts.slice(0, 8).map(c => (
+          <li key={c.projectId} style={{ padding: '4px 0', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--c-text3)' }}>
+            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {c.title || '제목없음'}
+            </span>
+            <span style={{ fontSize: 10, fontWeight: 600, color: kindColor(c.kind), flexShrink: 0 }}>
+              {kindLabel(c.kind)}
+            </span>
+          </li>
+        ))}
+        {conflicts.length > 8 && (
+          <li style={{ padding: '4px 0', fontSize: 11, color: 'var(--c-text6)' }}>
+            … 외 {conflicts.length - 8}개
+          </li>
+        )}
+      </ul>
+    </div>
+  );
+}
+
+export default function SyncConflictModal({ localSavedAt, driveData, localProjectCount = 0, conflicts = null, onKeepLocal, onLoadDrive, onDismiss, busy = false, busyMessage = '동기화 중…' }) {
   const driveProjectCount = driveData?.projects?.length ?? 0;
 
   const localIsNewer = new Date(localSavedAt || 0) >= new Date(driveData?.savedAt || 0);
@@ -95,11 +125,13 @@ export default function SyncConflictModal({ localSavedAt, driveData, localProjec
         <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--c-text)', marginBottom: 6 }}>
           기기 간 데이터가 다릅니다
         </div>
-        <div style={{ fontSize: 13, color: 'var(--c-text5)', marginBottom: 22, lineHeight: 1.6 }}>
+        <div style={{ fontSize: 13, color: 'var(--c-text5)', marginBottom: 18, lineHeight: 1.6 }}>
           로그인하면서 Drive에서 다른 기기의 저장 데이터를 감지했습니다.<br/>
           어느 데이터를 사용할지 선택해 주세요. 선택하지 않은 쪽은 덮어씌워집니다.<br/>
           선택 전 현재 데이터가 자동으로 스냅샷에 보존됩니다.
         </div>
+
+        <ConflictList conflicts={conflicts} />
 
         <div style={{ display: 'flex', gap: 12, marginBottom: 16, opacity: busy ? 0.5 : 1, pointerEvents: busy ? 'none' : 'auto' }}>
           <DataCard

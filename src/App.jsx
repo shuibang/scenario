@@ -1918,6 +1918,7 @@ function Shell({ authUser, setAuthUser }) {
           localSavedAt={syncConflict.localSavedAt}
           driveData={syncConflict.driveData}
           localProjectCount={syncConflict.localProjectCount ?? state.projects?.length ?? 0}
+          conflicts={syncConflict.conflicts}
           busy={syncConflictBusy}
           busyMessage={syncConflictBusy}
           onKeepLocal={async () => {
