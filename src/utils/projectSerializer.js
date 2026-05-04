@@ -208,5 +208,8 @@ export function combineProjectsToState(payloads, { index } = {}) {
   }
   if (index?.savedAt)  result.savedAt  = index.savedAt;
   if (index?.deviceId) result.deviceId = index.deviceId;
+  // 인덱스 메타(작품별 updatedAt/savedAt) 보존 — 작품 단위 충돌 감지에 사용 (Phase 2.1).
+  // _ prefix는 LOAD_FROM_DRIVE reducer가 무시한다는 신호.
+  if (index) result._index = index;
   return result;
 }

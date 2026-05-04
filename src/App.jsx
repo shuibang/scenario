@@ -854,7 +854,35 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
           _driveSyncing = false;
           return;
         }
-        onSyncConflict?.({ localSavedAt, driveData, localProjectCount: localProjects.length });
+        // Phase 2.1 — 작품별 conflict 산출. 신 형식(_index)이 있을 때만 의미 있음.
+        // 구 형식 fallback이면 conflicts=null → 기존 사이트 단위 충돌 모달 그대로.
+        let conflicts = null;
+        const driveProjsMeta = driveData?._index?.projects || null;
+        if (driveProjsMeta) {
+          const localById = new Map(localProjects.map(p => [p.id, p]));
+          const driveById = new Map(driveProjsMeta.map(p => [p.id, p]));
+          conflicts = [];
+          for (const lp of localProjects) {
+            const dp = driveById.get(lp.id);
+            if (!dp) {
+              conflicts.push({ projectId: lp.id, title: lp.title, kind: 'localOnly', local: { updatedAt: lp.updatedAt } });
+            } else if (lp.updatedAt !== dp.updatedAt) {
+              conflicts.push({
+                projectId: lp.id,
+                title: lp.title || dp.title,
+                kind: 'conflict',
+                local: { updatedAt: lp.updatedAt },
+                drive: { updatedAt: dp.updatedAt, savedAt: dp.savedAt },
+              });
+            }
+          }
+          for (const dp of driveProjsMeta) {
+            if (!localById.has(dp.id)) {
+              conflicts.push({ projectId: dp.id, title: dp.title, kind: 'driveOnly', drive: { updatedAt: dp.updatedAt, savedAt: dp.savedAt } });
+            }
+          }
+        }
+        onSyncConflict?.({ localSavedAt, driveData, localProjectCount: localProjects.length, conflicts });
         setDriveStatus('none');
         _driveSyncing = false;
         return;
