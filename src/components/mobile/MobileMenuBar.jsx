@@ -44,33 +44,69 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
       } catch {}
       const hasLocalData = localProjects.length > 0;
       const driveHasData = (driveData?.projects?.length ?? 0) > 0;
-      const localMs = new Date(localSavedAt || 0).getTime();
-      const driveMs = new Date(driveData?.savedAt || 0).getTime();
-      const tsLooksSame = Math.abs(driveMs - localMs) <= 5000;
+
       if (!driveData?.savedAt || !driveHasData) {
         setDriveStatus('synced');
       } else if (!hasLocalData) {
         loadFromDriveData(driveData);
         setDriveStatus('synced');
-      } else if (tsLooksSame) {
-        setDriveStatus('synced');
-      } else if (driveData?.deviceId && getDeviceId() === driveData.deviceId) {
-        // 같은 기기 — 시간 비교 무의미 (drama_saved_at race로 발생하는 단일기기 오탐 차단)
-        setDriveStatus('synced');
       } else {
-        // "나중에 결정"으로 모달을 닫은 세션에서는 재출현하지 않는다.
-        // sessionStorage는 탭 단위로 유지되므로 브라우저/탭을 새로 열면 자동 초기화 → 다시 판정.
-        let dismissedThisSession = false;
-        try { dismissedThisSession = sessionStorage.getItem('sync-conflict-dismissed') === '1'; } catch {}
-        if (dismissedThisSession) {
+        // 작품별 conflicts 산출 (신 형식 _index 있을 때만 정확). 구 형식이면 conflicts === null.
+        let conflicts = null;
+        const driveProjsMeta = driveData?._index?.projects || null;
+        if (driveProjsMeta) {
+          const localById = new Map(localProjects.map(p => [p.id, p]));
+          const driveById = new Map(driveProjsMeta.map(p => [p.id, p]));
+          conflicts = [];
+          for (const lp of localProjects) {
+            const dp = driveById.get(lp.id);
+            if (!dp) {
+              conflicts.push({ projectId: lp.id, title: lp.title, kind: 'localOnly', local: { updatedAt: lp.updatedAt } });
+            } else if (lp.updatedAt !== dp.updatedAt) {
+              conflicts.push({
+                projectId: lp.id,
+                title: lp.title || dp.title,
+                kind: 'conflict',
+                local: { updatedAt: lp.updatedAt },
+                drive: { updatedAt: dp.updatedAt, savedAt: dp.savedAt },
+              });
+            }
+          }
+          for (const dp of driveProjsMeta) {
+            if (!localById.has(dp.id)) {
+              conflicts.push({ projectId: dp.id, title: dp.title, kind: 'driveOnly', drive: { updatedAt: dp.updatedAt, savedAt: dp.savedAt } });
+            }
+          }
+        }
+
+        const localMs = new Date(localSavedAt || 0).getTime();
+        const driveMs = new Date(driveData.savedAt || 0).getTime();
+        const tsLooksSame = Math.abs(driveMs - localMs) <= 5000;
+
+        // 판정 우선순위 (App.jsx와 동일):
+        // 1) 신 형식 conflicts === [] → synced (가장 정확)
+        // 2) tsLooksSame (5초 race) → synced
+        // 3) 같은 deviceId → synced
+        // 4) 그 외 → 충돌 모달
+        if (conflicts !== null && conflicts.length === 0) {
           setDriveStatus('synced');
+        } else if (tsLooksSame) {
+          setDriveStatus('synced');
+        } else if (driveData?.deviceId && getDeviceId() === driveData.deviceId) {
+          setDriveStatus('synced');
+        } else {
+          let dismissedThisSession = false;
+          try { dismissedThisSession = sessionStorage.getItem('sync-conflict-dismissed') === '1'; } catch {}
+          if (dismissedThisSession) {
+            setDriveStatus('synced');
+            syncingRef.current = false;
+            return;
+          }
+          onSyncConflict?.({ localSavedAt, driveData, localProjectCount: localProjects.length, conflicts });
+          setDriveStatus('none');
           syncingRef.current = false;
           return;
         }
-        onSyncConflict?.({ localSavedAt, driveData, localProjectCount: localProjects.length });
-        setDriveStatus('none');
-        syncingRef.current = false;
-        return;
       }
       setTimeout(() => setDriveStatus('none'), 3000);
     } catch (e) {

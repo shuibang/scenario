@@ -830,32 +830,15 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
       } catch {}
       const hasLocalData = localProjects.length > 0;
       const driveHasData = (driveData?.projects?.length ?? 0) > 0;
-      // 같은 저장 건인데 네트워크 지연 등으로 ms 단위 어긋남은 충돌로 보지 않음 (5초 이내 허용)
-      const localMs = new Date(localSavedAt || 0).getTime();
-      const driveMs = new Date(driveData?.savedAt || 0).getTime();
-      const tsLooksSame = Math.abs(driveMs - localMs) <= 5000;
+
       if (!driveData?.savedAt || !driveHasData) {
         setDriveStatus('synced');
       } else if (!hasLocalData) {
         loadFromDriveData(driveData);
         setDriveStatus('synced');
-      } else if (tsLooksSame) {
-        setDriveStatus('synced');
-      } else if (driveData?.deviceId && getDeviceId() === driveData.deviceId) {
-        // 같은 기기 — 시간 비교 무의미 (drama_saved_at race로 발생하는 단일기기 오탐 차단)
-        setDriveStatus('synced');
       } else {
-        // "나중에 결정"으로 모달을 닫은 세션에서는 재출현하지 않는다.
-        // sessionStorage는 탭 단위로 유지되므로 브라우저/탭을 새로 열면 자동 초기화 → 다시 판정.
-        let dismissedThisSession = false;
-        try { dismissedThisSession = sessionStorage.getItem('sync-conflict-dismissed') === '1'; } catch {}
-        if (dismissedThisSession) {
-          setDriveStatus('synced');
-          _driveSyncing = false;
-          return;
-        }
-        // Phase 2.1 — 작품별 conflict 산출. 신 형식(_index)이 있을 때만 의미 있음.
-        // 구 형식 fallback이면 conflicts=null → 기존 사이트 단위 충돌 모달 그대로.
+        // Phase 2.1 — 작품별 conflict 산출. 신 형식(_index)이 있을 때만 정확.
+        // 구 형식 fallback이면 conflicts=null.
         let conflicts = null;
         const driveProjsMeta = driveData?._index?.projects || null;
         if (driveProjsMeta) {
@@ -882,10 +865,39 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
             }
           }
         }
-        onSyncConflict?.({ localSavedAt, driveData, localProjectCount: localProjects.length, conflicts });
-        setDriveStatus('none');
-        _driveSyncing = false;
-        return;
+
+        // 같은 저장 건인데 네트워크 지연 등으로 ms 단위 어긋남은 충돌로 보지 않음 (5초 이내)
+        const localMs = new Date(localSavedAt || 0).getTime();
+        const driveMs = new Date(driveData.savedAt || 0).getTime();
+        const tsLooksSame = Math.abs(driveMs - localMs) <= 5000;
+
+        // 판정 우선순위:
+        // 1) 신 형식이고 작품별 conflicts 0건 — 진짜 동일 데이터 (가장 정확한 신호)
+        //    → 다른 기기 deviceId가 Drive에 마지막 기록됐어도, 그 후 같은 기기에서 작업해
+        //      결과가 동일하면 모달 불필요. 사용자 보고: "같은 기기인데 모달 뜸" 해소.
+        // 2) tsLooksSame (5초 race)
+        // 3) 같은 deviceId
+        // 위 어디에도 안 걸리면 → 충돌 모달
+        if (conflicts !== null && conflicts.length === 0) {
+          setDriveStatus('synced');
+        } else if (tsLooksSame) {
+          setDriveStatus('synced');
+        } else if (driveData?.deviceId && getDeviceId() === driveData.deviceId) {
+          setDriveStatus('synced');
+        } else {
+          // "나중에"로 닫은 세션은 재출현 안 함
+          let dismissedThisSession = false;
+          try { dismissedThisSession = sessionStorage.getItem('sync-conflict-dismissed') === '1'; } catch {}
+          if (dismissedThisSession) {
+            setDriveStatus('synced');
+            _driveSyncing = false;
+            return;
+          }
+          onSyncConflict?.({ localSavedAt, driveData, localProjectCount: localProjects.length, conflicts });
+          setDriveStatus('none');
+          _driveSyncing = false;
+          return;
+        }
       }
       setTimeout(() => setDriveStatus('none'), 3000);
     } catch (e) {
