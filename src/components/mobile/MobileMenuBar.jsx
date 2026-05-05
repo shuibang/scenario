@@ -158,9 +158,9 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
       {/* Row 1: ☰ | 대본 작업실 🎬 | timer */}
       <div style={{
         height: 44,
-        display: 'flex', alignItems: 'center', gap: 4,
-        paddingLeft: 'max(8px, env(safe-area-inset-left, 8px))',
-        paddingRight: 'max(8px, env(safe-area-inset-right, 8px))',
+        display: 'flex', alignItems: 'center', gap: 2,
+        paddingLeft: 'max(6px, env(safe-area-inset-left, 6px))',
+        paddingRight: 'max(6px, env(safe-area-inset-right, 6px))',
         borderBottom: '1px solid var(--c-border2)',
       }}>
         {/* Left: hamburger + dropdown */}
@@ -170,7 +170,7 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
             style={{
               background: 'none', border: 'none',
               color: 'var(--c-text4)', fontSize: 18,
-              cursor: 'pointer', padding: '6px 8px', lineHeight: 1,
+              cursor: 'pointer', padding: '6px 5px', lineHeight: 1,
               WebkitTapHighlightColor: 'transparent',
             }}
           >☰</button>
@@ -305,9 +305,9 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
         <button
           onClick={() => { window.location.href = '/'; }}
           style={{
-            display: 'flex', alignItems: 'center', gap: 5,
+            display: 'flex', alignItems: 'center', gap: 4,
             background: 'transparent', border: 'none', cursor: 'pointer',
-            borderRadius: 6, padding: '4px 6px', flexShrink: 0,
+            borderRadius: 6, padding: '4px 4px', flexShrink: 0,
             WebkitTapHighlightColor: 'transparent',
           }}
         >
@@ -316,7 +316,7 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
         </button>
 
         {/* 구분선 */}
-        <div style={{ width: 1, height: 14, background: 'var(--c-border3)', flexShrink: 0, margin: '0 2px' }} />
+        <div style={{ width: 1, height: 14, background: 'var(--c-border3)', flexShrink: 0 }} />
 
         {/* 연출 작업실 바로가기 */}
         <a
@@ -324,15 +324,15 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
           onClick={e => { e.preventDefault(); window.location.hash = '#director'; }}
           title="연출 작업실"
           style={{
-            display: 'flex', alignItems: 'center', gap: 4,
+            display: 'flex', alignItems: 'center', gap: 3,
             textDecoration: 'none', color: 'var(--c-text4)', fontSize: 12,
             background: 'transparent', borderRadius: 6,
-            padding: '4px 6px', flexShrink: 0, lineHeight: 1,
+            padding: '4px 4px', flexShrink: 0, lineHeight: 1,
             WebkitTapHighlightColor: 'transparent',
           }}
         >
           <Clapperboard size={13} strokeWidth={1.75} style={{ flexShrink: 0 }} />
-          <span style={{ whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>연출 작업실</span>
+          <span style={{ whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>연출</span>
           <ExternalLink size={10} strokeWidth={2} style={{ flexShrink: 0, opacity: 0.6 }} />
         </a>
 
@@ -349,7 +349,7 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 3,
               background: 'transparent', border: 'none',
-              padding: '4px 6px', borderRadius: 4, flexShrink: 0,
+              padding: '4px 4px', borderRadius: 4, flexShrink: 0,
               color: '#f59e0b', fontSize: 11,
               cursor: reconnecting ? 'wait' : 'pointer',
               WebkitTapHighlightColor: 'transparent',
@@ -360,7 +360,7 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
           </button>
         )}
         <PublicPcBadge compact onClick={() => onMenuAction?.('tools:settings')} />
-        <div data-tour-id="mobile-timer" style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+        <div data-tour-id="mobile-timer" style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
           {activeProjectId && WorkTimer && (
             <WorkTimer
               key={activeProjectId}

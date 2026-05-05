@@ -789,7 +789,7 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
           }}
         >
           <FileText size={13} strokeWidth={1.75} style={{ flexShrink: 0 }} />
-          <span style={{ whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>대본 작업실</span>
+          <span style={{ whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>대본</span>
           <ExternalLink size={10} strokeWidth={2} style={{ flexShrink: 0, opacity: 0.6 }} />
         </a>
 

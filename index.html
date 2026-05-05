@@ -205,12 +205,27 @@
 
     /* 헤더 - 연출 작업실 버튼 (감독 사용자용 별도 진입, 원고지 빨강으로 메인 CTA와 구분) */
     .btn-director {
+      display: inline-flex; align-items: center; gap: 4px;
       padding: 5px 14px; border-radius: 6px; font-size: 12px;
       border: 1px solid var(--ms-red); background: transparent;
       color: var(--ms-red); font-weight: 500;
       transition: background 0.15s ease, color 0.15s ease;
     }
     .btn-director:hover { background: var(--ms-red); color: #fff; }
+
+    /* 모바일에서 헤더 줄바꿈 방지 — 긴 라벨은 짧은 라벨로 토글 */
+    .btn-text-short, .logo-text-short { display: none; }
+    @media (max-width: 600px) {
+      .btn-text-full, .logo-text-full { display: none; }
+      .btn-text-short, .logo-text-short { display: inline; }
+      .header-btns { gap: 6px; }
+      .btn-outline, .btn-primary, .btn-director { padding: 5px 10px; }
+    }
+
+    /* 히어로 풀로고가 뷰포트에 보이는 동안 헤더 워드마크는 숨김 — 시각 중복 제거.
+       스크롤로 hero가 화면 밖이면 다시 노출. JS가 body.hero-visible 토글. */
+    .logo-link { transition: opacity 0.18s ease; }
+    body.hero-visible .logo-link { opacity: 0; visibility: hidden; pointer-events: none; }
 
     /* 히어로 하단 - 연출 작업실 진입 링크 (작가 본 흐름에서 살짝 분리된 보조 CTA) */
     .hero-director-link {
@@ -578,7 +593,8 @@
   <!-- 헤더 -->
   <header class="site-header">
     <button class="logo-link" type="button" aria-label="맨 위로" onclick="window.scrollTo({ top: 0, behavior: 'smooth' });">
-      <span class="logo-text">대본 작업실</span>
+      <span class="logo-text logo-text-full">대본 작업실</span>
+      <span class="logo-text logo-text-short">대작</span>
     </button>
     <div class="header-btns">
       <button id="theme-toggle" class="btn-theme-toggle" type="button" aria-label="다크/라이트 모드 전환" title="다크/라이트 모드 전환">
@@ -599,9 +615,16 @@
           <path d="M21 13.5A8.5 8.5 0 0 1 10.5 3a8.5 8.5 0 1 0 10.5 10.5z" fill="currentColor"/>
         </svg>
       </button>
-      <a href="/app#director"><button class="btn-director" type="button">연출 작업실</button></a>
+      <a href="/app#director"><button class="btn-director" type="button">
+        <span aria-hidden="true">🎬</span>
+        <span class="btn-text-full">연출 작업실</span>
+        <span class="btn-text-short">연출</span>
+      </button></a>
       <a href="/app"><button class="btn-outline">로그인</button></a>
-      <a href="/app"><button class="btn-primary">바로 시작하기</button></a>
+      <a href="/app"><button class="btn-primary">
+        <span class="btn-text-full">바로 시작하기</span>
+        <span class="btn-text-short">시작</span>
+      </button></a>
     </div>
   </header>
 
@@ -974,6 +997,19 @@
       entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
     }, { threshold: 0.1 });
     document.querySelectorAll('.reveal').forEach(el => revealObs.observe(el));
+
+    // ── 히어로 풀로고 가시성 → 헤더 워드마크 토글 ─────────────────
+    // 풀로고가 화면에 보이는 동안 좌상단 "대본 작업실" 워드마크는 숨겨 시각 중복 제거.
+    // 페이지 진입 시 깜빡임 없도록 초기 가시성도 즉시 계산.
+    (() => {
+      const heroLogo = document.querySelector('.hero-logo-mark');
+      if (!heroLogo) return;
+      const setVisible = (v) => document.body.classList.toggle('hero-visible', v);
+      const rect = heroLogo.getBoundingClientRect();
+      setVisible(rect.bottom > 0 && rect.top < window.innerHeight);
+      const io = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting), { threshold: 0 });
+      io.observe(heroLogo);
+    })();
 
     // ── 유틸 ─────────────────────────────────────────────────────
     function wait(ms) { return new Promise(r => setTimeout(r, ms)); }

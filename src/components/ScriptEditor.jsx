@@ -383,39 +383,47 @@ function SymbolPicker({ mobile = false, closeToken = 0, onOpen, forceOpen = null
 
 // ─── Page counter (status bar) ────────────────────────────────────────────────
 function PageCounter({ blocks, stylePreset, scrollRef }) {
-  const totalPages = useMemo(() => {
-    if (!blocks.length) return 1;
+  const { totalPages, totalScenes, charCount } = useMemo(() => {
+    if (!blocks.length) return { totalPages: 1, totalScenes: 0, charCount: 0 };
     const m = getLayoutMetrics(stylePreset);
     const { charsPerLine, charsInSpeech, linesPerPage, fontSize, lineHeight } = m;
     const lineHpt = fontSize * lineHeight;
     let total = 0;
+    let scenes = 0;
+    let chars = 0;
     // ep_title: TOKEN_HEIGHTS.ep_title = (fs+2)/fs (토크나이저와 동일)
     total += (fontSize + 2) / fontSize;
     for (const b of blocks) {
+      const text = stripHtml(b.content || '');
       switch (b.type) {
         case 'scene_number':
+          scenes += 1;
           total += 1 + 12 / lineHpt;
           break;
         case 'action': {
-          const len = stripHtml(b.content || '').length;
-          const lines = Math.max(1, Math.ceil(len / (charsPerLine - 2)));
+          const lines = Math.max(1, Math.ceil(text.length / (charsPerLine - 2)));
           total += lines * (1 + 1 / lineHpt);
+          chars += text.length;
           break;
         }
         case 'dialogue': {
-          const len = stripHtml(b.content || '').length;
-          const lines = Math.max(1, Math.ceil(len / charsInSpeech));
+          const lines = Math.max(1, Math.ceil(text.length / charsInSpeech));
           total += lines * (1 + 1 / lineHpt);
+          chars += text.length;
           break;
         }
         default: {
-          const len = stripHtml(b.content || '').length;
-          const lines = Math.max(1, Math.ceil(len / charsPerLine));
+          const lines = Math.max(1, Math.ceil(text.length / charsPerLine));
           total += lines * (1 + 1 / lineHpt);
+          chars += text.length;
         }
       }
     }
-    return Math.max(1, Math.ceil(total / linesPerPage));
+    return {
+      totalPages: Math.max(1, Math.ceil(total / linesPerPage)),
+      totalScenes: scenes,
+      charCount: chars,
+    };
   }, [blocks, stylePreset]);
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -435,8 +443,15 @@ function PageCounter({ blocks, stylePreset, scrollRef }) {
 
   if (!totalPages) return null;
   return (
-    <span className="text-[10px] tabular-nums" style={{ color: 'var(--c-text6)' }} title="현재 페이지 / 전체 페이지">
-      {currentPage}/{totalPages}
+    <span
+      className="text-[10px] tabular-nums"
+      style={{ color: 'var(--c-text6)', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+      title={`페이지 ${currentPage}/${totalPages} · 씬 ${totalScenes}개 · 글자 ${charCount.toLocaleString('ko-KR')}자`}
+    >
+      <span>{currentPage}/{totalPages}</span>
+      {totalScenes > 0 && <><span style={{ opacity: 0.5 }}>·</span><span>씬 {totalScenes}</span></>}
+      <span style={{ opacity: 0.5 }}>·</span>
+      <span>{charCount.toLocaleString('ko-KR')}자</span>
     </span>
   );
 }
@@ -2296,12 +2311,19 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     let currentBlocks, restored;
     try { currentBlocks = JSON.parse(currentSerialized); } catch { undoActive.current = false; return; }
     try { restored = JSON.parse(prev); } catch { undoActive.current = false; return; }
+    // setBlocks → loadBlocks 과정에서 surface가 contentEditable을 다시 그리며
+    // scrollTop을 0으로 리셋하는 경우가 있어 사용자가 보던 위치가 사라짐.
+    // 직전 scroll 위치를 저장해두고, flashChangedBlock가 변경 블록을 못 찾을 때
+    // 최소 보던 위치는 유지되도록 폴백.
+    const scrollContainer = editorScrollRef.current;
+    const savedScrollTop = scrollContainer?.scrollTop ?? 0;
     setBlocks(restored);
     // 전역 state.scriptBlocks 동기화 — 우측 패널 chip 등 다른 뷰가 stale 안 되도록.
     // SET_BLOCKS는 AUTO_RECORD에 없어 전역 history에 entry 안 만듦 → redo 흐름 안전.
     dispatch({ type: 'SET_BLOCKS', episodeId: activeEpisodeId, payload: restored });
     requestAnimationFrame(() => {
       surfaceApiRef.current?.loadBlocks(restored);
+      if (scrollContainer) scrollContainer.scrollTop = savedScrollTop;
       undoActive.current = false;
       flashChangedBlock(currentBlocks, restored);
       window.dispatchEvent(new CustomEvent('scriptundostate', {
@@ -2320,10 +2342,13 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     let currentBlocks, restored;
     try { currentBlocks = currentSerialized ? JSON.parse(currentSerialized) : []; } catch { currentBlocks = []; }
     try { restored = JSON.parse(next); } catch { undoActive.current = false; return; }
+    const scrollContainer = editorScrollRef.current;
+    const savedScrollTop = scrollContainer?.scrollTop ?? 0;
     setBlocks(restored);
     dispatch({ type: 'SET_BLOCKS', episodeId: activeEpisodeId, payload: restored });
     requestAnimationFrame(() => {
       surfaceApiRef.current?.loadBlocks(restored);
+      if (scrollContainer) scrollContainer.scrollTop = savedScrollTop;
       undoActive.current = false;
       flashChangedBlock(currentBlocks, restored);
       window.dispatchEvent(new CustomEvent('scriptundostate', {
@@ -3733,19 +3758,21 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
         </div>
       )}
 
-      {/* Toolbar — 2행: 회차 정보 + 페이지수 + 저장됨 (모바일 전용) */}
+      {/* Toolbar — 2행: 회차 정보 + 페이지수/씬수/글자수 + 저장됨 (모바일 전용) */}
       <div className="md:hidden px-4 py-1 flex items-center gap-2 text-xs shrink-0" style={{ borderBottom: '1px solid var(--c-border2)' }}>
-        {/* 왼쪽: 회차·제목·쪽수·저장됨 */}
-        <span style={{ color: 'var(--c-text3)', flexShrink: 0 }}>{episode?.number}회 {episode?.title || ''}</span>
+        {/* 회차 제목은 길면 잘리도록(truncate) — 통계/저장 표시가 우측으로 밀려 화면 밖으로 나가지 않게 */}
+        <span style={{ color: 'var(--c-text3)', flexShrink: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {episode?.number}회 {episode?.title || ''}
+        </span>
         {brokenSceneRefs.length > 0 && (
           <button
             onClick={() => { setReconnectIdx(0); setReconnectTarget(brokenSceneRefs[0]); }}
-            className="text-xs px-1.5 py-0.5 rounded"
+            className="text-xs px-1.5 py-0.5 rounded shrink-0"
             style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', cursor: 'pointer' }}
           >⚠ S# 참조 {brokenSceneRefs.length}개 끊김</button>
         )}
-        <PageCounter blocks={blocks} stylePreset={stylePreset} scrollRef={editorScrollRef} />
-        <span style={{ color: 'var(--c-border3)' }}>● 저장됨</span>
+        <span className="shrink-0"><PageCounter blocks={blocks} stylePreset={stylePreset} scrollRef={editorScrollRef} /></span>
+        <span className="shrink-0" style={{ color: 'var(--c-border3)' }}>● 저장됨</span>
       </div>
 
       {/* Reconnect panel */}
