@@ -44,6 +44,37 @@ export function mergeWorkLog(logs, entry) {
   return [...logs.slice(0, idx), merged, ...logs.slice(idx + 1)];
 }
 
+// ─── Project fingerprint — Phase 1.2 변경 감지 ──────────────────────────────
+// 작품 단위로 cascading 데이터의 (길이 + 마지막 updatedAt)을 단일 문자열로 만들어
+// 마지막 저장 시점과 비교. 변경 안 된 작품은 신 형식 Drive 저장을 건너뛴다.
+function projectFingerprint(state, projectId) {
+  const p = state.projects.find(pr => pr.id === projectId);
+  if (!p) return null;
+  const sig = (arr) => {
+    let len = 0, maxTs = 0;
+    for (const it of arr) {
+      if (it?.projectId === projectId) {
+        len++;
+        const ts = new Date(it.updatedAt || 0).getTime();
+        if (ts > maxTs) maxTs = ts;
+      }
+    }
+    return `${len}:${maxTs}`;
+  };
+  return [
+    p.updatedAt,
+    sig(state.episodes),
+    sig(state.characters),
+    sig(state.scenes),
+    sig(state.scriptBlocks),
+    sig(state.coverDocs),
+    sig(state.synopsisDocs),
+    sig(state.resources),
+    sig(state.workTimeLogs),
+    sig(state.checklistItems),
+  ].join('|');
+}
+
 // ─── Default style preset ────────────────────────────────────────────────────
 export const DEFAULT_STYLE_PRESET = {
   dialogueGap: '7em',
@@ -620,6 +651,10 @@ export function AppProvider({ children }) {
   const lastSavedSizesRef = useRef(null);
   const guardAcceptOnceRef = useRef(false);
   const guardDismissedSizesRef = useRef(null);
+  // Phase 1.2 변경 감지: 작품별 fingerprint(cascading 데이터 길이 + max updatedAt).
+  // 매 사이클마다 모든 작품을 신 형식으로 저장하면 503 rate limit hit 빈번 → 변경된 작품만 저장.
+  // __index 키는 인덱스 파일의 마지막 저장 fingerprint.
+  const lastProjFingerprintRef = useRef({});
 
   useEffect(() => {
     (async () => {
@@ -868,8 +903,9 @@ export function AppProvider({ children }) {
           });
 
         // Phase 1.2 — 신 형식(작품별 파일 + 인덱스) 병행 저장.
+        // 변경된 작품만 저장 (옵션 B): fingerprint 비교로 매 사이클 N+2 폭발을 막아
+        // Drive API rate limit(503 transientError) 회피.
         // 구 형식이 source of truth이므로 실패해도 silent + console.warn만.
-        // Phase 1.3에서 신 형식이 안정화되면 구 형식 호출은 Phase 4.3에서 제거.
         const deviceId = getDeviceId();
         const projectsMeta = state.projects.map(p => ({
           id: p.id,
@@ -877,17 +913,40 @@ export function AppProvider({ children }) {
           updatedAt: p.updatedAt,
           savedAt,
         }));
-        Promise.all([
-          saveProjectsIndex({ projects: projectsMeta, savedAt, deviceId }),
-          ...state.projects.map(p =>
-            saveProjectToDrive(p.id, serializeProject(state, p.id, {
-              drive: { savedAt, deviceId },
-            }))
-          ),
-        ]).catch(e => {
-          if (e?.message === 'DRIVE_AUTH_REQUIRED') return;
-          console.warn('[Drive] 작품별 신 형식 저장 실패 (구 형식 정상):', e?.message || e);
+        const changedProjects = state.projects.filter(p => {
+          const fp = projectFingerprint(state, p.id);
+          return lastProjFingerprintRef.current[p.id] !== fp;
         });
+        const indexFp = projectsMeta.map(m => `${m.id}:${m.updatedAt}`).join(',');
+        const indexChanged = lastProjFingerprintRef.current.__index !== indexFp;
+
+        const v2Tasks = [];
+        if (indexChanged) {
+          v2Tasks.push({ kind: 'index', run: () => saveProjectsIndex({ projects: projectsMeta, savedAt, deviceId }) });
+        }
+        for (const p of changedProjects) {
+          v2Tasks.push({
+            kind: 'project',
+            id: p.id,
+            run: () => saveProjectToDrive(p.id, serializeProject(state, p.id, { drive: { savedAt, deviceId } })),
+          });
+        }
+        if (v2Tasks.length > 0) {
+          Promise.all(v2Tasks.map(t => t.run())).then(() => {
+            for (const p of changedProjects) {
+              lastProjFingerprintRef.current[p.id] = projectFingerprint(state, p.id);
+            }
+            if (indexChanged) lastProjFingerprintRef.current.__index = indexFp;
+            // 삭제된 작품의 fingerprint 정리 (메모리 누수 방지)
+            const validIds = new Set(state.projects.map(p => p.id));
+            for (const k of Object.keys(lastProjFingerprintRef.current)) {
+              if (k !== '__index' && !validIds.has(k)) delete lastProjFingerprintRef.current[k];
+            }
+          }).catch(e => {
+            if (e?.message === 'DRIVE_AUTH_REQUIRED') return;
+            console.warn('[Drive] 작품별 신 형식 저장 실패 (구 형식 정상):', e?.message || e);
+          });
+        }
       }
     }, 300);
   }, [

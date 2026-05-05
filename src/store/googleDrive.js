@@ -84,6 +84,27 @@ async function withAuthRetry(operation) {
   }
 }
 
+// 503/429 transient/rate 에러를 지수 backoff로 재시도. 작품별 신 형식 저장처럼
+// 동시 다발 호출에서 quota 초과 시 자연 회복용. withAuthRetry 위에 한 겹 더 감싼다.
+async function withTransientRetry(operation, { maxRetries = 3 } = {}) {
+  let attempt = 0;
+  while (true) {
+    try {
+      return await operation();
+    } catch (e) {
+      const status = e?.driveStatus;
+      const reason = e?.driveReason;
+      const isTransient = status === 503 || status === 429
+        || reason === 'transientError' || reason === 'rateLimitExceeded'
+        || reason === 'userRateLimitExceeded';
+      if (!isTransient || attempt >= maxRetries) throw e;
+      const delay = 500 * Math.pow(2, attempt) + Math.floor(Math.random() * 200); // 500~700, 1100~1300, 2300~2500
+      await new Promise(r => setTimeout(r, delay));
+      attempt++;
+    }
+  }
+}
+
 // ── 기기 정보 ──────────────────────────────────────────────────────────────
 export function getDeviceLabel() {
   const ua = navigator.userAgent;
@@ -538,7 +559,7 @@ export async function saveProjectsIndex({ projects, savedAt, deviceId }) {
     savedAt: savedAt || new Date().toISOString(),
     deviceId,
   });
-  return upsertFile(PROJECTS_INDEX_FILE, content);
+  return withTransientRetry(() => upsertFile(PROJECTS_INDEX_FILE, content));
 }
 
 /**
@@ -558,7 +579,7 @@ export async function loadProjectsIndex() {
 export async function saveProjectToDrive(projectId, payload) {
   if (!isTokenValid()) throw new Error('DRIVE_AUTH_REQUIRED');
   const content = JSON.stringify(payload);
-  return upsertFile(projectFileName(projectId), content);
+  return withTransientRetry(() => upsertFile(projectFileName(projectId), content));
 }
 
 /**
