@@ -365,14 +365,24 @@ function reducer(state, action) {
       };
     }
 
-    case 'SET_BLOCKS':
+    case 'SET_BLOCKS': {
+      // payload 내 동일 id 중복 방어 — HWPX/DOCX import 등에서 같은 id가 두 번
+      // 들어와도 한 번만 채택. detectScriptBlockDuplicates 경고의 재발 예방.
+      const seen = new Set();
+      const dedupedPayload = action.payload.filter(b => {
+        if (!b?.id) return true;
+        if (seen.has(b.id)) return false;
+        seen.add(b.id);
+        return true;
+      });
       return {
         ...state,
         scriptBlocks: [
           ...state.scriptBlocks.filter(b => b.episodeId !== action.episodeId),
-          ...action.payload,
+          ...dedupedPayload,
         ],
       };
+    }
 
     case 'UPDATE_BLOCK_EMOTION':
       return {
