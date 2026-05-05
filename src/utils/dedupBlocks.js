@@ -1,3 +1,20 @@
+// (episodeId, id) 같은 블록은 마지막 등장(배열 뒤쪽) 1개만 보존하고 새 배열 반환.
+// 일반적으로 더 늦게 추가된 사본이 최신이라는 가정. 안전 정책.
+export function dedupScriptBlocks(blocks) {
+  if (!Array.isArray(blocks)) return blocks;
+  const seen = new Set();
+  const reversed = [];
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    const b = blocks[i];
+    if (!b?.id) { reversed.push(b); continue; }
+    const key = `${b.episodeId || ''}:${b.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    reversed.push(b);
+  }
+  return reversed.reverse();
+}
+
 // scriptBlocks의 (episodeId, id) 중복을 감지한다.
 // Read-only: 배열을 변경하거나 새 배열을 만들지 않는다.
 // 결과는 모니터링/진단용 리포트 객체.

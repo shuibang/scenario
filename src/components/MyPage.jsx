@@ -14,6 +14,7 @@ import { ANNOUNCEMENTS } from './UpdateBanner';
 import { SCENE_PREFIX_OPTIONS, getScenePrefix, setScenePrefix } from '../utils/scenePrefix';
 import { getSceneFormat, setSceneFormat, LOC_SEP_PRESETS, TIME_FMT_PRESETS, isCustomLocSep, previewFormat } from '../utils/sceneFormat';
 import { setPublicPcMode } from '../store/db';
+import { detectScriptBlockDuplicates } from '../utils/dedupBlocks';
 
 // ─── Log PDF ──────────────────────────────────────────────────────────────────
 const LOG_PDF_FONT = '함초롬바탕';
@@ -577,9 +578,24 @@ function FontManagementSection() {
 }
 
 export function SettingsTab() {
+  const { state, dispatch } = useApp();
   const [publicPc, setPublicPc] = useState(() => localStorage.getItem(PUBLIC_PC_KEY) === 'true');
   const [designTool, setDesignTool]       = useState(() => localStorage.getItem(DESIGN_TOOL_KEY) || 'treatment');
   const [scenelistSync, setScenelistSync] = useState(() => localStorage.getItem(SCENELIST_SYNC_KEY) || 'sync');
+
+  const dupReport = useMemo(
+    () => detectScriptBlockDuplicates(state.scriptBlocks),
+    [state.scriptBlocks]
+  );
+  const handleDedup = () => {
+    if (dupReport.totalDuplicates === 0) return;
+    const ok = window.confirm(
+      `대본 블록 ${dupReport.totalDuplicates}건의 중복이 발견됐습니다.\n` +
+      `같은 ID의 사본 중 마지막 것만 보존합니다.\n계속할까요?`
+    );
+    if (!ok) return;
+    dispatch({ type: 'DEDUP_SCRIPT_BLOCKS' });
+  };
 
   const togglePublicPc = () => {
     const next = !publicPc;
@@ -704,6 +720,37 @@ export function SettingsTab() {
             );
           })}
         </div>
+      </div>
+
+      {/* 데이터 정리 — 같은 ID 대본 블록 중복 제거 */}
+      <div
+        className="flex items-start gap-4 rounded-lg"
+        style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)', padding: '12px 16px' }}
+      >
+        <div className="flex-1">
+          <div className="text-sm font-medium mb-0.5" style={{ color: 'var(--c-text)' }}>데이터 정리</div>
+          <div className="text-xs" style={{ color: 'var(--c-text5)' }}>
+            같은 ID의 대본 블록이 중복으로 저장된 경우 정리합니다. HWPX·DOCX import나 동기화 race로 드물게 발생.
+          </div>
+          <div style={{ marginTop: 4, fontSize: 11, color: 'var(--c-text6)' }}>
+            현재 중복: {dupReport.totalDuplicates}건 / 전체 블록 {dupReport.totalBlocks}개
+          </div>
+        </div>
+        <button
+          onClick={handleDedup}
+          disabled={dupReport.totalDuplicates === 0}
+          className="shrink-0"
+          style={{
+            padding: '6px 14px', borderRadius: 6,
+            border: '1px solid var(--c-border3)',
+            background: dupReport.totalDuplicates > 0 ? 'var(--c-accent)' : 'var(--c-input)',
+            color: dupReport.totalDuplicates > 0 ? '#fff' : 'var(--c-text5)',
+            fontSize: 12, fontWeight: 600,
+            cursor: dupReport.totalDuplicates > 0 ? 'pointer' : 'not-allowed',
+          }}
+        >
+          {dupReport.totalDuplicates > 0 ? '정리' : '깨끗'}
+        </button>
       </div>
 
       {/* 법적 주의 문구 */}

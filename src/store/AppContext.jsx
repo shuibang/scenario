@@ -6,7 +6,7 @@ import { computeSizeGuard } from './sizeGuard';
 import { sharePayloadSchema } from '../utils/urlSchemas';
 import { parsePath, syncUrl } from '../utils/urlSync';
 import { describeDriveError } from '../utils/driveError';
-import { detectScriptBlockDuplicates } from '../utils/dedupBlocks';
+import { detectScriptBlockDuplicates, dedupScriptBlocks } from '../utils/dedupBlocks';
 import { getDeviceId } from '../utils/deviceId';
 
 // 복원 가능한 activeDoc 값 whitelist — localStorage에 주입된 예상 밖의 값 차단
@@ -383,6 +383,10 @@ function reducer(state, action) {
         ],
       };
     }
+
+    case 'DEDUP_SCRIPT_BLOCKS':
+      // 사용자 명시 액션 (마이페이지 → 데이터 정리). 잔존 (episodeId, id) 중복 제거.
+      return { ...state, scriptBlocks: dedupScriptBlocks(state.scriptBlocks) };
 
     case 'UPDATE_BLOCK_EMOTION':
       return {
