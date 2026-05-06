@@ -1,24 +1,256 @@
 /**
  * SyncConflictModal — Drive 로그인 시 로컬 vs Drive 데이터 충돌 해결 UI
  *
- * 표시 조건:
- *   - Drive에 데이터가 있고
- *   - 로컬에도 의미 있는 데이터가 있고 (프로젝트 1개 이상)
- *   - 두 savedAt 타임스탬프가 다를 때
+ * 두 가지 모드:
+ *   1) conflicts !== null (신 형식, Phase 2.2b) — 작품별 시간 라디오. onApply(decisions).
+ *   2) conflicts === null (구 형식 fallback) — 두 카드. onKeepLocal / onLoadDrive.
  *
- * 사용자가 선택:
- *   - "현재 기기 유지" → 로컬 데이터를 Drive에 업로드 (Drive 덮어씀)
- *   - "다른 기기 데이터 불러오기" → Drive 데이터를 로컬에 로드
+ * 결정 모델:
+ *   decisions: { [projectId]: 'local' | 'drive' }
+ *   - conflict + 'local' → 이 기기 데이터 유지(Drive에 덮어쓰기)
+ *   - conflict + 'drive' → Drive 데이터로 교체
+ *   - localOnly + 'local' → 유지 + Drive에 새로 push
+ *   - localOnly + 'drive' → 이 기기에서 휴지통으로 + Drive 정리
+ *   - driveOnly + 'local' → 무시(이 기기에서 안 가져옴 + Drive 파일/인덱스 정리)
+ *   - driveOnly + 'drive' → 이 기기에 가져오기
  */
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 
 function fmtTs(isoStr) {
-  if (!isoStr) return '알 수 없음';
+  if (!isoStr) return null;
   const d = new Date(isoStr);
-  if (isNaN(d)) return '알 수 없음';
+  if (isNaN(d)) return null;
   const pad = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
+
+// ── 작품별 시간 라디오 행 (Phase 2.2b 본 작업) ─────────────────────────────────
+
+function ConflictRow({ conflict, decision, onChange, busy }) {
+  const { projectId, title, kind } = conflict;
+  const localTs = conflict.local?.updatedAt;
+  const driveTs = conflict.drive?.updatedAt || conflict.drive?.savedAt;
+  const localFmt = fmtTs(localTs);
+  const driveFmt = fmtTs(driveTs);
+
+  // 더 최신 쪽 자동 표시 — 사용자가 가만히 있어도 합리적인 기본값
+  let newerSide = null;
+  if (localTs && driveTs) {
+    newerSide = new Date(localTs) >= new Date(driveTs) ? 'local' : 'drive';
+  }
+
+  const kindBadge = kind === 'conflict'
+    ? { label: '양쪽 다 변경', color: 'var(--c-accent2)' }
+    : kind === 'localOnly'
+      ? { label: '이 기기에만', color: 'var(--c-accent)' }
+      : { label: 'Drive에만', color: 'var(--c-text5)' };
+
+  // 행별 라벨 — kind에 따라 의미가 다름
+  const localLabel = kind === 'driveOnly'
+    ? '이 기기에 없음 (선택 시 가져오지 않음)'
+    : (kind === 'localOnly' ? '이 기기 유지' : '이 기기 데이터');
+  const driveLabel = kind === 'localOnly'
+    ? 'Drive에 없음 (선택 시 이 기기에서 휴지통으로)'
+    : (kind === 'driveOnly' ? 'Drive에서 가져오기' : 'Drive 데이터');
+
+  const Row = ({ side, ts, fmt, label }) => {
+    const checked = decision === side;
+    const isNewer = newerSide === side;
+    const inputId = `conflict-${projectId}-${side}`;
+    return (
+      <label
+        htmlFor={inputId}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          padding: '8px 10px',
+          borderRadius: 7,
+          background: checked ? 'var(--c-active)' : 'transparent',
+          border: `1px solid ${checked ? 'var(--c-accent)' : 'var(--c-border3)'}`,
+          cursor: busy ? 'default' : 'pointer',
+          transition: 'background 0.12s, border-color 0.12s',
+        }}
+      >
+        <input
+          id={inputId}
+          type="radio"
+          name={`conflict-${projectId}`}
+          value={side}
+          checked={checked}
+          disabled={busy}
+          onChange={() => onChange(projectId, side)}
+          style={{ flexShrink: 0, accentColor: 'var(--c-accent)' }}
+        />
+        <span style={{ fontSize: 13, fontWeight: 600, color: checked ? 'var(--c-accent)' : 'var(--c-text2)', minWidth: 110 }}>
+          {fmt || '—'}
+        </span>
+        <span style={{ fontSize: 11, color: 'var(--c-text5)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {side === 'local' ? '📱 이 기기' : '☁ Drive'} · {label}
+        </span>
+        {isNewer && fmt && (
+          <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--c-accent)', flexShrink: 0 }}>
+            더 최신
+          </span>
+        )}
+      </label>
+    );
+  };
+
+  return (
+    <div style={{
+      padding: '10px 12px',
+      borderRadius: 8,
+      background: 'var(--c-input)',
+      border: '1px solid var(--c-border3)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--c-text)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {title || '제목없음'}
+        </span>
+        <span style={{ fontSize: 10, fontWeight: 700, color: kindBadge.color, flexShrink: 0, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          {kindBadge.label}
+        </span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <Row side="local" ts={localTs} fmt={localFmt} label={localLabel} />
+        <Row side="drive" ts={driveTs} fmt={driveFmt} label={driveLabel} />
+      </div>
+    </div>
+  );
+}
+
+function defaultDecisions(conflicts) {
+  const out = {};
+  for (const c of conflicts || []) {
+    if (c.kind === 'conflict') {
+      const lt = c.local?.updatedAt;
+      const dt = c.drive?.updatedAt || c.drive?.savedAt;
+      out[c.projectId] = (new Date(lt || 0) >= new Date(dt || 0)) ? 'local' : 'drive';
+    } else if (c.kind === 'localOnly') {
+      out[c.projectId] = 'local';
+    } else {
+      out[c.projectId] = 'drive';
+    }
+  }
+  return out;
+}
+
+function ConflictResolver({ conflicts, onApply, onDismiss, busy, busyMessage }) {
+  const [decisions, setDecisions] = useState(() => defaultDecisions(conflicts));
+
+  const setOne = (projectId, side) => {
+    if (busy) return;
+    setDecisions(prev => ({ ...prev, [projectId]: side }));
+  };
+
+  const applyBulk = (mode) => {
+    if (busy) return;
+    if (mode === 'newest') return setDecisions(defaultDecisions(conflicts));
+    const target = mode === 'allLocal' ? 'local' : 'drive';
+    const next = {};
+    for (const c of conflicts) next[c.projectId] = target;
+    setDecisions(next);
+  };
+
+  const counts = useMemo(() => {
+    let local = 0, drive = 0;
+    for (const v of Object.values(decisions)) {
+      if (v === 'local') local++; else if (v === 'drive') drive++;
+    }
+    return { local, drive };
+  }, [decisions]);
+
+  return (
+    <>
+      <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--c-text)', marginBottom: 6 }}>
+        기기 간 데이터가 다릅니다
+      </div>
+      <div style={{ fontSize: 13, color: 'var(--c-text5)', marginBottom: 16, lineHeight: 1.6 }}>
+        작품별로 어느 시점을 살릴지 선택해 주세요.<br/>
+        선택 전 양쪽 데이터가 자동으로 스냅샷에 보존됩니다.
+      </div>
+
+      <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+        <BulkBtn onClick={() => applyBulk('newest')}  busy={busy}>전부 최신순</BulkBtn>
+        <BulkBtn onClick={() => applyBulk('allLocal')} busy={busy}>전부 이 기기</BulkBtn>
+        <BulkBtn onClick={() => applyBulk('allDrive')} busy={busy}>전부 Drive</BulkBtn>
+      </div>
+
+      <div style={{
+        display: 'flex', flexDirection: 'column', gap: 8,
+        marginBottom: 16,
+        maxHeight: 320, overflowY: 'auto',
+        opacity: busy ? 0.5 : 1, pointerEvents: busy ? 'none' : 'auto',
+      }}>
+        {conflicts.map(c => (
+          <ConflictRow
+            key={c.projectId}
+            conflict={c}
+            decision={decisions[c.projectId]}
+            onChange={setOne}
+            busy={busy}
+          />
+        ))}
+      </div>
+
+      <div style={{ fontSize: 11, color: 'var(--c-text6)', marginBottom: 12, textAlign: 'center' }}>
+        이 기기 {counts.local}개 · Drive {counts.drive}개 적용 예정
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        {onDismiss && !busy && (
+          <button
+            onClick={onDismiss}
+            style={{
+              padding: '9px 14px', borderRadius: 7,
+              background: 'transparent',
+              border: '1px solid var(--c-border3)',
+              color: 'var(--c-text5)',
+              fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            나중에 결정
+          </button>
+        )}
+        <button
+          onClick={() => onApply(decisions)}
+          disabled={busy}
+          style={{
+            padding: '9px 18px', borderRadius: 7,
+            background: 'var(--c-accent)',
+            border: 'none',
+            color: '#fff',
+            fontSize: 13, fontWeight: 700,
+            cursor: busy ? 'default' : 'pointer',
+            opacity: busy ? 0.6 : 1,
+          }}
+        >
+          {busy ? (busyMessage || '적용 중…') : '선택대로 적용'}
+        </button>
+      </div>
+    </>
+  );
+}
+
+function BulkBtn({ children, onClick, busy }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={busy}
+      style={{
+        padding: '6px 11px', borderRadius: 6,
+        border: '1px solid var(--c-border3)',
+        background: 'var(--c-card)',
+        color: 'var(--c-text3)',
+        fontSize: 12, fontWeight: 600,
+        cursor: busy ? 'default' : 'pointer',
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ── 구 형식 fallback (두 카드) ────────────────────────────────────────────────
 
 function DataCard({ title, savedAt, projectCount, highlight, onClick, label }) {
   return (
@@ -41,7 +273,7 @@ function DataCard({ title, savedAt, projectCount, highlight, onClick, label }) {
         마지막 저장
       </div>
       <div style={{ fontSize: 15, fontWeight: 700, color: highlight ? 'var(--c-accent)' : 'var(--c-text)', marginBottom: 12 }}>
-        {fmtTs(savedAt)}
+        {fmtTs(savedAt) || '알 수 없음'}
       </div>
       <div style={{ fontSize: 12, color: 'var(--c-text5)' }}>
         작품 {projectCount}개
@@ -67,40 +299,59 @@ function DataCard({ title, savedAt, projectCount, highlight, onClick, label }) {
   );
 }
 
-function ConflictList({ conflicts }) {
-  if (!conflicts || conflicts.length === 0) return null;
-  const kindLabel = (k) => k === 'conflict' ? '양쪽 모두 변경' : k === 'localOnly' ? '이 기기에만' : 'Drive에만';
-  const kindColor = (k) => k === 'conflict' ? 'var(--c-accent2)' : k === 'localOnly' ? 'var(--c-accent)' : 'var(--c-text5)';
+function LegacyChooser({ localSavedAt, driveData, localProjectCount, onKeepLocal, onLoadDrive, busy, busyMessage }) {
+  const driveProjectCount = driveData?.projects?.length ?? 0;
+  const localIsNewer = new Date(localSavedAt || 0) >= new Date(driveData?.savedAt || 0);
   return (
-    <div style={{ marginBottom: 16, padding: '12px 14px', borderRadius: 8, background: 'var(--c-input)', border: '1px solid var(--c-border3)' }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text4)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-        변경된 작품 {conflicts.length}개
+    <>
+      <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--c-text)', marginBottom: 6 }}>
+        기기 간 데이터가 다릅니다
       </div>
-      <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
-        {conflicts.slice(0, 8).map(c => (
-          <li key={c.projectId} style={{ padding: '4px 0', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--c-text3)' }}>
-            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {c.title || '제목없음'}
-            </span>
-            <span style={{ fontSize: 10, fontWeight: 600, color: kindColor(c.kind), flexShrink: 0 }}>
-              {kindLabel(c.kind)}
-            </span>
-          </li>
-        ))}
-        {conflicts.length > 8 && (
-          <li style={{ padding: '4px 0', fontSize: 11, color: 'var(--c-text6)' }}>
-            … 외 {conflicts.length - 8}개
-          </li>
-        )}
-      </ul>
-    </div>
+      <div style={{ fontSize: 13, color: 'var(--c-text5)', marginBottom: 18, lineHeight: 1.6 }}>
+        로그인하면서 Drive에서 다른 기기의 저장 데이터를 감지했습니다.<br/>
+        어느 데이터를 사용할지 선택해 주세요. 선택하지 않은 쪽은 덮어씌워집니다.<br/>
+        선택 전 현재 데이터가 자동으로 스냅샷에 보존됩니다.
+      </div>
+      <div style={{ display: 'flex', gap: 12, marginBottom: 16, opacity: busy ? 0.5 : 1, pointerEvents: busy ? 'none' : 'auto' }}>
+        <DataCard
+          title="현재 기기"
+          savedAt={localSavedAt}
+          projectCount={localProjectCount}
+          highlight={localIsNewer}
+          label={localIsNewer ? '더 최신 — 이 기기 유지' : '이 기기 유지'}
+          onClick={onKeepLocal}
+        />
+        <DataCard
+          title="다른 기기 (Drive)"
+          savedAt={driveData?.savedAt}
+          projectCount={driveProjectCount}
+          highlight={!localIsNewer}
+          label={!localIsNewer ? '더 최신 — 불러오기' : 'Drive 데이터 불러오기'}
+          onClick={onLoadDrive}
+        />
+      </div>
+      <div style={{ fontSize: 11, color: busy ? 'var(--c-accent)' : 'var(--c-text6)', textAlign: 'center', lineHeight: 1.6, fontWeight: busy ? 600 : 400 }}>
+        {busy ? (busyMessage || '동기화 중…') : '선택 후 드라이브 자동 동기화가 시작됩니다.'}
+      </div>
+    </>
   );
 }
 
-export default function SyncConflictModal({ localSavedAt, driveData, localProjectCount = 0, conflicts = null, onKeepLocal, onLoadDrive, onDismiss, busy = false, busyMessage = '동기화 중…' }) {
-  const driveProjectCount = driveData?.projects?.length ?? 0;
+// ── 메인 ─────────────────────────────────────────────────────────────────────
 
-  const localIsNewer = new Date(localSavedAt || 0) >= new Date(driveData?.savedAt || 0);
+export default function SyncConflictModal({
+  localSavedAt,
+  driveData,
+  localProjectCount = 0,
+  conflicts = null,
+  onKeepLocal,    // legacy fallback
+  onLoadDrive,    // legacy fallback
+  onApply,        // 신: decisions => Promise<void>
+  onDismiss,
+  busy = false,
+  busyMessage = '동기화 중…',
+}) {
+  const useNewUI = Array.isArray(conflicts) && conflicts.length > 0 && typeof onApply === 'function';
 
   return (
     <div
@@ -116,47 +367,35 @@ export default function SyncConflictModal({ localSavedAt, driveData, localProjec
           background: 'var(--c-panel)',
           border: '1px solid var(--c-border)',
           borderRadius: 14,
-          padding: '28px 24px',
-          maxWidth: 480,
+          padding: '24px 22px',
+          maxWidth: useNewUI ? 540 : 480,
           width: '100%',
+          maxHeight: 'calc(100vh - 40px)',
+          overflowY: 'auto',
           boxShadow: '0 8px 40px rgba(0,0,0,0.4)',
         }}
       >
-        <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--c-text)', marginBottom: 6 }}>
-          기기 간 데이터가 다릅니다
-        </div>
-        <div style={{ fontSize: 13, color: 'var(--c-text5)', marginBottom: 18, lineHeight: 1.6 }}>
-          로그인하면서 Drive에서 다른 기기의 저장 데이터를 감지했습니다.<br/>
-          어느 데이터를 사용할지 선택해 주세요. 선택하지 않은 쪽은 덮어씌워집니다.<br/>
-          선택 전 현재 데이터가 자동으로 스냅샷에 보존됩니다.
-        </div>
-
-        <ConflictList conflicts={conflicts} />
-
-        <div style={{ display: 'flex', gap: 12, marginBottom: 16, opacity: busy ? 0.5 : 1, pointerEvents: busy ? 'none' : 'auto' }}>
-          <DataCard
-            title="현재 기기"
-            savedAt={localSavedAt}
-            projectCount={localProjectCount}
-            highlight={localIsNewer}
-            label={localIsNewer ? '더 최신 — 이 기기 유지' : '이 기기 유지'}
-            onClick={onKeepLocal}
+        {useNewUI ? (
+          <ConflictResolver
+            conflicts={conflicts}
+            onApply={onApply}
+            onDismiss={onDismiss && !busy ? onDismiss : null}
+            busy={busy}
+            busyMessage={busyMessage}
           />
-          <DataCard
-            title="다른 기기 (Drive)"
-            savedAt={driveData?.savedAt}
-            projectCount={driveProjectCount}
-            highlight={!localIsNewer}
-            label={!localIsNewer ? '더 최신 — 불러오기' : 'Drive 데이터 불러오기'}
-            onClick={onLoadDrive}
+        ) : (
+          <LegacyChooser
+            localSavedAt={localSavedAt}
+            driveData={driveData}
+            localProjectCount={localProjectCount}
+            onKeepLocal={onKeepLocal}
+            onLoadDrive={onLoadDrive}
+            busy={busy}
+            busyMessage={busyMessage}
           />
-        </div>
+        )}
 
-        <div style={{ fontSize: 11, color: busy ? 'var(--c-accent)' : 'var(--c-text6)', textAlign: 'center', lineHeight: 1.6, fontWeight: busy ? 600 : 400 }}>
-          {busy ? busyMessage : '선택 후 드라이브 자동 동기화가 시작됩니다.'}
-        </div>
-
-        {onDismiss && !busy && (
+        {onDismiss && !busy && !useNewUI && (
           <button
             onClick={onDismiss}
             style={{

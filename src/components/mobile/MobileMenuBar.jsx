@@ -11,7 +11,7 @@ import { supabaseSignOut, refreshDriveToken } from '../../store/supabaseClient';
 import { guardedSignInWithGoogle } from '../../utils/guardedSignIn';
 import { useDriveAuthState } from '../../hooks/useDriveAuthState';
 import { shouldRunInitialSync, markInitialSyncDone } from '../../store/driveSyncGate';
-import { getDeviceId } from '../../utils/deviceId';
+import { buildProjectConflicts } from '../../utils/projectConflict';
 import Menubar from '../Menubar/Menubar';
 import PublicPcBadge from '../PublicPcBadge';
 
@@ -24,6 +24,11 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
   const { valid: driveTokenValid, settled: driveAuthSettled } = useDriveAuthState();
   const [reconnecting, setReconnecting] = useState(false);
   const syncingRef = useRef(false);
+  const latestStateRef = useRef(state);
+
+  useEffect(() => {
+    latestStateRef.current = state;
+  }, [state]);
   const timerSaveRef = useRef(null); // WorkTimer의 autoSave 연결
 
   // Drive 동기화 — 데스크톱과 동일한 충돌 판정 기준.
@@ -52,7 +57,8 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
         setDriveStatus('synced');
       } else {
         // 작품별 conflicts 산출 (신 형식 _index 있을 때만 정확). 구 형식이면 conflicts === null.
-        let conflicts = null;
+        const localState = latestStateRef.current;
+        const conflicts = buildProjectConflicts(localState, driveData); /*
         const driveProjsMeta = driveData?._index?.projects || null;
         if (driveProjsMeta) {
           const localById = new Map(localProjects.map(p => [p.id, p]));
@@ -88,11 +94,7 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
         // 2) tsLooksSame (5초 race) → synced
         // 3) 같은 deviceId → synced
         // 4) 그 외 → 충돌 모달
-        if (conflicts !== null && conflicts.length === 0) {
-          setDriveStatus('synced');
-        } else if (tsLooksSame) {
-          setDriveStatus('synced');
-        } else if (driveData?.deviceId && getDeviceId() === driveData.deviceId) {
+        */ if (conflicts.length === 0) {
           setDriveStatus('synced');
         } else {
           let dismissedThisSession = false;
@@ -102,7 +104,12 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
             syncingRef.current = false;
             return;
           }
-          onSyncConflict?.({ localSavedAt, driveData, localProjectCount: localProjects.length, conflicts });
+          onSyncConflict?.({
+            localSavedAt,
+            driveData,
+            localProjectCount: localState?.projects?.length ?? localProjects.length,
+            conflicts,
+          });
           setDriveStatus('none');
           syncingRef.current = false;
           return;
@@ -127,11 +134,11 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
 
   // 로그인 후 토큰 유효하면 Drive 동기화 — 같은 사용자에 대해 1회만 (창 크기 변경 리마운트 가드).
   useEffect(() => {
-    if (!authUser || !isTokenValid() || driveStatus !== 'none') return;
+    if (!authUser || !driveAuthSettled || !driveTokenValid || driveStatus !== 'none') return;
     if (!shouldRunInitialSync(authUser.email)) return;
     markInitialSyncDone(authUser.email);
     runDriveSync();
-  }, [authUser]);
+  }, [authUser, driveAuthSettled, driveTokenValid, driveStatus, runDriveSync]);
 
   const handleDriveReconnect = useCallback(async () => {
     if (reconnecting) return;

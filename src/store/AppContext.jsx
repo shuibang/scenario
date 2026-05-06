@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
 import { getAll, setAll, getItem, setItem, DB_KEYS, genId, now, migrateFromLocalStorage } from './db';
 import { isTokenValid, saveToDrive, clearAccessToken, saveProjectsIndex, saveProjectToDrive } from './googleDrive';
-import { serializeProject } from '../utils/projectSerializer';
+import { serializeProject, mergeImportedProject } from '../utils/projectSerializer';
 import { computeSizeGuard } from './sizeGuard';
 import { sharePayloadSchema } from '../utils/urlSchemas';
 import { parsePath, syncUrl } from '../utils/urlSync';
@@ -523,6 +523,29 @@ function reducer(state, action) {
       return { ...state, guardPending: null };
     case 'SET_SCROLL_TO_SCENE':
       return { ...state, scrollToSceneId: action.id };
+
+    // Phase 2.2b — 작품 단위 충돌 해결에서 사용. payload는 projectSerializer 형식
+    // (project + cascading 배열 + trash). mergeImportedProject('replace')로 같은 ID
+    // 작품의 모든 데이터를 통째로 교체하거나, 없는 작품을 새로 추가한다.
+    case 'REPLACE_PROJECT_DATA': {
+      const next = mergeImportedProject(state, action.payload, 'replace');
+      // active 상태는 보존 — projectId가 그대로 존재하면 navigation 유지
+      const targetId = action.payload?.project?.id;
+      const projectStillExists = !!state.activeProjectId &&
+        next.projects.some(pr => pr.id === state.activeProjectId);
+      const epStillExists = !!state.activeEpisodeId &&
+        next.episodes.some(e => e.id === state.activeEpisodeId);
+      return {
+        ...next,
+        activeProjectId: projectStillExists ? state.activeProjectId : null,
+        activeEpisodeId: epStillExists ? state.activeEpisodeId : null,
+        activeDoc:       projectStillExists ? state.activeDoc : null,
+        // 같은 작품 내 episode가 교체됐다면 에디터 강제 리로드
+        pendingScriptReload: (state.activeProjectId === targetId && epStillExists)
+          ? state.activeEpisodeId
+          : state.pendingScriptReload,
+      };
+    }
 
     case 'LOAD_FROM_DRIVE': {
       const p = action.payload;
