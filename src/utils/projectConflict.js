@@ -131,12 +131,19 @@ function logConflictDiff(projectId, title, localState, driveState) {
     const b = stableStringify(drive?.[key]);
     if (a !== b) diffs[key] = { local: local?.[key], drive: drive?.[key] };
   }
+  // window에 노출 → 사용자가 콘솔에서 copy(JSON.stringify(window.__lastConflictDiff, null, 2))로
+  // 한 번에 클립보드 복사 가능. 큰 객체를 펼치고 캡처하는 부담 줄임.
+  if (typeof window !== 'undefined') {
+    window.__lastConflictDiff = { projectId, title, diffs, diffKeys: Object.keys(diffs) };
+  }
   // eslint-disable-next-line no-console
   console.groupCollapsed(`[sync conflict diff] ${title || projectId}`);
   // eslint-disable-next-line no-console
   console.log('projectId:', projectId);
   // eslint-disable-next-line no-console
   console.log('차이나는 키들:', Object.keys(diffs));
+  // eslint-disable-next-line no-console
+  console.log('전체 diff: copy(JSON.stringify(window.__lastConflictDiff, null, 2)) 로 클립보드 복사');
   for (const [key, value] of Object.entries(diffs)) {
     // eslint-disable-next-line no-console
     console.log(`[${key}] local:`, value.local, '\nDrive:', value.drive);
