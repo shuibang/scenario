@@ -338,6 +338,12 @@ export async function saveToDrive(payload) {
   return next;
 }
 
+// 작품별 PUT 직렬화 — 같은 작품 파일에 동시 PUT 발생 시 Drive API의 도착 순서가
+// 보장되지 않아 옛 PUT이 새 PUT을 덮어쓰는 race 방지. saveToDrive(구 형식)와 동일 패턴.
+// 다른 작품끼리는 병렬 그대로 (큐 키가 projectId별로 분리됨).
+const _pendingProjectSaves = {};
+let _pendingIndexSave = Promise.resolve();
+
 // ── 스냅샷 ──────────────────────────────────────────────────────────────────
 
 /** 스냅샷 인덱스 목록 반환 (없으면 []) */
@@ -551,15 +557,19 @@ function projectFileName(projectId) {
  * @param {string} args.deviceId
  */
 export async function saveProjectsIndex({ projects, savedAt, deviceId }) {
-  if (!isTokenValid()) throw new Error('DRIVE_AUTH_REQUIRED');
-  const content = JSON.stringify({
-    format: PROJECTS_INDEX_FORMAT,
-    version: PROJECTS_INDEX_VERSION,
-    projects: projects || [],
-    savedAt: savedAt || new Date().toISOString(),
-    deviceId,
+  const next = _pendingIndexSave.catch(() => {}).then(async () => {
+    if (!isTokenValid()) throw new Error('DRIVE_AUTH_REQUIRED');
+    const content = JSON.stringify({
+      format: PROJECTS_INDEX_FORMAT,
+      version: PROJECTS_INDEX_VERSION,
+      projects: projects || [],
+      savedAt: savedAt || new Date().toISOString(),
+      deviceId,
+    });
+    return withTransientRetry(() => upsertFile(PROJECTS_INDEX_FILE, content));
   });
-  return withTransientRetry(() => upsertFile(PROJECTS_INDEX_FILE, content));
+  _pendingIndexSave = next.catch(() => {});
+  return next;
 }
 
 /**
@@ -577,9 +587,14 @@ export async function loadProjectsIndex() {
  * @param {object} payload - { format:'djs', version:1, project, episodes, ..., drive:{savedAt,deviceId} }
  */
 export async function saveProjectToDrive(projectId, payload) {
-  if (!isTokenValid()) throw new Error('DRIVE_AUTH_REQUIRED');
-  const content = JSON.stringify(payload);
-  return withTransientRetry(() => upsertFile(projectFileName(projectId), content));
+  const prev = _pendingProjectSaves[projectId] || Promise.resolve();
+  const next = prev.catch(() => {}).then(async () => {
+    if (!isTokenValid()) throw new Error('DRIVE_AUTH_REQUIRED');
+    const content = JSON.stringify(payload);
+    return withTransientRetry(() => upsertFile(projectFileName(projectId), content));
+  });
+  _pendingProjectSaves[projectId] = next.catch(() => {});
+  return next;
 }
 
 /**
