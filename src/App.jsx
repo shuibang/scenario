@@ -7,7 +7,7 @@ import { AppProvider, useApp, mergeWorkLog, reducer as appReducer } from './stor
 import { getSceneFormat, rebuildSceneContent } from './utils/sceneFormat';
 import { FONTS, FONT_STATUS, checkFontsAvailability, getFontPdfStatus, getFontByCssFamily } from './print/FontRegistry';
 import { getItem, setItem, getAll, setAll, DB_KEYS, clearDramaStorage, isPublicPcMode, genId, now } from './store/db';
-import { setAccessToken, clearAccessToken, loadFromDrive, loadAllProjectsFromDrive, isTokenValid, saveSnapshot, saveProjectToDrive, deleteProjectFromDrive, saveProjectsIndex, saveToDrive } from './store/googleDrive';
+import { setAccessToken, clearAccessToken, loadAllProjectsFromDrive, isTokenValid, saveSnapshot, saveProjectToDrive, deleteProjectFromDrive, saveProjectsIndex, saveToDrive } from './store/googleDrive';
 import { serializeProject } from './utils/projectSerializer';
 import { buildProjectConflicts } from './utils/projectConflict';
 import { supabase, signInWithGoogle, supabaseSignOut, extractUserData, refreshDriveToken } from './store/supabaseClient';
@@ -822,7 +822,7 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
   }, [state]);
 
   const runDriveSync = useCallback(async () => {
-    if (_driveSyncing || !isTokenValid()) return;
+    if (_driveSyncing || !isTokenValid()) return 'skipped';
     _driveSyncing = true;
     setDriveStatus('syncing');
     try {
@@ -840,54 +840,18 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
 
       if (!driveData?.savedAt || !driveHasData) {
         setDriveStatus('synced');
+        return 'synced';
       } else if (!hasLocalData) {
         loadFromDriveData(driveData);
         setDriveStatus('synced');
+        return 'synced';
       } else {
-        // Phase 2.1 — 작품별 conflict 산출. 신 형식(_index)이 있을 때만 정확.
-        // 구 형식 fallback이면 conflicts=null.
+        // 작품별 충돌만 계산해서, 같은 계정 안에서도 실제 내용이 다른 경우에만 모달을 띄운다.
         const localState = latestStateRef.current;
-        const conflicts = buildProjectConflicts(localState, driveData); /*
-        const driveProjsMeta = driveData?._index?.projects || null;
-        if (driveProjsMeta) {
-          const localById = new Map(localProjects.map(p => [p.id, p]));
-          const driveById = new Map(driveProjsMeta.map(p => [p.id, p]));
-          conflicts = [];
-          for (const lp of localProjects) {
-            const dp = driveById.get(lp.id);
-            if (!dp) {
-              conflicts.push({ projectId: lp.id, title: lp.title, kind: 'localOnly', local: { updatedAt: lp.updatedAt } });
-            } else if (lp.updatedAt !== dp.updatedAt) {
-              conflicts.push({
-                projectId: lp.id,
-                title: lp.title || dp.title,
-                kind: 'conflict',
-                local: { updatedAt: lp.updatedAt },
-                drive: { updatedAt: dp.updatedAt, savedAt: dp.savedAt },
-              });
-            }
-          }
-          for (const dp of driveProjsMeta) {
-            if (!localById.has(dp.id)) {
-              conflicts.push({ projectId: dp.id, title: dp.title, kind: 'driveOnly', drive: { updatedAt: dp.updatedAt, savedAt: dp.savedAt } });
-            }
-          }
-        }
-
-        // 같은 저장 건인데 네트워크 지연 등으로 ms 단위 어긋남은 충돌로 보지 않음 (5초 이내)
-        const localMs = new Date(localSavedAt || 0).getTime();
-        const driveMs = new Date(driveData.savedAt || 0).getTime();
-        const tsLooksSame = Math.abs(driveMs - localMs) <= 5000;
-
-        // 판정 우선순위:
-        // 1) 신 형식이고 작품별 conflicts 0건 — 진짜 동일 데이터 (가장 정확한 신호)
-        //    → 다른 기기 deviceId가 Drive에 마지막 기록됐어도, 그 후 같은 기기에서 작업해
-        //      결과가 동일하면 모달 불필요. 사용자 보고: "같은 기기인데 모달 뜸" 해소.
-        // 2) tsLooksSame (5초 race)
-        // 3) 같은 deviceId
-        // 위 어디에도 안 걸리면 → 충돌 모달
-        */ if (conflicts.length === 0) {
+        const conflicts = buildProjectConflicts(localState, driveData);
+        if (conflicts.length === 0) {
           setDriveStatus('synced');
+          return 'synced';
         } else {
           // "나중에"로 닫은 세션은 재출현 안 함
           let dismissedThisSession = false;
@@ -895,7 +859,7 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
           if (dismissedThisSession) {
             setDriveStatus('synced');
             _driveSyncing = false;
-            return;
+            return 'dismissed';
           }
           onSyncConflict?.({
             localSavedAt,
@@ -905,18 +869,20 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
           });
           setDriveStatus('none');
           _driveSyncing = false;
-          return;
+          return 'conflict';
         }
       }
       setTimeout(() => setDriveStatus('none'), 3000);
+      return 'synced';
     } catch (e) {
       if (e.message?.includes('401') || e.message?.includes('DRIVE_AUTH_REQUIRED')) {
         const newToken = await refreshDriveToken();
-        if (newToken) { _driveSyncing = false; runDriveSync(); return; }
+        if (newToken) { _driveSyncing = false; return runDriveSync(); }
       }
       if (e.message?.includes('403')) setDriveStatus('reauth');
       else setDriveStatus('error');
       console.warn('[Drive] 불러오기 실패:', e);
+      return e.message?.includes('403') ? 'reauth' : 'error';
     } finally {
       _driveSyncing = false;
     }
@@ -926,8 +892,15 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
     if (!authUser || !driveAuthSettled || !driveTokenValid || driveStatus !== 'none') return;
     // 같은 사용자에 대해 한 번 sync 완료했으면 리마운트(창 크기 변경 등)에서는 스킵.
     if (!shouldRunInitialSync(authUser.email)) return;
-    markInitialSyncDone(authUser.email);
-    runDriveSync();
+    let cancelled = false;
+    (async () => {
+      const result = await runDriveSync();
+      if (cancelled) return;
+      if (result === 'synced' || result === 'dismissed' || result === 'conflict') {
+        markInitialSyncDone(authUser.email);
+      }
+    })();
+    return () => { cancelled = true; };
   }, [authUser, driveAuthSettled, driveTokenValid, driveStatus, runDriveSync]);
 
   const handleDriveReconnect = useCallback(async () => {
@@ -1660,60 +1633,6 @@ function Shell({ authUser, setAuthUser }) {
     guardedSignInWithGoogle();
   }, [authUser]);
 
-  /* legacy manual-save flow kept commented for reference while replacing the
-     snapshot-only path with an explicit Drive workspace sync flow.
-  const handleSave = useCallback(async () => {
-    window.dispatchEvent(new Event('script:requestSave'));
-    await waitForEditorFlush();
-    // 수동 저장 시 스냅샷 생성 — 토큰 없으면 갱신 후 시도
-    const latestState = latestStateRef.current;
-    const snap = buildWorkspacePayload(latestState);
-    try {
-      if (!isTokenValid()) await refreshDriveToken();
-      if (!isTokenValid()) {
-        promptDriveReauthForSave();
-        return;
-      }
-
-      const projectIds = latestState.activeProjectId
-        ? [latestState.activeProjectId]
-        : (latestState.projects || []).map(project => project.id);
-      await syncWorkspaceToDrive(latestState, { projectIds });
-      try {
-        await saveSnapshot(snap, '?섎룞???, 'manual');
-        clearTimeout(saveToastTimer.current);
-        setSaveToastMsg('Drive????λ릺?덉뒿?덈떎');
-        setSaveToast(true);
-        saveToastTimer.current = setTimeout(() => setSaveToast(false), 2200);
-      } catch (snapshotError) {
-        const { userMsg, kind } = describeDriveError(snapshotError);
-        clearTimeout(saveToastTimer.current);
-        setSaveToastMsg(`Drive ?묒뾽怨듦컙????λ릺?덉쑝?? ?ㅻ깄?룹? 諛깆뾽? ?ㅽ뙣?덉뒿?덈떎. ${userMsg}`);
-        setSaveToast(true);
-        saveToastTimer.current = setTimeout(() => setSaveToast(false), 3800);
-        if (kind === 'auth') promptDriveReauthForSave();
-      }
-      return;
-      try {
-        if (!isTokenValid()) await refreshDriveToken();
-        if (isTokenValid()) {
-          await saveSnapshot(snap, '수동저장', 'manual');
-        } else {
-          promptDriveReauthForSave();
-        }
-      } catch (error) {
-        if (error?.message?.includes('401') || error?.message?.includes('DRIVE_AUTH_REQUIRED')) {
-          promptDriveReauthForSave();
-        }
-      }
-    }
-    clearTimeout(saveToastTimer.current);
-    setSaveToastMsg('저장되었습니다');
-    setSaveToast(true);
-    saveToastTimer.current = setTimeout(() => setSaveToast(false), 2000);
-  }, [state, promptDriveReauthForSave]);
-  */
-
   const handleSave = useCallback(async () => {
     window.dispatchEvent(new Event('script:requestSave'));
     await waitForEditorFlush();
@@ -2091,7 +2010,7 @@ function Shell({ authUser, setAuthUser }) {
               setSyncConflictBusy('Drive 업데이트 중…');
               const savedAt = new Date().toISOString();
               await syncWorkspaceToDrive(latestStateRef.current, { savedAt });
-              // 3) 성공 후에만 localStorage 갱신 → 다음 runDriveSync 에서 tsLooksSame = true
+              // 3) 성공 후에만 localStorage 갱신 → 다음 자동 sync에서 같은 저장본으로 본다
               try { localStorage.setItem('drama_saved_at', savedAt); } catch {}
               try { sessionStorage.removeItem('sync-conflict-dismissed'); } catch {}
               setSyncConflict(null);
@@ -2216,26 +2135,6 @@ function Shell({ authUser, setAuthUser }) {
                 projectIds: uploadProjectIds,
                 deleteProjectIds,
               });
-              if (false) {
-                const removedIds = new Set(driveDeletes.map(c => c.projectId));
-                const oldIndex = driveData?._index;
-                if (oldIndex?.projects) {
-                  const newProjectsMeta = oldIndex.projects.filter(p => !removedIds.has(p.id));
-                  try {
-                    await saveProjectsIndex({
-                      projects: newProjectsMeta,
-                      savedAt: new Date().toISOString(),
-                      deviceId: getDeviceId(),
-                    });
-                  } catch (e) {
-                    console.warn('[Drive] 인덱스 갱신 실패 (driveOnly 삭제):', e);
-                  }
-                }
-                for (const c of driveDeletes) {
-                  try { await deleteProjectFromDrive(c.projectId); }
-                  catch (e) { console.warn('[Drive] 작품 파일 삭제 실패:', c.projectId, e); }
-                }
-              }
 
               // 4) 정리 — drama_saved_at은 다음 persist 사이클이 갱신
               try { sessionStorage.removeItem('sync-conflict-dismissed'); } catch {}

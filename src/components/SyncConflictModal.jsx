@@ -32,6 +32,7 @@ function ConflictRow({ conflict, decision, onChange, busy }) {
   const driveTs = conflict.drive?.updatedAt || conflict.drive?.savedAt;
   const localFmt = fmtTs(localTs);
   const driveFmt = fmtTs(driveTs);
+  const sameMoment = !!localTs && !!driveTs && new Date(localTs).getTime() === new Date(driveTs).getTime();
 
   // 더 최신 쪽 자동 표시 — 사용자가 가만히 있어도 합리적인 기본값
   let newerSide = null;
@@ -48,14 +49,14 @@ function ConflictRow({ conflict, decision, onChange, busy }) {
   // 행별 라벨 — kind에 따라 의미가 다름
   const localLabel = kind === 'driveOnly'
     ? '이 기기에 없음 (선택 시 가져오지 않음)'
-    : (kind === 'localOnly' ? '이 기기 유지' : '이 기기 데이터');
+    : (kind === 'localOnly' ? '이 기기 버전 유지' : '현재 이 기기 버전');
   const driveLabel = kind === 'localOnly'
-    ? 'Drive에 없음 (선택 시 이 기기에서 휴지통으로)'
-    : (kind === 'driveOnly' ? 'Drive에서 가져오기' : 'Drive 데이터');
+    ? 'Drive에는 없음 (선택 시 이 기기에서 삭제)'
+    : (kind === 'driveOnly' ? 'Drive 저장본 가져오기' : 'Drive에 저장된 버전');
 
   const Row = ({ side, ts, fmt, label }) => {
     const checked = decision === side;
-    const isNewer = newerSide === side;
+    const isNewer = !sameMoment && newerSide === side;
     const inputId = `conflict-${projectId}-${side}`;
     return (
       <label
@@ -84,7 +85,7 @@ function ConflictRow({ conflict, decision, onChange, busy }) {
           {fmt || '—'}
         </span>
         <span style={{ fontSize: 11, color: 'var(--c-text5)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {side === 'local' ? '📱 이 기기' : '☁ Drive'} · {label}
+          {side === 'local' ? '이 기기 버전' : 'Drive 저장본'} · {label}
         </span>
         {isNewer && fmt && (
           <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--c-accent)', flexShrink: 0 }}>
@@ -110,6 +111,11 @@ function ConflictRow({ conflict, decision, onChange, busy }) {
           {kindBadge.label}
         </span>
       </div>
+      {kind === 'conflict' && sameMoment && (
+        <div style={{ fontSize: 11, color: 'var(--c-text5)', marginBottom: 8, lineHeight: 1.5 }}>
+          저장 시각은 같지만 실제 작품 내용이 달라서 충돌로 감지되었습니다.
+        </div>
+      )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <Row side="local" ts={localTs} fmt={localFmt} label={localLabel} />
         <Row side="drive" ts={driveTs} fmt={driveFmt} label={driveLabel} />
@@ -165,7 +171,8 @@ function ConflictResolver({ conflicts, onApply, onDismiss, busy, busyMessage }) 
         기기 간 데이터가 다릅니다
       </div>
       <div style={{ fontSize: 13, color: 'var(--c-text5)', marginBottom: 16, lineHeight: 1.6 }}>
-        작품별로 어느 시점을 살릴지 선택해 주세요.<br/>
+        작품별로 어느 버전을 남길지 선택해 주세요.<br/>
+        Drive는 다른 기기가 아니라 현재 Drive에 저장된 버전입니다.<br/>
         선택 전 양쪽 데이터가 자동으로 스냅샷에 보존됩니다.
       </div>
 
@@ -193,7 +200,7 @@ function ConflictResolver({ conflicts, onApply, onDismiss, busy, busyMessage }) 
       </div>
 
       <div style={{ fontSize: 11, color: 'var(--c-text6)', marginBottom: 12, textAlign: 'center' }}>
-        이 기기 {counts.local}개 · Drive {counts.drive}개 적용 예정
+        이 기기 {counts.local}개 · Drive 저장본 {counts.drive}개 적용 예정
       </div>
 
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
@@ -308,13 +315,13 @@ function LegacyChooser({ localSavedAt, driveData, localProjectCount, onKeepLocal
         기기 간 데이터가 다릅니다
       </div>
       <div style={{ fontSize: 13, color: 'var(--c-text5)', marginBottom: 18, lineHeight: 1.6 }}>
-        로그인하면서 Drive에서 다른 기기의 저장 데이터를 감지했습니다.<br/>
+        로그인하면서 Drive에 저장된 데이터를 감지했습니다.<br/>
         어느 데이터를 사용할지 선택해 주세요. 선택하지 않은 쪽은 덮어씌워집니다.<br/>
         선택 전 현재 데이터가 자동으로 스냅샷에 보존됩니다.
       </div>
       <div style={{ display: 'flex', gap: 12, marginBottom: 16, opacity: busy ? 0.5 : 1, pointerEvents: busy ? 'none' : 'auto' }}>
         <DataCard
-          title="현재 기기"
+          title="이 기기"
           savedAt={localSavedAt}
           projectCount={localProjectCount}
           highlight={localIsNewer}
@@ -322,11 +329,11 @@ function LegacyChooser({ localSavedAt, driveData, localProjectCount, onKeepLocal
           onClick={onKeepLocal}
         />
         <DataCard
-          title="다른 기기 (Drive)"
+          title="Drive 저장본"
           savedAt={driveData?.savedAt}
           projectCount={driveProjectCount}
           highlight={!localIsNewer}
-          label={!localIsNewer ? '더 최신 — 불러오기' : 'Drive 데이터 불러오기'}
+          label={!localIsNewer ? '더 최신 — 불러오기' : 'Drive 저장본 불러오기'}
           onClick={onLoadDrive}
         />
       </div>

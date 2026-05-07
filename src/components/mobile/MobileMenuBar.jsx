@@ -36,7 +36,7 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
   // 여러 기기 간 동기화 시 모바일 데이터가 경고 없이 덮어써지는 사고가 있어
   // 양쪽에 의미 있는 데이터가 있고 타임스탬프가 다르면 충돌 모달을 띄우도록 통일.
   const runDriveSync = useCallback(async () => {
-    if (syncingRef.current || !isTokenValid()) return;
+    if (syncingRef.current || !isTokenValid()) return 'skipped';
     syncingRef.current = true;
     setDriveStatus('syncing');
     try {
@@ -52,57 +52,25 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
 
       if (!driveData?.savedAt || !driveHasData) {
         setDriveStatus('synced');
+        return 'synced';
       } else if (!hasLocalData) {
         loadFromDriveData(driveData);
         setDriveStatus('synced');
+        return 'synced';
       } else {
-        // 작품별 conflicts 산출 (신 형식 _index 있을 때만 정확). 구 형식이면 conflicts === null.
+        // 작품별 충돌만 계산해서 실제 내용이 다를 때만 모달을 띄운다.
         const localState = latestStateRef.current;
-        const conflicts = buildProjectConflicts(localState, driveData); /*
-        const driveProjsMeta = driveData?._index?.projects || null;
-        if (driveProjsMeta) {
-          const localById = new Map(localProjects.map(p => [p.id, p]));
-          const driveById = new Map(driveProjsMeta.map(p => [p.id, p]));
-          conflicts = [];
-          for (const lp of localProjects) {
-            const dp = driveById.get(lp.id);
-            if (!dp) {
-              conflicts.push({ projectId: lp.id, title: lp.title, kind: 'localOnly', local: { updatedAt: lp.updatedAt } });
-            } else if (lp.updatedAt !== dp.updatedAt) {
-              conflicts.push({
-                projectId: lp.id,
-                title: lp.title || dp.title,
-                kind: 'conflict',
-                local: { updatedAt: lp.updatedAt },
-                drive: { updatedAt: dp.updatedAt, savedAt: dp.savedAt },
-              });
-            }
-          }
-          for (const dp of driveProjsMeta) {
-            if (!localById.has(dp.id)) {
-              conflicts.push({ projectId: dp.id, title: dp.title, kind: 'driveOnly', drive: { updatedAt: dp.updatedAt, savedAt: dp.savedAt } });
-            }
-          }
-        }
-
-        const localMs = new Date(localSavedAt || 0).getTime();
-        const driveMs = new Date(driveData.savedAt || 0).getTime();
-        const tsLooksSame = Math.abs(driveMs - localMs) <= 5000;
-
-        // 판정 우선순위 (App.jsx와 동일):
-        // 1) 신 형식 conflicts === [] → synced (가장 정확)
-        // 2) tsLooksSame (5초 race) → synced
-        // 3) 같은 deviceId → synced
-        // 4) 그 외 → 충돌 모달
-        */ if (conflicts.length === 0) {
+        const conflicts = buildProjectConflicts(localState, driveData);
+        if (conflicts.length === 0) {
           setDriveStatus('synced');
+          return 'synced';
         } else {
           let dismissedThisSession = false;
           try { dismissedThisSession = sessionStorage.getItem('sync-conflict-dismissed') === '1'; } catch {}
           if (dismissedThisSession) {
             setDriveStatus('synced');
             syncingRef.current = false;
-            return;
+            return 'dismissed';
           }
           onSyncConflict?.({
             localSavedAt,
@@ -112,14 +80,15 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
           });
           setDriveStatus('none');
           syncingRef.current = false;
-          return;
+          return 'conflict';
         }
       }
       setTimeout(() => setDriveStatus('none'), 3000);
+      return 'synced';
     } catch (e) {
       if (e.message?.includes('401') || e.message?.includes('DRIVE_AUTH_REQUIRED')) {
         const newToken = await refreshDriveToken();
-        if (newToken) { syncingRef.current = false; runDriveSync(); return; }
+        if (newToken) { syncingRef.current = false; return runDriveSync(); }
       }
       if (e.message?.includes('403')) {
         setDriveStatus('reauth');
@@ -127,6 +96,7 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
         setDriveStatus('error');
       }
       console.warn('[Drive] 불러오기 실패:', e);
+      return e.message?.includes('403') ? 'reauth' : 'error';
     } finally {
       syncingRef.current = false;
     }
@@ -136,8 +106,15 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
   useEffect(() => {
     if (!authUser || !driveAuthSettled || !driveTokenValid || driveStatus !== 'none') return;
     if (!shouldRunInitialSync(authUser.email)) return;
-    markInitialSyncDone(authUser.email);
-    runDriveSync();
+    let cancelled = false;
+    (async () => {
+      const result = await runDriveSync();
+      if (cancelled) return;
+      if (result === 'synced' || result === 'dismissed' || result === 'conflict') {
+        markInitialSyncDone(authUser.email);
+      }
+    })();
+    return () => { cancelled = true; };
   }, [authUser, driveAuthSettled, driveTokenValid, driveStatus, runDriveSync]);
 
   const handleDriveReconnect = useCallback(async () => {
