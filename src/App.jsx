@@ -1950,7 +1950,20 @@ function Shell({ authUser, setAuthUser }) {
         open={saveAsOpen}
         onClose={() => setSaveAsOpen(false)}
         projectTitle={activeProject?.title}
-        onExport={(format, filename) => console.log('[stub] export', format, filename)}
+        onExport={(filename) => {
+          if (!activeProject?.id) throw new Error('내보낼 작품이 선택되지 않았습니다.');
+          const payload = serializeProject(latestStateRef.current, activeProject.id);
+          if (!payload) throw new Error('작품 데이터를 찾을 수 없습니다.');
+          const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${filename}.djs`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }}
       />
       <ShareLinkModal
         open={shareLinkOpen}
