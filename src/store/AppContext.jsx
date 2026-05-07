@@ -1022,7 +1022,9 @@ export function AppProvider({ children }) {
   // 주의: skipDriveSaveRef를 쓰지 않는다 — 복원 후 편집이 없으면 Drive에는 여전히 옛 버전이 남아
   //       다음 새로고침에서 그 옛 버전이 복원된 상태를 덮어쓰는 사고가 발생했다.
   //       복원 직후에도 자동저장이 돌아 Drive에 복원 상태를 반영하도록 한다.
-  const loadFromDriveData = (drivePayload, options = {}) => {
+  // useCallback 필수: 소비자(MenuBar 등)의 useCallback이 이 함수를 deps에 두면 매 렌더마다 새 참조가
+  //   되어 effect 무한 재발사 → conflict 모달 끝없이 트리거되는 사고 발생.
+  const loadFromDriveData = useCallback((drivePayload, options = {}) => {
     const { syncBackToDrive = false } = options;
 
     skipSavedAtRef.current = true;
@@ -1040,7 +1042,7 @@ export function AppProvider({ children }) {
     }
 
     dispatch({ type: 'LOAD_FROM_DRIVE', payload: drivePayload });
-  };
+  }, []);
 
   // Size-guard user responses — SizeGuardModal에서 호출
   const acceptSizeGuard = () => {
