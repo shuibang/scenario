@@ -4,6 +4,35 @@ import { useApp } from '../../store/AppContext';
 import { buildReviewURL } from '../../App';
 import { buildSceneListShareURL } from '../../utils/sceneListShare';
 
+const SHARE_SELECTIONS_STORAGE_KEY = 'drama_share_link_selections_v1';
+
+function readSavedSelections() {
+  try {
+    const raw = localStorage.getItem(SHARE_SELECTIONS_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeSelections(allEpisodes, source) {
+  const savedEpisodes = source?.episodes && typeof source.episodes === 'object' ? source.episodes : {};
+  const episodesMap = {};
+  allEpisodes.forEach(ep => {
+    episodesMap[ep.id] = typeof savedEpisodes[ep.id] === 'boolean' ? savedEpisodes[ep.id] : true;
+  });
+  return {
+    cover: typeof source?.cover === 'boolean' ? source.cover : true,
+    synopsis: typeof source?.synopsis === 'boolean' ? source.synopsis : true,
+    episodes: episodesMap,
+    chars: typeof source?.chars === 'boolean' ? source.chars : true,
+    biography: typeof source?.biography === 'boolean' ? source.biography : false,
+    treatment: typeof source?.treatment === 'boolean' ? source.treatment : false,
+  };
+}
+
 export default function ShareLinkModal({ open, onClose }) {
   const { state } = useApp();
   const { episodes, activeProjectId, activeEpisodeId } = state;
@@ -12,11 +41,9 @@ export default function ShareLinkModal({ open, onClose }) {
     .filter(e => e.projectId === activeProjectId)
     .sort((a, b) => a.number - b.number);
 
-  // ── 검토 링크 선택 상태
+  // ── 검토 링크 선택 상태 (마지막 체크 상태 localStorage 유지)
   const makeInitialSel = useCallback(() => {
-    const episodesMap = {};
-    allEpisodes.forEach(ep => { episodesMap[ep.id] = true; });
-    return { cover: true, synopsis: true, episodes: episodesMap, chars: true, biography: false, treatment: false };
+    return normalizeSelections(allEpisodes, readSavedSelections());
   }, [allEpisodes.map(e => e.id).join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [sel,        setSel]        = useState(makeInitialSel);
@@ -31,7 +58,7 @@ export default function ShareLinkModal({ open, onClose }) {
   const [slGenerating,setSlGenerating]= useState(false);
   const [slError,     setSlError]     = useState(null);
 
-  // 모달 열릴 때 초기화
+  // 모달 열릴 때 초기화 — 체크 상태는 마지막 저장값 복원
   useEffect(() => {
     if (open) {
       setSel(makeInitialSel());
@@ -43,6 +70,13 @@ export default function ShareLinkModal({ open, onClose }) {
       setSlError(null);
     }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 체크 상태 변경 시 localStorage에 저장 (다음에 모달 열 때 복원)
+  useEffect(() => {
+    try {
+      localStorage.setItem(SHARE_SELECTIONS_STORAGE_KEY, JSON.stringify(sel));
+    } catch {}
+  }, [sel]);
 
   const toggle = (key, id) => {
     setSel(prev => {
