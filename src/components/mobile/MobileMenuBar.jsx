@@ -102,16 +102,24 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
     }
   }, [loadFromDriveData, onSyncConflict]);
 
+  // 같은 마운트에서 sync 중복 발사 차단 — driveStatus가 'syncing' → 'none' 되돌아오는
+  // 동안 effect 재발사로 runDriveSync가 여러 번 호출되는 것을 막음.
+  const initialSyncStartedRef = useRef(false);
+
   // 로그인 후 토큰 유효하면 Drive 동기화 — 같은 사용자에 대해 1회만 (창 크기 변경 리마운트 가드).
   useEffect(() => {
     if (!authUser || !driveAuthSettled || !driveTokenValid || driveStatus !== 'none') return;
     if (!shouldRunInitialSync(authUser.email)) return;
+    if (initialSyncStartedRef.current) return;
+    initialSyncStartedRef.current = true;
     let cancelled = false;
     (async () => {
       const result = await runDriveSync();
       if (cancelled) return;
       if (result === 'synced' || result === 'dismissed' || result === 'conflict') {
         markInitialSyncDone(authUser.email);
+      } else {
+        initialSyncStartedRef.current = false;
       }
     })();
     return () => { cancelled = true; };

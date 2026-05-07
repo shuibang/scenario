@@ -888,16 +888,26 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
     }
   }, [loadFromDriveData, onSyncConflict]);
 
+  // 같은 마운트에서 sync가 이미 시작됐는지 — driveStatus가 'syncing' → 'none'으로
+  // 돌아오는 동안 effect가 중복 발사되어 runDriveSync가 여러 번 호출되는 것을 차단.
+  // markInitialSyncDone은 비동기 결과가 도착해야 호출되므로 그 전에 발사 가능.
+  const initialSyncStartedRef = useRef(false);
+
   useEffect(() => {
     if (!authUser || !driveAuthSettled || !driveTokenValid || driveStatus !== 'none') return;
     // 같은 사용자에 대해 한 번 sync 완료했으면 리마운트(창 크기 변경 등)에서는 스킵.
     if (!shouldRunInitialSync(authUser.email)) return;
+    if (initialSyncStartedRef.current) return;
+    initialSyncStartedRef.current = true;
     let cancelled = false;
     (async () => {
       const result = await runDriveSync();
       if (cancelled) return;
       if (result === 'synced' || result === 'dismissed' || result === 'conflict') {
         markInitialSyncDone(authUser.email);
+      } else {
+        // transient 실패(skipped/error/reauth)는 다음 기회에 재시도되어야 함
+        initialSyncStartedRef.current = false;
       }
     })();
     return () => { cancelled = true; };
