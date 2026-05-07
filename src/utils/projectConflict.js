@@ -194,5 +194,24 @@ export function buildProjectConflicts(localState, driveState) {
     });
   }
 
+  // Debug: 모달 트리거(=conflicts.length>0) 시 요약 로그.
+  // kind별로 카운트해 어떤 종류 충돌인지(같은 기기 같은 작품의 conflict 인지 / 한쪽에만 있는
+  // localOnly·driveOnly 인지) 구분 가능. localOnly/driveOnly만 있으면 logConflictDiff는
+  // 호출되지 않으므로 별도 요약이 필요.
+  if (isDebugEnabled() && conflicts.length > 0) {
+    const counts = conflicts.reduce((acc, c) => {
+      acc[c.kind] = (acc[c.kind] || 0) + 1;
+      return acc;
+    }, {});
+    // eslint-disable-next-line no-console
+    console.warn('[sync conflict 요약]', {
+      total: conflicts.length,
+      counts,
+      localProjectIds: localProjects.map(p => p.id),
+      driveProjectIds: driveProjects.map(p => p.id),
+      conflicts: conflicts.map(c => ({ id: c.projectId, title: c.title, kind: c.kind })),
+    });
+  }
+
   return conflicts;
 }
