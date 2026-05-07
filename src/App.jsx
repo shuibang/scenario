@@ -1308,7 +1308,7 @@ function Shell({ authUser, setAuthUser }) {
   });
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false);
   const [snapshotOpen, setSnapshotOpen]         = useState(false);
-  const { state, dispatch, loadFromDriveData } = useApp();
+  const { state, dispatch, loadFromDriveData, getChangedProjectIds, markProjectsSynced } = useApp();
 
   // Drive 동기화 충돌 — { localSavedAt, driveData } | null
   const [syncConflict, setSyncConflict] = useState(null);
@@ -1647,7 +1647,12 @@ function Shell({ authUser, setAuthUser }) {
         return;
       }
 
-      await syncWorkspaceToDrive(latestState);
+      // 변경된 작품만 PUT — persist effect와 같은 fingerprint ref 공유.
+      // 작품 N개 매번 PUT(=느림) 대신 바뀐 K개만. K=0이어도 인덱스/구 형식/스냅샷은
+      // syncWorkspaceToDrive 안에서 그대로 처리되므로 안전.
+      const changedProjectIds = getChangedProjectIds(latestState);
+      await syncWorkspaceToDrive(latestState, { projectIds: changedProjectIds });
+      markProjectsSynced(latestState, changedProjectIds);
 
       try {
         await saveSnapshot(snap, '\uC218\uB3D9\uC800\uC7A5', 'manual');
@@ -1673,7 +1678,7 @@ function Shell({ authUser, setAuthUser }) {
         promptDriveReauthForSave();
       }
     }
-  }, [buildWorkspacePayload, promptDriveReauthForSave, syncWorkspaceToDrive, waitForEditorFlush]);
+  }, [buildWorkspacePayload, promptDriveReauthForSave, syncWorkspaceToDrive, waitForEditorFlush, getChangedProjectIds, markProjectsSynced]);
 
   // 전역 Ctrl+S 단축키 → 토스트 포함 저장
   useEffect(() => {

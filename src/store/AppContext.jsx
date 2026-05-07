@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useRef, useCallback } from 'react';
 import { getAll, setAll, getItem, setItem, DB_KEYS, genId, now, migrateFromLocalStorage } from './db';
 import { isTokenValid, saveToDrive, clearAccessToken, saveProjectsIndex, saveProjectToDrive } from './googleDrive';
 import { serializeProject, mergeImportedProject } from '../utils/projectSerializer';
@@ -1048,6 +1048,32 @@ export function AppProvider({ children }) {
     guardAcceptOnceRef.current = true;
     dispatch({ type: 'CLEAR_GUARD_PENDING' });
   };
+  // 수동 저장(handleSave) 등에서 변경된 작품만 PUT하기 위해 fingerprint ref 공유.
+  // 자동저장(persist effect)이 사용하는 동일한 ref이므로 어느 쪽이 먼저 PUT해도
+  // 다른 쪽이 다시 같은 작품을 PUT하지 않음.
+  const getChangedProjectIds = useCallback((targetState) => {
+    if (!targetState?.projects) return [];
+    return targetState.projects
+      .filter(p => projectFingerprint(targetState, p.id) !== lastProjFingerprintRef.current[p.id])
+      .map(p => p.id);
+  }, []);
+
+  // PUT 성공 후 호출 — 다음 사이클에서 같은 작품을 또 PUT하지 않도록 ref 갱신.
+  // 인덱스 fingerprint도 함께 갱신 (작품 추가/삭제/제목 변경 시 인덱스도 변하기 때문).
+  const markProjectsSynced = useCallback((targetState, projectIds) => {
+    if (!targetState?.projects || !Array.isArray(projectIds)) return;
+    const ids = new Set(projectIds);
+    for (const p of targetState.projects) {
+      if (ids.has(p.id)) {
+        lastProjFingerprintRef.current[p.id] = projectFingerprint(targetState, p.id);
+      }
+    }
+    const indexFp = targetState.projects
+      .map(m => `${m.id}:${m.updatedAt}`)
+      .join(',');
+    lastProjFingerprintRef.current.__index = indexFp;
+  }, []);
+
   const cancelSizeGuard = () => {
     // 현재 크기를 취소 baseline으로 기억 — 사용자가 다시 편집하기 전까지 저장 보류
     guardDismissedSizesRef.current = {
@@ -1058,7 +1084,7 @@ export function AppProvider({ children }) {
   };
 
   return (
-    <AppContext.Provider value={{ state, dispatch, loadFromDriveData, acceptSizeGuard, cancelSizeGuard, genId, now }}>
+    <AppContext.Provider value={{ state, dispatch, loadFromDriveData, acceptSizeGuard, cancelSizeGuard, getChangedProjectIds, markProjectsSynced, genId, now }}>
       {children}
     </AppContext.Provider>
   );
