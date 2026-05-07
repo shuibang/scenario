@@ -620,14 +620,20 @@ export async function loadAllProjectsFromDrive() {
       const payloads = await Promise.all(
         index.projects.map(meta => loadProjectFromDrive(meta.id).catch(() => null))
       );
-      const missing = payloads.filter(p => !p).length;
-      if (missing === 0) {
+      const missingMeta = index.projects
+        .map((meta, i) => ({ meta, payload: payloads[i] }))
+        .filter(x => !x.payload)
+        .map(x => ({ id: x.meta.id, title: x.meta.title }));
+      if (missingMeta.length === 0) {
         // 동적 import — 순환 의존 회피
         const { combineProjectsToState } = await import('../utils/projectSerializer');
         return combineProjectsToState(payloads, { index });
       }
+      // 어떤 작품 파일이 missing인지 명시 — Drive에서 직접 찾아 처리하거나 재업로드 가능.
       console.warn('[Drive] 신 형식 작품 일부 누락 → 구 형식 fallback', {
-        total: index.projects.length, missing,
+        total: index.projects.length,
+        missing: missingMeta.length,
+        missingProjects: missingMeta,
       });
     }
   } catch (e) {
