@@ -524,6 +524,22 @@ function reducer(state, action) {
     case 'SET_SCROLL_TO_SCENE':
       return { ...state, scrollToSceneId: action.id };
 
+    // Phase 3 — .djs 파일 import에서 같은 ID 작품 충돌 시 '사본'(newId) 정책.
+    // payload는 projectSerializer 형식. mergeImportedProject가 모든 ID를 새로 발급
+    // 하고 cascading 참조를 새 ID로 매핑해 사본으로 추가한다. 같은 ID 충돌이 없는
+    // 단순 import도 이 액션으로 처리 가능 (newId 정책은 ID 충돌과 무관하게 동작).
+    case 'ADD_IMPORTED_PROJECT_COPY': {
+      const next = mergeImportedProject(state, action.payload, 'newId');
+      // 새로 추가된 작품을 활성화 — 사용자가 import 직후 바로 보게.
+      const newProject = next.projects[next.projects.length - 1];
+      return {
+        ...next,
+        activeProjectId: newProject?.id ?? state.activeProjectId,
+        activeEpisodeId: null,
+        activeDoc: null,
+      };
+    }
+
     // Phase 2.2b — 작품 단위 충돌 해결에서 사용. payload는 projectSerializer 형식
     // (project + cascading 배열 + trash). mergeImportedProject('replace')로 같은 ID
     // 작품의 모든 데이터를 통째로 교체하거나, 없는 작품을 새로 추가한다.

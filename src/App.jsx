@@ -1945,6 +1945,17 @@ function Shell({ authUser, setAuthUser }) {
         projects={state.projects}
         activeProjectId={state.activeProjectId}
         onSelect={id => dispatch({ type: 'SET_ACTIVE_PROJECT', id })}
+        onFileImport={(imported, policy) => {
+          // policy: 'replace' (덮어쓰기) | 'newId' (사본으로 추가)
+          if (policy === 'replace') {
+            dispatch({ type: 'REPLACE_PROJECT_DATA', payload: imported });
+            // 덮어쓰기 후 해당 작품 활성화
+            dispatch({ type: 'SET_ACTIVE_PROJECT', id: imported.project.id });
+          } else {
+            // ADD_IMPORTED_PROJECT_COPY가 새 ID 발급 + 활성화까지 처리
+            dispatch({ type: 'ADD_IMPORTED_PROJECT_COPY', payload: imported });
+          }
+        }}
       />
       <SaveAsModal
         open={saveAsOpen}
