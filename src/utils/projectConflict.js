@@ -109,6 +109,42 @@ export function getProjectConflictUpdatedAt(state, projectId) {
   return max ? new Date(max).toISOString() : null;
 }
 
+// 디버그용 — localStorage('drama_debug_sync_conflicts','1')로 켜면 충돌 발견 시
+// 양쪽 comparable payload의 어느 키가 다른지 콘솔에 출력. 같은 기기에서 모달이
+// 자꾸 뜨는 케이스의 root cause를 잡기 위함 (IndexedDB↔JSON 왕복 시 형 변환 등).
+function isDebugEnabled() {
+  try {
+    return typeof localStorage !== 'undefined' && localStorage.getItem('drama_debug_sync_conflicts') === '1';
+  } catch {
+    return false;
+  }
+}
+
+function logConflictDiff(projectId, title, localState, driveState) {
+  if (!isDebugEnabled()) return;
+  const local = getComparableProjectPayload(localState, projectId);
+  const drive = getComparableProjectPayload(driveState, projectId);
+  const keys = new Set([...Object.keys(local || {}), ...Object.keys(drive || {})]);
+  const diffs = {};
+  for (const key of keys) {
+    const a = stableStringify(local?.[key]);
+    const b = stableStringify(drive?.[key]);
+    if (a !== b) diffs[key] = { local: local?.[key], drive: drive?.[key] };
+  }
+  // eslint-disable-next-line no-console
+  console.groupCollapsed(`[sync conflict diff] ${title || projectId}`);
+  // eslint-disable-next-line no-console
+  console.log('projectId:', projectId);
+  // eslint-disable-next-line no-console
+  console.log('차이나는 키들:', Object.keys(diffs));
+  for (const [key, value] of Object.entries(diffs)) {
+    // eslint-disable-next-line no-console
+    console.log(`[${key}] local:`, value.local, '\nDrive:', value.drive);
+  }
+  // eslint-disable-next-line no-console
+  console.groupEnd();
+}
+
 export function buildProjectConflicts(localState, driveState) {
   const localProjects = localState?.projects || [];
   const driveProjects = driveState?.projects || [];
@@ -131,6 +167,7 @@ export function buildProjectConflicts(localState, driveState) {
     const localFingerprint = getProjectConflictFingerprint(localState, localProject.id);
     const driveFingerprint = getProjectConflictFingerprint(driveState, localProject.id);
     if (localFingerprint !== driveFingerprint) {
+      logConflictDiff(localProject.id, localProject.title, localState, driveState);
       conflicts.push({
         projectId: localProject.id,
         title: localProject.title || driveProject.title,
