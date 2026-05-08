@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import PreviewRenderer from '../print/PreviewRenderer';
-import { exportPdf } from '../print/pdfViaServer';
+import { exportPdf } from '../print/printPdf';
 import { reviewLegacySchema } from '../utils/urlSchemas';
 import { loadSharedReviewResource, isShortReviewId } from '../utils/reviewShare';
 import { supabase } from '../store/supabaseClient';
