@@ -215,6 +215,9 @@ export function tokenizeSection(section, metrics) {
         }
         case 'action': {
           const plainA = stripHtml(block.content);
+          // 빈 action 블록은 blank 토큰으로 — react-pdf가 빈 Text를 0높이로 렌더해서
+          // 화면 빈 줄이 출력에서 사라지던 문제. blank는 line-height 보장.
+          if (!plainA) { tokens.push(B()); break; }
           const rawHtmlA = block.content || '';
           const hasHtmlA = rawHtmlA !== plainA;
           const wrappedA = wrapText(plainA, charsPerLine - 2);
@@ -234,6 +237,8 @@ export function tokenizeSection(section, metrics) {
         }
         case 'dialogue': {
           const plainD = stripHtml(block.content);
+          // 빈 dialogue 블록(인물명/대사 모두 비어있는 경우)도 화면대로 빈 줄로 출력.
+          if (!plainD && !block.charName) { tokens.push(B()); break; }
           const rawHtmlD = block.content || '';
           const hasHtmlD = rawHtmlD !== plainD;
           const wrappedD = wrapText(plainD, charsInSpeech);
