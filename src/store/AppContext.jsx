@@ -375,6 +375,66 @@ function reducer(state, action) {
         s.id === action.payload.id ? { ...s, ...action.payload, updatedAt: now() } : s) };
     case 'DELETE_SCENE':
       return { ...state, scenes: state.scenes.filter(s => s.id !== action.id) };
+
+    // 씬보드 카드 → 같은/다른 회차로 씬 복사. atomic하게 scene 메타 + 묶인 블록(scene_number ~
+    // 다음 scene_number 직전)을 새 id로 발급해 대상 회차 끝에 추가.
+    case 'COPY_SCENE_TO_EPISODE': {
+      const { sourceSceneId, targetEpisodeId } = action.payload;
+      const sourceScene = state.scenes.find(s => s.id === sourceSceneId);
+      if (!sourceScene || !targetEpisodeId) return state;
+
+      const newSceneId = genId();
+      const targetEpScenes = state.scenes.filter(
+        s => s.episodeId === targetEpisodeId && !s.deleted
+      );
+      const newSceneSeq = targetEpScenes.reduce(
+        (max, s) => Math.max(max, s.sceneSeq ?? 0), 0
+      ) + 1;
+      const ts = now();
+      const newScene = {
+        ...sourceScene,
+        id: newSceneId,
+        episodeId: targetEpisodeId,
+        sceneSeq: newSceneSeq,
+        deleted: false,
+        createdAt: ts,
+        updatedAt: ts,
+      };
+
+      // source 씬에 묶인 블록 슬라이싱 (scene_number 블록 위치부터 다음 scene_number 직전까지)
+      const sourceEpId = sourceScene.episodeId;
+      const sourceEpBlocks = state.scriptBlocks.filter(b => b.episodeId === sourceEpId);
+      const startIdx = sourceEpBlocks.findIndex(
+        b => b.type === 'scene_number' && b.sceneId === sourceSceneId
+      );
+      let copiedBlocks = [];
+      if (startIdx !== -1) {
+        let endIdx = sourceEpBlocks.length;
+        for (let i = startIdx + 1; i < sourceEpBlocks.length; i++) {
+          if (sourceEpBlocks[i].type === 'scene_number') { endIdx = i; break; }
+        }
+        copiedBlocks = sourceEpBlocks.slice(startIdx, endIdx).map((b, i) => ({
+          ...b,
+          id: genId(),
+          episodeId: targetEpisodeId,
+          // scene_number 블록과 같은 sceneId를 가진 본문 블록만 새 sceneId로 매핑.
+          // sceneId 없는 본문은 그대로 (없는 채로) 유지.
+          sceneId: b.sceneId === sourceSceneId ? newSceneId : b.sceneId,
+          createdAt: ts + i,
+          updatedAt: ts + i,
+        }));
+      }
+
+      return {
+        ...state,
+        scenes: [...state.scenes, newScene],
+        scriptBlocks: [...state.scriptBlocks, ...copiedBlocks],
+        // 대상 회차가 현재 활성이면 ScriptEditor에 reload 신호.
+        pendingScriptReload: state.activeEpisodeId === targetEpisodeId
+          ? targetEpisodeId
+          : state.pendingScriptReload,
+      };
+    }
     case 'SYNC_SCENES': {
       const { removeOrphans = false } = action;
       const syncedIds = new Set(action.payload.map(s => s.id));
@@ -620,6 +680,7 @@ const AUTO_RECORD = new Set([
   'DELETE_SCENE',
   'DELETE_CHARACTER',
   'IMPORT_TREATMENT_TO_SCRIPT',
+  'COPY_SCENE_TO_EPISODE',
 ]);
 
 function makeSnapshot(state) {

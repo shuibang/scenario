@@ -337,29 +337,33 @@ function ColorBar({ tab, scenes, scriptBlocks, characters, epId, selectedCharKey
 }
 
 // ─── SceneBoardCard ───────────────────────────────────────────────────────────
-function SceneBoardCard({ scene, seqNum, isSelected, isOver, isDragging, onClick, onDelete, sceneChars, dragProps, dispatch }) {
+function SceneBoardCard({ scene, seqNum, isSelected, isOver, isDragging, onClick, onDelete, onCopy, sceneChars, dragProps, dispatch, episodes, currentEpId }) {
   const [deleteMode, setDeleteMode] = useState(false);
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
+  const [copyOpen, setCopyOpen] = useState(false);
+  const [hovered, setHovered] = useState(false);
   const cardRef = useRef(null);
 
-  // 카드 밖 클릭 시 deleteMode 해제
+  // 카드 밖 클릭 시 deleteMode/copyOpen 해제
   useEffect(() => {
-    if (!deleteMode) return;
+    if (!deleteMode && !copyOpen) return;
     const handler = (e) => {
       if (cardRef.current && !cardRef.current.contains(e.target)) {
         setDeleteMode(false);
+        setCopyOpen(false);
       }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [deleteMode]);
+  }, [deleteMode, copyOpen]);
 
   return (
     <div
       ref={cardRef}
       {...dragProps}
       onClick={onClick}
-      onDoubleClick={(e) => { e.stopPropagation(); setDeleteMode(v => !v); }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
         position: 'relative',
         background: isSelected ? 'var(--c-active)' : 'var(--c-card)',
@@ -375,24 +379,104 @@ function SceneBoardCard({ scene, seqNum, isSelected, isOver, isDragging, onClick
         transition: 'border-color 0.15s, opacity 0.15s',
       }}
     >
-      {/* 씬정보 + 삭제 버튼 */}
+      {/* 씬정보 + 액션 버튼 (복사/삭제) */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 }}>
         <div style={{ fontSize: 10, color: 'var(--c-text5)', fontWeight: 600 }}>
           <span style={{ color: 'var(--c-accent2)', marginRight: 4 }}>{buildSceneLabel(seqNum)}</span>
           {scene.content && <span>{scene.content.replace(SCENE_PREFIX_STRIP_RE, '')}</span>}
         </div>
-        {deleteMode && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onDelete(scene.id); setDeleteMode(false); }}
-            onMouseDown={(e) => e.stopPropagation()}
-            style={{
-              background: '#ef4444', color: '#fff', border: 'none',
-              borderRadius: 6, padding: '2px 8px', fontSize: 11,
-              cursor: 'pointer', fontWeight: 600, flexShrink: 0,
-            }}
-          >삭제</button>
-        )}
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
+          {/* hover 또는 액션 popup 열린 동안 [복사] [삭제] 노출. 삭제 1차 클릭 시 deleteMode 빨강 진입 → 한 번 더 클릭으로 확정. */}
+          {!deleteMode && (hovered || copyOpen) && (
+            <>
+              {onCopy && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setCopyOpen(v => !v); }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  title="회차로 복사"
+                  style={{
+                    background: copyOpen ? 'var(--c-accent)' : 'transparent',
+                    color: copyOpen ? '#fff' : 'var(--c-text5)',
+                    border: `1px solid ${copyOpen ? 'var(--c-accent)' : 'var(--c-border3)'}`,
+                    borderRadius: 6, padding: '1px 6px', fontSize: 10,
+                    cursor: 'pointer', fontWeight: 600,
+                  }}
+                >복사</button>
+              )}
+              <button
+                onClick={(e) => { e.stopPropagation(); setDeleteMode(true); setCopyOpen(false); }}
+                onMouseDown={(e) => e.stopPropagation()}
+                title="씬 삭제"
+                style={{
+                  background: 'transparent',
+                  color: 'var(--c-text5)',
+                  border: '1px solid var(--c-border3)',
+                  borderRadius: 6, padding: '1px 6px', fontSize: 10,
+                  cursor: 'pointer', fontWeight: 600,
+                }}
+              >삭제</button>
+            </>
+          )}
+          {deleteMode && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete(scene.id); setDeleteMode(false); }}
+              onMouseDown={(e) => e.stopPropagation()}
+              title="한 번 더 클릭하여 삭제 확정"
+              style={{
+                background: '#ef4444', color: '#fff', border: 'none',
+                borderRadius: 6, padding: '2px 8px', fontSize: 11,
+                cursor: 'pointer', fontWeight: 600,
+              }}
+            >확정</button>
+          )}
+        </div>
       </div>
+
+      {/* 회차 선택 popup */}
+      {copyOpen && onCopy && (
+        <div
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
+          style={{
+            position: 'absolute', top: 32, right: 8, zIndex: 30,
+            background: 'var(--c-card)', border: '1px solid var(--c-border3)',
+            borderRadius: 8, padding: 6, minWidth: 150, maxHeight: 220, overflowY: 'auto',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          }}
+        >
+          <div style={{ fontSize: 10, color: 'var(--c-text5)', padding: '2px 6px 4px', fontWeight: 600 }}>
+            복사할 회차 선택
+          </div>
+          {(!episodes || episodes.length === 0) ? (
+            <div style={{ fontSize: 11, color: 'var(--c-text5)', padding: 6 }}>회차 없음</div>
+          ) : (
+            episodes.map(ep => (
+              <button
+                key={ep.id}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCopy(scene.id, ep.id);
+                  setCopyOpen(false);
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--c-hover)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                style={{
+                  display: 'block', width: '100%', textAlign: 'left',
+                  background: 'transparent', border: 'none',
+                  padding: '5px 6px', fontSize: 11, cursor: 'pointer',
+                  color: 'var(--c-text)', borderRadius: 4,
+                }}
+              >
+                {ep.number}회 {ep.title || ''}
+                {ep.id === currentEpId && (
+                  <span style={{ color: 'var(--c-text5)', fontSize: 10, marginLeft: 4 }}>(현재)</span>
+                )}
+              </button>
+            ))
+          )}
+        </div>
+      )}
 
       {/* 인물등장 */}
       {sceneChars.length > 0 && (
@@ -448,7 +532,7 @@ function SceneBoardCard({ scene, seqNum, isSelected, isOver, isDragging, onClick
 }
 
 // ─── SceneBoardTab ────────────────────────────────────────────────────────────
-function SceneBoardTab({ epId, scenes, scriptBlocks, characters, dispatch, onSelectScene, selectedSceneId }) {
+function SceneBoardTab({ epId, scenes, scriptBlocks, characters, episodes, dispatch, onSelectScene, selectedSceneId }) {
   const epScenes = useMemo(() =>
     scenes.filter(s => s.episodeId === epId).sort((a, b) => (a.sceneSeq ?? 0) - (b.sceneSeq ?? 0)),
     [scenes, epId]
@@ -543,6 +627,27 @@ function SceneBoardTab({ epId, scenes, scriptBlocks, characters, dispatch, onSel
     dispatch({ type: 'UPDATE_SCENE', payload: { id: sceneId, sceneListContent: content }, _record: true });
   }
 
+  // 같은 작품의 회차들 (현재 작품만 — episodes 자체가 이미 작품 필터링되어 들어왔다고 가정)
+  const projectEpisodes = useMemo(() => {
+    const epList = (episodes || []).slice().sort((a, b) => (a.number || 0) - (b.number || 0));
+    return epList;
+  }, [episodes]);
+
+  const [copyToast, setCopyToast] = useState(null);
+  const copyToastTimerRef = useRef(null);
+  useEffect(() => () => { if (copyToastTimerRef.current) clearTimeout(copyToastTimerRef.current); }, []);
+
+  function handleCopy(sceneId, targetEpisodeId) {
+    dispatch({ type: 'COPY_SCENE_TO_EPISODE', payload: { sourceSceneId: sceneId, targetEpisodeId } });
+    const targetEp = projectEpisodes.find(e => e.id === targetEpisodeId);
+    const label = targetEp
+      ? `${targetEp.number}회차${targetEp.id === epId ? ' (현재)' : ''}로 복사됨`
+      : '복사됨';
+    setCopyToast(label);
+    if (copyToastTimerRef.current) clearTimeout(copyToastTimerRef.current);
+    copyToastTimerRef.current = setTimeout(() => setCopyToast(null), 2500);
+  }
+
   // 씬별 등장 인물 계산 — 인물정보(characterId)가 등록된 인물만
   const sceneCharsMap = useMemo(() => {
     const charMap = new Map(characters.map(c => [c.id, c]));
@@ -571,7 +676,21 @@ function SceneBoardTab({ epId, scenes, scriptBlocks, characters, dispatch, onSel
   }
 
   return (
-    <div ref={containerRef} style={{ padding: 16 }}>
+    <div ref={containerRef} style={{ padding: 16, position: 'relative' }}>
+      {copyToast && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+            background: 'var(--c-accent)', color: '#fff',
+            padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.18)',
+            zIndex: 100, pointerEvents: 'none', whiteSpace: 'nowrap',
+          }}
+        >{copyToast}</div>
+      )}
+
       {/* 활성 씬 그리드 */}
       <div style={{
         display: 'grid',
@@ -588,6 +707,9 @@ function SceneBoardTab({ epId, scenes, scriptBlocks, characters, dispatch, onSel
             isDragging={dragIdx === idx}
             onClick={() => onSelectScene?.(scene.id)}
             onDelete={handleDelete}
+            onCopy={handleCopy}
+            episodes={projectEpisodes}
+            currentEpId={epId}
             sceneChars={sceneCharsMap[scene.id] || []}
             dispatch={dispatch}
             dragProps={{
@@ -982,6 +1104,48 @@ export default function StructurePage() {
     dispatch({ type: 'SET_SELECTED_STRUCTURE_SCENE', id });
   };
 
+  // 탭별 도움말 (? 버튼) — 다른 페이지(SceneListPage/CharacterPanel 등)와 동일 패턴.
+  const [tabHelpOpen, setTabHelpOpen] = useState(false);
+  const tabHelpRef = useRef(null);
+  useEffect(() => {
+    if (!tabHelpOpen) return;
+    const onDown = (e) => {
+      if (tabHelpRef.current && !tabHelpRef.current.contains(e.target)) setTabHelpOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [tabHelpOpen]);
+  // 탭 전환 시 popup 자동 닫힘
+  useEffect(() => { setTabHelpOpen(false); }, [activeTab]);
+
+  const tabHelpContent = {
+    '씬보드': {
+      title: '씬보드 안내',
+      items: [
+        '카드를 드래그하면 같은 회차 안에서 씬 순서를 바꿀 수 있어요.',
+        '카드에 마우스를 올리면 [복사] [삭제] 버튼이 나타나요.',
+        '[복사]를 누르면 같은/다른 회차로 씬을 복사할 수 있어요.',
+        '[삭제] → [확정] 두 번 클릭으로 씬을 휴지통으로 보내요.',
+      ],
+    },
+    '지문': {
+      title: '지문 안내',
+      items: [
+        '회차의 모든 지문(action) 블록을 씬별로 묶어 한눈에 볼 수 있어요.',
+        '지문 옆 색상 칩은 그 블록에 달린 감정태그예요.',
+        '읽기 전용 뷰입니다. 편집은 대본 에디터에서 해 주세요.',
+      ],
+    },
+    '인물': {
+      title: '인물 안내',
+      items: [
+        '회차에 등장하는 인물별로 대사가 묶여서 표시돼요.',
+        '왼쪽에서 인물을 선택하면 그 인물의 모든 대사가 나와요.',
+        '읽기 전용 뷰입니다. 편집은 대본 에디터에서 해 주세요.',
+      ],
+    },
+  };
+
   if (!activeProjectId) return null;
 
   return (
@@ -1015,8 +1179,36 @@ export default function StructurePage() {
 
         <div style={{ flex: 1 }} />
 
-        {/* 탭 버튼 */}
-        <div style={{ display: 'flex', gap: 2 }}>
+        {/* 탭 버튼 (탭 그룹 앞에 활성 탭 도움말 ? 버튼) */}
+        <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          <div ref={tabHelpRef} style={{ position: 'relative', display: 'inline-flex', marginRight: 4 }}>
+            <button
+              onClick={() => setTabHelpOpen(v => !v)}
+              title={`${activeTab} 도움말`}
+              style={{
+                width: 18, height: 18, borderRadius: '50%', border: '1px solid var(--c-border3)',
+                background: tabHelpOpen ? 'var(--c-active)' : 'transparent',
+                color: 'var(--c-text5)', fontSize: 11, fontWeight: 700,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                lineHeight: 1, flexShrink: 0,
+              }}
+            >?</button>
+            {tabHelpOpen && tabHelpContent[activeTab] && (
+              <div style={{
+                position: 'absolute', top: '24px', right: 0, zIndex: 200,
+                background: 'var(--c-card)', border: '1px solid var(--c-border)',
+                borderRadius: 8, padding: '10px 14px', width: 280,
+                boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+              }}>
+                <div className="text-xs font-semibold mb-2" style={{ color: 'var(--c-text3)' }}>
+                  {tabHelpContent[activeTab].title}
+                </div>
+                {tabHelpContent[activeTab].items.map((t, i) => (
+                  <div key={i} className="text-[11px] leading-relaxed" style={{ color: 'var(--c-text5)' }}>· {t}</div>
+                ))}
+              </div>
+            )}
+          </div>
           {TABS.map(tab => (
             <button
               key={tab}
@@ -1079,7 +1271,7 @@ export default function StructurePage() {
             {activeTab === '씬보드' && (
               <SceneBoardTab
                 epId={epId} scenes={scenes} scriptBlocks={scriptBlocks}
-                characters={characters}
+                characters={characters} episodes={projectEpisodes}
                 dispatch={dispatch} onSelectScene={handleSelectScene} selectedSceneId={selectedSceneId}
               />
             )}
