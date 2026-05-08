@@ -638,8 +638,14 @@ function setCaret(blockEl, offset) {
       }
       rem -= node.length;
     }
+    // 빈 블록(<br> placeholder만): <br> 앞에 빈 텍스트 노드를 주입하고 그 안에 caret.
+    // 이유: caret이 컨테이너 끝(br 뒤)에 있으면 한글 IME 첫 자모 commit 직후 세션이
+    // 끊겨 'ㄱㅏ나다'처럼 자모가 분리되는 Chrome contenteditable 버그 발생.
+    const tn = document.createTextNode('');
+    if (target.firstChild) target.insertBefore(tn, target.firstChild);
+    else target.appendChild(tn);
     const r = document.createRange();
-    r.selectNodeContents(target); r.collapse(false);
+    r.setStart(tn, 0); r.collapse(true);
     window.getSelection()?.removeAllRanges();
     window.getSelection()?.addRange(r);
   } catch (_) {}
