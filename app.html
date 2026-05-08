@@ -2,6 +2,14 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- 구 도메인 redirect — Vercel host 기반 308이 안 잡히는 deployment 구조 대비 폴백. paint 전 동기. -->
+    <script>
+      (function () {
+        if (location.hostname === 'scenario-876h.vercel.app') {
+          location.replace('https://daejak.kr' + location.pathname + location.search + location.hash);
+        }
+      })();
+    </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-visual" />

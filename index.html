@@ -7,6 +7,15 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <meta name="theme-color" content="#1B2A4E" />
+  <!-- 구 도메인 redirect — Vercel host 기반 308이 안 잡히는 deployment 구조 대비 클라이언트 폴백.
+       paint 전에 동기 실행되어 깜빡임 최소화. -->
+  <script>
+    (function () {
+      if (location.hostname === 'scenario-876h.vercel.app') {
+        location.replace('https://daejak.kr' + location.pathname + location.search + location.hash);
+      }
+    })();
+  </script>
   <!-- Legacy 공유 링크 호환: 구 형식 /#xxx 해시는 React 앱(/app)으로 즉시 이전.
        페인트 전에 동기 실행되어야 깜빡임 없이 redirect됨. -->
   <script>
