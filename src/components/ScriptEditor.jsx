@@ -1290,6 +1290,7 @@ const EditorSurface = forwardRef(function EditorSurface({
   activeEpisodeId,
   activeProjectId,
   onPaste,
+  onCopy,          // 사이트 내부 클립보드 마커 + JSON 블록 데이터 저장
   onUndo,          // () → 커스텀 Undo 핸들러
   onSlashInput,    // ({ blockEl, query }) → 슬래시 팔레트 오픈
   onSlashClose,    // () → 슬래시 팔레트 닫기
@@ -2199,6 +2200,7 @@ const EditorSurface = forwardRef(function EditorSurface({
       onKeyDown={handleKeyDown}
       onClick={(e) => { handleClick(e); doParse(); }}
       onPaste={onPaste}
+      onCopy={onCopy}
     />
   );
 });
@@ -3538,8 +3540,112 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
 
   // ── (인물태그 DOM 주입은 위 디바운스 effect에서 통합 처리) ──────────────────
 
+  // ── Copy: 사이트 내부 클립보드 마커 + JSON 블록 데이터 저장
+  // 다른 ScriptEditor에 붙여넣을 때 블록 타입·인라인 서식(B/I/U) 그대로 복원하기 위해.
+  // 단일 블록 부분 선택은 default copy 동작 유지(텍스트만 복사).
+  const handleEditorCopy = useCallback((e) => {
+    const surface = document.querySelector('[data-editor-surface]');
+    if (!surface) return;
+    const sel = window.getSelection();
+    if (!sel?.rangeCount || sel.isCollapsed) return;
+    const range = sel.getRangeAt(0);
+    if (!surface.contains(range.commonAncestorContainer)) return;
+
+    const findBlock = (node) => {
+      let el = node?.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+      while (el && el !== surface) {
+        if (el.dataset?.blockId) return el;
+        el = el.parentElement;
+      }
+      return null;
+    };
+    const startBlockEl = findBlock(range.startContainer);
+    const endBlockEl = findBlock(range.endContainer);
+    if (!startBlockEl || !endBlockEl) return;
+
+    const allBlocks = [...surface.querySelectorAll('[data-block-id]')];
+    const lo = Math.min(allBlocks.indexOf(startBlockEl), allBlocks.indexOf(endBlockEl));
+    const hi = Math.max(allBlocks.indexOf(startBlockEl), allBlocks.indexOf(endBlockEl));
+    if (lo < 0) return;
+
+    // 단일 블록 부분 선택 → default copy (텍스트만 복사)
+    if (lo === hi) {
+      const blockText = (allBlocks[lo].textContent || '').trim();
+      const selectedText = range.toString().trim();
+      if (selectedText.length < blockText.length) return;
+    }
+
+    const ids = allBlocks.slice(lo, hi + 1).map(el => el.dataset.blockId);
+    const blocksData = ids.map(id => blocks.find(b => b.id === id)).filter(Boolean);
+    if (!blocksData.length) return;
+
+    const json = JSON.stringify({ source: 'drama-editor', version: 1, blocks: blocksData });
+    // 블록 사이는 \n 1개로 join — 작가 의도와 시각 표시 1:1 매핑.
+    // \n\n 사용 시 빈 블록 1개가 \n\n\n\n로 표현되어 시놉시스 paste 시 빈 줄 3개 증식.
+    const plainText = blocksData.map(b => stripHtml(b.content || '')).join('\n');
+
+    e.preventDefault();
+    e.clipboardData.setData('application/x-drama-blocks', json);
+    e.clipboardData.setData('text/plain', plainText);
+  }, [blocks]);
+
   // ── Paste: 시나리오 자동 파싱
   const handleEditorPaste = useCallback((e) => {
+    // 사이트 내부 복사 마커 있으면 → JSON 블록 데이터 그대로 복원 (자동 파싱 우회)
+    const dramaJson = e.clipboardData?.getData('application/x-drama-blocks');
+    if (dramaJson) {
+      e.preventDefault();
+      let payload = null;
+      try { payload = JSON.parse(dramaJson); } catch {}
+      if (!payload?.blocks?.length) return;
+
+      const ts = Date.now();
+      const newBlocks = payload.blocks.map((b, i) => {
+        const next = {
+          ...b,
+          id: genId(),
+          episodeId: activeEpisodeId,
+          projectId: activeProjectId,
+          createdAt: ts + i,
+          updatedAt: ts + i,
+        };
+        // scene_number 블록은 새 sceneId 발급 (씬 메타와 충돌 방지)
+        if (b.type === 'scene_number') next.sceneId = genId();
+        return next;
+      });
+
+      // 커서 위치 이후에 삽입
+      const surface = document.querySelector('[data-editor-surface]');
+      const sel = window.getSelection();
+      let insertAfterId = null;
+      if (sel?.rangeCount && surface) {
+        let el = sel.getRangeAt(0).startContainer;
+        el = el.nodeType === Node.TEXT_NODE ? el.parentElement : el;
+        while (el && el !== surface) {
+          if (el.dataset?.blockId) { insertAfterId = el.dataset.blockId; break; }
+          el = el.parentElement;
+        }
+      }
+
+      setBlocks(prev => {
+        const merged = (() => {
+          if (!insertAfterId) return syncLabels([...prev, ...newBlocks]);
+          const idx = prev.findIndex(b => b.id === insertAfterId);
+          if (idx < 0) return syncLabels([...prev, ...newBlocks]);
+          return syncLabels([...prev.slice(0, idx + 1), ...newBlocks, ...prev.slice(idx + 1)]);
+        })();
+        requestAnimationFrame(() => surfaceApiRef.current?.loadBlocks(merged));
+        return merged;
+      });
+
+      const nScenes   = newBlocks.filter(b => b.type === 'scene_number').length;
+      const nDialogue = newBlocks.filter(b => b.type === 'dialogue').length;
+      const nAction   = newBlocks.filter(b => b.type === 'action').length;
+      setPasteToast(`사이트 내 붙여넣기 완료 — 씬 ${nScenes}, 대사 ${nDialogue}, 지문 ${nAction}`);
+      setTimeout(() => setPasteToast(null), 3000);
+      return;
+    }
+
     const text = e.clipboardData?.getData('text/plain') || '';
     const lines = text.split('\n');
     const nonEmpty = lines.filter(l => l.trim());
@@ -3932,6 +4038,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
             activeEpisodeId={activeEpisodeId}
             activeProjectId={activeProjectId}
             onPaste={handleEditorPaste}
+            onCopy={handleEditorCopy}
             onUndo={handleUndo}
             onSlashInput={handleSlashInput}
             onSlashClose={handleSlashClose}

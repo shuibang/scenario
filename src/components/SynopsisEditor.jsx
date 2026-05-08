@@ -30,20 +30,21 @@ function stripHtml(html) {
   return (html || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ');
 }
 
-// <div> 줄바꿈 → <br> 로 정규화 (Chrome contenteditable은 엔터 시 <div> 사용)
-// DOMPurify 허용 목록에 div가 없어서 로드 시 div가 스트립되며 줄바꿈 소실되는 문제 방지
-function normalizeToBr(html) {
-  return (html || '')
-    .replace(/<div><br\s*\/?><\/div>/gi, '<br>')   // 빈 줄 (엔터 두번)
-    .replace(/<\/div><div>/gi, '<br>')              // 연속 div
-    .replace(/<div[^>]*>/gi, '<br>')                // div 열림
-    .replace(/<\/div>/gi, '');                      // div 닫힘 제거
+// 시놉시스 HTML 허용 태그: div + 인라인 서식 + br.
+// div를 인정해서 Chrome contenteditable의 자연스러운 표현(엔터 = <div>)을 그대로 저장/로드.
+// 이전엔 div를 br로 정규화했지만, paste/저장/로드 사이클에서 br placeholder가 사라지거나
+// 누적되는 회귀 발생 → div 자체를 보존하는 것이 가장 멱등성 안전.
+const ALLOWED_RICH_TAGS = ['div', 'b', 'i', 'u', 'br', 'strong', 'em'];
+function sanitizeRichValue(html) {
+  return DOMPurify.sanitize(html || '', { ALLOWED_TAGS: ALLOWED_RICH_TAGS, ALLOWED_ATTR: [] });
 }
 
 // ─── RichField: contenteditable div
 function RichField({ label, value, onChange, placeholder, readOnly }) {
   const ref = useRef(null);
   const skipNextEffect = useRef(false);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
 
   // Load initial content / external value change (e.g. project switch)
   useEffect(() => {
@@ -52,21 +53,36 @@ function RichField({ label, value, onChange, placeholder, readOnly }) {
     if (skipNextEffect.current) { skipNextEffect.current = false; return; }
     // Don't overwrite while user is actively editing
     if (document.activeElement === el) return;
-    // div → br 정규화 후 sanitize: br은 ALLOWED_TAGS에 있어 줄바꿈이 보존됨
-    el.innerHTML = DOMPurify.sanitize(normalizeToBr(value), { ALLOWED_TAGS: ['b', 'i', 'u', 'br', 'strong', 'em'], ALLOWED_ATTR: [] });
+    const sanitized = sanitizeRichValue(value);
+    // 동일한 sanitize 결과면 innerHTML 재셋 skip — contenteditable의 native undo history
+    // 보존(Ctrl+Z 동작) + Chrome이 innerHTML 셋마다 자체 변형(빈 줄 추가)하는 회귀 차단.
+    if (el.innerHTML === sanitized) return;
+    el.innerHTML = sanitized;
   }, [value]);
+
+  // unmount 직전 마지막 raw 강제 저장 — 빠른 페이지 이동 시 자동저장 race로
+  // 마지막 입력이 손실되던 회귀 차단. 부모가 onChange를 매 렌더 새로 만들어도
+  // ref로 안정화해 cleanup이 올바른 onChange를 호출.
+  useEffect(() => {
+    return () => {
+      if (ref.current) onChangeRef.current(ref.current.innerHTML ?? '');
+    };
+  }, []);
 
   const handleInput = () => {
     skipNextEffect.current = true;
-    // 저장 시도 div → br 정규화: 다음 로드에서도 줄바꿈 유지
+    // sanitize 후 저장 — useEffect의 동일성 가드와 정확히 매칭되어 innerHTML 재셋 회피.
     const raw = ref.current?.innerHTML ?? '';
-    onChange(normalizeToBr(raw));
+    onChange(sanitizeRichValue(raw));
   };
 
-  // Paste: strip formatting, keep plain text
+  // Paste: strip formatting, keep plain text. Chrome 기본 동작에 맡겨 caret 컨텍스트 자연 처리.
+  // div 직접 구성 시 caret이 div 안에 있으면 nested div가 만들어져 빈 줄 추가되는 회귀 발생.
+  // execCommand('insertText') + 변환 없는 raw 저장(handleInput) 조합으로 멱등성 보장.
   const handlePaste = (e) => {
     e.preventDefault();
     const text = e.clipboardData.getData('text/plain');
+    if (!text) return;
     document.execCommand('insertText', false, text);
   };
 
