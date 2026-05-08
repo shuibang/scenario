@@ -1,5 +1,11 @@
 {
   "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "scenario-876h.vercel.app" }],
+      "destination": "https://daejak.kr/:path*",
+      "permanent": true
+    },
     { "source": "/landing.html",  "destination": "/",          "permanent": true },
     { "source": "/help.html",     "destination": "/help",      "permanent": true },
     { "source": "/notice.html",   "destination": "/notice",    "permanent": true },
