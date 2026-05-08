@@ -208,17 +208,77 @@
 
   <div class="timeline">
 
-    <!-- v24 (2026-04-30) -->
+    <!-- v25 (2026-05-09) -->
     <div class="cl-entry">
       <div class="cl-dot"></div>
       <div class="cl-card">
         <details open>
           <summary>
             <div class="cl-meta">
+              <div class="cl-date">2026-05-09</div>
+              <div class="cl-title">🛠 5월 안정화 — 동기화·에디터 UX·씬보드·복사 정리</div>
+            </div>
+            <span class="new-badge">최신</span>
+            <span class="arrow">▶</span>
+          </summary>
+          <div class="cl-body">
+            <div class="cl-section">
+              <div class="cl-section-head">구글 드라이브 동기화 추가 안정화</div>
+              <ul>
+                <li>작품 파일과 인덱스 저장이 직렬화되어 race로 옛 데이터가 덮어써지던 문제를 잡았어요</li>
+                <li>"같은 기기인데 충돌 모달이 자꾸 뜨는" 오발화를 추가로 차단했어요</li>
+                <li>초기 동기화가 한 번만 발사되도록 가드를 추가했어요 (중복 fire 방지)</li>
+                <li>수동 저장 시 변경된 작품만 업로드되도록 바꿨어요 — 매번 전체 재업로드가 사라져 폰 저장이 빨라졌어요</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">대본 에디터 — 작은 거슬림 일괄 정리</div>
+              <ul>
+                <li>빈 줄에서 한글 첫 글자가 자모로 분리되던 문제(예: "ㄱㅏ나다")를 수정했어요</li>
+                <li>본문의 빈 영역을 클릭하면 마지막 작업 위치로 커서가 다시 잡힙니다</li>
+                <li>슬래시(/) 메뉴 닫고 빈 영역 클릭 시 화면이 맨 위로 점프하던 문제를 수정했어요</li>
+                <li>표지·시놉시스에서 회차로 돌아올 때 커서가 첫 줄에 잡히던 문제를 수정해, 마지막 작업 위치로 가도록 했어요</li>
+                <li>본문 텍스트를 드래그로 선택할 때 viewport 끝까지 잡으면 화면이 진동하던 문제를 수정했어요</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">복사·붙여넣기</div>
+              <ul>
+                <li>본문에서 다른 회차로 복사·붙여넣기 시 블록 타입(씬번호/지문/대사)과 굵게·기울임·밑줄을 그대로 가져옵니다</li>
+                <li>시놉시스에 본문 텍스트를 붙여넣을 때 빈 줄이 늘어나거나 줄바꿈이 사라지던 문제를 수정했어요</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">씬보드 (구조 페이지)</div>
+              <ul>
+                <li>카드에 마우스를 올리면 [복사] [삭제] 버튼이 나타납니다 (이전 더블클릭 진입은 폐기)</li>
+                <li>[복사]로 같은/다른 회차에 씬을 통째로 복사할 수 있어요 (본문 블록 포함)</li>
+                <li>[삭제]는 클릭 → 빨강 [확정] 두 단계로 안전합니다</li>
+                <li>씬보드 탭 옆 ? 버튼으로 사용법 안내(탭별 다름)를 보실 수 있어요</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">검토링크 / 출력</div>
+              <ul>
+                <li>검토링크에서 PDF 다운로드 시 미리보기가 백지로 뜨거나 "인쇄준비중"이 한참 떠 있던 문제를 수정했어요</li>
+                <li>PDF/DOCX/HWPX 출력에 화면대로 빈 줄도 그대로 들어가도록 수정했어요</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- v24 (2026-04-30) -->
+    <div class="cl-entry">
+      <div class="cl-dot"></div>
+      <div class="cl-card">
+        <details>
+          <summary>
+            <div class="cl-meta">
               <div class="cl-date">2026-04-30</div>
               <div class="cl-title">🎨 새 로고·랜딩 리뉴얼 · 다크/라이트 토글 · 사이트 컬러 통일</div>
             </div>
-            <span class="new-badge">최신</span>
             <span class="arrow">▶</span>
           </summary>
           <div class="cl-body">
