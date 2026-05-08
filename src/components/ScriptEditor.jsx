@@ -1370,8 +1370,15 @@ const EditorSurface = forwardRef(function EditorSurface({
     if (!el) return;
     syncMeta(initialBlocks);
     el.innerHTML = blocksToHtml(initialBlocks);
-    const first = el.querySelector('[data-block-id]');
-    if (first) setCaret(first, 0);
+    // 회차 진입 시 마지막 블록 끝에 caret — 작가는 마지막 작업 위치에서 이어쓰는 게 자연스러움.
+    // 첫 블록으로 보내면 표지 등 다른 페이지 갔다 돌아올 때 "첫줄에 잡힘" 회귀 발생.
+    // scrollIntoView center: 빈/짧은 작품에선 입력줄이 화면 중간에, 긴 작품에선 마지막 블록이 중간에.
+    const all = [...el.querySelectorAll('[data-block-id]')];
+    const last = all[all.length - 1];
+    if (last) {
+      setCaret(last, blockText(last).length);
+      last.scrollIntoView({ block: 'center' });
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [episodeId]);
 
@@ -1395,8 +1402,13 @@ const EditorSurface = forwardRef(function EditorSurface({
     const firstBlockId = initialBlocks[0]?.id;
     if (firstBlockId && firstDomId !== firstBlockId) {
       el.innerHTML = blocksToHtml(initialBlocks);
-      const first = el.querySelector('[data-block-id]');
-      if (first) setCaret(first, 0);
+      // full rebuild 후에도 마지막 블록 끝으로 — 회차 진입/외부 주입 모두 작가가 이어쓰기 원함.
+      const all = [...el.querySelectorAll('[data-block-id]')];
+      const last = all[all.length - 1];
+      if (last) {
+        setCaret(last, blockText(last).length);
+        last.scrollIntoView({ block: 'center' });
+      }
       return;
     }
 
@@ -1532,10 +1544,17 @@ const EditorSurface = forwardRef(function EditorSurface({
     focusEnd() {
       const el = surfaceRef.current;
       if (!el) return;
-      el.focus();
+      // preventScroll: Chrome contenteditable이 focus 시 surface 시작점으로 자동 스크롤하는
+      // 동작 차단. 슬래시 메뉴/picker 닫힌 직후 빈 영역 클릭에서 화면이 맨 위로 점프하던 회귀 방지.
+      el.focus({ preventScroll: true });
       const all = [...el.querySelectorAll('[data-block-id]')];
       const last = all[all.length - 1];
-      if (last) setCaret(last, blockText(last).length);
+      if (last) {
+        setCaret(last, blockText(last).length);
+        // center: 회차 진입과 동일한 정책. /슬래시 후 새 블록이 viewport 아래쪽 끝에 끼어 있을
+        // 때 'nearest'면 무동작이라 입력줄이 답답한 위치에 머무는 회귀가 있어 'center'로 통일.
+        last.scrollIntoView({ block: 'center' });
+      }
     },
     loadBlocks(blocks) {
       const el = surfaceRef.current;
@@ -3634,6 +3653,11 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
       raf = requestAnimationFrame(() => {
         const sel = window.getSelection();
         if (!sel?.rangeCount) return;
+        // drag로 selection 확장 중에는 동작 금지: native auto-scroll로 화면이 내려가면 selection
+        // 시작점이 viewport 밖으로 나가고, 이 핸들러가 시작점으로 화면을 되돌리면서 native와
+        // 충돌해 진동 발생. selection이 펼쳐진 상태(drag 중/직후)는 작가가 텍스트를 잡고 있는
+        // 상태이므로 자동 스크롤하지 않는 게 자연스러움.
+        if (!sel.isCollapsed) return;
         const range = sel.getRangeAt(0).cloneRange();
         range.collapse(true);
         const rect = range.getBoundingClientRect();
@@ -3848,10 +3872,16 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
             }
             return;
           }
-          // Click in the scroll wrapper below the surface — only move to end if editor is empty
-          const surface = e.currentTarget.querySelector('[data-editor-surface]');
-          const hasContent = surface && surface.children.length > 0;
-          if (!hasContent) surfaceApiRef.current?.focusEnd();
+          // drag로 selection이 살아있으면 작가가 의도적으로 텍스트를 잡은 상태 → 흔들지 않음.
+          // (drag 중 마우스가 viewport 밖으로 나가 mouseup이 surface 바깥에서 발생하면
+          //  click이 여기로 와서 selection을 무효화하던 회귀 방지.)
+          const sel = window.getSelection();
+          if (sel && !sel.isCollapsed) return;
+          // Click in the scroll wrapper outside the surface — always move caret to end.
+          // 작가 직감: "에디터 어디든 누르면 커서 생긴다". surface 바깥 패딩/여백 클릭도
+          // 새로 입력하려는 의도이므로 마지막 블록 끝으로 caret 이동. pendingBlockType는
+          // 그 후에 caret 위치(마지막 블록) 기준으로 적용되어 단축어 흐름과도 호환.
+          surfaceApiRef.current?.focusEnd();
           if (pendingBlockType) {
             const pt = pendingBlockType;
             setPendingBlockType(null);
