@@ -34,7 +34,7 @@ import MobileOnboardingTour from './components/mobile/MobileOnboardingTour';
 import SharedReviewView from './components/SharedReviewView';
 import DirectorDeliveryView from './components/DirectorDeliveryView';
 import SurveyPage from './components/SurveyPage';
-import AdBanner from './components/AdBanner';
+import AdBanner, { KakaoAdBanner } from './components/AdBanner';
 // ─── v2: extracted mobile components ──────────────────────────────────────────
 import MobileMenuBar    from './components/mobile/MobileMenuBar';
 import MobileBottomPanel from './components/mobile/MobileBottomPanel';
@@ -2297,8 +2297,8 @@ function Shell({ authUser, setAuthUser }) {
         </div>
         {/* 광고 + 하단탭: 집중 모드에서 CSS로 숨김 (언마운트 방지) */}
         <div style={{ display: focusMode ? 'none' : 'contents' }}>
-          <div data-mobile-bottom-ad style={{ flexShrink: 0, height: (keyboardUp || mobileBottomOpen) ? 0 : 20, overflow: 'hidden', transition: 'height 0.2s ease' }}>
-            <AdBanner slot="mobile-bottom" mobileHide={false} height={20} />
+          <div data-mobile-bottom-ad style={{ flexShrink: 0, height: (keyboardUp || mobileBottomOpen) ? 0 : 100, overflow: 'hidden', transition: 'height 0.2s ease' }}>
+            <KakaoAdBanner unitId="DAN-9k0hbAU4Bzj4sVVQ" width={320} height={100} mobileHide={false} />
           </div>
           <MobileBottomPanel
             open={mobileBottomOpen}

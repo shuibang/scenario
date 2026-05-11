@@ -27,6 +27,13 @@ const styles = `
   font-size: 11px;
   color: #888;
 }
+.site-footer__notice {
+  margin: 16px auto 0;
+  max-width: 640px;
+  font-size: 10px;
+  line-height: 1.5;
+  color: #aaa;
+}
 .site-footer__row {
   display: flex;
   flex-wrap: wrap;
@@ -77,6 +84,9 @@ export default function Footer() {
       </p>
       <Row items={ROW1} />
       <Row items={ROW2} />
+      <p className="site-footer__notice">
+        이 사이트는 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.
+      </p>
     </footer>
   );
 }

@@ -76,15 +76,34 @@ const LOCAL_SELECTIONS = { cover: false, synopsis: false, episodes: {}, chars: f
 // OAuth 리디렉트 시 현재 hash 보존 → App.jsx onAuthStateChange에서 복원
 const RETURN_HASH_KEY = 'drama_pending_return_hash';
 
-// AppContext 없이 독립적으로 동작하는 광고 배너
+// AppContext 없이 독립적으로 동작하는 광고 배너 (쿠팡 파트너스).
+// 다크 테마 디렉터 대시보드 컨텍스트에 맞춘 별도 스타일 (메인 AdBanner와 분리).
 const _IS_DEV = import.meta.env.DEV;
+const _directorAdCache = new Map();
+const _DIRECTOR_AD_TTL = 6 * 60 * 60 * 1000;
+
 const DirectorAdBanner = memo(function DirectorAdBanner({ height = 20, slot = 'director' }) {
-  const ref = useRef(null);
-  const pushed = useRef(false);
+  const [items, setItems] = useState(() => {
+    const e = _directorAdCache.get(slot);
+    return e && Date.now() - e.fetchedAt < _DIRECTOR_AD_TTL ? e.items : null;
+  });
   useEffect(() => {
-    if (_IS_DEV || pushed.current || !ref.current) return;
-    try { (window.adsbygoogle = window.adsbygoogle || []).push({}); pushed.current = true; } catch {}
-  }, []);
+    if (_IS_DEV || !slot) return undefined;
+    const cached = _directorAdCache.get(slot);
+    if (cached && Date.now() - cached.fetchedAt < _DIRECTOR_AD_TTL) return undefined;
+    const ctrl = new AbortController();
+    fetch(`/api/coupang/products?slot=${encodeURIComponent(slot)}&limit=1`, { signal: ctrl.signal })
+      .then((r) => r.json())
+      .then((json) => {
+        const arr = Array.isArray(json?.items) ? json.items : [];
+        if (arr.length === 0) return;
+        _directorAdCache.set(slot, { items: arr, fetchedAt: Date.now() });
+        setItems(arr);
+      })
+      .catch(() => {});
+    return () => ctrl.abort();
+  }, [slot]);
+
   if (_IS_DEV) {
     return (
       <div style={{ height, overflow: 'hidden', background: 'rgba(253,224,71,0.35)', border: '1px dashed #ca8a04', display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box' }}>
@@ -92,15 +111,51 @@ const DirectorAdBanner = memo(function DirectorAdBanner({ height = 20, slot = 'd
       </div>
     );
   }
+
+  if (!items || items.length === 0) {
+    return (
+      <div style={{ height, overflow: 'hidden', background: 'rgba(255,255,255,0.02)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#5a6077' }} aria-hidden="true">
+        <span>광고</span>
+      </div>
+    );
+  }
+
+  const p = items[0];
+  const isCard = height >= 100;
   return (
-    <div ref={ref} style={{ height, overflow: 'hidden' }}>
-      <ins className="adsbygoogle"
-        style={{ display: 'block', width: '100%', height }}
-        data-ad-client="ca-pub-5479563960989185"
-        data-ad-slot="2569066048"
-        data-ad-format="autorelaxed"
-      />
-    </div>
+    <a
+      href={p.productUrl}
+      target="_blank"
+      rel="noopener noreferrer sponsored nofollow"
+      title={p.productName}
+      style={{
+        display: 'block', height, overflow: 'hidden', textDecoration: 'none', color: 'inherit',
+        background: '#1a1e28', border: '1px solid #252a38', borderRadius: 4,
+      }}
+    >
+      {isCard ? (
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <div style={{
+            flex: 1, minHeight: 0,
+            backgroundImage: `url("${p.productImage}")`,
+            backgroundSize: 'contain', backgroundPosition: 'center', backgroundRepeat: 'no-repeat',
+            backgroundColor: '#0d0f14',
+          }} />
+          <div style={{ padding: '3px 6px', fontSize: 10, lineHeight: 1.3, color: '#9aa0b4' }}>
+            <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.productName}</div>
+            <div style={{ color: '#e8b84b', fontWeight: 700 }}>{p.productPrice ? Number(p.productPrice).toLocaleString() + '원' : ''}</div>
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', height: '100%', alignItems: 'center', gap: 6, padding: '0 6px' }}>
+          {p.productImage ? (
+            <img src={p.productImage} alt="" loading="lazy" style={{ height: '100%', width: 'auto', maxHeight: height, objectFit: 'contain', flexShrink: 0 }} />
+          ) : null}
+          <div style={{ flex: 1, minWidth: 0, fontSize: 10, color: '#9aa0b4', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.productName}</div>
+          <span style={{ fontSize: 9, padding: '1px 4px', borderRadius: 2, background: 'rgba(232,184,75,0.15)', color: '#e8b84b', fontWeight: 600, flexShrink: 0 }}>AD</span>
+        </div>
+      )}
+    </a>
   );
 });
 

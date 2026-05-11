@@ -1,94 +1,135 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../store/AppContext';
-
-const AD_CLIENT = 'ca-pub-5479563960989185';
-
-// slot → { adSlot, format }
-// 각 슬롯은 고유 AdSense ad unit id를 가짐. 새 slot을 추가할 때는
-// AdSense 콘솔에서 전용 unit을 만든 뒤 여기에 매핑을 추가할 것.
-const SLOT_CONFIG = {
-  // ── Right panel — 2 광고씩 (각 슬롯 고유 id) ──
-  'cover-panel-1':         { adSlot: '9561548489', format: 'auto' },
-  'cover-panel-2':         { adSlot: '7304491166', format: 'auto' },
-  'synopsis-panel-1':      { adSlot: '1516765830', format: 'auto' },
-  'synopsis-panel-2':      { adSlot: '4334500869', format: 'auto' },
-  'biography-panel-1':     { adSlot: '9255867082', format: 'auto' },
-  'biography-panel-2':     { adSlot: '1038465710', format: 'auto' },
-  'relationships-panel-1': { adSlot: '4594567345', format: 'auto' },
-  'relationships-panel-2': { adSlot: '3021419190', format: 'auto' },
-  'resources-panel-1':     { adSlot: '1860592795', format: 'auto' },
-  'resources-panel-2':     { adSlot: '4198769490', format: 'auto' },
-  'treatment-panel-1':     { adSlot: '4295184444', format: 'auto' },
-  'treatment-panel-2':     { adSlot: '8042857761', format: 'auto' },
-  'characters-panel-1':    { adSlot: '4103612757', format: 'auto' },
-  'characters-panel-2':    { adSlot: '7699030808', format: 'auto' },
-  'scenelist-panel-1':     { adSlot: '7851286071', format: 'auto' },
-  'scenelist-panel-2':     { adSlot: '6538204405', format: 'auto' },
-  'settings-panel-1':      { adSlot: '9655322336', format: 'auto' },
-  'settings-panel-2':      { adSlot: '9938181333', format: 'auto' },
-
-  // ── Right panel — 단일 광고 ──
-  'structure-panel':       { adSlot: '3867597000', format: 'auto' },
-  'checklist':             { adSlot: '2554515337', format: 'auto' },
-
-  // ── 에디터 하단 반응형 4분할 ──
-  'bottom-fixed-1':        { adSlot: '3846187377', format: 'horizontal' },
-  'bottom-fixed-2':        { adSlot: '3843546272', format: 'horizontal' },
-  'bottom-fixed-3':        { adSlot: '1760520443', format: 'horizontal' },
-  'bottom-fixed-4':        { adSlot: '7168759797', format: 'horizontal' },
-
-  // ── 출력 미리보기 모달 ──
-  'print-modal-left':      { adSlot: '2694116136', format: 'horizontal' },
-  'print-modal-right':     { adSlot: '8715370672', format: 'auto' },
-
-  // ── 모바일 ──
-  // mobile-bottom-left / mobile-memo-bottom은 일반 디스플레이로 등록됨 → format 'auto'
-  'mobile-bottom':         { adSlot: '2569066048', format: 'autorelaxed' },
-  'mobile-bottom-left':    { adSlot: '1241433661', format: 'auto' },
-  'mobile-memo-bottom':    { adSlot: '9066271181', format: 'auto' },
-};
 
 const IS_DEV = import.meta.env.DEV;
 
-// char-* 슬롯은 인물 수가 가변적이라 통일 유지 (auto)
-function resolveConfig(slot) {
-  if (slot?.startsWith('char-')) return { adSlot: '9561548489', format: 'auto' };
-  const cfg = SLOT_CONFIG[slot];
-  if (!cfg) {
-    if (IS_DEV) console.warn(`[AdBanner] Unknown slot: ${slot}`);
-    return null;
-  }
-  return cfg;
+// 카카오 애드핏 스크립트 로더 (페이지당 1회만 삽입)
+const KAKAO_SCRIPT_ID = 'kakao-adfit-loader';
+function ensureKakaoScript() {
+  if (typeof document === 'undefined') return;
+  if (document.getElementById(KAKAO_SCRIPT_ID)) return;
+  const s = document.createElement('script');
+  s.id = KAKAO_SCRIPT_ID;
+  s.async = true;
+  s.src = 'https://t1.kakaocdn.net/kas/static/ba.min.js';
+  document.head.appendChild(s);
 }
 
-export default function AdBanner({ slot, mobileHide = true, height = 56, style = {}, className = '' }) {
+/**
+ * 카카오 애드핏 광고 단위 렌더러.
+ * unitId/width/height는 호출부에서 명시 (단위마다 사이즈 고정).
+ * 같은 unitId를 같은 페이지에 중복 표시하지 말 것 (정책 위반 → 노출 안 됨).
+ */
+export function KakaoAdBanner({ unitId, width, height, mobileHide = false, style = {}, className = '' }) {
   const { state } = useApp();
-  const pushed = useRef(false);
 
   useEffect(() => {
-    if (IS_DEV || state.isPro || pushed.current) return;
-    try {
-      (window.adsbygoogle = window.adsbygoogle || []).push({});
-      pushed.current = true;
-    } catch {}
+    if (IS_DEV || state.isPro) return;
+    ensureKakaoScript();
   }, [state.isPro]);
 
   if (state.isPro) return null;
 
-  const cfg = resolveConfig(slot);
-  if (!cfg) return null;
-  const { adSlot, format } = cfg;
   const visibilityClass = mobileHide ? 'hidden md:block' : 'block';
+  const boxStyle = { ...style, minHeight: height, maxHeight: height, boxSizing: 'border-box' };
 
   if (IS_DEV) {
     return (
       <div
         className={`${visibilityClass} shrink-0 ${className}`}
+        style={{ ...boxStyle, background: 'rgba(124,58,237,0.15)', border: '1px dashed #7c3aed', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      >
+        <span style={{ fontSize: 10, color: '#5b21b6', fontWeight: 600 }}>KAKAO {unitId} {width}×{height}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={`${visibilityClass} shrink-0 ${className}`}
+      style={{ ...boxStyle, display: 'flex', justifyContent: 'center', overflow: 'hidden' }}
+    >
+      <ins
+        className="kakao_ad_area"
+        style={{ display: 'none' }}
+        data-ad-unit={unitId}
+        data-ad-width={String(width)}
+        data-ad-height={String(height)}
+      />
+    </div>
+  );
+}
+
+// 동일 슬롯·동일 6시간 윈도우 안에서는 fetch를 한 번만 하도록 모듈 캐시.
+// (페이지 전환 후 다시 마운트되어도 네트워크 호출이 반복되지 않음)
+const moduleCache = new Map(); // slot → { items, fetchedAt }
+const MODULE_CACHE_TTL = 6 * 60 * 60 * 1000;
+
+function getCached(slot) {
+  const e = moduleCache.get(slot);
+  if (!e) return null;
+  if (Date.now() - e.fetchedAt > MODULE_CACHE_TTL) {
+    moduleCache.delete(slot);
+    return null;
+  }
+  return e.items;
+}
+
+function setCached(slot, items) {
+  moduleCache.set(slot, { items, fetchedAt: Date.now() });
+}
+
+function formatPrice(n) {
+  if (!n || !Number.isFinite(Number(n))) return '';
+  return Number(n).toLocaleString() + '원';
+}
+
+export default function AdBanner({ slot, mobileHide = true, height = 56, style = {}, className = '' }) {
+  const { state } = useApp();
+  // 마운트 시점에 캐시 hit이면 곧바로 'ok'로 시작. slot은 인스턴스 수명 동안 변하지 않는다는 전제.
+  const [items, setItems] = useState(() => getCached(slot));
+  const [status, setStatus] = useState(() => (getCached(slot) ? 'ok' : 'idle'));
+
+  useEffect(() => {
+    if (state.isPro || IS_DEV || !slot) return undefined;
+    if (getCached(slot)) return undefined;
+    const ctrl = new AbortController();
+    fetch(`/api/coupang/products?slot=${encodeURIComponent(slot)}&limit=1`, { signal: ctrl.signal })
+      .then((r) => r.json())
+      .then((json) => {
+        const arr = Array.isArray(json?.items) ? json.items : [];
+        if (arr.length === 0) {
+          setStatus('empty');
+          return;
+        }
+        setCached(slot, arr);
+        setItems(arr);
+        setStatus('ok');
+      })
+      .catch((e) => {
+        if (e?.name === 'AbortError') return;
+        setStatus('error');
+      });
+    return () => ctrl.abort();
+  }, [slot, state.isPro]);
+
+  if (state.isPro) return null;
+
+  const visibilityClass = mobileHide ? 'hidden md:block' : 'block';
+  const baseBoxStyle = { ...style, minHeight: height, maxHeight: height, boxSizing: 'border-box' };
+
+  // dev placeholder (기존 동일)
+  if (IS_DEV) {
+    return (
+      <div
+        className={`${visibilityClass} shrink-0 ${className}`}
         style={{
-          ...style, minHeight: height, maxHeight: height,
-          background: 'rgba(253,224,71,0.35)', border: '1px dashed #ca8a04',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          boxSizing: 'border-box',
+          ...baseBoxStyle,
+          background: 'rgba(253,224,71,0.35)',
+          border: '1px dashed #ca8a04',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
       >
         <span style={{ fontSize: 10, color: '#92400e', fontWeight: 600 }}>AD {slot}</span>
@@ -96,19 +137,123 @@ export default function AdBanner({ slot, mobileHide = true, height = 56, style =
     );
   }
 
-  return (
-    <div
-      className={`${visibilityClass} shrink-0 overflow-hidden ${className}`}
-      style={{ ...style, minHeight: height, maxHeight: height, overflow: 'hidden' }}
+  // 운영 환경: 로딩/실패/빈 응답 → 자리만 차지하는 옅은 placeholder
+  // (키 미설정 또는 API 실패 시 동일 처리. 부모 레이아웃이 무너지지 않도록 height은 유지)
+  if (status !== 'ok' || !items || items.length === 0) {
+    return (
+      <div
+        className={`${visibilityClass} shrink-0 ${className}`}
+        style={{
+          ...baseBoxStyle,
+          background: 'rgba(0,0,0,0.015)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 10,
+          color: '#cbd5e1',
+        }}
+        aria-hidden="true"
+      >
+        <span>광고</span>
+      </div>
+    );
+  }
+
+  const p = items[0];
+  const isCard = height >= 100;
+  const adBadge = (
+    <span
+      style={{
+        fontSize: 9,
+        padding: '1px 4px',
+        borderRadius: 3,
+        background: 'rgba(0,0,0,0.55)',
+        color: '#fff',
+        fontWeight: 600,
+        letterSpacing: '0.02em',
+      }}
     >
-      <ins
-        className="adsbygoogle"
-        style={{ display: 'block', width: '100%', height: '100%' }}
-        data-ad-client={AD_CLIENT}
-        data-ad-slot={adSlot}
-        data-ad-format={format}
-        data-full-width-responsive="true"
-      />
-    </div>
+      AD
+    </span>
+  );
+
+  return (
+    <a
+      href={p.productUrl}
+      target="_blank"
+      rel="noopener noreferrer sponsored nofollow"
+      className={`${visibilityClass} shrink-0 overflow-hidden ${className}`}
+      style={{
+        ...baseBoxStyle,
+        display: 'block',
+        textDecoration: 'none',
+        color: 'inherit',
+        background: '#fff',
+        border: '1px solid #e5e7eb',
+        borderRadius: 6,
+        overflow: 'hidden',
+      }}
+      title={p.productName}
+      data-coupang-slot={slot}
+    >
+      {isCard ? (
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <div
+            style={{
+              position: 'relative',
+              flex: 1,
+              minHeight: 0,
+              background: '#f9fafb',
+              backgroundImage: `url("${p.productImage}")`,
+              backgroundSize: 'contain',
+              backgroundPosition: 'center',
+              backgroundRepeat: 'no-repeat',
+            }}
+          >
+            <div style={{ position: 'absolute', top: 4, right: 4 }}>{adBadge}</div>
+          </div>
+          <div style={{ padding: '4px 6px', fontSize: 10, lineHeight: 1.3 }}>
+            <div
+              style={{
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                color: '#374151',
+              }}
+            >
+              {p.productName}
+            </div>
+            <div style={{ color: '#dc2626', fontWeight: 700 }}>{formatPrice(p.productPrice)}</div>
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', height: '100%', alignItems: 'center', gap: 8, padding: '0 8px' }}>
+          {p.productImage ? (
+            <img
+              src={p.productImage}
+              alt=""
+              loading="lazy"
+              style={{ height: '100%', width: 'auto', maxHeight: height, objectFit: 'contain', flexShrink: 0 }}
+            />
+          ) : null}
+          <div style={{ flex: 1, minWidth: 0, fontSize: 11, lineHeight: 1.3 }}>
+            <div
+              style={{
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                color: '#374151',
+              }}
+            >
+              {p.productName}
+            </div>
+            <div style={{ color: '#dc2626', fontWeight: 700, fontSize: 11 }}>
+              {formatPrice(p.productPrice)}
+            </div>
+          </div>
+          {adBadge}
+        </div>
+      )}
+    </a>
   );
 }

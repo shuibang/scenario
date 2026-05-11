@@ -212,7 +212,7 @@
       <li>회원 가입·로그인 및 본인 식별 (Google·Kakao 등 외부 OAuth 연동)</li>
       <li>이용자가 작성한 대본·자료의 클라우드 저장 및 기기 간 동기화</li>
       <li>서비스 안정성·오류 분석을 위한 접속 기록 처리</li>
-      <li>광고 게재 및 트래픽 측정 (Google AdSense, Google Analytics)</li>
+      <li>제휴 광고 게재 및 트래픽 측정 (쿠팡 파트너스, Google Analytics)</li>
       <li>고객 문의 응대</li>
     </ul>
 
@@ -224,7 +224,7 @@
         <tr><td>이용자 콘텐츠</td><td>대본·시놉시스·인물·자료·메모 등 작성 데이터</td><td>이용자가 작성·저장 시</td></tr>
         <tr><td>드라이브 연동</td><td>Google Drive 액세스 토큰 (브라우저 내 저장)</td><td>드라이브 동기화 활성화 시</td></tr>
         <tr><td>접속 기록</td><td>IP, 브라우저 정보, 접속 시각, 페이지 이동 경로</td><td>자동 수집</td></tr>
-        <tr><td>광고·분석</td><td>광고 식별자, 쿠키 ID</td><td>자동 수집</td></tr>
+        <tr><td>제휴 광고·분석</td><td>제휴 링크 클릭 트래킹, 분석 쿠키 ID</td><td>광고 클릭·자동 수집</td></tr>
       </tbody>
     </table>
     <div class="tip">이용자가 작성한 대본 본문은 원칙적으로 이용자의 브라우저(IndexedDB) 또는 이용자 본인의 Google Drive에만 저장되며, 운영자 서버에 보관되지 않습니다. Supabase에는 인증 정보와 공유 링크 메타데이터(<strong>review_links</strong>)만 저장됩니다.</div>
@@ -251,7 +251,8 @@
       <tbody>
         <tr><td>Supabase, Inc.</td><td>인증·DB 호스팅</td><td>미국</td></tr>
         <tr><td>Vercel Inc.</td><td>웹 호스팅·CDN</td><td>미국</td></tr>
-        <tr><td>Google LLC</td><td>OAuth 인증, Drive 연동, Analytics, AdSense, 폰트</td><td>미국</td></tr>
+        <tr><td>Google LLC</td><td>OAuth 인증, Drive 연동, Analytics, 폰트</td><td>미국</td></tr>
+        <tr><td>Coupang Corp.</td><td>쿠팡 파트너스 제휴 광고 (상품 정보 노출·클릭 트래킹)</td><td>대한민국</td></tr>
       </tbody>
     </table>
 
@@ -260,9 +261,10 @@
     <ul>
       <li><strong>필수 쿠키:</strong> 로그인 세션 유지 (Supabase Auth)</li>
       <li><strong>분석 쿠키:</strong> Google Analytics (방문자 통계, 페이지 이동 분석)</li>
-      <li><strong>광고 쿠키:</strong> Google AdSense (관심사 기반 광고 게재)</li>
+      <li><strong>제휴 광고:</strong> 쿠팡 파트너스 — 광고 클릭 시 쿠팡(coupang.com) 도메인에서 자체적인 제휴 트래킹 쿠키를 설정할 수 있습니다.</li>
     </ul>
-    <p>이용자는 브라우저 설정에서 쿠키 저장을 거부할 수 있으나, 일부 기능(로그인·동기화)이 제한될 수 있습니다. Google 광고 개인화는 <a href="https://adssettings.google.com" target="_blank" rel="noopener">adssettings.google.com</a>에서, GA 옵트아웃은 <a href="https://tools.google.com/dlpage/gaoptout" target="_blank" rel="noopener">tools.google.com/dlpage/gaoptout</a>에서 설정할 수 있습니다.</p>
+    <p>이용자는 브라우저 설정에서 쿠키 저장을 거부할 수 있으나, 일부 기능(로그인·동기화)이 제한될 수 있습니다. GA 옵트아웃은 <a href="https://tools.google.com/dlpage/gaoptout" target="_blank" rel="noopener">tools.google.com/dlpage/gaoptout</a>에서, 쿠팡 광고 관련 설정은 <a href="https://www.coupang.com/np/policies/privacy" target="_blank" rel="noopener">coupang.com 개인정보처리방침</a>을 참고하실 수 있습니다.</p>
+    <p style="margin-top:12px;font-size:12px;color:#666;">※ 본 사이트는 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받을 수 있습니다.</p>
 
     <h2 id="sec7">7. 정보주체의 권리</h2>
     <p>이용자는 언제든지 다음 권리를 행사할 수 있습니다.</p>
@@ -335,5 +337,6 @@
   </div>
 </footer>
 
+<script async src="/static-ads.js"></script>
 </body>
 </html>
