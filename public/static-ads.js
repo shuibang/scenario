@@ -80,12 +80,17 @@
     wrap.setAttribute('aria-label', '광고');
     wrap.style.cssText =
       'display:flex;flex-wrap:nowrap;gap:8px;justify-content:center;align-items:center;' +
-      'max-width:1080px;margin:32px auto 16px;padding:0 16px;box-sizing:border-box;';
+      'width:100%;max-width:1080px;margin:32px auto 16px;padding:0 16px;' +
+      'box-sizing:border-box;overflow:hidden;';
 
     BOTTOM_UNITS.forEach(function (u, i) {
       var card = document.createElement('div');
       card.dataset.starSkyAdSlot = String(i + 1);
-      card.style.cssText = 'flex:0 0 ' + u.width + 'px;height:' + u.height + 'px;display:flex;justify-content:center;align-items:center;';
+      // flex:0 1 — 폭이 좁으면 카드 자체가 줄어들도록 허용.
+      // 카카오 ins는 사이즈 고정이라 카드 안에서 overflow되면 부모 wrap의 overflow:hidden으로 잘림.
+      card.style.cssText =
+        'flex:0 1 ' + u.width + 'px;max-width:100%;height:' + u.height + 'px;' +
+        'display:flex;justify-content:center;align-items:center;overflow:hidden;';
       card.appendChild(makeIns(u.unitId, u.width, u.height));
       wrap.appendChild(card);
     });
