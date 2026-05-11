@@ -2381,11 +2381,13 @@ function Shell({ authUser, setAuthUser }) {
         {!focusMode && <StatusBar />}
 
         <div style={{ overflow: 'hidden', height: focusMode ? 0 : 'auto' }}>
-          <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-1.5 no-print" style={{ margin: '0 8px 6px' }}>
-            <AdBanner slot="bottom-fixed-1" mobileHide={false} height={48} style={{ borderRadius: 6 }} />
-            <div className="hidden md:block"><AdBanner slot="bottom-fixed-2" mobileHide={false} height={48} style={{ borderRadius: 6 }} /></div>
-            <div className="hidden md:block"><AdBanner slot="bottom-fixed-3" mobileHide={false} height={48} style={{ borderRadius: 6 }} /></div>
-            <div className="hidden xl:block"><AdBanner slot="bottom-fixed-4" mobileHide={false} height={48} style={{ borderRadius: 6 }} /></div>
+          <div className="no-print" style={{ margin: '0 8px 6px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+            {/* ≥1280px: 카카오 728×90 (PC 단위) — 본문 폭이 728 이상 확보되는 화면에서만 */}
+            <div className="hidden xl:flex" style={{ width: '100%', justifyContent: 'center' }}>
+              <KakaoAdBanner unitId="DAN-duuNkW51pfplIrP1" width={728} height={90} mobileHide={false} />
+            </div>
+            {/* 모든 폭: 쿠팡 가로 배너 */}
+            <AdBanner slot="bottom-fixed-1" mobileHide={false} height={60} style={{ borderRadius: 6, width: '100%', maxWidth: 728 }} />
           </div>
         </div>
 
@@ -2478,11 +2480,13 @@ function Shell({ authUser, setAuthUser }) {
       {!focusMode && <StatusBar />}
 
       <div style={{ overflow: 'hidden', height: focusMode ? 0 : 'auto' }}>
-        <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-1.5 no-print" style={{ margin: '0 8px 6px' }}>
-          <AdBanner slot="bottom-fixed-1" mobileHide={false} height={48} style={{ borderRadius: 6 }} />
-          <div className="hidden md:block"><AdBanner slot="bottom-fixed-2" mobileHide={false} height={48} style={{ borderRadius: 6 }} /></div>
-          <div className="hidden md:block"><AdBanner slot="bottom-fixed-3" mobileHide={false} height={48} style={{ borderRadius: 6 }} /></div>
-          <div className="hidden xl:block"><AdBanner slot="bottom-fixed-4" mobileHide={false} height={48} style={{ borderRadius: 6 }} /></div>
+        <div className="no-print" style={{ margin: '0 8px 6px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+          {/* ≥1280px: 카카오 728×90 (PC 단위) — 본문 폭이 728 이상 확보되는 화면에서만 */}
+          <div className="hidden xl:flex" style={{ width: '100%', justifyContent: 'center' }}>
+            <KakaoAdBanner unitId="DAN-duuNkW51pfplIrP1" width={728} height={90} mobileHide={false} />
+          </div>
+          {/* 모든 폭: 쿠팡 가로 배너 */}
+          <AdBanner slot="bottom-fixed-1" mobileHide={false} height={60} style={{ borderRadius: 6, width: '100%', maxWidth: 728 }} />
         </div>
       </div>
 
