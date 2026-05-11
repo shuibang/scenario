@@ -1115,7 +1115,7 @@ export default function MyPage() {
           {activeTab === 'membership' && (
             <div className="flex flex-col items-center gap-8">
               <PlaceholderTab icon="⭐" title="멤버십" desc="멤버십 기능은 준비 중입니다." />
-              {false && <SupportCard />}
+              <SupportCard />
             </div>
           )}
         </div>
