@@ -2297,7 +2297,18 @@ function Shell({ authUser, setAuthUser }) {
         </div>
         {/* 광고 + 하단탭: 집중 모드에서 CSS로 숨김 (언마운트 방지) */}
         <div style={{ display: focusMode ? 'none' : 'contents' }}>
-          <div data-mobile-bottom-ad style={{ flexShrink: 0, height: (keyboardUp || mobileBottomOpen) ? 0 : 100, overflow: 'hidden', transition: 'height 0.2s ease' }}>
+          {/* 광고 ↔ 하단 패널 토글 버튼 사이 간격 — 오클릭 방지 (패널 열리면 0) */}
+          <div
+            data-mobile-bottom-ad
+            style={{
+              flexShrink: 0,
+              height: (keyboardUp || mobileBottomOpen) ? 0 : 100,
+              marginTop: (keyboardUp || mobileBottomOpen) ? 0 : 8,
+              marginBottom: (keyboardUp || mobileBottomOpen) ? 0 : 16,
+              overflow: 'hidden',
+              transition: 'height 0.2s ease, margin 0.2s ease',
+            }}
+          >
             <KakaoAdBanner unitId="DAN-0Eobamy6SYfeIpxd" width={320} height={100} mobileHide={false} />
           </div>
           <MobileBottomPanel
