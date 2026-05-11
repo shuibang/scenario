@@ -65,15 +65,15 @@ const SLOT_KEYWORDS = {
   'director-sidebar-1':    MOBILE_GROUP,
   'director-sidebar-2':    MOBILE_GROUP,
 
-  // ── 정적 marketing/info 페이지 ──
-  // 2026-05-11부터 정적 페이지의 사이드/하단 슬롯은 카카오 애드핏으로 교체됨.
-  // 아래 매핑은 static-ads.js에서 더 이상 호출되지 않으나, 폴백/다른 용도 대비 보존.
+  // ── 정적 marketing/info 페이지 (static-ads.js) ──
+  // 카카오 애드핏 정책상 모바일 단위(320×100)는 모바일에서만 → 데스크탑 하단은 쿠팡 가로 배너로.
+  // html-bottom-1/2: 데스크탑 하단 쿠팡 (≥768px / #2는 ≥1280px). 나머지는 미사용(보존).
+  'html-bottom-1':         ['베스트셀러', '아이패드'],
+  'html-bottom-2':         ['에어팟', '독서대'],
+  'html-bottom-3':         ['독서등', '데스크 패드'],
+  'html-bottom-4':         ['기계식 키보드', '버티컬 마우스'],
   'html-sidebar-left':     ['집필 노트', '시나리오 책', '글쓰기 책'],
   'html-sidebar-right':    ['책상 의자', '독서등', '데스크 패드'],
-  'html-bottom-1':         ['베스트셀러'],
-  'html-bottom-2':         ['아이패드', '에어팟'],
-  'html-bottom-3':         ['독서대', '독서등'],
-  'html-bottom-4':         ['기계식 키보드', '버티컬 마우스'],
 };
 
 const DEFAULT_KEYWORDS = ['베스트셀러'];
