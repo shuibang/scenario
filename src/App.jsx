@@ -2392,12 +2392,8 @@ function Shell({ authUser, setAuthUser }) {
         {!focusMode && <StatusBar />}
 
         <div style={{ overflow: 'hidden', height: focusMode ? 0 : 'auto' }}>
-          <div className="no-print" style={{ margin: '0 8px 6px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-            {/* ≥1280px: 카카오 728×90 (PC 단위) — 본문 폭이 728 이상 확보되는 화면에서만 */}
-            <div className="hidden xl:flex" style={{ width: '100%', justifyContent: 'center' }}>
-              <KakaoAdBanner unitId="DAN-duuNkW51pfplIrP1" width={728} height={90} mobileHide={false} />
-            </div>
-            {/* 모든 폭: 쿠팡 가로 배너 */}
+          <div className="no-print" style={{ margin: '0 8px 6px', display: 'flex', justifyContent: 'center' }}>
+            {/* 태블릿(768~1279px): 본문 폭이 728을 보장 못 하므로 쿠팡 가로 배너 */}
             <AdBanner slot="bottom-fixed-1" mobileHide={false} height={60} style={{ borderRadius: 6, width: '100%', maxWidth: 728 }} />
           </div>
         </div>
@@ -2491,13 +2487,9 @@ function Shell({ authUser, setAuthUser }) {
       {!focusMode && <StatusBar />}
 
       <div style={{ overflow: 'hidden', height: focusMode ? 0 : 'auto' }}>
-        <div className="no-print" style={{ margin: '0 8px 6px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-          {/* ≥1280px: 카카오 728×90 (PC 단위) — 본문 폭이 728 이상 확보되는 화면에서만 */}
-          <div className="hidden xl:flex" style={{ width: '100%', justifyContent: 'center' }}>
-            <KakaoAdBanner unitId="DAN-duuNkW51pfplIrP1" width={728} height={90} mobileHide={false} />
-          </div>
-          {/* 모든 폭: 쿠팡 가로 배너 */}
-          <AdBanner slot="bottom-fixed-1" mobileHide={false} height={60} style={{ borderRadius: 6, width: '100%', maxWidth: 728 }} />
+        <div className="no-print" style={{ margin: '0 8px 6px', display: 'flex', justifyContent: 'center' }}>
+          {/* PC(≥1280px): 카카오 728×90 (PC 단위) 하나만 */}
+          <KakaoAdBanner unitId="DAN-duuNkW51pfplIrP1" width={728} height={90} mobileHide={false} />
         </div>
       </div>
 
