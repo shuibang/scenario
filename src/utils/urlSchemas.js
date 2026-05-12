@@ -38,6 +38,8 @@ export const logShareSchema = z.object({
   logs:       z.array(logEntrySchema).default([]),
   projects:   z.array(dbRecord).optional().default([]),
   exportedAt: z.number().optional(),
+  hideProjectTitle: z.boolean().optional().default(false),
+  hideChecklist:    z.boolean().optional().default(false),
 });
 
 // ── #review= legacy payload (SharedReviewView — 대본 읽기전용 공유) ───────────

@@ -45,7 +45,7 @@ function fmtTs(ts) {
   return `${d.getFullYear()}.${d.getMonth()+1}.${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
 }
 
-function LogPdfDoc({ logs, projects }) {
+function LogPdfDoc({ logs, projects, hideProjectTitle = false, hideChecklist = false }) {
   const totalSec = logs.reduce((s, l) => s + (l.activeDurationSec || 0), 0);
   const totalDays = new Set(logs.map(l => l.dateKey)).size;
   const sorted = [...logs].sort((a, b) => b.completedAt - a.completedAt);
@@ -76,7 +76,7 @@ function LogPdfDoc({ logs, projects }) {
         <View style={{ ...logPdfStyles.row, borderBottomWidth: 1, borderBottomColor: '#999' }}>
           <Text style={{ ...logPdfStyles.gray, width: '30%' }}>날짜/시간</Text>
           <Text style={{ ...logPdfStyles.gray, width: '25%' }}>작품</Text>
-          <Text style={{ ...logPdfStyles.gray, width: '32%' }}>완료 항목</Text>
+          <Text style={{ ...logPdfStyles.gray, width: '32%' }}>{hideChecklist ? '' : '완료 항목'}</Text>
           <Text style={{ ...logPdfStyles.gray, width: '13%', textAlign: 'right' }}>활동시간</Text>
         </View>
         {sorted.map((log, i) => {
@@ -85,13 +85,15 @@ function LogPdfDoc({ logs, projects }) {
           return (
             <View key={i} style={{ ...logPdfStyles.row, alignItems: 'flex-start' }}>
               <Text style={{ ...logPdfStyles.cell, width: '30%' }}>{fmtTs(log.completedAt)}</Text>
-              <Text style={{ ...logPdfStyles.cell, width: '25%' }}>{proj?.title || '삭제된 작품'}</Text>
+              <Text style={{ ...logPdfStyles.cell, width: '25%' }}>{hideProjectTitle ? '비공개' : (proj?.title || '삭제된 작품')}</Text>
               <View style={{ width: '32%' }}>
-                {snapshot.length > 0
-                  ? snapshot.map((item, j) => (
-                      <Text key={j} style={{ ...logPdfStyles.cell, fontSize: 8 }}>✓ {item.text}</Text>
-                    ))
-                  : <Text style={{ ...logPdfStyles.gray, fontSize: 8 }}>—</Text>
+                {hideChecklist
+                  ? <Text style={{ ...logPdfStyles.gray, fontSize: 8 }}>—</Text>
+                  : snapshot.length > 0
+                    ? snapshot.map((item, j) => (
+                        <Text key={j} style={{ ...logPdfStyles.cell, fontSize: 8 }}>✓ {item.text}</Text>
+                      ))
+                    : <Text style={{ ...logPdfStyles.gray, fontSize: 8 }}>—</Text>
                 }
               </View>
               <Text style={{ ...logPdfStyles.cell, width: '13%', textAlign: 'right' }}>{fmtSec(log.activeDurationSec || 0)}</Text>
@@ -103,9 +105,11 @@ function LogPdfDoc({ logs, projects }) {
   );
 }
 
-async function downloadLogPdf(logs, projects) {
+async function downloadLogPdf(logs, projects, opts = {}) {
   ensureFontsRegistered();
-  const blob = await pdf(<LogPdfDoc logs={logs} projects={projects} />).toBlob();
+  const blob = await pdf(
+    <LogPdfDoc logs={logs} projects={projects} hideProjectTitle={!!opts.hideProjectTitle} hideChecklist={!!opts.hideChecklist} />
+  ).toBlob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -114,13 +118,18 @@ async function downloadLogPdf(logs, projects) {
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
-async function buildLogShareUrl(logs, projects) {
+async function buildLogShareUrl(logs, projects, opts = {}) {
   const { saveLogPayload } = await import('../utils/reviewShare');
+  const safeLogs = opts.hideChecklist
+    ? logs.map(({ completedChecklistSnapshot, ...rest }) => rest)
+    : logs;
   const payload = {
     type: 'log-export',
     exportedAt: Date.now(),
-    projects: projects.map(p => ({ id: p.id, title: p.title })),
-    logs,
+    projects: opts.hideProjectTitle ? [] : projects.map(p => ({ id: p.id, title: p.title })),
+    logs: safeLogs,
+    hideProjectTitle: !!opts.hideProjectTitle,
+    hideChecklist: !!opts.hideChecklist,
   };
   const id = await saveLogPayload(payload);
   return `${window.location.origin}/app#log=${id}`;
@@ -182,6 +191,9 @@ function StatsTab() {
   const { state } = useApp();
   const { workTimeLogs, projects, episodes } = state;
   const [exportMsg, setExportMsg] = useState('');
+  const [hideTitle, setHideTitle]         = useState(false);
+  const [hideChecklist, setHideChecklist] = useState(false);
+  const exportOpts = { hideProjectTitle: hideTitle, hideChecklist };
 
   const totalSec = workTimeLogs.reduce((s, l) => s + (l.activeDurationSec || 0), 0);
   const totalDays = useMemo(() => new Set(workTimeLogs.map(l => l.dateKey)).size, [workTimeLogs]);
@@ -244,7 +256,7 @@ function StatsTab() {
   const handlePdfExport = async () => {
     setExportMsg('생성 중…');
     try {
-      await downloadLogPdf(workTimeLogs, projects);
+      await downloadLogPdf(workTimeLogs, projects, exportOpts);
       setExportMsg('PDF 저장됨');
     } catch (e) {
       setExportMsg('오류: ' + e.message);
@@ -255,7 +267,7 @@ function StatsTab() {
   const handleLinkCopy = async () => {
     let url;
     try {
-      url = await buildLogShareUrl(workTimeLogs, projects);
+      url = await buildLogShareUrl(workTimeLogs, projects, exportOpts);
     } catch (err) {
       console.error('[handleLinkCopy] buildLogShareUrl failed:', err);
       setExportMsg('링크 생성에 실패했어요. 잠시 후 다시 시도해주세요.');
@@ -292,7 +304,7 @@ function StatsTab() {
   return (
     <div>
       {workTimeLogs.length > 0 && (
-        <div className="flex items-center gap-2 mb-6">
+        <div className="flex items-center gap-2 mb-6 flex-wrap">
           <button onClick={handlePdfExport}
             className="text-xs px-3 py-1 rounded"
             style={{ background: 'var(--c-accent)', color: '#fff', border: 'none', cursor: 'pointer' }}>
@@ -304,6 +316,18 @@ function StatsTab() {
             읽기전용 링크
           </button>
           {exportMsg && <span className="text-xs" style={{ color: 'var(--c-accent2)' }}>{exportMsg}</span>}
+          <div className="flex items-center gap-3" style={{ marginLeft: 'auto' }}>
+            <label className="flex items-center gap-1.5 text-xs cursor-pointer" style={{ color: 'var(--c-text4)' }}>
+              <input type="checkbox" checked={hideTitle} onChange={e => setHideTitle(e.target.checked)}
+                style={{ accentColor: 'var(--c-accent)', width: 13, height: 13, cursor: 'pointer' }} />
+              작품명 가리기
+            </label>
+            <label className="flex items-center gap-1.5 text-xs cursor-pointer" style={{ color: 'var(--c-text4)' }}>
+              <input type="checkbox" checked={hideChecklist} onChange={e => setHideChecklist(e.target.checked)}
+                style={{ accentColor: 'var(--c-accent)', width: 13, height: 13, cursor: 'pointer' }} />
+              체크리스트 가리기
+            </label>
+          </div>
         </div>
       )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>

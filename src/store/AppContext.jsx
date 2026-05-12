@@ -550,8 +550,15 @@ function reducer(state, action) {
     case 'ADD_CHECKLIST_ITEM':
       return { ...state, checklistItems: [...state.checklistItems, action.payload] };
     case 'UPDATE_CHECKLIST_ITEM':
-      return { ...state, checklistItems: state.checklistItems.map(it =>
-        it.id === action.payload.id ? { ...it, ...action.payload } : it) };
+      return { ...state, checklistItems: state.checklistItems.map(it => {
+        if (it.id !== action.payload.id) return it;
+        const next = { ...it, ...action.payload };
+        // done 토글 시 완료 시각 기록 — 작업기록 스냅샷이 "그 세션에 완료한 항목"만 담도록
+        if (Object.prototype.hasOwnProperty.call(action.payload, 'done')) {
+          next.doneAt = action.payload.done ? Date.now() : null;
+        }
+        return next;
+      }) };
     case 'DELETE_CHECKLIST_ITEM':
       return { ...state, checklistItems: state.checklistItems.filter(it => it.id !== action.id) };
 

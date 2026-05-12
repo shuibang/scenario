@@ -524,9 +524,11 @@ function WorkTimer({ projectId, documentId, onComplete, saveRef }) {
     startedAt.current = Date.now();
   }, [projectId]);
 
-  const buildSnapshot = () =>
+  // 이 세션(sinceTs 이후)에 완료 처리한 체크리스트 항목만 스냅샷에 담는다.
+  // doneAt이 없는 과거 항목은 제외 — 한 번 체크한 항목이 이후 모든 기록에 따라붙던 문제 해결
+  const buildSnapshot = (sinceTs) =>
     checklistRef.current
-      .filter(it => it.projectId === projectId && it.done)
+      .filter(it => it.projectId === projectId && it.done && it.doneAt && it.doneAt >= sinceTs)
       .map(it => ({ id: it.id, text: it.text, docId: it.docId || null }));
 
   const resetIdle = useCallback(() => {
@@ -579,7 +581,7 @@ function WorkTimer({ projectId, documentId, onComplete, saveRef }) {
         completedAt: Date.now(),
         activeDurationSec: elapsedRef.current,
         dateKey: toLocalDateKey(startedAt.current),
-        completedChecklistSnapshot: buildSnapshot(),
+        completedChecklistSnapshot: buildSnapshot(startedAt.current),
       }});
     }
     // reset for next session
@@ -599,7 +601,7 @@ function WorkTimer({ projectId, documentId, onComplete, saveRef }) {
       completedAt: Date.now(),
       activeDurationSec: elapsedRef.current,
       dateKey: toLocalDateKey(startedAt.current),
-      completedChecklistSnapshot: buildSnapshot(),
+      completedChecklistSnapshot: buildSnapshot(startedAt.current),
     };
     dispatch({ type: 'ADD_WORK_LOG', payload: entry });
     // IndexedDB에 직접 기록 (페이지 언로드 시 state 업데이트가 persist되기 전에 닫힐 수 있으므로)
@@ -2503,6 +2505,7 @@ function LogShareView() {
   const hash = window.location.hash;
   const [data, setData] = useState(null);
   const [bad, setBad]   = useState(false);
+  const [page, setPage] = useState(0);
 
   useEffect(() => {
     const val = hash.slice(5); // '#log=' 제거
@@ -2537,10 +2540,15 @@ function LogShareView() {
     );
   }
 
-  const { logs = [], projects = [], exportedAt } = data;
+  const { logs = [], projects = [], exportedAt, hideProjectTitle = false, hideChecklist = false } = data;
   const totalSec = logs.reduce((s, l) => s + (l.activeDurationSec || 0), 0);
   const totalDays = new Set(logs.map(l => l.dateKey)).size;
   const sorted = [...logs].sort((a, b) => b.completedAt - a.completedAt);
+
+  const PER_PAGE = 12;
+  const pageCount = Math.max(1, Math.ceil(sorted.length / PER_PAGE));
+  const curPage = Math.min(page, pageCount - 1);
+  const pageLogs = sorted.slice(curPage * PER_PAGE, curPage * PER_PAGE + PER_PAGE);
 
   const fmt = (sec) => {
     const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
@@ -2555,8 +2563,17 @@ function LogShareView() {
 
   const s = { fontFamily: 'Pretendard, Apple SD Gothic Neo, sans-serif', maxWidth: 640, margin: '0 auto', padding: '40px 24px', color: '#1a1a1a' };
 
+  const pageBtn = (active) => ({
+    minWidth: 30, height: 30, padding: '0 8px', borderRadius: 6,
+    border: '1px solid ' + (active ? '#8DA0BB' : '#e0e0e0'),
+    background: active ? '#8DA0BB' : '#fff',
+    color: active ? '#fff' : '#555',
+    fontSize: 13, fontWeight: active ? 700 : 400,
+    cursor: active ? 'default' : 'pointer',
+  });
+
   return (
-    <div style={{ minHeight: '100vh', background: '#fff' }}>
+    <div style={{ position: 'fixed', inset: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch', background: '#fff' }}>
     <div style={s}>
       <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>작업 기록 증빙</div>
       {exportedAt && <div style={{ fontSize: 12, color: '#999', marginBottom: 24 }}>내보내기: {fmtTs(exportedAt)}</div>}
@@ -2572,15 +2589,15 @@ function LogShareView() {
 
       <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: '#555' }}>세션 목록</div>
       <div style={{ border: '1px solid #e8e8e8', borderRadius: 8, overflow: 'hidden' }}>
-        {sorted.map((log, i) => {
+        {pageLogs.map((log, i) => {
           const proj = projects.find(p => p.id === log.projectId);
           const snapshot = log.completedChecklistSnapshot || [];
           return (
-            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 16px', borderBottom: i < sorted.length - 1 ? '1px solid #f0f0f0' : 'none', background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
+            <div key={curPage * PER_PAGE + i} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 16px', borderBottom: i < pageLogs.length - 1 ? '1px solid #f0f0f0' : 'none', background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
               <span style={{ fontSize: 11, color: '#999', minWidth: 120, flexShrink: 0 }}>{fmtTs(log.completedAt)}</span>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13 }}>{proj?.title || '삭제된 작품'}</div>
-                {snapshot.length > 0 && (
+                <div style={{ fontSize: 13 }}>{hideProjectTitle ? '비공개' : (proj?.title || '삭제된 작품')}</div>
+                {!hideChecklist && snapshot.length > 0 && (
                   <div style={{ fontSize: 11, color: '#999', marginTop: 2 }}>
                     완료: {snapshot.map(s => s.text).join(', ')}
                   </div>
@@ -2591,6 +2608,16 @@ function LogShareView() {
           );
         })}
       </div>
+
+      {pageCount > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 6, marginTop: 20, flexWrap: 'wrap' }}>
+          <button style={pageBtn(false)} disabled={curPage === 0} onClick={() => setPage(p => Math.max(0, p - 1))}>◀</button>
+          {Array.from({ length: pageCount }, (_, idx) => (
+            <button key={idx} style={pageBtn(idx === curPage)} onClick={() => setPage(idx)}>{idx + 1}</button>
+          ))}
+          <button style={pageBtn(false)} disabled={curPage === pageCount - 1} onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}>▶</button>
+        </div>
+      )}
     </div>
     </div>
   );
