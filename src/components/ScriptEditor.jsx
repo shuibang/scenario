@@ -1742,6 +1742,32 @@ const EditorSurface = forwardRef(function EditorSurface({
       }
     }
 
+    // "1." → 씬번호 변환 (모바일 IME 키보드는 keydown에서 '.' 키를 못 잡으므로
+    // input 이벤트에서도 "숫자+마침표" 상태를 감지해 변환한다. 데스크톱은 keydown
+    // 핸들러가 '.' 입력 전에 이미 변환하므로 여기 도달하지 않음.)
+    {
+      const selN = window.getSelection();
+      const elN = surfaceRef.current;
+      if (selN?.rangeCount && elN) {
+        const bElN = findBlockEl(selN.getRangeAt(0).startContainer, elN);
+        const tN = bElN?.dataset.blockType;
+        if (bElN && tN && tN !== 'scene_number') {
+          const txtElN = tN === 'dialogue' ? (bElN.querySelector('.ce-speech') || bElN) : bElN;
+          const rawN = blockText(txtElN);
+          if (/^\d+\.$/.test(rawN.trim()) && caretOff(selN.getRangeAt(0), txtElN) === rawN.length) {
+            slashOffsetRef.current = null;
+            onSlashClose?.();
+            onCharSuggest?.(null, null);
+            changeBlockTypeEl(bElN, 'scene_number');
+            setBlockText(bElN, '');
+            setCaret(bElN, 0);
+            doParse();
+            return;
+          }
+        }
+      }
+    }
+
     doParse();
 
     const sel = window.getSelection();
@@ -1770,7 +1796,7 @@ const EditorSurface = forwardRef(function EditorSurface({
     } else {
       onCharSuggest?.(null, null);
     }
-  }, [doParse, onCharSuggest, syncSlashPalette]);
+  }, [doParse, onCharSuggest, syncSlashPalette, onSlashClose]);
 
   // ── KeyDown handler ───────────────────────────────────────────────────────
   const handleKeyDown = useCallback((e) => {
