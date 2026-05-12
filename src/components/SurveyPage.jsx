@@ -47,11 +47,7 @@ const FEATURE_OPTIONS = [
   '구조 - 씬보드/지문별/인물별',
   '출력 (PDF/DOCX/HWPX)',
   '검토 링크 공유',
-];
-
-const Q11_OPTIONS = [
-  { id: 'emotion', label: '감정 태그',  desc: '씬/지문/대사에 감정을 태그하고 흐름 시각화' },
-  { id: 'search',  label: '씬 검색',    desc: '키워드로 씬 빠르게 찾기' },
+  '연출 작업실',
 ];
 
 const Q16_FREE_GROUPS = [
@@ -70,6 +66,7 @@ const Q16_FREE_GROUPS = [
 ];
 
 const Q16_PAID_ITEMS = [
+  'PDF 출력 (서버 처리 필요)',
   '인물이력서',
   '구조 페이지 (씬보드/지문별/인물별)',
   '감정 태그 & 감정 흐름 시각화',
@@ -133,6 +130,22 @@ function Card({ children }) {
 }
 
 const errMsg = <div style={{ color: 'var(--c-error)', fontSize: 12, marginTop: 8 }}>필수 항목입니다.</div>;
+
+function HomeButton() {
+  return (
+    <button
+      type="button"
+      onClick={() => { window.location.href = '/'; }}
+      style={{
+        marginTop: 28, padding: '12px 28px', borderRadius: 10, border: 'none',
+        background: 'var(--c-accent)', color: '#fff', fontSize: 14, fontWeight: 700,
+        cursor: 'pointer',
+      }}
+    >
+      홈으로 돌아가기
+    </button>
+  );
+}
 
 // 라디오 단일 선택
 function SingleSelect({ name, options, value, onChange, allowOther }) {
@@ -265,12 +278,12 @@ function ProgressBar({ answers }) {
   const filled = [
     answers.q1, answers.q2.length > 0, answers.q3.length > 0, answers.q4,
     answers.q5, answers.q6.length > 0, answers.q7, answers.q8,
-    answers.q9, answers.q10, answers.q11.length > 0, answers.q12,
+    answers.q9, answers.q10, answers.q12,
     answers.q13, answers.q14, answers.q15, answers.q16.length > 0,
     answers.q17, answers.q18, answers.q19, answers.q20Email,
-    answers.qType, answers.qUi,
+    answers.qType, answers.qUi, answers.qWorkStatusLink, answers.qPhone,
   ].filter(Boolean).length;
-  const pct = Math.round((filled / 22) * 100);
+  const pct = Math.round((filled / 23) * 100);
 
   return (
     <div style={{
@@ -306,6 +319,7 @@ export default function SurveyPage() {
     q11: [], q11Other: '', q12: '', q13: '', q14: 0, q15: '',
     q16: [], q17: '', q18: '', q19: '', q20Email: '',
     qType: '', qUi: '',
+    qWorkStatusLink: '', qPhone: '',
   });
   const [errors, setErrors]       = useState({});
   const [submitted, setSubmitted] = useState(() => !!localStorage.getItem('survey_submitted'));
@@ -381,6 +395,8 @@ export default function SurveyPage() {
           q20_email:  answers.q20Email || null,
           q_type:     answers.qType   || null,
           q_ui:       answers.qUi     || null,
+          q_work_status_link: answers.qWorkStatusLink || null,
+          q_phone:    answers.qPhone  || null,
         }]);
         if (error) throw error;
       }
@@ -411,6 +427,7 @@ export default function SurveyPage() {
           <p style={{ color: 'var(--c-text3)', fontSize: 15, lineHeight: 1.8 }}>
             소중한 의견 감사해요!
           </p>
+          <HomeButton />
         </div>
       </div>
     );
@@ -435,6 +452,7 @@ export default function SurveyPage() {
           <p style={{ marginTop: 16, fontSize: 12, color: 'var(--c-text5)' }}>
             이미 제출하신 설문입니다.
           </p>
+          <HomeButton />
         </div>
       </div>
     );
@@ -570,7 +588,7 @@ export default function SurveyPage() {
 
           <Card>
             <div id="qUi">
-              <QuestionLabel>최근 바뀐 UI(디자인·레이아웃)에 대해 어떻게 느끼셨나요?<Optional /></QuestionLabel>
+              <QuestionLabel>바뀐 UI(디자인·레이아웃)에 대해 어떻게 느끼셨나요?<Optional /></QuestionLabel>
               <SingleSelect
                 name="qUi"
                 options={[
@@ -641,83 +659,22 @@ export default function SurveyPage() {
           </div>
 
           <Card>
-            <div id="q11">
-              <QuestionLabel>
-                Q10. 추후 업데이트 예정 기능 중 기대되는 것을 골라주세요!<Optional />
-                <span style={{ fontWeight: 400, color: 'var(--c-text4)', fontSize: 12, marginLeft: 4 }}>(복수 선택)</span>
-              </QuestionLabel>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {Q11_OPTIONS.map(({ id, label, desc }) => (
-                  <label key={id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={answers.q11.includes(label)}
-                      onChange={() => {
-                        const next = answers.q11.includes(label)
-                          ? answers.q11.filter(v => v !== label)
-                          : [...answers.q11, label];
-                        set('q11', next);
-                      }}
-                      style={{ accentColor: 'var(--c-accent)', width: 16, height: 16, flexShrink: 0, marginTop: 2 }}
-                    />
-                    <div>
-                      <span style={{ fontSize: 14, color: 'var(--c-text2)', fontWeight: 500 }}>{label}</span>
-                      <span style={{ fontSize: 13, color: 'var(--c-text4)', marginLeft: 6 }}>({desc})</span>
-                    </div>
-                  </label>
-                ))}
-
-                {/* Q11 기타 — 조건부 입력창 */}
-                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={answers.q11.includes('__other__')}
-                    onChange={() => {
-                      const checked = answers.q11.includes('__other__');
-                      set('q11', checked ? answers.q11.filter(v => v !== '__other__') : [...answers.q11, '__other__']);
-                      if (checked) set('q11Other', '');
-                    }}
-                    style={{ accentColor: 'var(--c-accent)', width: 16, height: 16, flexShrink: 0, marginTop: 2 }}
-                  />
-                  <div style={{ flex: 1 }}>
-                    <span style={{ fontSize: 14, color: 'var(--c-text2)', fontWeight: 500 }}>기타, 이런 기능이 생겼으면 해요</span>
-                    {answers.q11.includes('__other__') && (
-                      <input
-                        type="text"
-                        value={answers.q11Other}
-                        onChange={e => set('q11Other', e.target.value)}
-                        placeholder="원하는 기능을 자유롭게 적어주세요"
-                        style={{
-                          display: 'block', marginTop: 8, width: '100%',
-                          background: 'var(--c-input)', border: '1px solid var(--c-border3)',
-                          borderRadius: 6, padding: '8px 12px', color: 'var(--c-text)', fontSize: 13,
-                          outline: 'none', boxSizing: 'border-box',
-                        }}
-                      />
-                    )}
-                  </div>
-                </label>
-              </div>
-            </div>
-          </Card>
-
-          <Card>
             <div id="q12">
-              <QuestionLabel>Q11. 꼭 추가됐으면 하는 기능이 있나요?<Optional /></QuestionLabel>
+              <QuestionLabel>Q10. 꼭 추가됐으면 하는 기능이 있나요?<Optional /></QuestionLabel>
               <TextArea value={answers.q12} onChange={v => set('q12', v)} placeholder="원하는 기능을 자유롭게 적어주세요" />
             </div>
           </Card>
 
           <Card>
             <div id="q13">
-              <QuestionLabel>Q12. 가장 불편했던 점은?<Optional /></QuestionLabel>
+              <QuestionLabel>Q11. 가장 불편했던 점은?<Optional /></QuestionLabel>
               <TextArea value={answers.q13} onChange={v => set('q13', v)} placeholder="불편했던 점을 솔직하게 알려주세요" />
             </div>
           </Card>
 
           <Card>
             <div id="q14">
-              <QuestionLabel>Q13. 이 툴을 다른 작가에게 추천할 의향이 있나요?<Required /></QuestionLabel>
+              <QuestionLabel>Q12. 이 툴을 다른 작가에게 추천할 의향이 있나요?<Required /></QuestionLabel>
               <ScaleRating
                 value={answers.q14}
                 onChange={v => { set('q14', v); clearErr('q14'); }}
@@ -730,7 +687,7 @@ export default function SurveyPage() {
 
           <Card>
             <div id="q15">
-              <QuestionLabel>Q14. 추천하거나 안 하는 이유를 알려주세요.<Optional /></QuestionLabel>
+              <QuestionLabel>Q13. 추천하거나 안 하는 이유를 알려주세요.<Optional /></QuestionLabel>
               <TextArea value={answers.q15} onChange={v => set('q15', v)} placeholder="이유를 자유롭게 적어주세요" />
             </div>
           </Card>
@@ -745,7 +702,7 @@ export default function SurveyPage() {
           <Card>
             <div id="q16">
               <QuestionLabel>
-                Q15. 현재 무료로 제공되는 기능 중 "이것만으로도 충분하다"고 느끼는 기능을 모두 골라주세요.<Optional />
+                Q14. 이것만은 무료로 제공해줬으면 좋겠다 하는 기능을 모두 골라주세요.<Optional />
                 <span style={{ fontWeight: 400, color: 'var(--c-text4)', fontSize: 12, marginLeft: 4 }}>(복수 선택)</span>
               </QuestionLabel>
               {Q16_FREE_GROUPS.map(group => (
@@ -801,7 +758,7 @@ export default function SurveyPage() {
                     '대본 편집 전체',
                     '씬번호 자동 연동',
                     '자동저장',
-                    '출력 (PDF/DOCX/HWPX)',
+                    '출력 (DOCX/HWPX)',
                     '씬리스트/시놉시스/트리트먼트',
                     '인물 관리 (인물 현황)',
                     '자료수집 페이지',
@@ -821,7 +778,7 @@ export default function SurveyPage() {
                 </div>
               </div>
 
-              <QuestionLabel>Q16. 사용해보신 결과 계속 사용하실 계획인가요?<Required /></QuestionLabel>
+              <QuestionLabel>Q15. 사용해보신 결과 계속 사용하실 계획인가요?<Required /></QuestionLabel>
               <SingleSelect
                 name="q17"
                 options={[
@@ -846,7 +803,7 @@ export default function SurveyPage() {
             <>
               <Card>
                 <div id="q18">
-                  <QuestionLabel>Q17. 유료라면 어떤 방식을 선호하시나요?<Optional /></QuestionLabel>
+                  <QuestionLabel>Q16. 유료라면 어떤 방식을 선호하시나요?<Optional /></QuestionLabel>
                   <SingleSelect
                     name="q18"
                     options={[
@@ -864,7 +821,7 @@ export default function SurveyPage() {
 
               <Card>
                 <div id="q19">
-                  <QuestionLabel>Q18. 광고 없는 버전을 위해 낼 수 있는 금액은?<Optional /></QuestionLabel>
+                  <QuestionLabel>Q17. 광고 없는 버전을 위해 낼 수 있는 금액은?<Optional /></QuestionLabel>
                   <SingleSelect
                     name="q19"
                     options={[
@@ -892,7 +849,7 @@ export default function SurveyPage() {
           <Card>
             <div id="q20Email">
               <QuestionLabel>
-                Q19. 이메일을 남겨주시면 추후 업데이트 소식을 전해드릴게요.<Optional />
+                Q18. 이메일을 남겨주시면 추후 업데이트 소식을 전해드릴게요.<Optional />
               </QuestionLabel>
               <input
                 type="email"
@@ -907,6 +864,65 @@ export default function SurveyPage() {
               />
               <div style={{ marginTop: 10, fontSize: 13, color: 'var(--c-text4)', lineHeight: 1.6 }}>
                 💌 정식 출시 소식을 전해드립니다.
+              </div>
+            </div>
+          </Card>
+
+          {/* ══════════════════════════════════════════
+              경품 이벤트
+          ══════════════════════════════════════════ */}
+          <Card>
+            <div style={{
+              background: 'var(--c-active)', border: '1px solid var(--c-accent)',
+              borderRadius: 10, padding: '16px 16px', marginBottom: 20,
+              fontSize: 13.5, color: 'var(--c-text2)', lineHeight: 1.8,
+            }}>
+              <strong>☕ [베타테스트 한달차 이벤트]</strong><br />
+              5월 13일부터 말일까지, <strong>2시간 이상</strong> 사용해보시고 설문에 참여해주시면
+              추첨을 통해 <strong>10분에게 커피쿠폰</strong>을 보내드립니다.<br />
+              설문에 <strong>꼼꼼하게 참여하실수록 당첨 확률이 높아집니다.</strong><br />
+              <span style={{ fontSize: 12.5, color: 'var(--c-text4)' }}>
+                (대부분의 중요 기능 수정을 끝낸 오늘부터의 기록만 인정됩니다.)
+              </span>
+            </div>
+
+            <div id="qWorkStatusLink">
+              <QuestionLabel>Q19. 작업현황 읽기 전용 링크를 붙여넣어 주세요.<Optional /></QuestionLabel>
+              <div style={{ fontSize: 13, color: 'var(--c-text4)', lineHeight: 1.7, marginBottom: 10 }}>
+                · 모바일: 왼쪽 햄버거 버튼 → <strong>작업현황</strong><br />
+                · 데스크톱: 오른쪽 <strong>마이페이지</strong> → <strong>작업현황</strong><br />
+                위 화면에서 읽기 전용 링크를 생성한 뒤 아래에 붙여넣어 주세요.
+              </div>
+              <input
+                type="url"
+                value={answers.qWorkStatusLink}
+                onChange={e => set('qWorkStatusLink', e.target.value)}
+                placeholder="https://..."
+                style={{
+                  width: '100%', background: 'var(--c-input)', border: '1px solid var(--c-border3)',
+                  borderRadius: 8, padding: '10px 12px', color: 'var(--c-text)', fontSize: 14,
+                  outline: 'none', boxSizing: 'border-box',
+                }}
+              />
+            </div>
+          </Card>
+
+          <Card>
+            <div id="qPhone">
+              <QuestionLabel>Q20. 경품 수령을 위한 전화번호를 남겨주세요.<Optional /></QuestionLabel>
+              <input
+                type="tel"
+                value={answers.qPhone}
+                onChange={e => set('qPhone', e.target.value)}
+                placeholder="010-1234-5678"
+                style={{
+                  width: '100%', background: 'var(--c-input)', border: '1px solid var(--c-border3)',
+                  borderRadius: 8, padding: '10px 12px', color: 'var(--c-text)', fontSize: 14,
+                  outline: 'none', boxSizing: 'border-box',
+                }}
+              />
+              <div style={{ marginTop: 10, fontSize: 13, color: 'var(--c-text4)', lineHeight: 1.6 }}>
+                🔒 수집된 전화번호는 경품 발송을 위해서만 사용되며, 이벤트 종료 후 파기됩니다.
               </div>
             </div>
           </Card>
