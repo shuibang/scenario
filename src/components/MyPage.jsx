@@ -203,9 +203,72 @@ function StatsTab() {
       const logs = workTimeLogs.filter(l => l.projectId === p.id);
       const sec  = logs.reduce((s, l) => s + (l.activeDurationSec || 0), 0);
       const epCount = episodes.filter(e => e.projectId === p.id).length;
-      return { project: p, sec, logCount: logs.length, epCount };
-    }).sort((a, b) => b.sec - a.sec);
+      const lastAt = logs.reduce((m, l) => Math.max(m, l.completedAt || 0), 0);
+      return { project: p, sec, logCount: logs.length, epCount, lastAt };
+    }).sort((a, b) => {
+      // 최근 작업분이 맨 위 — 작업 기록이 전혀 없는 작품은 맨 아래
+      if (a.lastAt === 0 && b.lastAt === 0) return 0;
+      if (a.lastAt === 0) return 1;
+      if (b.lastAt === 0) return -1;
+      return b.lastAt - a.lastAt;
+    });
   }, [projects, episodes, workTimeLogs]);
+
+  // ─── 안 A: 작업 패턴 (스트릭 + 평균 세션 + 요일별) ───────────────────────────
+  const workPattern = useMemo(() => {
+    if (workTimeLogs.length === 0) return null;
+    const fmtKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const dateKeys = new Set(workTimeLogs.map(l => l.dateKey).filter(Boolean));
+
+    // 최장 스트릭
+    const sorted = [...dateKeys].sort();
+    let longest = sorted.length > 0 ? 1 : 0;
+    let run = sorted.length > 0 ? 1 : 0;
+    for (let i = 1; i < sorted.length; i++) {
+      const prev = new Date(sorted[i - 1] + 'T00:00:00');
+      const cur = new Date(sorted[i] + 'T00:00:00');
+      const diff = Math.round((cur - prev) / 86400000);
+      if (diff === 1) {
+        run++;
+        if (run > longest) longest = run;
+      } else {
+        run = 1;
+      }
+    }
+
+    // 현재 스트릭 — 오늘 작업했으면 오늘부터, 아니면 어제부터 거꾸로
+    const today = new Date();
+    const todayKey = fmtKey(today);
+    const yest = new Date(today);
+    yest.setDate(today.getDate() - 1);
+    const yestKey = fmtKey(yest);
+    let cursor = null;
+    if (dateKeys.has(todayKey)) cursor = new Date(today);
+    else if (dateKeys.has(yestKey)) cursor = new Date(yest);
+    let current = 0;
+    while (cursor) {
+      if (dateKeys.has(fmtKey(cursor))) {
+        current++;
+        cursor.setDate(cursor.getDate() - 1);
+      } else break;
+    }
+
+    // 평균 세션 길이
+    const total = workTimeLogs.reduce((s, l) => s + (l.activeDurationSec || 0), 0);
+    const avgSec = Math.round(total / workTimeLogs.length);
+
+    // 요일별 활동 (월~일 인덱스 0~6)
+    const weekday = [0, 0, 0, 0, 0, 0, 0];
+    for (const log of workTimeLogs) {
+      if (!log.dateKey) continue;
+      const d = new Date(log.dateKey + 'T00:00:00');
+      const jsDay = d.getDay(); // 0=일~6=토
+      const idx = jsDay === 0 ? 6 : jsDay - 1; // 0=월~6=일
+      weekday[idx] += log.activeDurationSec || 0;
+    }
+
+    return { current, longest, avgSec, weekday };
+  }, [workTimeLogs]);
 
   const last30 = useMemo(() => {
     const today = new Date();
@@ -224,9 +287,20 @@ function StatsTab() {
 
   const maxSec = Math.max(...last30.map(d => d.sec), 1);
 
-  const recentLogs = useMemo(() =>
-    [...workTimeLogs].sort((a, b) => b.completedAt - a.completedAt).slice(0, 10),
+  const sortedLogs = useMemo(() =>
+    [...workTimeLogs].sort((a, b) => b.completedAt - a.completedAt),
     [workTimeLogs]
+  );
+  const SESSION_PAGE_SIZE = 10;
+  const [sessionPage, setSessionPage] = useState(0);
+  const sessionTotalPages = Math.max(1, Math.ceil(sortedLogs.length / SESSION_PAGE_SIZE));
+  // 세션이 삭제되어 현재 페이지가 범위를 벗어나면 첫 페이지로
+  useEffect(() => {
+    if (sessionPage >= sessionTotalPages) setSessionPage(0);
+  }, [sessionTotalPages, sessionPage]);
+  const pagedLogs = useMemo(
+    () => sortedLogs.slice(sessionPage * SESSION_PAGE_SIZE, (sessionPage + 1) * SESSION_PAGE_SIZE),
+    [sortedLogs, sessionPage]
   );
 
   const fmt = (sec, multiLine = false) => {
@@ -346,6 +420,62 @@ function StatsTab() {
         </div>
       </div>
 
+      {workPattern && (
+        <div style={cardStyle}>
+          <div style={labelStyle}>작업 패턴</div>
+          {/* 스트릭 + 평균 세션 */}
+          <div className="flex items-center gap-4 mt-3 flex-wrap">
+            <div className="flex items-baseline gap-1.5">
+              <span style={{ fontSize: 16 }}>{workPattern.current > 0 ? '🔥' : '·'}</span>
+              <span style={{ fontSize: 18, fontWeight: 700, color: workPattern.current > 0 ? 'var(--c-accent)' : 'var(--c-text5)' }}>
+                {workPattern.current}일
+              </span>
+              <span style={{ fontSize: 10.5, color: 'var(--c-text6)' }}>현재 연속</span>
+            </div>
+            <div style={{ width: 1, height: 18, background: 'var(--c-border3)' }} />
+            <div className="flex items-baseline gap-1.5">
+              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-text3)' }}>{workPattern.longest}일</span>
+              <span style={{ fontSize: 10.5, color: 'var(--c-text6)' }}>최장 연속</span>
+            </div>
+            <div style={{ width: 1, height: 18, background: 'var(--c-border3)' }} />
+            <div className="flex items-baseline gap-1.5">
+              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-text3)' }}>{fmt(workPattern.avgSec)}</span>
+              <span style={{ fontSize: 10.5, color: 'var(--c-text6)' }}>한 세션 평균</span>
+            </div>
+          </div>
+          {/* 요일별 막대 */}
+          <div className="mt-4">
+            <div style={{ fontSize: 10, color: 'var(--c-text6)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>요일별 활동</div>
+            <div className="grid grid-cols-7 gap-1" style={{ height: 40, alignItems: 'end' }}>
+              {(() => {
+                const maxW = Math.max(...workPattern.weekday, 1);
+                return workPattern.weekday.map((sec, idx) => {
+                  const pct = sec / maxW;
+                  const color = pct === 0 ? 'var(--c-border3)' : pct > 0.6 ? 'var(--c-accent)' : 'var(--c-accent2)';
+                  return (
+                    <div
+                      key={idx}
+                      title={sec > 0 ? fmt(sec) : '없음'}
+                      style={{
+                        height: `${Math.max(pct * 36, sec > 0 ? 3 : 2)}px`,
+                        background: color,
+                        borderRadius: 2,
+                        transition: 'height 0.2s',
+                      }}
+                    />
+                  );
+                });
+              })()}
+            </div>
+            <div className="grid grid-cols-7 gap-1 mt-1">
+              {['월', '화', '수', '목', '금', '토', '일'].map((d) => (
+                <span key={d} className="text-center" style={{ fontSize: 9, color: 'var(--c-text6)' }}>{d}</span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={cardStyle}>
         <div style={labelStyle}>최근 30일 활동</div>
         <div className="flex items-end gap-0.5 mt-3" style={{ height: '48px' }}>
@@ -375,8 +505,11 @@ function StatsTab() {
 
       {projectStats.length > 0 && (
         <div style={cardStyle}>
-          <div style={labelStyle}>작품별 작업시간</div>
-          <div className="mt-3 space-y-2">
+          <div style={labelStyle}>작품별 작업시간 <span style={{ fontSize: 9, color: 'var(--c-text6)', textTransform: 'none', letterSpacing: 0 }}>· 최근 작업순</span></div>
+          <div
+            className="mt-3 space-y-2"
+            style={{ maxHeight: 260, overflowY: 'auto', paddingRight: 4 }}
+          >
             {projectStats.map(({ project, sec, epCount }) => (
               <div key={project.id} className="flex items-center gap-3">
                 <span className="text-xs flex-1 truncate" style={{ color: 'var(--c-text3)' }}>
@@ -392,11 +525,49 @@ function StatsTab() {
         </div>
       )}
 
-      {recentLogs.length > 0 && (
+      {sortedLogs.length > 0 && (
         <div style={cardStyle}>
-          <div style={labelStyle}>최근 세션</div>
+          <div className="flex items-center justify-between">
+            <div style={labelStyle}>
+              세션 기록
+              <span style={{ fontSize: 9, color: 'var(--c-text6)', textTransform: 'none', letterSpacing: 0, marginLeft: 6 }}>
+                · 총 {sortedLogs.length}개
+              </span>
+            </div>
+            {sessionTotalPages > 1 && (
+              <div className="flex items-center gap-1" style={{ marginBottom: 4 }}>
+                <button
+                  onClick={() => setSessionPage(p => Math.max(0, p - 1))}
+                  disabled={sessionPage === 0}
+                  style={{
+                    fontSize: 11, padding: '2px 8px', borderRadius: 4,
+                    border: '1px solid var(--c-border3)', background: 'transparent',
+                    color: sessionPage === 0 ? 'var(--c-text6)' : 'var(--c-text3)',
+                    cursor: sessionPage === 0 ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  이전
+                </button>
+                <span className="tabular-nums" style={{ fontSize: 11, color: 'var(--c-text5)', minWidth: 36, textAlign: 'center' }}>
+                  {sessionPage + 1} / {sessionTotalPages}
+                </span>
+                <button
+                  onClick={() => setSessionPage(p => Math.min(sessionTotalPages - 1, p + 1))}
+                  disabled={sessionPage >= sessionTotalPages - 1}
+                  style={{
+                    fontSize: 11, padding: '2px 8px', borderRadius: 4,
+                    border: '1px solid var(--c-border3)', background: 'transparent',
+                    color: sessionPage >= sessionTotalPages - 1 ? 'var(--c-text6)' : 'var(--c-text3)',
+                    cursor: sessionPage >= sessionTotalPages - 1 ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  다음
+                </button>
+              </div>
+            )}
+          </div>
           <div className="mt-3 space-y-1">
-            {recentLogs.map((log, i) => {
+            {pagedLogs.map((log, i) => {
               const proj = projects.find(p => p.id === log.projectId);
               const snapshot = log.completedChecklistSnapshot || [];
               const epLabel = (() => {
