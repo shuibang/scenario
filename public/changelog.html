@@ -181,14 +181,75 @@
     .cl-title { font-size: 13.5px; }
   }
 </style>
+<link rel="stylesheet" href="/site-nav.css" />
 <link rel="stylesheet" href="/footer.css" />
 </head>
 <body>
 
 <header class="site-header">
-  <a href="/landing.html" class="site-logo">대본 작업실</a>
-  <a href="/landing.html" class="site-header-cta">바로 시작하기 →</a>
+  <a href="/" class="site-logo">대본 작업실</a>
+  <nav class="site-nav" aria-label="주 메뉴">
+    <div class="nav-item">
+      <a class="nav-summary" href="/notice">공지사항<span class="nav-chev" aria-hidden="true"></span></a>
+      <div class="nav-dropdown" role="menu">
+        <a href="/notice" role="menuitem">공지사항</a>
+        <a href="/changelog" role="menuitem">업데이트 내역</a>
+      </div>
+    </div>
+    <div class="nav-item">
+      <a class="nav-summary" href="/about">서비스 소개<span class="nav-chev" aria-hidden="true"></span></a>
+      <div class="nav-dropdown" role="menu">
+        <a href="/about" role="menuitem">서비스 소개</a>
+        <a href="/help" role="menuitem">사용 설명서</a>
+        <a href="/privacy" role="menuitem">개인정보처리방침</a>
+        <a href="/terms" role="menuitem">이용약관</a>
+      </div>
+    </div>
+    <div class="nav-item">
+      <a class="nav-summary" href="/devlog-1">개발기<span class="nav-chev" aria-hidden="true"></span></a>
+      <div class="nav-dropdown" role="menu">
+        <a href="/devlog-1" role="menuitem">1편 — 왜 만들었나</a>
+        <a href="/devlog-2" role="menuitem">2편 — 어떻게 만들었나</a>
+        <a href="/devlog-3" role="menuitem">3편 — 만들고 나서</a>
+      </div>
+    </div>
+    <a class="nav-link" href="/contact">문의</a>
+  </nav>
+  <button id="nav-toggle" class="btn-nav-toggle" type="button" aria-label="메뉴 열기" aria-expanded="false" aria-controls="nav-drawer">
+    <svg class="ti-burger" viewBox="0 0 24 24" aria-hidden="true"><g stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></g></svg>
+    <svg class="ti-close" viewBox="0 0 24 24" aria-hidden="true"><g stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></g></svg>
+  </button>
+  <a href="/" class="site-header-cta">바로 시작하기 →</a>
 </header>
+
+<div class="nav-drawer-backdrop" aria-hidden="true"></div>
+<nav id="nav-drawer" class="nav-drawer" aria-label="모바일 메뉴">
+  <details>
+    <summary>공지사항</summary>
+    <div class="drawer-sub">
+      <a href="/notice">공지사항</a>
+      <a href="/changelog">업데이트 내역</a>
+    </div>
+  </details>
+  <details>
+    <summary>서비스 소개</summary>
+    <div class="drawer-sub">
+      <a href="/about">서비스 소개</a>
+      <a href="/help">사용 설명서</a>
+      <a href="/privacy">개인정보처리방침</a>
+      <a href="/terms">이용약관</a>
+    </div>
+  </details>
+  <details>
+    <summary>개발기</summary>
+    <div class="drawer-sub">
+      <a href="/devlog-1">1편 — 왜 만들었나</a>
+      <a href="/devlog-2">2편 — 어떻게 만들었나</a>
+      <a href="/devlog-3">3편 — 만들고 나서</a>
+    </div>
+  </details>
+  <a class="drawer-link" href="/contact">문의</a>
+</nav>
 
 <div class="page">
 
@@ -197,12 +258,6 @@
     <h1>업데이트 내역</h1>
     <p>새로운 기능과 개선 사항을 확인하세요</p>
   </div>
-
-  <nav class="page-nav" aria-label="관련 페이지">
-    <a href="/notice.html">공지사항</a>
-    <a href="/changelog.html" class="current">업데이트 내역</a>
-    <a href="/help.html">사용 설명서</a>
-  </nav>
 
   <div style="height: 2rem;"></div>
 
@@ -1362,6 +1417,7 @@
   </div>
 </footer>
 
+<script defer src="/site-nav.js"></script>
 <script async src="/static-ads.js"></script>
 </body>
 </html>
