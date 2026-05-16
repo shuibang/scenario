@@ -879,7 +879,7 @@ export default function SurveyPage() {
             }}>
               <strong>☕ [베타테스트 한달차 이벤트]</strong><br />
               5월 13일부터 말일까지, <strong>2시간 이상</strong> 사용해보시고 설문에 참여해주시면
-              추첨을 통해 <strong>10분에게 커피쿠폰</strong>을 보내드립니다.<br />
+              추첨을 통해 <strong>10분께 2만원 커피쿠폰</strong>을 보내드립니다.<br />
               설문에 <strong>꼼꼼하게 참여하실수록 당첨 확률이 높아집니다.</strong><br />
               <span style={{ fontSize: 12.5, color: 'var(--c-text4)' }}>
                 (대부분의 중요 기능 수정을 끝낸 오늘부터의 기록만 인정됩니다.)
