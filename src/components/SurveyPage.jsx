@@ -249,7 +249,7 @@ function ScaleRating({ value, onChange, leftLabel, rightLabel }) {
           >{n}</button>
         ))}
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--c-text4)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 600, color: 'var(--c-text2)' }}>
         <span>{leftLabel}</span><span>{rightLabel}</span>
       </div>
     </div>
@@ -575,12 +575,12 @@ export default function SurveyPage() {
 
           <Card>
             <div id="q7">
-              <QuestionLabel>Q6. 전반적인 사용 난이도는?<Required /></QuestionLabel>
+              <QuestionLabel>Q6. 사용할 때 전반적으로 쉬운 편이었나요?<Required /></QuestionLabel>
               <ScaleRating
                 value={answers.q7}
                 onChange={v => { set('q7', v); clearErr('q7'); }}
-                leftLabel="아주 어려웠어요"
-                rightLabel="아주 쉬웠어요"
+                leftLabel="전혀 아니다"
+                rightLabel="아주 쉽다"
               />
               {errors.q7 && errMsg}
             </div>
