@@ -10,7 +10,7 @@ export const menuConfig = [
     label: '파일',
     altKey: 'f',
     items: [
-      { id: 'new-project',  label: '새 작품',           shortcut: 'Ctrl+Alt+N',  action: 'file:new' },
+      { id: 'new-project',  label: '새 대본',           shortcut: 'Ctrl+Alt+N',  action: 'file:new' },
       { id: 'open', label: '열기…', shortcut: 'Ctrl+O', action: 'file:openList' },
       'separator',
       { id: 'save',    label: '저장',             shortcut: 'Ctrl+S',      action: 'file:save' },
@@ -29,10 +29,10 @@ export const menuConfig = [
       'separator',
       { id: 'share',    label: '링크 공유…',   shortcut: 'Ctrl+Alt+L', action: 'file:share' },
       { id: 'snapshot', label: '백업 / 복원…',                          action: 'file:snapshot' },
-      { id: 'recent',   label: '최근 작품',    hasSubmenu: true, dynamic: 'recentProjects', submenu: [] },
-      { id: 'project-mgmt', label: '작품 관리…', action: 'file:projectMgmt' },
+      { id: 'recent',   label: '최근 대본',    hasSubmenu: true, dynamic: 'recentProjects', submenu: [] },
+      { id: 'project-mgmt', label: '대본 관리…', action: 'file:projectMgmt' },
       'separator',
-      { id: 'project-info', label: '작품 정보…', action: 'file:projectInfo' },
+      { id: 'project-info', label: '대본 정보…', action: 'file:projectInfo' },
     ],
   },
 
@@ -121,7 +121,7 @@ export const menuConfig = [
         id: 'shortcuts', label: '단축키 목록', hasSubmenu: true,
         submenu: [
           { id: 'sc-h1',        label: '파일',        type: 'header' },
-          { id: 'sc-new',       label: '새 작품',     shortcut: 'Ctrl+Alt+N', type: 'shortcutInfo' },
+          { id: 'sc-new',       label: '새 대본',     shortcut: 'Ctrl+Alt+N', type: 'shortcutInfo' },
           { id: 'sc-open',      label: '열기',        shortcut: 'Ctrl+O',     type: 'shortcutInfo' },
           { id: 'sc-save',      label: '저장',        shortcut: 'Ctrl+S',     type: 'shortcutInfo' },
           { id: 'sc-export',    label: '내보내기',    shortcut: 'Ctrl+P',     type: 'shortcutInfo' },

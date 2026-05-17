@@ -90,7 +90,7 @@ export async function loadReviewPayload(id) {
 
 export async function createFeedbackVersionShare({ scriptId, title, snapshotContent }) {
   ensureSupabase();
-  if (!scriptId) throw new Error('작품이 선택되지 않았습니다. 작품을 연 뒤 다시 시도해주세요.');
+  if (!scriptId) throw new Error('대본이 선택되지 않았습니다. 대본을 연 뒤 다시 시도해주세요.');
   const session = await getRequiredSession();
   assertPayloadSize(snapshotContent);
   await ensureDriveAccessToken();

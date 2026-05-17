@@ -75,10 +75,10 @@ export default function OpenProjectModal({ open, onClose, projects = [], activeP
         }
         const conflictWith = findImportConflict({ projects }, imported);
         if (conflictWith) {
-          // 같은 ID 작품이 이미 있음 — 정책 선택으로 진입
+          // 같은 ID 대본이 이미 있음 — 정책 선택으로 진입
           setPendingImport({ imported, conflictWith });
         } else {
-          // 충돌 없음 — 새 작품으로 그대로 추가
+          // 충돌 없음 — 새 대본으로 그대로 추가
           onFileImport?.(imported, 'newId');
           onClose();
         }
@@ -111,7 +111,7 @@ export default function OpenProjectModal({ open, onClose, projects = [], activeP
       onClose={onClose}
       title="열기"
       size="md"
-      description="작품을 선택해 여세요."
+      description="대본을 선택해 여세요."
       footer={
         pendingImport ? (
           <>
@@ -140,7 +140,7 @@ export default function OpenProjectModal({ open, onClose, projects = [], activeP
       ) : <>
       {/* 탭 */}
       <div style={{ display: 'flex', gap: 2, marginBottom: 14, borderBottom: '1px solid var(--c-border)' }}>
-        {[{ id: TAB_LOCAL, label: '내 작품' }, { id: TAB_DRIVE, label: 'Google Drive' }, { id: TAB_FILE, label: '파일에서 열기' }]
+        {[{ id: TAB_LOCAL, label: '내 대본' }, { id: TAB_DRIVE, label: 'Google Drive' }, { id: TAB_FILE, label: '파일에서 열기' }]
           .map(t => (
             <button
               key={t.id}
@@ -167,7 +167,7 @@ export default function OpenProjectModal({ open, onClose, projects = [], activeP
       {tab !== TAB_FILE && (
         <div style={{ marginBottom: 10 }}>
           <input
-            placeholder="작품 검색…"
+            placeholder="대본 검색…"
             value={query}
             onChange={e => setQuery(e.target.value)}
             style={{
@@ -187,7 +187,7 @@ export default function OpenProjectModal({ open, onClose, projects = [], activeP
           selected={selected}
           onSelect={setSelected}
           onOpen={handleOpen}
-          emptyMsg="저장된 작품이 없습니다."
+          emptyMsg="저장된 대본이 없습니다."
         />
       )}
 
@@ -204,7 +204,7 @@ export default function OpenProjectModal({ open, onClose, projects = [], activeP
             selected={selected}
             onSelect={setSelected}
             onOpen={handleOpen}
-            emptyMsg="Drive에 저장된 작품이 없습니다."
+            emptyMsg="Drive에 저장된 대본이 없습니다."
           />
         )
       )}
@@ -234,10 +234,10 @@ function ImportConflictView({ imported, conflictWith }) {
   return (
     <div>
       <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-text)', marginBottom: 6 }}>
-        같은 ID의 작품이 이미 있습니다
+        같은 ID의 대본이 이미 있습니다
       </div>
       <div style={{ fontSize: 12, color: 'var(--c-text5)', marginBottom: 12, lineHeight: 1.6 }}>
-        <strong>"{importedTitle}"</strong> 작품이 이미 이 기기에 저장되어 있습니다.<br />
+        <strong>"{importedTitle}"</strong> 대본이 이미 이 기기에 저장되어 있습니다.<br />
         어떻게 추가할지 선택해 주세요.
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
@@ -251,8 +251,8 @@ function ImportConflictView({ imported, conflictWith }) {
         </div>
       </div>
       <ul style={{ fontSize: 11, color: 'var(--c-text5)', lineHeight: 1.7, paddingLeft: 18, margin: 0 }}>
-        <li><strong>덮어쓰기</strong> — 이 기기의 작품 데이터를 파일 내용으로 교체</li>
-        <li><strong>사본으로 추가</strong> — 새 ID로 별도의 작품을 만들어 추가 (제목 끝에 "(사본)")</li>
+        <li><strong>덮어쓰기</strong> — 이 기기의 대본 데이터를 파일 내용으로 교체</li>
+        <li><strong>사본으로 추가</strong> — 새 ID로 별도의 대본을 만들어 추가 (제목 끝에 "(사본)")</li>
       </ul>
     </div>
   );

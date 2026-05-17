@@ -1,8 +1,8 @@
 /**
- * promoteToProject — 아이디어를 새 작품으로 변환할 때
- * 아이디어의 구조 블록을 작품의 각 필드로 자동 채우는 헬퍼.
+ * promoteToProject — 아이디어를 새 대본으로 변환할 때
+ * 아이디어의 구조 블록을 대본의 각 필드로 자동 채우는 헬퍼.
  *
- * 블록 → 작품 필드 매핑:
+ * 블록 → 대본 필드 매핑:
  *   logline    → synopsisDoc.logline
  *   genre      → synopsisDoc.genre
  *   theme      → synopsisDoc.theme
@@ -18,7 +18,7 @@
 import { genId, now } from './db';
 
 /**
- * 아이디어의 블록을 새로 만든 작품에 시드 적용.
+ * 아이디어의 블록을 새로 만든 대본에 시드 적용.
  *
  * @param {object}   p
  * @param {Idea}     p.idea

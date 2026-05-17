@@ -22,13 +22,13 @@ function Tag({ children, color = '#6366f1' }) {
 const MOBILE_STEPS = [
   {
     tourId: 'mobile-tabs',
-    title: '먼저 작품을 만들어 보세요',
+    title: '먼저 대본을 만들어 보세요',
     accent: '#ef4444',
     desc: (
       <>
         하단 <Tag color="#3b82f6">대본</Tag> 탭을 눌러 좌측 패널을 연 뒤<br/>
-        <Tag color="#ef4444">+ 새 작품</Tag>을 눌러 시작합니다.<br/>
-        작품을 만들어야 표지·시놉시스·대본 편집을 시작할 수 있어요.
+        <Tag color="#ef4444">+ 새 대본</Tag>을 눌러 시작합니다.<br/>
+        대본을 만들어야 표지·시놉시스·대본 편집을 시작할 수 있어요.
       </>
     ),
   },
@@ -101,7 +101,7 @@ const MOBILE_PAGE_HINTS = {
     accent: '#6366f1',
     desc: (
       <>
-        <Tag>표지</Tag>에 작품 기본 정보를 입력하세요.<br/>
+        <Tag>표지</Tag>에 대본 기본 정보를 입력하세요.<br/>
         제목·작가·장르·방송사 등이 출력 첫 장에 표시됩니다.
       </>
     ),

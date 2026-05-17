@@ -316,11 +316,11 @@
             <div class="cl-section">
               <div class="cl-section-head">💡 아이디어 노트 (신규)</div>
               <ul>
-                <li>작품과 독립된 소재·아이디어 정리 공간이 추가됐어요</li>
+                <li>대본과 독립된 소재·아이디어 정리 공간이 추가됐어요</li>
                 <li><strong>여러 진입점</strong>: 데스크톱 메뉴바 옆 <code>💡 아이디어 노트</code> 버튼 → 우측 사이드 시트 / 모바일 햄버거 메뉴 → 바텀 시트 / 분할보기 페인 / <code>⛶</code>로 전체화면 전환</li>
                 <li><strong>블록 편집기</strong>: 본문에 <code>/</code> 또는 + 버튼으로 구조 블록 삽입 — 로그라인 · 장르 · 주제 · 기획의도 · 줄거리 · 간략 트리트먼트 · 인물(다중 역할) · 메모 · 링크 · 이미지(드래그앤드롭)</li>
                 <li><strong>자유 태그</strong>: <code>#멜로</code> <code>#가족</code> 같은 태그로 분류·검색</li>
-                <li><strong>이 아이디어로 작품 만들기</strong>: 블록이 새 작품의 시놉시스 항목·등장인물·자료수집으로 자동 시드. 시트를 띄워두고 작품 만들면서 원본 참고 가능</li>
+                <li><strong>이 아이디어로 대본 만들기</strong>: 블록이 새 대본의 시놉시스 항목·등장인물·자료수집으로 자동 시드. 시트를 띄워두고 대본 만들면서 원본 참고 가능</li>
                 <li>시트 열리면 우측 패널 자동 닫힘 → 닫으면 복원</li>
                 <li>구글 드라이브 자동 백업</li>
               </ul>
@@ -379,7 +379,7 @@
               <div class="cl-section-head">작업현황 페이지 개편</div>
               <ul>
                 <li>세션 기록을 10개씩 페이지로 나누어 누적된 기록을 끝까지 볼 수 있어요</li>
-                <li>작품별 작업시간을 '최근 작업 순'으로 정렬했어요 — 작품이 많아지면 카드 안에서 스크롤됩니다</li>
+                <li>대본별 작업시간을 '최근 작업 순'으로 정렬했어요 — 대본이 많아지면 카드 안에서 스크롤됩니다</li>
                 <li>작업 패턴 카드 신규 — 🔥 연속 작업일(현재/최장) · 한 세션 평균 길이 · 요일별 활동 그래프</li>
               </ul>
             </div>
@@ -417,7 +417,7 @@
             <div class="cl-section">
               <div class="cl-section-head">작업기록 공유 기능 개선</div>
               <ul>
-                <li>기존 공유 기능에 '작품명 가리기' / '체크리스트 가리기' 옵션을 추가했어요 — 어떤 정보를 공개할지 선택할 수 있어요</li>
+                <li>기존 공유 기능에 '대본명 가리기' / '체크리스트 가리기' 옵션을 추가했어요 — 어떤 정보를 공개할지 선택할 수 있어요</li>
                 <li>세션별로 그날 완료한 체크리스트 항목이 함께 기록(스냅샷)됩니다</li>
                 <li>공유 화면 자체에도 페이지네이션이 들어갔어요</li>
               </ul>
@@ -576,17 +576,17 @@
             <div class="cl-section">
               <div class="cl-section-head">.djs 파일로 내보내기 / 열기</div>
               <ul>
-                <li>파일 → "파일로 내보내기" (Ctrl+Alt+S) — 현재 작품을 .djs 파일로 컴퓨터에 저장합니다</li>
-                <li>파일 → "열기" (Ctrl+O) — .djs 파일을 가져와 작품 목록에 추가할 수 있어요</li>
-                <li>같은 ID의 작품이 이미 있으면 "덮어쓰기 / 사본으로 추가"를 선택하실 수 있어요</li>
+                <li>파일 → "파일로 내보내기" (Ctrl+Alt+S) — 현재 대본을 .djs 파일로 컴퓨터에 저장합니다</li>
+                <li>파일 → "열기" (Ctrl+O) — .djs 파일을 가져와 대본 목록에 추가할 수 있어요</li>
+                <li>같은 ID의 대본이 이미 있으면 "덮어쓰기 / 사본으로 추가"를 선택하실 수 있어요</li>
               </ul>
             </div>
             <div class="cl-section">
               <div class="cl-section-head">동기화 안정성</div>
               <ul>
-                <li>작품 파일과 인덱스 저장이 직렬화되어 race로 옛 데이터가 덮어써지던 문제를 잡았어요</li>
+                <li>대본 파일과 인덱스 저장이 직렬화되어 race로 옛 데이터가 덮어써지던 문제를 잡았어요</li>
                 <li>초기 동기화가 한 번만 발사되도록 가드를 추가했어요 (중복 fire 방지)</li>
-                <li>수동 저장 시 변경된 작품만 업로드되도록 바꿨어요 — 폰 저장이 눈에 띄게 빨라집니다</li>
+                <li>수동 저장 시 변경된 대본만 업로드되도록 바꿨어요 — 폰 저장이 눈에 띄게 빨라집니다</li>
                 <li>초기 sync 실패 시에도 마킹이 보류되어 다음 시도에서 재시도가 가능해졌어요</li>
               </ul>
             </div>
@@ -615,10 +615,10 @@
           </summary>
           <div class="cl-body">
             <div class="cl-section">
-              <div class="cl-section-head">충돌 모달 작품별·시간 중심 (Phase 2.2b)</div>
+              <div class="cl-section-head">충돌 모달 대본별·시간 중심 (Phase 2.2b)</div>
               <ul>
-                <li>"기기/Drive 어느 쪽 살릴까"가 아니라 "어느 시점 살릴까"를 작품별로 선택하시도록 바꿨어요</li>
-                <li>작품별로 비교가 동일하면 모달 자체가 안 뜹니다 — "같은 기기인데 자꾸 모달 뜨는" 오발화 차단</li>
+                <li>"기기/Drive 어느 쪽 살릴까"가 아니라 "어느 시점 살릴까"를 대본별로 선택하시도록 바꿨어요</li>
+                <li>대본별로 비교가 동일하면 모달 자체가 안 뜹니다 — "같은 기기인데 자꾸 모달 뜨는" 오발화 차단</li>
               </ul>
             </div>
             <div class="cl-section">
@@ -648,17 +648,17 @@
           <summary>
             <div class="cl-meta">
               <div class="cl-date">2026-05-05</div>
-              <div class="cl-title">🗂 작품 단위 Drive 동기화 도입 (Phase 1) · 데이터 정리 메뉴</div>
+              <div class="cl-title">🗂 대본 단위 Drive 동기화 도입 (Phase 1) · 데이터 정리 메뉴</div>
             </div>
             <span class="arrow">▶</span>
           </summary>
           <div class="cl-body">
             <div class="cl-section">
-              <div class="cl-section-head">작품 단위 Drive 동기화</div>
+              <div class="cl-section-head">대본 단위 Drive 동기화</div>
               <ul>
-                <li>그동안은 모든 작품을 하나의 파일로 동기화했는데, 이제 작품별로 따로 저장합니다 — 한 작품에 충돌이 나도 다른 작품에는 영향이 없어요</li>
+                <li>그동안은 모든 대본을 하나의 파일로 동기화했는데, 이제 대본별로 따로 저장합니다 — 한 대본에 충돌이 나도 다른 대본에는 영향이 없어요</li>
                 <li>구 형식에서 신 형식으로 자동 마이그레이션 — 처음 한 번 자동으로 변환됩니다</li>
-                <li>충돌 모달에 어떤 작품이 충돌인지 작품 목록이 표시됩니다</li>
+                <li>충돌 모달에 어떤 대본이 충돌인지 대본 목록이 표시됩니다</li>
                 <li>구 형식이 없는 사용자는 신 형식으로만 동작 (자동 fallback)</li>
               </ul>
             </div>
@@ -819,17 +819,17 @@
           <summary>
             <div class="cl-meta">
               <div class="cl-date">2026-04-28</div>
-              <div class="cl-title">📁 작품 관리 · 인물 이력서 개편 · 슬래시 메뉴 정렬</div>
+              <div class="cl-title">📁 대본 관리 · 인물 이력서 개편 · 슬래시 메뉴 정렬</div>
             </div>
             <span class="arrow">▶</span>
           </summary>
           <div class="cl-body">
             <div class="cl-section">
-              <div class="cl-section-head">작품 관리 · 휴지통</div>
+              <div class="cl-section-head">대본 관리 · 휴지통</div>
               <ul>
-                <li>작품 관리 페이지 추가 — [파일] 메뉴 또는 모바일 햄버거 메뉴에서 진입</li>
-                <li>작품 카드에서 이름을 바로 바꿀 수 있음 — 클릭 한 번으로 인라인 수정</li>
-                <li>휴지통 추가 — 삭제한 작품을 30일간 보관, 그 사이 언제든 복원 가능</li>
+                <li>대본 관리 페이지 추가 — [파일] 메뉴 또는 모바일 햄버거 메뉴에서 진입</li>
+                <li>대본 카드에서 이름을 바로 바꿀 수 있음 — 클릭 한 번으로 인라인 수정</li>
+                <li>휴지통 추가 — 삭제한 대본을 30일간 보관, 그 사이 언제든 복원 가능</li>
                 <li class="sub">회차·씬·인물·시놉시스·표지까지 한 번에 함께 보관됩니다</li>
               </ul>
             </div>
@@ -1061,21 +1061,21 @@
               <ul>
                 <li>검토 링크 생성 → 연출 작업실에서 열기 · 가져오기 → 작가에게 전송까지 끝까지 동작하도록 정리</li>
                 <li>대본 작업실 "피드백 노트" 페이지에서 본문이 비어 보이던 문제 수정</li>
-                <li>작품을 선택하지 않은 상태에서 링크 생성 시 친화적 안내 메시지 표시</li>
+                <li>대본을 선택하지 않은 상태에서 링크 생성 시 친화적 안내 메시지 표시</li>
                 <li>링크 공유 후 같은 브라우저에서 열람 시 "불러오는 중…"에서 멈추던 문제 해결</li>
               </ul>
             </div>
             <div class="cl-section">
               <div class="cl-section-head">상태 유지 · 데이터</div>
               <ul>
-                <li>창을 닫거나 새로고침해도 마지막 작품이 자동으로 다시 열리도록 복원</li>
+                <li>창을 닫거나 새로고침해도 마지막 대본이 자동으로 다시 열리도록 복원</li>
                 <li>작업시간이 새로고침마다 0으로 보이던 문제 해결 — 당일 누적 합산으로 표시</li>
                 <li>하루에 여러 번 작업을 기록해도 일별로 한 줄로 합쳐짐</li>
                 <li>작업 날짜가 자정 전후에 UTC로 어긋나던 문제 수정 (로컬 시간 기준으로)</li>
               </ul>
             </div>
             <div class="cl-section">
-              <div class="cl-section-head">연출 작품 삭제</div>
+              <div class="cl-section-head">연출 대본 삭제</div>
               <ul>
                 <li>느린 네트워크에서 중복 클릭 방지 — 같은 삭제가 두 번 실행되지 않도록</li>
                 <li>이미 삭제된 항목을 또 클릭했을 때 친화적 안내 + 목록 즉시 정리</li>
@@ -1165,7 +1165,7 @@
           <summary>
             <div class="cl-meta">
               <div class="cl-date">2026-04-20</div>
-              <div class="cl-title">✨ 서식 · 씬기호 전면 정비 · 단막(70분) 작품 유형 추가</div>
+              <div class="cl-title">✨ 서식 · 씬기호 전면 정비 · 단막(70분) 대본 유형 추가</div>
             </div>
             <span class="arrow">▶</span>
           </summary>
@@ -1190,11 +1190,11 @@
             <div class="cl-section">
               <div class="cl-section-head">메뉴 · UI</div>
               <ul>
-                <li>작품 유형에 <strong>단막(70분)</strong> 추가</li>
+                <li>대본 유형에 <strong>단막(70분)</strong> 추가</li>
                 <li>상태바 재설계 · 메뉴 정리 · 가져오기 안내 개선</li>
                 <li>input · textarea · 씬 헤더에서 슬래시 팔레트 억제 (오작동 방지)</li>
                 <li>상단 정보바를 모바일 전용으로 제한, 단축버튼 행(B/I/U/S · 정렬)도 모바일 전용으로 재배치</li>
-                <li>새 작품 팝업 스타일 · "만들기" 버튼 누락 CSS 복구</li>
+                <li>새 대본 팝업 스타일 · "만들기" 버튼 누락 CSS 복구</li>
               </ul>
             </div>
           </div>
@@ -1315,10 +1315,10 @@
               <div class="cl-section-head">연출 작업실 모바일 UI 전면 개편</div>
               <ul>
                 <li>대본 작업실과 동일한 하단 슬라이딩 패널 구조로 통일</li>
-                <li>하단 탭: 작품 / 연출 / 보드
+                <li>하단 탭: 대본 / 연출 / 보드
                   <ul>
-                    <li class="sub">작품: 작품 목록 + 대본 본문 미리보기</li>
-                    <li class="sub">연출: 작품별 연출노트 목록 + 메모 작성</li>
+                    <li class="sub">대본: 대본 목록 + 대본 본문 미리보기</li>
+                    <li class="sub">연출: 대본별 연출노트 목록 + 메모 작성</li>
                     <li class="sub">보드: 스토리보드 생성 및 편집</li>
                   </ul>
                 </li>
@@ -1329,7 +1329,7 @@
               <div class="cl-section-head">연출 작업실 데스크톱 개선</div>
               <ul>
                 <li>메인 사이드바 토글 버튼을 헤더로 이동 — 메뉴 항목 가림 해소</li>
-                <li>작품 목록 · 연출노트 목록 · 스토리보드 목록 패널 개별 접기(◀/▶) 지원</li>
+                <li>대본 목록 · 연출노트 목록 · 스토리보드 목록 패널 개별 접기(◀/▶) 지원</li>
                 <li>패널 너비 전환 시 부드러운 애니메이션</li>
               </ul>
             </div>
@@ -1472,7 +1472,7 @@
           <summary>
             <div class="cl-meta">
               <div class="cl-date">2026-04-08</div>
-              <div class="cl-title">🗂️ 씬리스트 출력 · 트리트먼트 · 타임라인 · 작품 생성 개편</div>
+              <div class="cl-title">🗂️ 씬리스트 출력 · 트리트먼트 · 타임라인 · 대본 생성 개편</div>
             </div>
             <span class="arrow">▶</span>
           </summary>
@@ -1502,7 +1502,7 @@
               </ul>
             </div>
             <div class="cl-section">
-              <div class="cl-section-head">작품 생성 개편</div>
+              <div class="cl-section-head">대본 생성 개편</div>
               <ul>
                 <li>단막 / 미니시리즈 / 영화 / 기타 4가지 형식 선택</li>
                 <li>유형별 클라이막스 구간 자동 설정</li>
@@ -1600,7 +1600,7 @@
               <div class="cl-section-head">2026-04-04</div>
               <ul>
                 <li>자료수집 그리드/목록 뷰 토글, 메모·이미지 카드 타입 분리</li>
-                <li>표지↔작품명 동기화</li>
+                <li>표지↔대본명 동기화</li>
                 <li>UI 개선 — 광고영역 표기, 씬리스트 가로출력, 인물 첫등장 뱃지, 체크리스트 줄바꿈</li>
                 <li>Save the Cat 기본 접힘</li>
                 <li>씬리스트 버그 수정 — 씬 추가 후 목록 사라지던 문제, 대본 연동 개선</li>

@@ -6,24 +6,24 @@ import RolePicker from '../RolePicker';
  * IdeaNoteEditor — 단일 아이디어 편집기
  *
  * 블록 기반: 사용자가 자유 텍스트로 시작하지만, "/" 입력 또는 좌측 + 버튼으로
- * 구조 블록을 삽입할 수 있다. 구조 블록은 작품으로 승격할 때 자동 매핑된다.
+ * 구조 블록을 삽입할 수 있다. 구조 블록은 대본으로 승격할 때 자동 매핑된다.
  *
  * Props:
  *   idea     — 편집 대상 객체 ({ id, title, tags, blocks, starred, ... })
  *   onChange — (patch: Partial<Idea>) => void
- *   onPromote — () => void (작품으로 승격 버튼 클릭)
+ *   onPromote — () => void (대본으로 승격 버튼 클릭)
  *   onDelete  — () => void
  *   compact  — boolean (사이드 시트 등 좁은 폭에서 활성화)
  */
 
 // 블록 메타데이터.
 //   - 시놉시스 페이지(genre/theme/logline/intent/story)와 1:1 매핑
-//   - treatment 는 작품 첫 회차 summaryItems 로 자동 전환
+//   - treatment 는 대본 첫 회차 summaryItems 로 자동 전환
 const BLOCK_META = {
   memo:      { icon: '📝', label: '메모',         hint: '자유 형식 메모' },
   logline:   { icon: '🎯', label: '로그라인',     hint: '시놉시스 - 한 줄 요약' },
   genre:     { icon: '🏷️', label: '장르',         hint: '시놉시스 - 장르' },
-  theme:     { icon: '🎭', label: '주제',         hint: '시놉시스 - 작품이 다루려는 주제' },
+  theme:     { icon: '🎭', label: '주제',         hint: '시놉시스 - 대본이 다루려는 주제' },
   intent:    { icon: '💡', label: '기획의도',     hint: '시놉시스 - 기획 의도' },
   story:     { icon: '📖', label: '줄거리',       hint: '시놉시스 - 전체 줄거리' },
   treatment: { icon: '📋', label: '간략 트리트먼트', hint: '한 줄씩 회차/씬 흐름. 첫 회차 트리트먼트에 자동 추가' },
@@ -116,13 +116,13 @@ export default function IdeaNoteEditor({ idea, onChange, onPromote, onDelete, co
         {onPromote && (
           <button
             onClick={onPromote}
-            title="이 아이디어로 새 작품 만들기"
+            title="이 아이디어로 새 대본 만들기"
             style={{
               padding: '6px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
               border: '1px solid var(--c-accent)', background: 'var(--c-active)',
               color: 'var(--c-accent)', cursor: 'pointer', whiteSpace: 'nowrap',
             }}
-          >➕ 작품으로</button>
+          >➕ 대본으로</button>
         )}
         {onDelete && (
           <button
@@ -360,10 +360,10 @@ function BlockRow({ block, isFirst, isLast, onUpdate, onInsertAfter, onRemove, o
             placeholder={
               block.type === 'logline'   ? '한 줄로 요약 — 예: "엄마가 사실 다른 사람이라면?"' :
               block.type === 'genre'     ? '예: 가족 멜로, 미스터리 스릴러, 로맨틱 코미디' :
-              block.type === 'theme'     ? '작품이 다루려는 주제·메시지' :
-              block.type === 'intent'    ? '이 작품을 왜 쓰는지·무엇을 말하고 싶은지' :
+              block.type === 'theme'     ? '대본이 다루려는 주제·메시지' :
+              block.type === 'intent'    ? '이 대본을 왜 쓰는지·무엇을 말하고 싶은지' :
               block.type === 'story'     ? '전체 줄거리를 자유롭게 적어주세요.' :
-              block.type === 'treatment' ? '한 줄에 한 회차/씬 흐름. 작품 만들 때 첫 회차 트리트먼트로 자동 추가됩니다.' :
+              block.type === 'treatment' ? '한 줄에 한 회차/씬 흐름. 대본 만들 때 첫 회차 트리트먼트로 자동 추가됩니다.' :
               block.type === 'note'      ? '참고할 점·레퍼런스·아이디어 조각' :
               '메모 자유 입력 — / 입력 시 다른 구조 블록 추가'
             }

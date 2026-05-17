@@ -84,7 +84,7 @@ async function withAuthRetry(operation) {
   }
 }
 
-// 503/429 transient/rate 에러를 지수 backoff로 재시도. 작품별 신 형식 저장처럼
+// 503/429 transient/rate 에러를 지수 backoff로 재시도. 대본별 신 형식 저장처럼
 // 동시 다발 호출에서 quota 초과 시 자연 회복용. withAuthRetry 위에 한 겹 더 감싼다.
 async function withTransientRetry(operation, { maxRetries = 3 } = {}) {
   let attempt = 0;
@@ -375,9 +375,9 @@ export async function loadIdeasFromDrive() {
   }
 }
 
-// 작품별 PUT 직렬화 — 같은 작품 파일에 동시 PUT 발생 시 Drive API의 도착 순서가
+// 대본별 PUT 직렬화 — 같은 대본 파일에 동시 PUT 발생 시 Drive API의 도착 순서가
 // 보장되지 않아 옛 PUT이 새 PUT을 덮어쓰는 race 방지. saveToDrive(구 형식)와 동일 패턴.
-// 다른 작품끼리는 병렬 그대로 (큐 키가 projectId별로 분리됨).
+// 다른 대본끼리는 병렬 그대로 (큐 키가 projectId별로 분리됨).
 const _pendingProjectSaves = {};
 let _pendingIndexSave = Promise.resolve();
 
@@ -467,7 +467,7 @@ export async function deleteSnapshot(id) {
 
 /**
  * 감독 드라이브에 대본 데이터를 새 파일로 저장
- * @param {string} title  - 작품 제목 (파일명에 포함)
+ * @param {string} title  - 대본 제목 (파일명에 포함)
  * @param {object} data   - 대본 전체 데이터 스냅샷
  * @returns {string} Drive file id
  */
@@ -572,11 +572,11 @@ export async function loadFromDrive() {
   });
 }
 
-// ── 작품 단위 저장 (Phase 1 — Drive 작품별 동기화) ─────────────────────────
+// ── 대본 단위 저장 (Phase 1 — Drive 대본별 동기화) ─────────────────────────
 // 기존 단일 drama_workspace.json은 backward-compat용으로 그대로 유지하고,
-// 새 동기화 흐름은 인덱스 + 작품별 파일 N개로 분리한다.
-//   drama_projects_index.json — 작품 메타 목록 (id/title/savedAt/...)
-//   drama_project_<projectId>.json — 한 작품의 모든 데이터 (projectSerializer)
+// 새 동기화 흐름은 인덱스 + 대본별 파일 N개로 분리한다.
+//   drama_projects_index.json — 대본 메타 목록 (id/title/savedAt/...)
+//   drama_project_<projectId>.json — 한 대본의 모든 데이터 (projectSerializer)
 const PROJECTS_INDEX_FILE = 'drama_projects_index.json';
 const PROJECT_FILE_PREFIX = 'drama_project_';
 const PROJECTS_INDEX_FORMAT = 'djs-index';
@@ -587,9 +587,9 @@ function projectFileName(projectId) {
 }
 
 /**
- * 작품 인덱스 저장 — 작품 목록 메타 + deviceId + 전체 savedAt
+ * 대본 인덱스 저장 — 대본 목록 메타 + deviceId + 전체 savedAt
  * @param {object} args
- * @param {Array<{id, title, updatedAt, savedAt}>} args.projects - 작품 메타 배열
+ * @param {Array<{id, title, updatedAt, savedAt}>} args.projects - 대본 메타 배열
  * @param {string} [args.savedAt] - 인덱스 저장 시각 (미지정 시 현재)
  * @param {string} args.deviceId
  */
@@ -610,7 +610,7 @@ export async function saveProjectsIndex({ projects, savedAt, deviceId }) {
 }
 
 /**
- * 작품 인덱스 로드
+ * 대본 인덱스 로드
  * @returns {object|null} { format, version, projects, savedAt, deviceId } | 신 형식 없으면 null
  */
 export async function loadProjectsIndex() {
@@ -619,7 +619,7 @@ export async function loadProjectsIndex() {
 }
 
 /**
- * 한 작품을 Drive에 저장 — payload는 projectSerializer.serializeProject() 결과
+ * 한 대본을 Drive에 저장 — payload는 projectSerializer.serializeProject() 결과
  * @param {string} projectId
  * @param {object} payload - { format:'djs', version:1, project, episodes, ..., drive:{savedAt,deviceId} }
  */
@@ -635,8 +635,8 @@ export async function saveProjectToDrive(projectId, payload) {
 }
 
 /**
- * 한 작품을 Drive에서 로드
- * @returns {object|null} 작품 payload | 없으면 null
+ * 한 대본을 Drive에서 로드
+ * @returns {object|null} 대본 payload | 없으면 null
  */
 export async function loadProjectFromDrive(projectId) {
   if (!isTokenValid()) throw new Error('DRIVE_AUTH_REQUIRED');
@@ -644,7 +644,7 @@ export async function loadProjectFromDrive(projectId) {
 }
 
 /**
- * 한 작품의 Drive 파일 삭제 (작품 영구 삭제 시 호출)
+ * 한 대본의 Drive 파일 삭제 (대본 영구 삭제 시 호출)
  * 파일이 없으면 조용히 무시.
  */
 export async function deleteProjectFromDrive(projectId) {
@@ -653,9 +653,9 @@ export async function deleteProjectFromDrive(projectId) {
 }
 
 /**
- * Drive에서 모든 작품 로드 — 신 형식 우선, 없거나 누락 시 구 형식 fallback.
+ * Drive에서 모든 대본 로드 — 신 형식 우선, 없거나 누락 시 구 형식 fallback.
  *
- * 신 형식 사용 조건: 인덱스 존재 AND 인덱스의 모든 작품 파일이 정상 로드됨.
+ * 신 형식 사용 조건: 인덱스 존재 AND 인덱스의 모든 대본 파일이 정상 로드됨.
  * 하나라도 누락되면 구 형식(drama_workspace.json)으로 fallback (안전 정책).
  *
  * 반환 포맷은 LOAD_FROM_DRIVE reducer가 받는 형태와 동일 (구 형식과 호환).
@@ -681,8 +681,8 @@ export async function loadAllProjectsFromDrive() {
         const { combineProjectsToState } = await import('../utils/projectSerializer');
         return combineProjectsToState(payloads, { index });
       }
-      // 어떤 작품 파일이 missing인지 명시 — Drive에서 직접 찾아 처리하거나 재업로드 가능.
-      console.warn('[Drive] 신 형식 작품 일부 누락 → 구 형식 fallback', {
+      // 어떤 대본 파일이 missing인지 명시 — Drive에서 직접 찾아 처리하거나 재업로드 가능.
+      console.warn('[Drive] 신 형식 대본 일부 누락 → 구 형식 fallback', {
         total: index.projects.length,
         missing: missingMeta.length,
         missingProjects: missingMeta,
@@ -708,7 +708,7 @@ export async function loadAllProjectsFromDrive() {
 }
 
 /**
- * 구 단일 파일(drama_workspace.json) → 신 형식(인덱스 + 작품별 파일) 변환.
+ * 구 단일 파일(drama_workspace.json) → 신 형식(인덱스 + 대본별 파일) 변환.
  * Phase 1.4 — loadAllProjectsFromDrive의 구 형식 fallback 시 백그라운드 호출.
  *
  * 구 형식 파일은 삭제하지 않음 — backward-compat (Phase 4.3에서 폐기).

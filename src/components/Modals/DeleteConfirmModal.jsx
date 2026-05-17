@@ -5,7 +5,7 @@ import React, { useState, useEffect, useRef } from 'react';
 //
 // props:
 //   open        boolean
-//   title       string         — 강조 표시될 항목명 (예: 작품 제목)
+//   title       string         — 강조 표시될 항목명 (예: 대본 제목)
 //   description string|node    — 안내문 (기본: 30일간 휴지통 보관 문구)
 //   onConfirm   () => void
 //   onCancel    () => void

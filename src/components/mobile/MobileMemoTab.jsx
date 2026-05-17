@@ -26,7 +26,7 @@ export default function MobileMemoTab() {
   };
   useEffect(() => () => clearTimeout(memoTimer.current), []);
 
-  if (!activeProjectId) return <div className="m-empty">작품을 선택하세요</div>;
+  if (!activeProjectId) return <div className="m-empty">대본을 선택하세요</div>;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '6px 8px', boxSizing: 'border-box' }}>

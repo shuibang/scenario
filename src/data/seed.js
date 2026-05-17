@@ -9,7 +9,7 @@ export function createSeedData() {
   const char2Id = genId();
   const projects = [{
     id: projectId,
-    title: '새 작품',
+    title: '새 대본',
     genre: '',
     status: 'writing',
     createdAt: t,
@@ -53,7 +53,7 @@ export function createSeedData() {
   const coverDocs = [{
     id: genId(),
     projectId,
-    title: '새 작품',
+    title: '새 대본',
     subtitle: '',
     writer: '',
     coWriter: '',

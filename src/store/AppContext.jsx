@@ -45,8 +45,8 @@ export function mergeWorkLog(logs, entry) {
 }
 
 // ─── Project fingerprint — Phase 1.2 변경 감지 ──────────────────────────────
-// 작품 단위로 cascading 데이터의 (길이 + 마지막 updatedAt)을 단일 문자열로 만들어
-// 마지막 저장 시점과 비교. 변경 안 된 작품은 신 형식 Drive 저장을 건너뛴다.
+// 대본 단위로 cascading 데이터의 (길이 + 마지막 updatedAt)을 단일 문자열로 만들어
+// 마지막 저장 시점과 비교. 변경 안 된 대본은 신 형식 Drive 저장을 건너뛴다.
 function projectFingerprint(state, projectId) {
   const p = state.projects.find(pr => pr.id === projectId);
   if (!p) return null;
@@ -201,7 +201,7 @@ function reducer(state, action) {
       const cv = split(state.coverDocs);
       const sy = split(state.synopsisDocs);
       const rs = split(state.resources);
-      // Orphan 안전장치 — 작품 ID와 매칭 안 되는 캐스케이드 데이터(예: 4/22-23 동기화 사고 등의
+      // Orphan 안전장치 — 대본 ID와 매칭 안 되는 캐스케이드 데이터(예: 4/22-23 동기화 사고 등의
       // 예외 잔존)를 감지해 경고만 출력. 데이터는 state에 그대로 남겨 손실 방지 (보수 정책).
       const projectIdSet = new Set(state.projects.map(p => p.id));
       const orphanCount = {
@@ -216,7 +216,7 @@ function reducer(state, action) {
       if (Object.values(orphanCount).some(n => n > 0)) {
         console.warn('[trash] orphan data detected', {
           orphanCount,
-          message: '작품과 연결되지 않은 데이터가 감지되었습니다. 보존됨.',
+          message: '대본과 연결되지 않은 데이터가 감지되었습니다. 보존됨.',
         });
       }
       const trash = state.trash || EMPTY_TRASH;
@@ -591,13 +591,13 @@ function reducer(state, action) {
     case 'SET_SCROLL_TO_SCENE':
       return { ...state, scrollToSceneId: action.id };
 
-    // Phase 3 — .djs 파일 import에서 같은 ID 작품 충돌 시 '사본'(newId) 정책.
+    // Phase 3 — .djs 파일 import에서 같은 ID 대본 충돌 시 '사본'(newId) 정책.
     // payload는 projectSerializer 형식. mergeImportedProject가 모든 ID를 새로 발급
     // 하고 cascading 참조를 새 ID로 매핑해 사본으로 추가한다. 같은 ID 충돌이 없는
     // 단순 import도 이 액션으로 처리 가능 (newId 정책은 ID 충돌과 무관하게 동작).
     case 'ADD_IMPORTED_PROJECT_COPY': {
       const next = mergeImportedProject(state, action.payload, 'newId');
-      // 새로 추가된 작품을 활성화 — 사용자가 import 직후 바로 보게.
+      // 새로 추가된 대본을 활성화 — 사용자가 import 직후 바로 보게.
       const newProject = next.projects[next.projects.length - 1];
       return {
         ...next,
@@ -607,9 +607,9 @@ function reducer(state, action) {
       };
     }
 
-    // Phase 2.2b — 작품 단위 충돌 해결에서 사용. payload는 projectSerializer 형식
+    // Phase 2.2b — 대본 단위 충돌 해결에서 사용. payload는 projectSerializer 형식
     // (project + cascading 배열 + trash). mergeImportedProject('replace')로 같은 ID
-    // 작품의 모든 데이터를 통째로 교체하거나, 없는 작품을 새로 추가한다.
+    // 대본의 모든 데이터를 통째로 교체하거나, 없는 대본을 새로 추가한다.
     case 'REPLACE_PROJECT_DATA': {
       const next = mergeImportedProject(state, action.payload, 'replace');
       // active 상태는 보존 — projectId가 그대로 존재하면 navigation 유지
@@ -623,7 +623,7 @@ function reducer(state, action) {
         activeProjectId: projectStillExists ? state.activeProjectId : null,
         activeEpisodeId: epStillExists ? state.activeEpisodeId : null,
         activeDoc:       projectStillExists ? state.activeDoc : null,
-        // 같은 작품 내 episode가 교체됐다면 에디터 강제 리로드
+        // 같은 대본 내 episode가 교체됐다면 에디터 강제 리로드
         pendingScriptReload: (state.activeProjectId === targetId && epStillExists)
           ? state.activeEpisodeId
           : state.pendingScriptReload,
@@ -758,8 +758,8 @@ export function AppProvider({ children }) {
   const lastSavedSizesRef = useRef(null);
   const guardAcceptOnceRef = useRef(false);
   const guardDismissedSizesRef = useRef(null);
-  // Phase 1.2 변경 감지: 작품별 fingerprint(cascading 데이터 길이 + max updatedAt).
-  // 매 사이클마다 모든 작품을 신 형식으로 저장하면 503 rate limit hit 빈번 → 변경된 작품만 저장.
+  // Phase 1.2 변경 감지: 대본별 fingerprint(cascading 데이터 길이 + max updatedAt).
+  // 매 사이클마다 모든 대본을 신 형식으로 저장하면 503 rate limit hit 빈번 → 변경된 대본만 저장.
   // __index 키는 인덱스 파일의 마지막 저장 fingerprint.
   const lastProjFingerprintRef = useRef({});
 
@@ -869,9 +869,9 @@ export function AppProvider({ children }) {
             }
           } catch { /* fallthrough to seed */ }
         }
-        // 신규 사용자는 빈 상태로 시작 — 더미 작품/인물 자동 생성 X.
+        // 신규 사용자는 빈 상태로 시작 — 더미 대본/인물 자동 생성 X.
         // CenterPanel·LeftPanel·ProjectsManagePage가 빈 상태 안내 UI를 충분히
-        // 제공하고, 사용자가 명시적으로 "새 작품"을 만들도록 유도한다.
+        // 제공하고, 사용자가 명시적으로 "새 대본"을 만들도록 유도한다.
         dispatch({ type: 'INIT', payload: {} });
       }
     })();
@@ -1009,8 +1009,8 @@ export function AppProvider({ children }) {
             }
           });
 
-        // Phase 1.2 — 신 형식(작품별 파일 + 인덱스) 병행 저장.
-        // 변경된 작품만 저장 (옵션 B): fingerprint 비교로 매 사이클 N+2 폭발을 막아
+        // Phase 1.2 — 신 형식(대본별 파일 + 인덱스) 병행 저장.
+        // 변경된 대본만 저장 (옵션 B): fingerprint 비교로 매 사이클 N+2 폭발을 막아
         // Drive API rate limit(503 transientError) 회피.
         // 구 형식이 source of truth이므로 실패해도 silent + console.warn만.
         const deviceId = getDeviceId();
@@ -1044,14 +1044,14 @@ export function AppProvider({ children }) {
               lastProjFingerprintRef.current[p.id] = projectFingerprint(state, p.id);
             }
             if (indexChanged) lastProjFingerprintRef.current.__index = indexFp;
-            // 삭제된 작품의 fingerprint 정리 (메모리 누수 방지)
+            // 삭제된 대본의 fingerprint 정리 (메모리 누수 방지)
             const validIds = new Set(state.projects.map(p => p.id));
             for (const k of Object.keys(lastProjFingerprintRef.current)) {
               if (k !== '__index' && !validIds.has(k)) delete lastProjFingerprintRef.current[k];
             }
           }).catch(e => {
             if (e?.message === 'DRIVE_AUTH_REQUIRED') return;
-            console.warn('[Drive] 작품별 신 형식 저장 실패 (구 형식 정상):', e?.message || e);
+            console.warn('[Drive] 대본별 신 형식 저장 실패 (구 형식 정상):', e?.message || e);
           });
         }
       }
@@ -1118,9 +1118,9 @@ export function AppProvider({ children }) {
     guardAcceptOnceRef.current = true;
     dispatch({ type: 'CLEAR_GUARD_PENDING' });
   };
-  // 수동 저장(handleSave) 등에서 변경된 작품만 PUT하기 위해 fingerprint ref 공유.
+  // 수동 저장(handleSave) 등에서 변경된 대본만 PUT하기 위해 fingerprint ref 공유.
   // 자동저장(persist effect)이 사용하는 동일한 ref이므로 어느 쪽이 먼저 PUT해도
-  // 다른 쪽이 다시 같은 작품을 PUT하지 않음.
+  // 다른 쪽이 다시 같은 대본을 PUT하지 않음.
   const getChangedProjectIds = useCallback((targetState) => {
     if (!targetState?.projects) return [];
     return targetState.projects
@@ -1128,8 +1128,8 @@ export function AppProvider({ children }) {
       .map(p => p.id);
   }, []);
 
-  // PUT 성공 후 호출 — 다음 사이클에서 같은 작품을 또 PUT하지 않도록 ref 갱신.
-  // 인덱스 fingerprint도 함께 갱신 (작품 추가/삭제/제목 변경 시 인덱스도 변하기 때문).
+  // PUT 성공 후 호출 — 다음 사이클에서 같은 대본을 또 PUT하지 않도록 ref 갱신.
+  // 인덱스 fingerprint도 함께 갱신 (대본 추가/삭제/제목 변경 시 인덱스도 변하기 때문).
   const markProjectsSynced = useCallback((targetState, projectIds) => {
     if (!targetState?.projects || !Array.isArray(projectIds)) return;
     const ids = new Set(projectIds);

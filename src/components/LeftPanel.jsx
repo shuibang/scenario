@@ -153,7 +153,7 @@ function ProjectItem({ project, section = 'all', expanded, onToggle }) {
       {expanded && (
         <div>
           <NavItem large={large} icon={FileText} label="표지" active={activeDoc === 'cover' && !activeEpisodeId} onClick={() => { dispatch({ type: 'SET_ACTIVE_PROJECT', id: project.id }); dispatch({ type: 'SET_ACTIVE_DOC', payload: 'cover' }); }} indent={2} />
-          <NavItem large={large} icon={ScrollText} label="작품 시놉시스" active={activeDoc === 'synopsis'} onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'synopsis' })} indent={2} />
+          <NavItem large={large} icon={ScrollText} label="대본 시놉시스" active={activeDoc === 'synopsis'} onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'synopsis' })} indent={2} />
 
           <div className="mt-1">
             <div style={{ paddingLeft: large ? '32px' : '24px', paddingTop: 2, paddingBottom: 2, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--c-text6)' }}>회차</div>
@@ -388,7 +388,7 @@ function EpisodeItem({ ep, isSingle, large }) {
   );
 }
 
-// ─── 작품 유형별 기본값 ────────────────────────────────────────────────────────
+// ─── 대본 유형별 기본값 ────────────────────────────────────────────────────────
 const PROJECT_TYPE_PRESETS = {
   single: { label: '단막',       desc: '70분 단편',        totalMins: 70,  climaxStart: 55, climaxEnd: 68 },
   series: { label: '미니시리즈', desc: '회차별 60분',       totalMins: 60,  climaxStart: 48, climaxEnd: 58 },
@@ -427,7 +427,7 @@ function NewProjectModal({ onCommit, onCancel }) {
       <div className="rounded-xl p-5 w-80 flex flex-col gap-3" style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)' }} onClick={e => e.stopPropagation()}>
         {step === 'type' ? (
           <>
-            <div className="text-sm font-semibold" style={{ color: 'var(--c-text)' }}>작품 형식 선택</div>
+            <div className="text-sm font-semibold" style={{ color: 'var(--c-text)' }}>대본 형식 선택</div>
             <div className="grid grid-cols-2 gap-2">
               {Object.entries(PROJECT_TYPE_PRESETS).map(([type, { label, desc }]) => (
                 <button
@@ -445,14 +445,14 @@ function NewProjectModal({ onCommit, onCancel }) {
           </>
         ) : (
           <>
-            <div className="text-sm font-semibold" style={{ color: 'var(--c-text)' }}>새 작품</div>
+            <div className="text-sm font-semibold" style={{ color: 'var(--c-text)' }}>새 대본</div>
             <div className="text-xs" style={{ color: 'var(--c-text5)' }}>{typeLabel}</div>
             <input
               autoFocus
               value={title}
               onChange={e => setTitle(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') handleCommit(); if (e.key === 'Escape') onCancel(); }}
-              placeholder="작품명 입력"
+              placeholder="대본명 입력"
               className="w-full text-sm px-3 py-2 rounded outline-none"
               style={{ background: 'var(--c-input)', color: 'var(--c-text)', border: '1px solid var(--c-border3)' }}
             />
@@ -660,7 +660,7 @@ export default function LeftPanel({ section = 'all', findMode = null, onFindClos
     <div className="h-full flex flex-col select-none" style={{ background: 'var(--c-panel)', borderRight: '1px solid var(--c-border)' }}>
       {addingProject && <NewProjectModal onCommit={handleAddProject} onCancel={() => setAddingProject(false)} />}
 
-      {/* 현재 열린 작품만 표시 */}
+      {/* 현재 열린 대본만 표시 */}
       <div style={{ flex: '1 1 0', overflowY: 'auto', paddingTop: 8, paddingBottom: 8, minHeight: 0 }}>
         {activeProjectId && projects.find(p => p.id === activeProjectId) ? (
           <ProjectItem
@@ -672,7 +672,7 @@ export default function LeftPanel({ section = 'all', findMode = null, onFindClos
           />
         ) : (
           <div className="px-4 py-6 text-center text-xs" style={{ color: 'var(--c-text6)' }}>
-            파일 → 열기로 작품을 불러오세요
+            파일 → 열기로 대본을 불러오세요
           </div>
         )}
       </div>

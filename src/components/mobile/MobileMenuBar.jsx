@@ -59,7 +59,7 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
         setDriveStatus('synced');
         return 'synced';
       } else {
-        // 작품별 충돌만 계산해서 실제 내용이 다를 때만 모달을 띄운다.
+        // 대본별 충돌만 계산해서 실제 내용이 다를 때만 모달을 띄운다.
         const localState = latestStateRef.current;
         const conflicts = buildProjectConflicts(localState, driveData);
         if (conflicts.length === 0) {
@@ -163,7 +163,7 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
 
   const handleLogout = async () => {
     timerSaveRef.current?.();
-    // 공용 PC 모드는 메모리(React state)도 비워야 다음 사용자에게 직전 작품 노출 안 됨 → 가장 안전한 방법은 reload.
+    // 공용 PC 모드는 메모리(React state)도 비워야 다음 사용자에게 직전 대본 노출 안 됨 → 가장 안전한 방법은 reload.
     const isPublicPc = isPublicPcMode();
     try {
       await supabaseSignOut();
@@ -279,7 +279,7 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
                   setMenuOpen(false);
                 }}
               >
-                <span>📁</span><span>작품 관리</span>
+                <span>📁</span><span>대본 관리</span>
               </button>
 
               <div style={{ height: 1, background: 'var(--c-border)', margin: '4px 0' }} />

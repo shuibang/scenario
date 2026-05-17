@@ -1,7 +1,7 @@
 /**
  * ideasStore — 아이디어 노트 저장소
  *
- * 작품과 독립된 별도 컬렉션(`drama_ideas`). IndexedDB에 단일 키로 저장하며,
+ * 대본과 독립된 별도 컬렉션(`drama_ideas`). IndexedDB에 단일 키로 저장하며,
  * 향후 Drive 동기화는 `daejak_ideas.json` 단일 파일로 백업한다.
  *
  * 데이터 모델:
@@ -35,7 +35,7 @@ function scheduleDriveSave() {
 }
 
 // 시놉시스 본문은 통합 'synopsis' 가 아닌 시놉시스 페이지의 항목별(genre/theme/logline/intent/story)
-// 블록으로 세분화해서 작품 만들 때 각 필드에 정확히 들어가도록 한다.
+// 블록으로 세분화해서 대본 만들 때 각 필드에 정확히 들어가도록 한다.
 // 'treatment' 는 첫 회차 summaryItems 로 변환됨.
 const BLOCK_TYPES = [
   'memo',

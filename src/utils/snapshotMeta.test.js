@@ -107,18 +107,18 @@ describe('formatBytes', () => {
 });
 
 describe('formatSnapshotMetaLine', () => {
-  it('전체 필드 → "작품 N개 · 씬 N · N자 · NKB"', () => {
+  it('전체 필드 → "대본 N개 · 씬 N · N자 · NKB"', () => {
     const line = formatSnapshotMetaLine({ projectCount: 3, sceneCount: 42, charCount: 15234, sizeBytes: 87654 });
-    expect(line).toBe('작품 3개 · 씬 42 · 15,234자 · 85.6KB');
+    expect(line).toBe('대본 3개 · 씬 42 · 15,234자 · 85.6KB');
   });
 
   it('레거시 호환 — projectCount만 있는 옛 스냅샷', () => {
     const line = formatSnapshotMetaLine({ projectCount: 2 });
-    expect(line).toBe('작품 2개');
+    expect(line).toBe('대본 2개');
   });
 
   it('charCount/sizeBytes 누락 시 그 부분만 생략', () => {
-    expect(formatSnapshotMetaLine({ projectCount: 1, sceneCount: 5 })).toBe('작품 1개 · 씬 5');
+    expect(formatSnapshotMetaLine({ projectCount: 1, sceneCount: 5 })).toBe('대본 1개 · 씬 5');
   });
 
   it('null/undefined → 빈 문자열', () => {

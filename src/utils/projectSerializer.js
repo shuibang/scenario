@@ -1,7 +1,7 @@
 /**
- * Project serializer — Drive 작품별 저장과 .djs 파일 export/import 공통.
+ * Project serializer — Drive 대본별 저장과 .djs 파일 export/import 공통.
  *
- * 한 작품 = { project, episodes, characters, scenes, scriptBlocks, coverDocs,
+ * 한 대본 = { project, episodes, characters, scenes, scriptBlocks, coverDocs,
  *           synopsisDocs, resources, workTimeLogs, checklistItems, trash } 직렬화.
  *
  * Drive 동기화 시에는 drive 메타(savedAt, deviceId)를 함께 포함.
@@ -44,7 +44,7 @@ const CASCADING_KEYS = [
   'workTimeLogs', 'checklistItems',
 ];
 
-// ── Serialize: state에서 한 작품의 모든 데이터 추출 ───────────────────────────
+// ── Serialize: state에서 한 대본의 모든 데이터 추출 ───────────────────────────
 export function serializeProject(state, projectId, opts = {}) {
   const project = state.projects?.find(p => p.id === projectId);
   if (!project) return null;
@@ -85,7 +85,7 @@ export function deserializeProject(rawData) {
   return projectExportSchema.parse(rawData);
 }
 
-// ── 충돌 감지: 같은 ID의 작품이 이미 state에 있는가 ──────────────────────────
+// ── 충돌 감지: 같은 ID의 대본이 이미 state에 있는가 ──────────────────────────
 export function findImportConflict(state, imported) {
   const importedId = imported?.project?.id;
   if (!importedId) return null;
@@ -143,8 +143,8 @@ function reIdProject(imported) {
   };
 }
 
-// ── Merge: imported 작품을 현재 state에 합침 ─────────────────────────────────
-// policy: 'replace' (같은 ID 작품과 cascading 모두 제거 후 imported로 교체)
+// ── Merge: imported 대본을 현재 state에 합침 ─────────────────────────────────
+// policy: 'replace' (같은 ID 대본과 cascading 모두 제거 후 imported로 교체)
 //         'newId'   (모든 ID 새로 발급해서 사본으로 추가)
 export function mergeImportedProject(state, imported, policy = 'newId') {
   const data = policy === 'newId' ? reIdProject(imported) : imported;
@@ -162,7 +162,7 @@ export function mergeImportedProject(state, imported, policy = 'newId') {
     ];
     const next = { ...state, projects };
     for (const k of CASCADING_KEYS) next[k] = removeAndAdd(k);
-    // trash는 작품별 항목만 교체
+    // trash는 대본별 항목만 교체
     const trashNext = { ...(state.trash || {}) };
     for (const [tk, tItems] of Object.entries(data.trash || {})) {
       const existing = (trashNext[tk] || []).filter(it => it.projectId !== targetProjectId);
@@ -178,7 +178,7 @@ export function mergeImportedProject(state, imported, policy = 'newId') {
   return next;
 }
 
-// ── 작품별 payloads → 통합 state 형태로 결합 ─────────────────────────────────
+// ── 대본별 payloads → 통합 state 형태로 결합 ─────────────────────────────────
 // loadAllProjectsFromDrive에서 사용. LOAD_FROM_DRIVE reducer가 받는 형태와 호환.
 // 인덱스의 savedAt/deviceId는 메타로 보존.
 export function combineProjectsToState(payloads, { index } = {}) {
@@ -208,7 +208,7 @@ export function combineProjectsToState(payloads, { index } = {}) {
   }
   if (index?.savedAt)  result.savedAt  = index.savedAt;
   if (index?.deviceId) result.deviceId = index.deviceId;
-  // 인덱스 메타(작품별 updatedAt/savedAt) 보존 — 작품 단위 충돌 감지에 사용 (Phase 2.1).
+  // 인덱스 메타(대본별 updatedAt/savedAt) 보존 — 대본 단위 충돌 감지에 사용 (Phase 2.1).
   // _ prefix는 LOAD_FROM_DRIVE reducer가 무시한다는 신호.
   if (index) result._index = index;
   return result;

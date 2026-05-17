@@ -4,7 +4,7 @@ import { genId, now } from '../store/db';
 
 // ─── Default fields (order-preserving array)
 const DEFAULT_FIELDS = [
-  { id: 'title',       label: '작품명',          type: 'input',    required: true },
+  { id: 'title',       label: '대본명',          type: 'input',    required: true },
   { id: 'subtitle',    label: '부제 / 형식',      type: 'input',    required: false },
   { id: 'writer',      label: '작가',             type: 'input',    required: false },
   { id: 'genre',       label: '장르',             type: 'input',    required: false },
@@ -98,7 +98,7 @@ export function CoverPreview({ values, customFields }) {
           className="font-bold leading-snug mb-2"
           style={{ color: 'var(--c-text)', fontSize: titleFontSize }}
         >
-          {titleText || <span style={{ color: 'var(--c-text6)' }}>작품명</span>}
+          {titleText || <span style={{ color: 'var(--c-text6)' }}>대본명</span>}
         </div>
         {subtitleField?.value && (
           <div
@@ -152,7 +152,7 @@ export default function CoverEditor() {
   // Load / migrate on project change
   useEffect(() => {
     const migrated = migrateDoc(existing);
-    // 표지에 작품명이 없으면 프로젝트 제목으로 pre-fill
+    // 표지에 대본명이 없으면 프로젝트 제목으로 pre-fill
     if (!migrated.values.title) {
       const project = projects.find(p => p.id === activeProjectId);
       if (project?.title) migrated.values.title = project.title;
@@ -165,7 +165,7 @@ export default function CoverEditor() {
   const setVal = (id, v) => {
     setValues(prev => ({ ...prev, [id]: v }));
     setDirty(true);
-    // 작품명 변경 시 프로젝트 제목 즉시 동기화
+    // 대본명 변경 시 프로젝트 제목 즉시 동기화
     if (id === 'title') {
       dispatch({ type: 'UPDATE_PROJECT', payload: { id: activeProjectId, title: v } });
     }

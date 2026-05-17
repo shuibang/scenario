@@ -68,9 +68,9 @@ export default function NewProjectModal({ open, onClose, onCommit, initialTitle 
     <Modal
       open={open}
       onClose={onClose}
-      title="새 작품"
+      title="새 대본"
       size="sm"
-      description="새 작품 정보를 입력하세요."
+      description="새 대본 정보를 입력하세요."
       footer={
         <>
           <ModalBtn variant="secondary" onClick={onClose}>취소</ModalBtn>
@@ -78,22 +78,22 @@ export default function NewProjectModal({ open, onClose, onCommit, initialTitle 
         </>
       }
     >
-      {/* 작품명 */}
+      {/* 대본명 */}
       <div className="modal-form">
-        <label className="modal-label">작품명</label>
+        <label className="modal-label">대본명</label>
         <input
           ref={titleRef}
           className="modal-input"
           value={title}
           onChange={e => setTitle(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') handleCommit(); }}
-          placeholder="제목 없는 작품"
+          placeholder="제목 없는 대본"
         />
       </div>
 
-      {/* 작품 유형 */}
+      {/* 대본 유형 */}
       <div className="modal-form" style={{ marginTop: 14 }}>
-        <label className="modal-label">작품 유형</label>
+        <label className="modal-label">대본 유형</label>
         <div className="new-project-type-grid">
           {PROJECT_TYPE_PRESETS.map(p => (
             <button

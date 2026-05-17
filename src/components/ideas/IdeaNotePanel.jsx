@@ -19,7 +19,7 @@ import IdeaNoteEditor from './IdeaNoteEditor';
  *   density       — 'compact' | 'comfortable' | 'full' (기본 'comfortable')
  *   onExpand      — 풀사이즈 보기로 전환 콜백 (있으면 우상단에 버튼 표시)
  *   onClose       — 닫기 콜백 (있으면 우상단 X 표시)
- *   onPromote     — (idea) => void  : 작품으로 승격 핸들러 (외부 모달 연결)
+ *   onPromote     — (idea) => void  : 대본으로 승격 핸들러 (외부 모달 연결)
  *   showHeader    — 상단바 표시 여부 (기본 true)
  */
 export default function IdeaNotePanel({

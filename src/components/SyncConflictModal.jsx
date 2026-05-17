@@ -2,7 +2,7 @@
  * SyncConflictModal — Drive 로그인 시 로컬 vs Drive 데이터 충돌 해결 UI
  *
  * 두 가지 모드:
- *   1) conflicts !== null (신 형식, Phase 2.2b) — 작품별 시간 라디오. onApply(decisions).
+ *   1) conflicts !== null (신 형식, Phase 2.2b) — 대본별 시간 라디오. onApply(decisions).
  *   2) conflicts === null (구 형식 fallback) — 두 카드. onKeepLocal / onLoadDrive.
  *
  * 결정 모델:
@@ -24,7 +24,7 @@ function fmtTs(isoStr) {
   return `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-// ── 작품별 시간 라디오 행 (Phase 2.2b 본 작업) ─────────────────────────────────
+// ── 대본별 시간 라디오 행 (Phase 2.2b 본 작업) ─────────────────────────────────
 
 function ConflictRow({ conflict, decision, onChange, busy }) {
   const { projectId, title, kind } = conflict;
@@ -113,7 +113,7 @@ function ConflictRow({ conflict, decision, onChange, busy }) {
       </div>
       {kind === 'conflict' && sameMoment && (
         <div style={{ fontSize: 11, color: 'var(--c-text5)', marginBottom: 8, lineHeight: 1.5 }}>
-          저장 시각은 같지만 실제 작품 내용이 달라서 충돌로 감지되었습니다.
+          저장 시각은 같지만 실제 대본 내용이 달라서 충돌로 감지되었습니다.
         </div>
       )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -171,7 +171,7 @@ function ConflictResolver({ conflicts, onApply, onDismiss, busy, busyMessage }) 
         기기 간 데이터가 다릅니다
       </div>
       <div style={{ fontSize: 13, color: 'var(--c-text5)', marginBottom: 16, lineHeight: 1.6 }}>
-        작품별로 어느 버전을 남길지 선택해 주세요.<br/>
+        대본별로 어느 버전을 남길지 선택해 주세요.<br/>
         Drive는 다른 기기가 아니라 현재 Drive에 저장된 버전입니다.<br/>
         선택 전 양쪽 데이터가 자동으로 스냅샷에 보존됩니다.
       </div>
@@ -283,7 +283,7 @@ function DataCard({ title, savedAt, projectCount, highlight, onClick, label }) {
         {fmtTs(savedAt) || '알 수 없음'}
       </div>
       <div style={{ fontSize: 12, color: 'var(--c-text5)' }}>
-        작품 {projectCount}개
+        대본 {projectCount}개
       </div>
       <button
         onClick={e => { e.stopPropagation(); onClick(); }}

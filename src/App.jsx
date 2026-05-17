@@ -430,7 +430,7 @@ function CenterPanel({ scrollToSceneId, onScrollHandled, keyboardUp, isMobile, f
       </div>
     );
   }
-  // MyPage / 작품 관리는 프로젝트와 무관하게 열람 가능 — 빈 상태에서도 진입할 수 있어야 함
+  // MyPage / 대본 관리는 프로젝트와 무관하게 열람 가능 — 빈 상태에서도 진입할 수 있어야 함
   if (activeDoc === 'mypage') return <MyPage />;
   if (activeDoc === 'projects') return <ProjectsManagePage onNewProject={onNewProject} />;
   if (activeDoc === 'trash')    return <TrashPage />;
@@ -438,7 +438,7 @@ function CenterPanel({ scrollToSceneId, onScrollHandled, keyboardUp, isMobile, f
     return (
       <div className="h-full flex flex-col items-center justify-center gap-4" style={{ background: 'var(--c-bg)' }}>
         <div className="text-5xl" style={{ color: 'var(--c-border3)' }}>✎</div>
-        <p style={{ color: 'var(--c-text5)' }} className="text-sm">좌측 패널에서 작품을 선택하거나 새로 만드세요</p>
+        <p style={{ color: 'var(--c-text5)' }} className="text-sm">좌측 패널에서 대본을 선택하거나 새로 만드세요</p>
       </div>
     );
   }
@@ -854,7 +854,7 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
         setDriveStatus('synced');
         return 'synced';
       } else {
-        // 작품별 충돌만 계산해서, 같은 계정 안에서도 실제 내용이 다른 경우에만 모달을 띄운다.
+        // 대본별 충돌만 계산해서, 같은 계정 안에서도 실제 내용이 다른 경우에만 모달을 띄운다.
         const localState = latestStateRef.current;
         const conflicts = buildProjectConflicts(localState, driveData);
         if (conflicts.length === 0) {
@@ -1107,7 +1107,7 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
               <span style={{ fontSize: 12, color: 'var(--c-text4)', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{authUser.name}</span>
               <button onClick={async () => {
                 timerSaveRef.current?.();
-                // 공용 PC 모드는 메모리(React state)도 비워야 다음 사용자에게 직전 작품 노출 안 됨 → 가장 안전한 방법은 reload.
+                // 공용 PC 모드는 메모리(React state)도 비워야 다음 사용자에게 직전 대본 노출 안 됨 → 가장 안전한 방법은 reload.
                 const isPublicPc = isPublicPcMode();
                 try {
                   await supabaseSignOut();
@@ -1432,7 +1432,7 @@ function Shell({ authUser, setAuthUser }) {
 
   // ── 아이디어 노트 시트
   const [ideaSheetOpen, setIdeaSheetOpen] = useState(false);
-  const [promoteIdea, setPromoteIdea] = useState(null);   // 작품으로 승격 중인 아이디어
+  const [promoteIdea, setPromoteIdea] = useState(null);   // 대본으로 승격 중인 아이디어
   const savedRightCollapsedRef = useRef(null);            // 시트 열기 직전 우측 패널 상태
 
   // 시트 열림 ↔ 우측 패널 자동 닫음 / 복원
@@ -1755,8 +1755,8 @@ function Shell({ authUser, setAuthUser }) {
         return;
       }
 
-      // 변경된 작품만 PUT — persist effect와 같은 fingerprint ref 공유.
-      // 작품 N개 매번 PUT(=느림) 대신 바뀐 K개만. K=0이어도 인덱스/구 형식/스냅샷은
+      // 변경된 대본만 PUT — persist effect와 같은 fingerprint ref 공유.
+      // 대본 N개 매번 PUT(=느림) 대신 바뀐 K개만. K=0이어도 인덱스/구 형식/스냅샷은
       // syncWorkspaceToDrive 안에서 그대로 처리되므로 안전.
       const changedProjectIds = getChangedProjectIds(latestState);
       await syncWorkspaceToDrive(latestState, { projectIds: changedProjectIds });
@@ -1890,7 +1890,7 @@ function Shell({ authUser, setAuthUser }) {
     // 내보내기 — PrintPreviewModal 직접 오픈
     if (action === 'file:export') { setExportDefaultFormat('pdf'); window.dispatchEvent(new CustomEvent('editor:flush')); setPrintPreviewOpen(true); return; }
 
-    // 최근 작품
+    // 최근 대본
     if (action?.startsWith('file:openRecent:')) {
       dispatch({ type: 'SET_ACTIVE_PROJECT', id: action.slice('file:openRecent:'.length) });
       return;
@@ -2087,7 +2087,7 @@ function Shell({ authUser, setAuthUser }) {
           // policy: 'replace' (덮어쓰기) | 'newId' (사본으로 추가)
           if (policy === 'replace') {
             dispatch({ type: 'REPLACE_PROJECT_DATA', payload: imported });
-            // 덮어쓰기 후 해당 작품 활성화
+            // 덮어쓰기 후 해당 대본 활성화
             dispatch({ type: 'SET_ACTIVE_PROJECT', id: imported.project.id });
           } else {
             // ADD_IMPORTED_PROJECT_COPY가 새 ID 발급 + 활성화까지 처리
@@ -2100,9 +2100,9 @@ function Shell({ authUser, setAuthUser }) {
         onClose={() => setSaveAsOpen(false)}
         projectTitle={activeProject?.title}
         onExport={(filename) => {
-          if (!activeProject?.id) throw new Error('내보낼 작품이 선택되지 않았습니다.');
+          if (!activeProject?.id) throw new Error('내보낼 대본이 선택되지 않았습니다.');
           const payload = serializeProject(latestStateRef.current, activeProject.id);
-          if (!payload) throw new Error('작품 데이터를 찾을 수 없습니다.');
+          if (!payload) throw new Error('대본 데이터를 찾을 수 없습니다.');
           const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
@@ -2226,7 +2226,7 @@ function Shell({ authUser, setAuthUser }) {
             }
           }}
           onApply={async (decisions) => {
-            // Phase 2.2b — 작품별 결정 적용. decisions: { [projectId]: 'local' | 'drive' }
+            // Phase 2.2b — 대본별 결정 적용. decisions: { [projectId]: 'local' | 'drive' }
             if (syncConflictBusy) return;
             const conflicts = syncConflict?.conflicts || [];
             const driveData = syncConflict?.driveData;
@@ -2269,13 +2269,13 @@ function Shell({ authUser, setAuthUser }) {
               for (const c of conflicts) {
                 const dec = decisions[c.projectId];
                 if (dec === 'drive' && (c.kind === 'conflict' || c.kind === 'driveOnly')) {
-                  // Drive 데이터로 교체/추가 — driveData에서 그 작품만 추출
+                  // Drive 데이터로 교체/추가 — driveData에서 그 대본만 추출
                   const payload = serializeProject(driveData, c.projectId);
                   if (payload) {
                     dispatch({ type: 'REPLACE_PROJECT_DATA', payload });
                     resolvedState = appReducer(resolvedState, { type: 'REPLACE_PROJECT_DATA', payload });
                   } else {
-                    console.warn('[Sync] driveData에서 작품 추출 실패', c.projectId);
+                    console.warn('[Sync] driveData에서 대본 추출 실패', c.projectId);
                   }
                 } else if (dec === 'drive' && c.kind === 'localOnly') {
                   // 이 기기에서 휴지통으로 — 복구 가능
@@ -2717,7 +2717,7 @@ function LogShareView() {
             <div key={curPage * PER_PAGE + i} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 16px', borderBottom: i < pageLogs.length - 1 ? '1px solid #f0f0f0' : 'none', background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
               <span style={{ fontSize: 11, color: '#999', minWidth: 120, flexShrink: 0 }}>{fmtTs(log.completedAt)}</span>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13 }}>{hideProjectTitle ? '비공개' : (proj?.title || '삭제된 작품')}</div>
+                <div style={{ fontSize: 13 }}>{hideProjectTitle ? '비공개' : (proj?.title || '삭제된 대본')}</div>
                 {!hideChecklist && snapshot.length > 0 && (
                   <div style={{ fontSize: 11, color: '#999', marginTop: 2 }}>
                     완료: {snapshot.map(s => s.text).join(', ')}

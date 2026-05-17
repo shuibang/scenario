@@ -834,7 +834,7 @@ textarea {
 .modal-input:focus { border-color: var(--c-accent); }
 .modal-input-readonly { cursor: default; opacity: 0.8; }
 
-/* ─── 새 작품 유형 선택 그리드 ──────────────────────────────────────────────── */
+/* ─── 새 대본 유형 선택 그리드 ──────────────────────────────────────────────── */
 .new-project-type-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

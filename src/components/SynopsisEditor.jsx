@@ -6,7 +6,7 @@ import { genId, now } from '../store/db';
 // ─── Section definitions
 const SECTIONS = [
   { id: 'genre',    label: '장르',    type: 'input',    placeholder: '예: 로맨스 · 드라마 · 스릴러' },
-  { id: 'theme',    label: '주제',    type: 'rich',     placeholder: '이 작품이 말하려는 핵심 메시지' },
+  { id: 'theme',    label: '주제',    type: 'rich',     placeholder: '이 대본이 말하려는 핵심 메시지' },
   { id: 'logline',  label: '로그라인', type: 'rich',     placeholder: '한 문장으로 요약한 이야기' },
   { id: 'intent',   label: '기획의도', type: 'rich',     placeholder: '왜 이 이야기인가' },
   { id: 'story',    label: '줄거리',  type: 'rich',     placeholder: '전체 이야기 흐름 (기승전결)' },
@@ -245,7 +245,7 @@ export default function SynopsisEditor() {
     <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, display: 'flex', flexDirection: 'column', background: 'var(--c-bg)', overflow: 'hidden' }}>
       {/* Header */}
       <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '10px', borderBottom: '1px solid var(--c-border2)' }}>
-        <span className="text-sm font-medium" style={{ color: 'var(--c-text2)' }}>작품 시놉시스</span>
+        <span className="text-sm font-medium" style={{ color: 'var(--c-text2)' }}>대본 시놉시스</span>
         <span style={{ marginLeft: 'auto', fontSize: 12, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--c-text6)' }}>
           {pageEst > 0 && <span>{`약 ${pageEst}p`}</span>}
           {dirty ? '저장 중…' : '● 저장됨'}

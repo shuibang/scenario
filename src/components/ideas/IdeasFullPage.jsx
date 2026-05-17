@@ -5,7 +5,7 @@ import IdeaNotePanel from './IdeaNotePanel';
  * IdeasFullPage — `/app#ideas` 풀스크린 라우트
  *
  * 시트가 좁아서 정리·검색이 어려울 때 큰 화면에서 보는 용도.
- * 작품 만들기 흐름은 시트에서 처리하는 게 자연스러우므로 여기서는 onPromote 미제공
+ * 대본 만들기 흐름은 시트에서 처리하는 게 자연스러우므로 여기서는 onPromote 미제공
  * (필요하면 시트로 돌아가서 promote).
  */
 export default function IdeasFullPage({ onBack }) {

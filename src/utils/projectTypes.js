@@ -1,4 +1,4 @@
-// 작품 유형 프리셋 ─ NewProjectModal과 여러 컴포넌트에서 공유
+// 대본 유형 프리셋 ─ NewProjectModal과 여러 컴포넌트에서 공유
 export const PROJECT_TYPE_PRESETS = [
   { id: 'movie',     label: '영화',        totalMins: 100, climaxStart: 78, climaxEnd: 95,  isMulti: false },
   { id: 'single',    label: '단막',        totalMins: 70,  climaxStart: 55, climaxEnd: 65,  isMulti: false },

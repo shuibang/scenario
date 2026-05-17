@@ -627,7 +627,7 @@ function SceneBoardTab({ epId, scenes, scriptBlocks, characters, episodes, dispa
     dispatch({ type: 'UPDATE_SCENE', payload: { id: sceneId, sceneListContent: content }, _record: true });
   }
 
-  // 같은 작품의 회차들 (현재 작품만 — episodes 자체가 이미 작품 필터링되어 들어왔다고 가정)
+  // 같은 대본의 회차들 (현재 대본만 — episodes 자체가 이미 대본 필터링되어 들어왔다고 가정)
   const projectEpisodes = useMemo(() => {
     const epList = (episodes || []).slice().sort((a, b) => (a.number || 0) - (b.number || 0));
     return epList;

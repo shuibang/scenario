@@ -84,14 +84,14 @@ export default function MobileScriptTab({ onClose }) {
         onCancel={() => setDeleteTarget(null)}
       />
 
-      {/* 새 작품 */}
-      <div className="m-item accent" onClick={() => { setAddingProject(true); setNewProjName(''); setNewProjType('series'); }}>+ 새 작품</div>
+      {/* 새 대본 */}
+      <div className="m-item accent" onClick={() => { setAddingProject(true); setNewProjName(''); setNewProjType('series'); }}>+ 새 대본</div>
 
       {addingProject && (
         <div style={{ padding: '10px 20px', borderBottom: '1px solid var(--c-border)', background: 'var(--c-panel)', display: 'flex', flexDirection: 'column', gap: 8 }}>
           <input
             autoFocus
-            placeholder="작품명 입력"
+            placeholder="대본명 입력"
             className="m-input"
             value={newProjName}
             onChange={e => setNewProjName(e.target.value)}
@@ -154,7 +154,7 @@ export default function MobileScriptTab({ onClose }) {
               >표지</div>
               <div className={`m-item sub${activeDoc === 'synopsis' ? ' active' : ''}`}
                 onClick={() => { dispatch({ type: 'SET_ACTIVE_DOC', payload: 'synopsis' }); onClose?.(); }}
-              >작품 시놉시스</div>
+              >대본 시놉시스</div>
 
               {epList.map(ep => {
                 const isEpActive = activeEpisodeId === ep.id && activeDoc === 'script';
@@ -219,7 +219,7 @@ export default function MobileScriptTab({ onClose }) {
       })}
 
       {projects.length === 0 && !addingProject && (
-        <div className="m-empty">위 버튼으로 첫 작품을 만들어보세요</div>
+        <div className="m-empty">위 버튼으로 첫 대본을 만들어보세요</div>
       )}
     </div>
   );

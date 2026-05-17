@@ -34,7 +34,7 @@ export default function ProjectInfoModal({ open, onClose, project, onSave }) {
     <Modal
       open={open}
       onClose={onClose}
-      title="작품 정보"
+      title="대본 정보"
       size="sm"
       footer={
         <>
@@ -46,7 +46,7 @@ export default function ProjectInfoModal({ open, onClose, project, onSave }) {
       <div className="modal-form-grid">
         <div className="modal-form">
           <label className="modal-label">제목</label>
-          <input className="modal-input" value={form.title} onChange={e => set('title', e.target.value)} placeholder="작품 제목" />
+          <input className="modal-input" value={form.title} onChange={e => set('title', e.target.value)} placeholder="대본 제목" />
         </div>
 
         <div className="modal-form">

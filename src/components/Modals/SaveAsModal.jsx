@@ -15,7 +15,7 @@ export default function SaveAsModal({ open, onClose, projectTitle = '', onExport
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState(null);
 
-  // 모달 열릴 때 작품 제목으로 초기화
+  // 모달 열릴 때 대본 제목으로 초기화
   useEffect(() => {
     if (open) {
       setFilename(projectTitle || '대본');
@@ -59,7 +59,7 @@ export default function SaveAsModal({ open, onClose, projectTitle = '', onExport
       }
     >
       <p className="modal-desc">
-        현재 작품을 <strong>.djs</strong> 파일로 저장합니다.<br />
+        현재 대본을 <strong>.djs</strong> 파일로 저장합니다.<br />
         다른 기기에서 열거나 백업용으로 사용하세요.
       </p>
 

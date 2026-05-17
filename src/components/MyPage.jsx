@@ -76,7 +76,7 @@ function LogPdfDoc({ logs, projects, hideProjectTitle = false, hideChecklist = f
         <Text style={logPdfStyles.sub}>세션 목록</Text>
         <View style={{ ...logPdfStyles.row, borderBottomWidth: 1, borderBottomColor: '#999' }}>
           <Text style={{ ...logPdfStyles.gray, width: '30%' }}>날짜/시간</Text>
-          <Text style={{ ...logPdfStyles.gray, width: '25%' }}>작품</Text>
+          <Text style={{ ...logPdfStyles.gray, width: '25%' }}>대본</Text>
           <Text style={{ ...logPdfStyles.gray, width: '32%' }}>{hideChecklist ? '' : '완료 항목'}</Text>
           <Text style={{ ...logPdfStyles.gray, width: '13%', textAlign: 'right' }}>활동시간</Text>
         </View>
@@ -86,7 +86,7 @@ function LogPdfDoc({ logs, projects, hideProjectTitle = false, hideChecklist = f
           return (
             <View key={i} style={{ ...logPdfStyles.row, alignItems: 'flex-start' }}>
               <Text style={{ ...logPdfStyles.cell, width: '30%' }}>{fmtTs(log.completedAt)}</Text>
-              <Text style={{ ...logPdfStyles.cell, width: '25%' }}>{hideProjectTitle ? '비공개' : (proj?.title || '삭제된 작품')}</Text>
+              <Text style={{ ...logPdfStyles.cell, width: '25%' }}>{hideProjectTitle ? '비공개' : (proj?.title || '삭제된 대본')}</Text>
               <View style={{ width: '32%' }}>
                 {hideChecklist
                   ? <Text style={{ ...logPdfStyles.gray, fontSize: 8 }}>—</Text>
@@ -152,7 +152,7 @@ function LogItem({ log, proj, epLabel, snapshot, fmt, fmtDate }) {
         </span>
         <div className="flex-1 min-w-0">
           <span className="text-xs block" style={{ color: 'var(--c-text4)' }}>
-            {proj?.title || '삭제된 작품'}
+            {proj?.title || '삭제된 대본'}
             {epLabel && <span className="ml-1 text-[10px]" style={{ color: 'var(--c-text6)' }}>{epLabel}</span>}
           </span>
           {hasSnapshot && !expanded && (
@@ -207,7 +207,7 @@ function StatsTab() {
       const lastAt = logs.reduce((m, l) => Math.max(m, l.completedAt || 0), 0);
       return { project: p, sec, logCount: logs.length, epCount, lastAt };
     }).sort((a, b) => {
-      // 최근 작업분이 맨 위 — 작업 기록이 전혀 없는 작품은 맨 아래
+      // 최근 작업분이 맨 위 — 작업 기록이 전혀 없는 대본은 맨 아래
       if (a.lastAt === 0 && b.lastAt === 0) return 0;
       if (a.lastAt === 0) return 1;
       if (b.lastAt === 0) return -1;
@@ -395,7 +395,7 @@ function StatsTab() {
             <label className="flex items-center gap-1.5 text-xs cursor-pointer" style={{ color: 'var(--c-text4)' }}>
               <input type="checkbox" checked={hideTitle} onChange={e => setHideTitle(e.target.checked)}
                 style={{ accentColor: 'var(--c-accent)', width: 13, height: 13, cursor: 'pointer' }} />
-              작품명 가리기
+              대본명 가리기
             </label>
             <label className="flex items-center gap-1.5 text-xs cursor-pointer" style={{ color: 'var(--c-text4)' }}>
               <input type="checkbox" checked={hideChecklist} onChange={e => setHideChecklist(e.target.checked)}
@@ -506,7 +506,7 @@ function StatsTab() {
 
       {projectStats.length > 0 && (
         <div style={cardStyle}>
-          <div style={labelStyle}>작품별 작업시간 <span style={{ fontSize: 9, color: 'var(--c-text6)', textTransform: 'none', letterSpacing: 0 }}>· 최근 작업순</span></div>
+          <div style={labelStyle}>대본별 작업시간 <span style={{ fontSize: 9, color: 'var(--c-text6)', textTransform: 'none', letterSpacing: 0 }}>· 최근 작업순</span></div>
           <div
             className="mt-3 space-y-2"
             style={{ maxHeight: 260, overflowY: 'auto', paddingRight: 4 }}

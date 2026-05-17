@@ -1,11 +1,11 @@
 // 스냅샷 메타 계산/포맷.
 // computeSnapshotMeta(payload, jsonStr?) → { projectCount, sceneCount, charCount, sizeBytes }
-// formatSnapshotMetaLine(meta) → "작품 3개 · 씬 42 · 1,234자 · 86KB"
+// formatSnapshotMetaLine(meta) → "대본 3개 · 씬 42 · 1,234자 · 86KB"
 //
 // charCount는 b/i/u 등 인라인 HTML 태그를 제거한 사용자 입력 문자 수.
 // sceneCount는 scriptBlocks의 type==='scene_number' 개수 — 에디터에서 보이는 씬 수와 일치.
 // sizeBytes는 UTF-8 인코딩 기준 바이트. 한글 1자 = 3바이트.
-// 옛 스냅샷 엔트리는 새 필드가 undefined → formatSnapshotMetaLine이 작품 N개만 출력.
+// 옛 스냅샷 엔트리는 새 필드가 undefined → formatSnapshotMetaLine이 대본 N개만 출력.
 
 const HTML_TAG_RE = /<[^>]+>/g;
 
@@ -52,7 +52,7 @@ export function formatBytes(n) {
 export function formatSnapshotMetaLine(meta) {
   if (!meta) return '';
   const parts = [];
-  if (typeof meta.projectCount === 'number') parts.push(`작품 ${meta.projectCount}개`);
+  if (typeof meta.projectCount === 'number') parts.push(`대본 ${meta.projectCount}개`);
   if (typeof meta.sceneCount === 'number') parts.push(`씬 ${meta.sceneCount}`);
   const c = formatChars(meta.charCount);
   if (c) parts.push(c);

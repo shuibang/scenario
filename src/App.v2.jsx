@@ -9,6 +9,7 @@ import {
   checkFontsAvailability,
   getFontPdfStatus,
   getFontByCssFamily,
+  getFontPdfTooltip,
 } from './print/FontRegistry';
 import { getItem, setItem, clearDramaStorage, isPublicPcMode, genId, now } from './store/db';
 import { setAccessToken, clearAccessToken, loadFromDrive } from './store/googleDrive';
@@ -108,7 +109,7 @@ function CenterPanel({ scrollToSceneId, onScrollHandled }) {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-4" style={{ background: 'var(--c-bg)' }}>
         <div className="text-5xl" style={{ color: 'var(--c-border3)' }}>✎</div>
-        <p style={{ color: 'var(--c-text5)' }} className="text-sm">좌측 패널에서 작품을 선택하거나 새로 만드세요</p>
+        <p style={{ color: 'var(--c-text5)' }} className="text-sm">좌측 패널에서 대본을 선택하거나 새로 만드세요</p>
       </div>
     );
   }
@@ -557,14 +558,15 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave }) {
         >
           <optgroup label="내장 글꼴">
             {FONTS.filter(f => f.sourceType === 'bundled').map(f => {
-              const status = getFontPdfStatus(f.id, fontAvailability);
-              const badge  = status === FONT_STATUS.FULL ? ' ✓' : status === FONT_STATUS.PARTIAL ? ' △' : status === FONT_STATUS.UNAVAILABLE ? ' ✗' : '';
-              return <option key={f.id} value={f.cssFamily}>{f.displayName}{badge}</option>;
+              const status  = getFontPdfStatus(f.id, fontAvailability);
+              const badge   = status === FONT_STATUS.FULL ? ' ✓' : status === FONT_STATUS.PARTIAL ? ' △' : status === FONT_STATUS.UNAVAILABLE ? ' ✗' : status === FONT_STATUS.SYSTEM ? ' ⚠' : '';
+              const tooltip = getFontPdfTooltip(f);
+              return <option key={f.id} value={f.cssFamily} title={tooltip}>{f.displayName}{badge}</option>;
             })}
           </optgroup>
           <optgroup label="시스템 글꼴">
             {FONTS.filter(f => f.sourceType === 'system').map(f => (
-              <option key={f.id} value={f.cssFamily}>{f.displayName}</option>
+              <option key={f.id} value={f.cssFamily} title={getFontPdfTooltip(f)}>{f.displayName}</option>
             ))}
           </optgroup>
         </select>
@@ -1018,7 +1020,7 @@ function LogShareView() {
             <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 16px', borderBottom: i < sorted.length - 1 ? '1px solid #f0f0f0' : 'none', background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
               <span style={{ fontSize: 11, color: '#999', minWidth: 120, flexShrink: 0 }}>{fmtTs(log.completedAt)}</span>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13 }}>{proj?.title || '삭제된 작품'}</div>
+                <div style={{ fontSize: 13 }}>{proj?.title || '삭제된 대본'}</div>
                 {snapshot.length > 0 && (
                   <div style={{ fontSize: 11, color: '#999', marginTop: 2 }}>
                     완료: {snapshot.map(s => s.text).join(', ')}

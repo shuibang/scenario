@@ -316,12 +316,12 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
     };
   }, [menuOpen]);
 
-  // 공통: 작품 목록 (projects + notes + storyboard 탭 공유)
+  // 공통: 대본 목록 (projects + notes + storyboard 탭 공유)
   const [scripts,      setScripts]      = useState(null);
   const [localScripts, setLocalScripts] = useState(() => loadLocalScripts());
   const [importOpen,   setImportOpen]   = useState(false);
 
-  // 작품 탭 state
+  // 대본 탭 state
   const [projSelected,  setProjSelected]  = useState(null);
   const [projViewing,   setProjViewing]   = useState(null);  // { appState, selections }
   const [projLoading,   setProjLoading]   = useState(false);
@@ -380,7 +380,7 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
   useEffect(() => { if (adding) setTimeout(() => addRef.current?.focus(), 50); }, [adding]);
 
 
-  // ── 작품 탭: 대본 로드 ─────────────────────────────────────────────────────
+  // ── 대본 탭: 대본 로드 ─────────────────────────────────────────────────────
   const loadProjScript = async (script) => {
     if (projSelected?.id === script.id) { setPanelOpen(false); return; }
     setProjSelected(script); setProjViewing(null); setProjLoading(true); setPanelOpen(false);
@@ -449,7 +449,7 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
 
   // ── 탭 항목 ───────────────────────────────────────────────────────────────
   const TABS = [
-    { id: 'projects',   icon: '📄', label: '작품' },
+    { id: 'projects',   icon: '📄', label: '대본' },
     { id: 'notes',      icon: '📝', label: '연출' },
     { id: 'scenelist',  icon: '📋', label: '씬리스트' },
     { id: 'storyboard', icon: '🎞',  label: '보드' },
@@ -483,7 +483,7 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
           </>
         )}
         {scripts === null && <div style={{ padding: '16px', fontSize: 12, color: D.text3 }}>불러오는 중…</div>}
-        {scripts?.length === 0 && localScripts.length === 0 && <div style={{ padding: '12px 14px', fontSize: 12, color: D.text3, textAlign: 'center' }}>가져온 작품이 없습니다</div>}
+        {scripts?.length === 0 && localScripts.length === 0 && <div style={{ padding: '12px 14px', fontSize: 12, color: D.text3, textAlign: 'center' }}>가져온 대본이 없습니다</div>}
         {(scripts?.length ?? 0) > 0 && <div style={{ padding: '2px 14px', fontSize: 10, color: D.text3, opacity: 0.7 }}>클라우드</div>}
         {scripts?.map(s => (
           <div key={s.id} onClick={() => loadProjScript(s)}
@@ -517,7 +517,7 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
           </>
         )}
         {scripts === null && <div style={{ padding: '16px', fontSize: 12, color: D.text3 }}>불러오는 중…</div>}
-        {scripts?.length === 0 && localScripts.length === 0 && <div style={{ padding: '16px', fontSize: 12, color: D.text3, textAlign: 'center' }}>가져온 작품이 없습니다</div>}
+        {scripts?.length === 0 && localScripts.length === 0 && <div style={{ padding: '16px', fontSize: 12, color: D.text3, textAlign: 'center' }}>가져온 대본이 없습니다</div>}
         {scripts?.map(s => {
           const cnt = getNoteCount(s.id);
           const active = noteScript?.id === s.id;
@@ -553,7 +553,7 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
           </>
         )}
         {scripts === null && <div style={{ padding: '16px', fontSize: 12, color: D.text3 }}>불러오는 중…</div>}
-        {scripts?.length === 0 && localScripts.length === 0 && <div style={{ padding: '12px 14px', fontSize: 12, color: D.text3, textAlign: 'center' }}>가져온 작품이 없습니다</div>}
+        {scripts?.length === 0 && localScripts.length === 0 && <div style={{ padding: '12px 14px', fontSize: 12, color: D.text3, textAlign: 'center' }}>가져온 대본이 없습니다</div>}
         {(scripts?.length ?? 0) > 0 && <div style={{ padding: '2px 14px', fontSize: 10, color: D.text3, opacity: 0.7 }}>클라우드</div>}
         {scripts?.map(s => {
           const active = sceneScript?.id === s.id;
@@ -573,7 +573,7 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
           const localScripts = loadLocalScripts();
           const allScripts = [...localScripts, ...(scripts || [])];
           return allScripts.length === 0
-            ? <div style={{ padding: '8px 14px', fontSize: 12, color: D.text3, textAlign: 'center' }}>작품이 없습니다</div>
+            ? <div style={{ padding: '8px 14px', fontSize: 12, color: D.text3, textAlign: 'center' }}>대본이 없습니다</div>
             : allScripts.map(s => (
               <div key={s.id} onClick={() => { setBoardScript(s); setPanelOpen(false); }}
                 style={{ padding: '9px 14px', borderLeft: boardScript?.id === s.id ? `2px solid ${D.accent}` : '2px solid transparent', background: boardScript?.id === s.id ? D.active : 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -593,7 +593,7 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
       if (!projSelected) return (
         <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, color: D.text3 }}>
           <div style={{ fontSize: 32, opacity: 0.3 }}>📄</div>
-          <div style={{ fontSize: 13 }}>아래 탭에서 작품을 선택하세요</div>
+          <div style={{ fontSize: 13 }}>아래 탭에서 대본을 선택하세요</div>
         </div>
       );
       if (projLoading) return (
@@ -616,7 +616,7 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
       if (!noteScript) return (
         <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, color: D.text3 }}>
           <div style={{ fontSize: 32, opacity: 0.3 }}>📋</div>
-          <div style={{ fontSize: 13 }}>아래 탭에서 작품을 선택하세요</div>
+          <div style={{ fontSize: 13 }}>아래 탭에서 대본을 선택하세요</div>
         </div>
       );
       return (
@@ -680,7 +680,7 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
     return null;
   })();
 
-  // 접속 기록에서 작품 클릭 시: 대시보드 복귀 + 작품 탭 + 로드
+  // 접속 기록에서 대본 클릭 시: 대시보드 복귀 + 대본 탭 + 로드
   const handleOpenFromHistory = (script) => {
     setDirectorPage('dashboard');
     setTab('projects');
@@ -740,7 +740,7 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
               {/* 유저 정보 */}
               {isGuest || !session ? (
                 <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div style={{ fontSize: 12, color: D.text3, lineHeight: 1.6 }}>Google로 로그인하면<br />받은 작품을 볼 수 있습니다.</div>
+                  <div style={{ fontSize: 12, color: D.text3, lineHeight: 1.6 }}>Google로 로그인하면<br />받은 대본을 볼 수 있습니다.</div>
                   <button
                     onClick={() => { setMenuOpen(false); loginWithReturnHash(); }}
                     style={{
@@ -960,7 +960,7 @@ export default function DirectorDashboard({ session, onBack, isGuest = false }) 
   };
 
   const NAV_ITEMS = [
-    { id: 'projects',   icon: '📄', label: '작품 목록' },
+    { id: 'projects',   icon: '📄', label: '대본 목록' },
     { id: 'notes',      icon: '📝', label: '연출노트' },
     { id: 'storyboard', icon: '🎞', label: '스토리보드' },
   ];
@@ -979,7 +979,7 @@ export default function DirectorDashboard({ session, onBack, isGuest = false }) 
     return () => window.removeEventListener('popstate', onPop);
   }, [directorPage]);
 
-  // 접속기록에서 작품 클릭 → 작품 메뉴 전환(자동 뷰어 로드는 추후)
+  // 접속기록에서 대본 클릭 → 대본 메뉴 전환(자동 뷰어 로드는 추후)
   const handleOpenFromHistory = () => {
     setDirectorPage('dashboard');
     setActiveMenu('projects');
@@ -1019,7 +1019,7 @@ export default function DirectorDashboard({ session, onBack, isGuest = false }) 
         display: 'flex', alignItems: 'center', padding: '0 24px', gap: 16,
         borderBottom: `1px solid ${D.border}`, background: D.sidebar,
       }}>
-        {/* 연출 작업실 (현재 위치, 작품 목록으로) */}
+        {/* 연출 작업실 (현재 위치, 대본 목록으로) */}
         <button
           onClick={() => setActiveMenu('projects')}
           title="연출 작업실"
@@ -1086,8 +1086,8 @@ export default function DirectorDashboard({ session, onBack, isGuest = false }) 
             overflow: 'hidden',
           }}>
             <div style={{ width: 220, flex: 1, padding: '20px 0', display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <SideSection label="작품" />
-              <SideItem icon="📄" label="작품 목록" active={activeMenu === 'projects'} onClick={() => setActiveMenu('projects')} />
+              <SideSection label="대본" />
+              <SideItem icon="📄" label="대본 목록" active={activeMenu === 'projects'} onClick={() => setActiveMenu('projects')} />
               <div style={{ margin: '12px 0 0', height: 1, background: D.border }} />
               <SideSection label="연출" />
               <SideItem icon="📝" label="연출노트"   active={activeMenu === 'notes'}      onClick={() => setActiveMenu('notes')} />
@@ -1255,7 +1255,7 @@ function OrphanScriptCard({ D, onRemove, removing }) {
       <div style={{ fontSize: 14, fontWeight: 700, color: D.text }}>Drive에서 파일을 찾을 수 없어요</div>
       <div style={{ fontSize: 12, color: D.text2, lineHeight: 1.7 }}>
         이 대본의 Drive 파일이 이미 삭제된 것 같습니다.<br />
-        작품 목록에서 제거할 수 있어요.
+        대본 목록에서 제거할 수 있어요.
       </div>
       <button
         onClick={onRemove}
@@ -1495,9 +1495,9 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
         </div>
       )}
 
-      {/* 작품 목록 + 뷰어 영역 (row) */}
+      {/* 대본 목록 + 뷰어 영역 (row) */}
       <div style={{ display: 'flex', flex: '1 1 0', minHeight: 0, overflow: 'hidden' }}>
-      {/* 작품 목록 (공통 JSX) */}
+      {/* 대본 목록 (공통 JSX) */}
       {(() => {
         const scriptListContent = (
           <div style={{ padding: '8px 0' }}>
@@ -1508,7 +1508,7 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
                 + 텍스트로 가져오기
               </button>
             </div>
-            {/* 로컬 작품 */}
+            {/* 로컬 대본 */}
             {localScripts.length > 0 && (
               <>
                 <div style={{ padding: '4px 16px 2px', fontSize: 10, fontWeight: 700, color: D.text3, letterSpacing: '0.05em', textTransform: 'uppercase', opacity: 0.7 }}>로컬</div>
@@ -1529,12 +1529,12 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
                 {(scripts?.length ?? 0) > 0 && <div style={{ height: 1, background: D.border, margin: '6px 0' }} />}
               </>
             )}
-            {/* 클라우드 작품 */}
+            {/* 클라우드 대본 */}
             {error && <div style={{ padding: '12px 16px', fontSize: 12, color: '#e05c5c' }}>오류: {error}</div>}
             {scripts === null && <div style={{ padding: '12px 16px', fontSize: 12, color: D.text3 }}>불러오는 중…</div>}
             {scripts?.length === 0 && !error && localScripts.length === 0 && (
               <div style={{ padding: '16px 16px', textAlign: 'center' }}>
-                <div style={{ fontSize: 11, color: D.text3, lineHeight: 1.6 }}>가져온 작품이 없습니다.<br />검토 링크에서 가져오거나<br />위 버튼으로 텍스트를 붙여넣으세요.</div>
+                <div style={{ fontSize: 11, color: D.text3, lineHeight: 1.6 }}>가져온 대본이 없습니다.<br />검토 링크에서 가져오거나<br />위 버튼으로 텍스트를 붙여넣으세요.</div>
               </div>
             )}
             {scripts?.length > 0 && <div style={{ padding: '4px 16px 2px', fontSize: 10, fontWeight: 700, color: D.text3, letterSpacing: '0.05em', textTransform: 'uppercase', opacity: 0.7 }}>클라우드</div>}
@@ -1548,14 +1548,14 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
 
         return isMobile ? (
           /* 모바일: 바텀 시트 */
-          <BottomSheet open={sheetOpen} onClose={() => setSheetOpen(false)} title="작품 목록">
+          <BottomSheet open={sheetOpen} onClose={() => setSheetOpen(false)} title="대본 목록">
             {scriptListContent}
           </BottomSheet>
         ) : (
           /* 데스크톱: 좌측 패널 */
           <div style={{ width: subCollapsed ? 28 : 260, flexShrink: 0, alignSelf: 'stretch', borderRight: `1px solid ${D.border}`, background: D.panel, display: 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'width 0.2s ease' }}>
             <div style={{ padding: '10px 8px 10px 12px', borderBottom: `1px solid ${D.border}`, display: 'flex', alignItems: 'center', gap: 6 }}>
-              {!subCollapsed && <div style={{ flex: 1, fontSize: 11, fontWeight: 700, color: D.text3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>작품 목록</div>}
+              {!subCollapsed && <div style={{ flex: 1, fontSize: 11, fontWeight: 700, color: D.text3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>대본 목록</div>}
               <button onClick={() => setSubCollapsed(v => !v)} title={subCollapsed ? '목록 열기' : '목록 닫기'}
                 style={{ flexShrink: 0, background: 'none', border: 'none', color: D.text3, cursor: 'pointer', fontSize: 10, padding: '2px 4px', lineHeight: 1 }}>
                 {subCollapsed ? '▶' : '◀'}
@@ -1574,7 +1574,7 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
           {isMobile && (
             <button onClick={() => setSheetOpen(true)}
               style={{ fontSize: 11, color: D.accent, background: 'none', border: `1px solid ${D.accent}`, borderRadius: 5, padding: '4px 10px', cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' }}>
-              📄 {selected ? selected.title.slice(0, 10) + (selected.title.length > 10 ? '…' : '') : '작품 선택'}
+              📄 {selected ? selected.title.slice(0, 10) + (selected.title.length > 10 ? '…' : '') : '대본 선택'}
             </button>
           )}
           {selected && viewing?.appState && (
@@ -1592,7 +1592,7 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
             <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: 32, marginBottom: 12, opacity: 0.3 }}>📄</div>
-                <div style={{ fontSize: 13, color: '#888' }}>{isMobile ? '위 버튼으로 작품을 선택하세요' : '좌측에서 작품을 선택하세요'}</div>
+                <div style={{ fontSize: 13, color: '#888' }}>{isMobile ? '위 버튼으로 대본을 선택하세요' : '좌측에서 대본을 선택하세요'}</div>
               </div>
             </div>
           )}
@@ -2283,7 +2283,7 @@ function SceneListPanel({ isMobile = false, mobileSelected = null }) {
           {(localScripts.length > 0 || (scripts?.length ?? 0) > 0) && <div style={{ height: 1, background: D.border, margin: '4px 0' }} />}
         </>
       )}
-      {/* 로컬 작품 */}
+      {/* 로컬 대본 */}
       {localScripts.length > 0 && (
         <>
           <div style={{ padding: '4px 16px 2px', fontSize: 10, fontWeight: 700, color: D.text3, letterSpacing: '0.05em', textTransform: 'uppercase', opacity: 0.7 }}>로컬</div>
@@ -2304,7 +2304,7 @@ function SceneListPanel({ isMobile = false, mobileSelected = null }) {
       {scripts?.length === 0 && localScripts.length === 0 && receivedLists.length === 0 && (
         <div style={{ padding: '24px 16px', textAlign: 'center' }}>
           <div style={{ fontSize: 22, marginBottom: 8, opacity: 0.4 }}>📋</div>
-          <div style={{ fontSize: 11, color: D.text3, lineHeight: 1.6 }}>가져온 작품이 없습니다.</div>
+          <div style={{ fontSize: 11, color: D.text3, lineHeight: 1.6 }}>가져온 대본이 없습니다.</div>
         </div>
       )}
       {scripts?.map(s => {
@@ -2328,7 +2328,7 @@ function SceneListPanel({ isMobile = false, mobileSelected = null }) {
           <button onClick={() => setSheetOpen(true)}
             style={{ flex: 1, padding: '6px 10px', borderRadius: 6, border: `1px solid ${D.accent}`, background: 'transparent', color: D.accent, fontSize: 12, fontWeight: 600, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6 }}>
             <span>📋</span>
-            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selected ? selected.title : '작품 선택'}</span>
+            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selected ? selected.title : '대본 선택'}</span>
             <span style={{ fontSize: 10, color: D.text3 }}>▾</span>
           </button>
         ) : (
@@ -2365,7 +2365,7 @@ function SceneListPanel({ isMobile = false, mobileSelected = null }) {
         {!selected && (
           <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, color: D.text3 }}>
             <div style={{ fontSize: 36, opacity: 0.25 }}>📋</div>
-            <div style={{ fontSize: 13 }}>{isMobile ? '위 버튼으로 작품을 선택하세요' : '좌측에서 작품을 선택하세요'}</div>
+            <div style={{ fontSize: 13 }}>{isMobile ? '위 버튼으로 대본을 선택하세요' : '좌측에서 대본을 선택하세요'}</div>
           </div>
         )}
         {selected && loading && (
@@ -2417,11 +2417,11 @@ function SceneListPanel({ isMobile = false, mobileSelected = null }) {
 
   return (
     <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
-      {/* 데스크톱 좌측: 작품 목록 */}
+      {/* 데스크톱 좌측: 대본 목록 */}
       {!isMobile && (
         <div style={{ width: subCollapsed ? 28 : 240, flexShrink: 0, borderRight: `1px solid ${D.border}`, background: D.panel, display: 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'width 0.2s ease' }}>
           <div style={{ padding: '10px 8px 10px 12px', borderBottom: `1px solid ${D.border}`, display: 'flex', alignItems: 'center', gap: 6 }}>
-            {!subCollapsed && <div style={{ flex: 1, fontSize: 11, fontWeight: 700, color: D.text3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>작품별 씬리스트</div>}
+            {!subCollapsed && <div style={{ flex: 1, fontSize: 11, fontWeight: 700, color: D.text3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>대본별 씬리스트</div>}
             <button onClick={() => setSubCollapsed(v => !v)} title={subCollapsed ? '목록 열기' : '목록 닫기'}
               style={{ flexShrink: 0, background: 'none', border: 'none', color: D.text3, cursor: 'pointer', fontSize: 10, padding: '2px 4px', lineHeight: 1 }}>
               {subCollapsed ? '▶' : '◀'}
@@ -2432,14 +2432,14 @@ function SceneListPanel({ isMobile = false, mobileSelected = null }) {
       )}
       {sceneTable}
 
-      {/* 모바일 시트: 작품 선택 */}
+      {/* 모바일 시트: 대본 선택 */}
       {isMobile && sheetOpen && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 9000, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'flex-end' }}
           onClick={() => setSheetOpen(false)}>
           <div style={{ width: '100%', maxHeight: '60vh', background: D.panel, borderRadius: '16px 16px 0 0', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
             onClick={e => e.stopPropagation()}>
             <div style={{ padding: '14px 16px 10px', borderBottom: `1px solid ${D.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 14, fontWeight: 700, color: D.text }}>작품 선택</span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: D.text }}>대본 선택</span>
               <button onClick={() => setSheetOpen(false)} style={{ background: 'none', border: 'none', color: D.text3, fontSize: 18, cursor: 'pointer', lineHeight: 1 }}>×</button>
             </div>
             <div style={{ flex: 1, overflowY: 'auto' }}>{scriptListContent}</div>
@@ -2538,7 +2538,7 @@ function NotesPanel({ isMobile = false }) {
 
   const scriptListContent = (
     <div style={{ padding: '8px 0' }}>
-      {/* 로컬 작품 */}
+      {/* 로컬 대본 */}
       {localScripts.length > 0 && (
         <>
           <div style={{ padding: '4px 16px 2px', fontSize: 10, fontWeight: 700, color: D.text3, letterSpacing: '0.05em', textTransform: 'uppercase', opacity: 0.7 }}>로컬</div>
@@ -2564,7 +2564,7 @@ function NotesPanel({ isMobile = false }) {
       {scripts?.length === 0 && localScripts.length === 0 && (
         <div style={{ padding: '24px 16px', textAlign: 'center' }}>
           <div style={{ fontSize: 22, marginBottom: 8, opacity: 0.4 }}>📝</div>
-          <div style={{ fontSize: 11, color: D.text3, lineHeight: 1.6 }}>가져온 작품이 없습니다.</div>
+          <div style={{ fontSize: 11, color: D.text3, lineHeight: 1.6 }}>가져온 대본이 없습니다.</div>
         </div>
       )}
       {scripts?.map(s => {
@@ -2591,11 +2591,11 @@ function NotesPanel({ isMobile = false }) {
   return (
     <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
 
-      {/* 작품 목록: 모바일→부모(DirectorMobileView)가 관리 / 데스크톱→좌측 패널 */}
+      {/* 대본 목록: 모바일→부모(DirectorMobileView)가 관리 / 데스크톱→좌측 패널 */}
       {!isMobile ? (
         <div style={{ width: subCollapsed ? 28 : 240, flexShrink: 0, borderRight: `1px solid ${D.border}`, background: D.panel, display: 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'width 0.2s ease' }}>
           <div style={{ padding: '10px 8px 10px 12px', borderBottom: `1px solid ${D.border}`, display: 'flex', alignItems: 'center', gap: 6 }}>
-            {!subCollapsed && <div style={{ flex: 1, fontSize: 11, fontWeight: 700, color: D.text3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>작품별 연출노트</div>}
+            {!subCollapsed && <div style={{ flex: 1, fontSize: 11, fontWeight: 700, color: D.text3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>대본별 연출노트</div>}
             <button onClick={() => setSubCollapsed(v => !v)} title={subCollapsed ? '목록 열기' : '목록 닫기'}
               style={{ flexShrink: 0, background: 'none', border: 'none', color: D.text3, cursor: 'pointer', fontSize: 10, padding: '2px 4px', lineHeight: 1 }}>
               {subCollapsed ? '▶' : '◀'}
@@ -2608,12 +2608,12 @@ function NotesPanel({ isMobile = false }) {
       {/* 노트 목록 */}
       <div style={{ flex: 1, minHeight: 0, minWidth: 0, overflow: 'auto', background: D.bg, padding: isMobile ? '16px 16px' : 32 }}>
 
-        {/* 모바일: 작품 선택 버튼 */}
+        {/* 모바일: 대본 선택 버튼 */}
         {isMobile && (
           <button onClick={() => setSheetOpen(true)}
             style={{ width: '100%', marginBottom: 16, padding: '10px 14px', borderRadius: 8, border: `1px solid ${D.accent}`, background: 'transparent', color: D.accent, fontSize: 13, fontWeight: 600, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>📝</span>
-            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selected ? selected.title : '작품 선택'}</span>
+            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selected ? selected.title : '대본 선택'}</span>
             <span style={{ fontSize: 11, color: D.text3 }}>▾</span>
           </button>
         )}
@@ -2622,7 +2622,7 @@ function NotesPanel({ isMobile = false }) {
           <div style={{ height: '60%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 36, marginBottom: 12, opacity: 0.3 }}>📋</div>
-              <div style={{ fontSize: 13, color: D.text3 }}>{isMobile ? '위 버튼으로 작품을 선택하세요' : '좌측에서 작품을 선택하세요'}</div>
+              <div style={{ fontSize: 13, color: D.text3 }}>{isMobile ? '위 버튼으로 대본을 선택하세요' : '좌측에서 대본을 선택하세요'}</div>
             </div>
           </div>
         )}
@@ -3159,7 +3159,7 @@ function UploadScriptModal({ onClose, onGenerate }) {
           {step === 1 && (
             <div>
               <div style={{ marginBottom: 12 }}>
-                <label style={{ fontSize: 11, fontWeight: 700, color: D.text3, display: 'block', marginBottom: 5 }}>작품 제목</label>
+                <label style={{ fontSize: 11, fontWeight: 700, color: D.text3, display: 'block', marginBottom: 5 }}>대본 제목</label>
                 <input
                   value={title}
                   onChange={e => setTitle(e.target.value)}
@@ -3199,7 +3199,7 @@ function UploadScriptModal({ onClose, onGenerate }) {
             <div>
               {/* 제목 수정 */}
               <div style={{ marginBottom: 12 }}>
-                <label style={{ fontSize: 11, fontWeight: 700, color: D.text3, display: 'block', marginBottom: 5 }}>작품 제목</label>
+                <label style={{ fontSize: 11, fontWeight: 700, color: D.text3, display: 'block', marginBottom: 5 }}>대본 제목</label>
                 <input
                   value={title}
                   onChange={e => setTitle(e.target.value)}
@@ -3319,7 +3319,7 @@ function ImportTextModal({ onClose, onImport }) {
         </div>
         <div style={{ flex: 1, overflowY: 'auto', padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
-            <label style={{ fontSize: 11, fontWeight: 700, color: D.text3, display: 'block', marginBottom: 5 }}>작품 제목</label>
+            <label style={{ fontSize: 11, fontWeight: 700, color: D.text3, display: 'block', marginBottom: 5 }}>대본 제목</label>
             <input value={title} onChange={e => setTitle(e.target.value)} placeholder="제목 없음"
               style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', borderRadius: 6, border: `1px solid ${D.border}`, background: D.bg, color: D.text, fontSize: 13, outline: 'none' }} />
           </div>
@@ -3365,7 +3365,7 @@ const GUIDE_STEPS = [
   {
     icon: '🎬',
     title: '연출 작업실에 오신 걸 환영합니다',
-    desc: '대본을 씬 단위로 분석하고 컷별 스토리보드를 제작하는 공간입니다.\n예시 작품이 미리 열려 있어요 — 직접 조작해보세요!',
+    desc: '대본을 씬 단위로 분석하고 컷별 스토리보드를 제작하는 공간입니다.\n예시 대본이 미리 열려 있어요 — 직접 조작해보세요!',
   },
   {
     icon: '🎞',
@@ -3495,7 +3495,7 @@ function StoryboardPanel({ isGuest, isMobile = false, mobilePreSelected = null, 
   const [selectedPanelId, setSelectedPanelId] = useState(null);  // 선택된 패널
   const [draggingIdx,     setDraggingIdx]     = useState(null);   // 드래그 중인 인덱스
   const [dragOverIdx,     setDragOverIdx]     = useState(null);   // 드롭 대상 인덱스
-  const [sheetOpen,       setSheetOpen]       = useState(false);  // 모바일 작품 시트
+  const [sheetOpen,       setSheetOpen]       = useState(false);  // 모바일 대본 시트
   const [printHeader,     setPrintHeader]     = useState(false);  // 출력 머리말/꼬리말
   const [printBgGraphics, setPrintBgGraphics] = useState(false);  // 출력 배경 그래픽
   const [subCollapsed,    setSubCollapsed]    = useState(false);  // 좌측 목록 패널 접힘
@@ -3509,7 +3509,7 @@ function StoryboardPanel({ isGuest, isMobile = false, mobilePreSelected = null, 
     setPanels(DEMO_PANELS);
   }, [isGuest]);
 
-  // 모바일: 외부에서 선택된 작품 동기화 (데모 스크립트는 isGuest effect가 담당)
+  // 모바일: 외부에서 선택된 대본 동기화 (데모 스크립트는 isGuest effect가 담당)
   useEffect(() => {
     if (!mobilePreSelected || mobilePreSelected._isDemo) return;
     setSelected(mobilePreSelected);
@@ -3543,7 +3543,7 @@ function StoryboardPanel({ isGuest, isMobile = false, mobilePreSelected = null, 
   // 로컬 스크립트 삭제
   const handleDeleteLocal = (e, id) => {
     e.stopPropagation();
-    if (!window.confirm('이 작품을 삭제할까요?\n연출노트와 스토리보드도 함께 삭제됩니다.')) return;
+    if (!window.confirm('이 대본을 삭제할까요?\n연출노트와 스토리보드도 함께 삭제됩니다.')) return;
     deleteLocalScript(id);
     try { localStorage.removeItem(`director_private_notes_${id}`); } catch {}
     try { localStorage.removeItem(`director_storyboard_${id}`); } catch {}
@@ -3551,7 +3551,7 @@ function StoryboardPanel({ isGuest, isMobile = false, mobilePreSelected = null, 
     if (selected?.id === id) { setSelected(null); setPanels(null); }
   };
 
-  // 작품 선택 시 기존 스토리보드 로드
+  // 대본 선택 시 기존 스토리보드 로드
   const handleSelect = (s) => {
     setSelected(s);
     setError('');
@@ -3833,7 +3833,7 @@ function StoryboardPanel({ isGuest, isMobile = false, mobilePreSelected = null, 
         {scripts?.length === 0 && localScripts.length === 0 && (
           <div style={{ padding: '24px 16px', textAlign: 'center' }}>
             <div style={{ fontSize: 22, marginBottom: 8, opacity: 0.4 }}>🎞</div>
-            <div style={{ fontSize: 11, color: D.text3, lineHeight: 1.6 }}>가져온 작품이 없습니다.</div>
+            <div style={{ fontSize: 11, color: D.text3, lineHeight: 1.6 }}>가져온 대본이 없습니다.</div>
           </div>
         )}
         {scripts?.map(s => {
@@ -3858,7 +3858,7 @@ function StoryboardPanel({ isGuest, isMobile = false, mobilePreSelected = null, 
   return (
     <div style={{ display: 'flex', flex: 1, minHeight: 0, height: '100%' }}>
 
-      {/* 작품 목록: 모바일→부모(DirectorMobileView)가 관리 / 데스크톱→좌측 패널 */}
+      {/* 대본 목록: 모바일→부모(DirectorMobileView)가 관리 / 데스크톱→좌측 패널 */}
       {!isMobile ? (
         <div style={{ width: subCollapsed ? 28 : 240, flexShrink: 0, borderRight: `1px solid ${D.border}`, background: D.panel, display: 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'width 0.2s ease' }}>
           <div style={{ padding: '10px 8px 10px 12px', borderBottom: `1px solid ${D.border}`, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -3883,7 +3883,7 @@ function StoryboardPanel({ isGuest, isMobile = false, mobilePreSelected = null, 
           <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 40, marginBottom: 12, opacity: 0.25 }}>🎞</div>
-              <div style={{ fontSize: 13, color: D.text3 }}>{isMobile ? '아래 버튼으로 작품을 선택하세요' : '좌측에서 작품을 선택하세요'}</div>
+              <div style={{ fontSize: 13, color: D.text3 }}>{isMobile ? '아래 버튼으로 대본을 선택하세요' : '좌측에서 대본을 선택하세요'}</div>
             </div>
           </div>
         )}
@@ -3913,7 +3913,7 @@ function StoryboardPanel({ isGuest, isMobile = false, mobilePreSelected = null, 
 
             {/* 상단 바 */}
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8, flexWrap: 'wrap' }}>
-              {/* 모바일: 작품 선택 버튼 */}
+              {/* 모바일: 대본 선택 버튼 */}
               {isMobile && (
                 <button onClick={() => setSheetOpen(true)}
                   style={{ padding: '5px 12px', borderRadius: 6, border: `1px solid ${D.border}`, background: D.panel, color: D.text2, fontSize: 11, cursor: 'pointer', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

@@ -4,14 +4,14 @@ import IdeaNotePanel from './IdeaNotePanel';
 /**
  * IdeaSheet — 사이드/바텀 시트 래퍼
  *
- * 데스크톱: 우측에서 슬라이드되는 패널 (오버레이 X — 작품 모달 위에서도 보임)
+ * 데스크톱: 우측에서 슬라이드되는 패널 (오버레이 X — 대본 모달 위에서도 보임)
  * 모바일:   바텀 시트
  *
  * Props:
  *   open
  *   onClose
  *   onExpand      — 풀스크린 페이지로 이동
- *   onPromote     — (idea) => void  : 작품으로 승격 핸들러
+ *   onPromote     — (idea) => void  : 대본으로 승격 핸들러
  *   isMobile      — 모바일 모드 여부
  */
 export default function IdeaSheet({ open, onClose, onExpand, onPromote, isMobile = false }) {

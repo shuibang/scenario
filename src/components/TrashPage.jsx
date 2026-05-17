@@ -88,10 +88,10 @@ export default function TrashPage() {
             color: 'var(--c-text5)', fontSize: 12, padding: 0,
             marginBottom: 8,
           }}
-        >← 작품 관리로 돌아가기</button>
+        >← 대본 관리로 돌아가기</button>
         <div className="text-lg font-bold" style={{ color: 'var(--c-text)' }}>휴지통</div>
         <div className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--c-text5)' }}>
-          삭제된 작품은 30일간 보관 후 자동 삭제됩니다. 복원하면 회차·씬·인물 등 모든 데이터가 함께 돌아옵니다.
+          삭제된 대본은 30일간 보관 후 자동 삭제됩니다. 복원하면 회차·씬·인물 등 모든 데이터가 함께 돌아옵니다.
         </div>
       </div>
 

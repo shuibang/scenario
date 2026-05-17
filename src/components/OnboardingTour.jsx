@@ -31,13 +31,13 @@ function Tag({ children, color = 'accent' }) {
 const STEPS = [
   {
     tourId: 'menubar',
-    title: '먼저 작품을 만들어 보세요',
+    title: '먼저 대본을 만들어 보세요',
     desc: (
       <>
-        상단 메뉴 <Tag>파일 → 새 작품</Tag> (단축키 <Tag color="blue">Ctrl+Alt+N</Tag>)으로<br/>
+        상단 메뉴 <Tag>파일 → 새 대본</Tag> (단축키 <Tag color="blue">Ctrl+Alt+N</Tag>)으로<br/>
         회차 수와 분량을 입력하면 바로 대본 작성으로 넘어갑니다.<br/>
         <span style={{ fontSize: 11, color: 'var(--c-text5)' }}>
-          작품을 만들어야 표지·시놉시스·대본 편집을 시작할 수 있어요.
+          대본을 만들어야 표지·시놉시스·대본 편집을 시작할 수 있어요.
         </span>
       </>
     ),
@@ -46,11 +46,11 @@ const STEPS = [
   {
     tourId: 'left-panel',
     navigateTo: 'cover',
-    title: '작품 구성 메뉴',
+    title: '대본 구성 메뉴',
     desc: (
       <>
-        <Tag>작품 구성 패널</Tag>에 회차·시놉시스·인물·트리트먼트 등<br/>
-        작품 전체를 구성하는 메뉴가 모여 있습니다.<br/>
+        <Tag>대본 구성 패널</Tag>에 회차·시놉시스·인물·트리트먼트 등<br/>
+        대본 전체를 구성하는 메뉴가 모여 있습니다.<br/>
         항목을 탭하면 편집 화면으로 이동합니다.<br/>
         <span style={{ fontSize: 11, color: 'var(--c-text5)' }}>
           모바일 : 화면 하단 탭바 <Tag color="blue">대본</Tag> <Tag color="blue">자료</Tag> <Tag color="blue">설계</Tag> 버튼
@@ -94,7 +94,7 @@ const PAGE_HINTS = {
     title: '표지',
     desc: (
       <>
-        <Tag>표지</Tag>에 작품 기본 정보(제목·작가·장르 등)를 입력하세요.<br/>
+        <Tag>표지</Tag>에 대본 기본 정보(제목·작가·장르 등)를 입력하세요.<br/>
         출력 시 첫 장에 표시됩니다.
       </>
     ),
@@ -106,7 +106,7 @@ const PAGE_HINTS = {
     desc: (
       <>
         <Tag>시놉시스</Tag>에 장르·주제·기획의도·줄거리를 정리하세요.<br/>
-        작품의 방향을 잡는 데 활용할 수 있습니다.
+        대본의 방향을 잡는 데 활용할 수 있습니다.
       </>
     ),
     tourId: 'center-panel',
@@ -202,7 +202,7 @@ const PAGE_HINTS = {
     title: '자료수집',
     desc: (
       <>
-        <Tag>자료수집</Tag>에 작품 관련 자료와 메모를 보관하세요.<br/>
+        <Tag>자료수집</Tag>에 대본 관련 자료와 메모를 보관하세요.<br/>
         링크·이미지·텍스트를 자유롭게 저장할 수 있습니다.
       </>
     ),

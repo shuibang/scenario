@@ -83,7 +83,7 @@ export default function DirectorHistoryPage({ onBack, isGuest, D, onOpenScript }
         )}
         {!loading && records.length === 0 && (
           <div style={{ padding: '60px 24px', textAlign: 'center', color: D.text3, fontSize: 13, lineHeight: 1.7 }}>
-            아직 받은 작품이 없습니다.<br />
+            아직 받은 대본이 없습니다.<br />
             <span style={{ fontSize: 11, opacity: 0.7 }}>작가가 공유한 대본이 여기에 기록됩니다.</span>
           </div>
         )}

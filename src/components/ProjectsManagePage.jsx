@@ -2,8 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
 import DeleteConfirmModal from './Modals/DeleteConfirmModal';
 
-// ─── ProjectsManagePage — 작품 관리 (Phase X.1) ────────────────────────────
-// 카드 클릭 = 작품 진입(SET_ACTIVE_PROJECT → activeDoc 'cover')
+// ─── ProjectsManagePage — 대본 관리 (Phase X.1) ────────────────────────────
+// 카드 클릭 = 대본 진입(SET_ACTIVE_PROJECT → activeDoc 'cover')
 // ✏️ = 인라인 이름 변경. Enter 확정 / Esc 취소 / blur 시 비어있으면 원복
 
 const TYPE_LABEL = { series: '시리즈', single: '단막' };
@@ -124,7 +124,7 @@ export default function ProjectsManagePage({ onNewProject }) {
       {/* Header */}
       <div className="shrink-0" style={{ padding: '16px 20px', borderBottom: '1px solid var(--c-border2)' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
-          <div className="text-lg font-bold" style={{ color: 'var(--c-text)' }}>작품 관리</div>
+          <div className="text-lg font-bold" style={{ color: 'var(--c-text)' }}>대본 관리</div>
           <button
             onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'trash' })}
             title="휴지통"
@@ -136,7 +136,7 @@ export default function ProjectsManagePage({ onNewProject }) {
           >🗑 휴지통{trashCount > 0 ? ` (${trashCount})` : ''}</button>
         </div>
         <div className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--c-text5)' }}>
-          작품 카드를 누르면 해당 작품으로 이동합니다. ✏️ 버튼으로 이름을 바꿀 수 있어요.
+          대본 카드를 누르면 해당 대본으로 이동합니다. ✏️ 버튼으로 이름을 바꿀 수 있어요.
         </div>
       </div>
 
@@ -144,9 +144,9 @@ export default function ProjectsManagePage({ onNewProject }) {
       <div className="flex-1 overflow-y-auto" style={{ padding: '12px 16px' }}>
         {projects.length === 0 ? (
           <div className="text-center py-16">
-            <div className="text-sm" style={{ color: 'var(--c-text5)' }}>아직 작품이 없습니다.</div>
+            <div className="text-sm" style={{ color: 'var(--c-text5)' }}>아직 대본이 없습니다.</div>
             <div className="mt-2 text-xs" style={{ color: 'var(--c-text6)' }}>
-              새 작품을 만들어 첫 회차를 시작해보세요.
+              새 대본을 만들어 첫 회차를 시작해보세요.
             </div>
             <button
               onClick={() => onNewProject?.()}
@@ -155,7 +155,7 @@ export default function ProjectsManagePage({ onNewProject }) {
                 border: '1px solid var(--c-border3)', background: 'var(--c-card)',
                 color: 'var(--c-text)', fontSize: 13, cursor: 'pointer',
               }}
-            >+ 새 작품 만들기</button>
+            >+ 새 대본 만들기</button>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -180,7 +180,7 @@ export default function ProjectsManagePage({ onNewProject }) {
                         onKeyDown={e => handleKeyDown(e, p)}
                         onBlur={() => handleBlur(p)}
                         onClick={e => e.stopPropagation()}
-                        placeholder="작품 제목"
+                        placeholder="대본 제목"
                         style={editInputStyle}
                       />
                     ) : (
