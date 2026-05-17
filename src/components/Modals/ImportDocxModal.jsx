@@ -4,6 +4,7 @@ import { useApp } from '../../store/AppContext';
 import { parseScriptText } from '../../utils/parseScriptText';
 import { genId, now } from '../../store/db';
 import { isMultiEpisode } from '../../utils/projectTypes';
+import { reportError } from '../../utils/errorTracker';
 
 export default function ImportDocxModal({ open, onClose }) {
   const { state, dispatch } = useApp();
@@ -42,7 +43,8 @@ export default function ImportDocxModal({ open, onClose }) {
       setMode(hasContent ? 'new' : 'append');
       setStep('confirm');
     } catch (err) {
-      setError('DOCX 파일을 읽을 수 없습니다: ' + (err?.message || err));
+      reportError({ source: 'manual', message: err?.message || String(err), stack: err?.stack });
+      setError('DOCX 파일을 읽을 수 없어요. 파일이 손상되었거나 지원되지 않는 형식일 수 있어요.');
     } finally {
       setLoading(false);
     }

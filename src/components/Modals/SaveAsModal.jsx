@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Modal, { ModalBtn } from './Modal';
+import { reportError } from '../../utils/errorTracker';
 
 // Windows 등 OS의 파일명 금지 문자 + 제어문자 제거. 빈 문자열은 호출자가 처리.
 function sanitizeFilename(raw) {
@@ -34,7 +35,8 @@ export default function SaveAsModal({ open, onClose, projectTitle = '', onExport
       await onExport?.(safeName);
       onClose();
     } catch (err) {
-      setError('내보내기 실패: ' + (err?.message || err));
+      reportError({ source: 'manual', message: err?.message || String(err), stack: err?.stack });
+      setError('내보내기에 실패했어요. 잠시 후 다시 시도해주세요.');
     } finally {
       setExporting(false);
     }

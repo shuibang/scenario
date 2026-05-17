@@ -9,6 +9,7 @@ import {
   LOC_SEP_PRESETS, TIME_FMT_PRESETS,
   isCustomLocSep, previewFormat,
 } from '../../utils/sceneFormat';
+import { reportError } from '../../utils/errorTracker';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatBytes(n) {
@@ -343,7 +344,10 @@ function FontSection() {
       const updated = [...meta, { id, name, format: ext.toUpperCase(), sizeBytes: file.size, isDefault: meta.length === 0, addedAt: Date.now() }];
       saveFontMeta(updated);
       setFonts(updated);
-    } catch (err) { setError(`업로드 실패: ${err.message}`); }
+    } catch (err) {
+      reportError({ source: 'manual', message: err?.message || String(err), stack: err?.stack });
+      setError('폰트 업로드에 실패했어요. 잠시 후 다시 시도해주세요.');
+    }
     finally { setUploading(false); }
   };
 
@@ -352,7 +356,10 @@ function FontSection() {
       const updated = loadFontMeta().map(f => ({ ...f, isDefault: f.id === id }));
       saveFontMeta(updated);
       setFonts(updated);
-    } catch (err) { setError(`기본 폰트 설정 실패: ${err.message}`); }
+    } catch (err) {
+      reportError({ source: 'manual', message: err?.message || String(err), stack: err?.stack });
+      setError('기본 폰트 설정에 실패했어요. 잠시 후 다시 시도해주세요.');
+    }
   };
 
   const handleDelete = async (id) => {
@@ -362,7 +369,10 @@ function FontSection() {
       if (meta.length > 0 && !meta.some(f => f.isDefault)) meta[0].isDefault = true;
       saveFontMeta(meta);
       setFonts(meta);
-    } catch (err) { setError(`삭제 실패: ${err.message}`); }
+    } catch (err) {
+      reportError({ source: 'manual', message: err?.message || String(err), stack: err?.stack });
+      setError('폰트 삭제에 실패했어요. 잠시 후 다시 시도해주세요.');
+    }
   };
 
   return (

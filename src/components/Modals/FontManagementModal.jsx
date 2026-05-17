@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import Modal from './Modal';
 import { storeFont, removeFont, loadFontMeta, saveFontMeta } from '../../print/fontStorage';
+import { reportError } from '../../utils/errorTracker';
 
 function formatBytes(n) {
   if (n == null) return '';
@@ -56,7 +57,8 @@ export default function FontManagementModal({ open, onClose }) {
       saveFontMeta(updated);
       setFonts(updated);
     } catch (err) {
-      setError(`업로드 실패: ${err.message}`);
+      reportError({ source: 'manual', message: err?.message || String(err), stack: err?.stack });
+      setError('폰트 업로드에 실패했어요. 잠시 후 다시 시도해주세요.');
     } finally {
       setUploading(false);
     }
@@ -68,7 +70,8 @@ export default function FontManagementModal({ open, onClose }) {
       saveFontMeta(updated);
       setFonts(updated);
     } catch (err) {
-      setError(`기본 폰트 설정 실패: ${err.message}`);
+      reportError({ source: 'manual', message: err?.message || String(err), stack: err?.stack });
+      setError('기본 폰트 설정에 실패했어요. 잠시 후 다시 시도해주세요.');
     }
   };
 
@@ -80,7 +83,8 @@ export default function FontManagementModal({ open, onClose }) {
       saveFontMeta(meta);
       setFonts(meta);
     } catch (err) {
-      setError(`삭제 실패: ${err.message}`);
+      reportError({ source: 'manual', message: err?.message || String(err), stack: err?.stack });
+      setError('폰트 삭제에 실패했어요. 잠시 후 다시 시도해주세요.');
     }
   };
 

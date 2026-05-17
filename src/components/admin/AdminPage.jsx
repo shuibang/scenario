@@ -10,11 +10,12 @@ import { supabase } from '../../store/supabaseClient';
  */
 
 const TABS = [
-  { id: 'dashboard', label: '📊 대시보드' },
-  { id: 'errors',    label: '🐞 오류 보고' },
-  { id: 'survey',    label: '📋 설문 응답' },
-  { id: 'shares',    label: '🔗 공유 활동' },
-  { id: 'paid',      label: '💰 유료 추정' },
+  { id: 'dashboard',   label: '📊 대시보드' },
+  { id: 'autoErrors',  label: '🚨 자동 오류' },
+  { id: 'errors',      label: '🐞 오류 보고' },
+  { id: 'survey',      label: '📋 설문 응답' },
+  { id: 'shares',      label: '🔗 공유 활동' },
+  { id: 'paid',        label: '💰 유료 추정' },
 ];
 
 const cardStyle = {
@@ -80,6 +81,7 @@ function useAdminData() {
     error: null,
     warnings: [],
     errors: [],
+    autoErrors: [],
     surveys: [],
     shared: [],
     reviewLinks: [],
@@ -101,6 +103,7 @@ function useAdminData() {
     //   review_links (legacy)                                                   → 정렬 컬럼 없음 (expires_at만 존재)
     const queries = [
       { key: 'errors',           q: supabase.from('error_reports').select('*').order('created_at', { ascending: false }).limit(500) },
+      { key: 'autoErrors',       q: supabase.from('client_errors').select('*').order('created_at', { ascending: false }).limit(1000) },
       { key: 'surveys',          q: supabase.from('survey_responses').select('*').order('created_at', { ascending: false }).limit(500) },
       { key: 'shared',           q: supabase.from('shared_scripts').select('*').order('imported_at', { ascending: false }).limit(500) },
       { key: 'reviewLinks',      q: supabase.from('review_links').select('*').limit(500) },
@@ -108,7 +111,7 @@ function useAdminData() {
       { key: 'feedbackSessions', q: supabase.from('feedback_sessions').select('*').order('submitted_at', { ascending: false }).limit(500) },
     ];
     const results = await Promise.allSettled(queries.map((x) => x.q));
-    const next = { errors: [], surveys: [], shared: [], reviewLinks: [], feedbackVersions: [], feedbackSessions: [] };
+    const next = { errors: [], autoErrors: [], surveys: [], shared: [], reviewLinks: [], feedbackVersions: [], feedbackSessions: [] };
     const warnings = [];
     results.forEach((r, i) => {
       const key = queries[i].key;
@@ -178,6 +181,11 @@ function DashboardTab({ data }) {
           <div style={subValStyle}>최근 30일 {stats.errorRecent}건</div>
         </div>
         <div style={cardStyle}>
+          <div style={labelStyle}>🚨 자동 캡처 오류</div>
+          <div style={valStyle}>{(data.autoErrors || []).length}건</div>
+          <div style={subValStyle}>최근 24h {(data.autoErrors || []).filter((r) => Date.now() - new Date(r.created_at).getTime() < 86400000).length}건</div>
+        </div>
+        <div style={cardStyle}>
           <div style={labelStyle}>설문 응답</div>
           <div style={valStyle}>{stats.surveyTotal}명</div>
           <div style={subValStyle}>이중 추첨 자격 후보 {stats.surveyEligible}명</div>
@@ -198,6 +206,179 @@ function DashboardTab({ data }) {
           <div style={subValStyle}>받은 피드백 누계</div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// 자동 오류 탭 — client_errors fingerprint 단위로 그룹핑
+// ───────────────────────────────────────────────────────────────────────────
+function AutoErrorsTab({ data }) {
+  const [sourceFilter, setSourceFilter] = useState('all');
+  const [windowFilter, setWindowFilter] = useState('7d');
+
+  const filtered = useMemo(() => {
+    const now = Date.now();
+    const windowMs = windowFilter === '24h' ? 86400000
+                   : windowFilter === '7d'  ? 7 * 86400000
+                   : windowFilter === '30d' ? 30 * 86400000
+                   : Infinity;
+    let rows = data.autoErrors || [];
+    if (sourceFilter !== 'all') rows = rows.filter((r) => r.source === sourceFilter);
+    if (windowMs !== Infinity) rows = rows.filter((r) => now - new Date(r.created_at).getTime() < windowMs);
+    return rows;
+  }, [data.autoErrors, sourceFilter, windowFilter]);
+
+  // fingerprint 단위 그룹핑
+  const groups = useMemo(() => {
+    const map = new Map();
+    filtered.forEach((r) => {
+      const key = r.fingerprint;
+      const g = map.get(key);
+      if (!g) {
+        map.set(key, {
+          fingerprint: key,
+          message: r.message,
+          source: r.source,
+          url: r.url,
+          stack: r.stack,
+          count: 1,
+          users: new Set(r.user_id ? [r.user_id] : []),
+          sessions: new Set([r.session_id]),
+          firstAt: r.created_at,
+          lastAt: r.created_at,
+          samples: [r],
+        });
+      } else {
+        g.count++;
+        if (r.user_id) g.users.add(r.user_id);
+        g.sessions.add(r.session_id);
+        if (new Date(r.created_at) > new Date(g.lastAt)) g.lastAt = r.created_at;
+        if (new Date(r.created_at) < new Date(g.firstAt)) g.firstAt = r.created_at;
+        if (g.samples.length < 5) g.samples.push(r);
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => {
+      // 최근 발생 우선 → 그 다음 발생 횟수
+      const dt = new Date(b.lastAt) - new Date(a.lastAt);
+      if (dt !== 0) return dt;
+      return b.count - a.count;
+    });
+  }, [filtered]);
+
+  const sources = [
+    { id: 'all',     label: `전체 (${(data.autoErrors || []).length})` },
+    { id: 'window',  label: '🌐 JS 오류' },
+    { id: 'promise', label: '⛓️ Promise' },
+    { id: 'react',   label: '⚛️ React 크래시' },
+    { id: 'manual',  label: '✋ 수동' },
+  ];
+  const windows = [
+    { id: '24h', label: '24시간' },
+    { id: '7d',  label: '7일' },
+    { id: '30d', label: '30일' },
+    { id: 'all', label: '전체' },
+  ];
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        {sources.map((s) => (
+          <button
+            key={s.id}
+            onClick={() => setSourceFilter(s.id)}
+            style={{
+              padding: '4px 10px', borderRadius: 6, fontSize: 12,
+              border: '1px solid', borderColor: sourceFilter === s.id ? 'var(--c-accent)' : 'var(--c-border3)',
+              background: sourceFilter === s.id ? 'var(--c-active)' : 'transparent',
+              color: sourceFilter === s.id ? 'var(--c-accent)' : 'var(--c-text4)',
+              cursor: 'pointer',
+            }}
+          >{s.label}</button>
+        ))}
+        <span style={{ width: 1, height: 16, background: 'var(--c-border3)', margin: '0 4px' }} />
+        {windows.map((w) => (
+          <button
+            key={w.id}
+            onClick={() => setWindowFilter(w.id)}
+            style={{
+              padding: '4px 10px', borderRadius: 6, fontSize: 12,
+              border: '1px solid', borderColor: windowFilter === w.id ? 'var(--c-accent)' : 'var(--c-border3)',
+              background: windowFilter === w.id ? 'var(--c-active)' : 'transparent',
+              color: windowFilter === w.id ? 'var(--c-accent)' : 'var(--c-text4)',
+              cursor: 'pointer',
+            }}
+          >{w.label}</button>
+        ))}
+      </div>
+
+      <div style={cardStyle}>
+        <div style={{ ...labelStyle, marginBottom: 8 }}>
+          {groups.length}개 그룹 · 총 {filtered.length}건 (최근 발생순)
+        </div>
+        {groups.length === 0 ? (
+          <div style={{ fontSize: 13, color: 'var(--c-text6)', padding: '20px 0', textAlign: 'center' }}>
+            기록된 자동 오류가 없습니다 🎉
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {groups.map((g) => <AutoErrorGroup key={g.fingerprint} group={g} />)}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AutoErrorGroup({ group }) {
+  const [open, setOpen] = useState(false);
+  const sourceLabel = group.source === 'window' ? '🌐' : group.source === 'promise' ? '⛓️' : group.source === 'react' ? '⚛️' : '✋';
+  return (
+    <div style={{ borderTop: '1px solid var(--c-border3)', paddingTop: 8 }}>
+      <div className="flex items-start gap-2 cursor-pointer" onClick={() => setOpen((v) => !v)}>
+        <span style={{ fontSize: 12, minWidth: 18 }}>{sourceLabel}</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 12.5, color: 'var(--c-text2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: open ? 'normal' : 'nowrap', fontWeight: 500 }}>
+            {group.message}
+          </div>
+          <div style={{ fontSize: 10.5, color: 'var(--c-text6)', marginTop: 2 }}>
+            {fmtRelative(group.lastAt)} · 발생 {group.count}회 · 영향 {group.users.size > 0 ? `유저 ${group.users.size}명` : '로그인 X'} · 세션 {group.sessions.size}개
+          </div>
+        </div>
+        <span style={{ fontSize: 10, color: 'var(--c-text6)' }}>{open ? '▲' : '▼'}</span>
+      </div>
+      {open && (
+        <div style={{ marginTop: 10, padding: '8px 10px', background: 'var(--c-input)', borderRadius: 6, fontSize: 11, color: 'var(--c-text5)', lineHeight: 1.7 }}>
+          <div><strong style={{ color: 'var(--c-text3)' }}>최초 발생:</strong> {fmtDateTime(group.firstAt)}</div>
+          <div><strong style={{ color: 'var(--c-text3)' }}>최근 발생:</strong> {fmtDateTime(group.lastAt)}</div>
+          <div><strong style={{ color: 'var(--c-text3)' }}>URL:</strong> {group.url || '—'}</div>
+          {group.stack && (
+            <details style={{ marginTop: 6 }}>
+              <summary style={{ cursor: 'pointer', color: 'var(--c-text6)' }}>스택 트레이스</summary>
+              <pre style={{
+                whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                fontSize: 10, color: 'var(--c-text5)', background: 'var(--c-bg)',
+                padding: 8, borderRadius: 4, marginTop: 6, maxHeight: 240, overflow: 'auto',
+              }}>
+{group.stack}
+              </pre>
+            </details>
+          )}
+          {group.samples.length > 1 && (
+            <details style={{ marginTop: 6 }}>
+              <summary style={{ cursor: 'pointer', color: 'var(--c-text6)' }}>최근 샘플 {group.samples.length}건 (User-Agent 등)</summary>
+              <div style={{ marginTop: 6 }}>
+                {group.samples.map((s) => (
+                  <div key={s.id} style={{ paddingTop: 6, borderTop: '1px dashed var(--c-border3)', fontSize: 10 }}>
+                    <div>{fmtDateTime(s.created_at)} · user_id: {shortId(s.user_id)} · session: {shortId(s.session_id)}</div>
+                    <div style={{ color: 'var(--c-text6)' }}>{s.user_agent || '—'}</div>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -705,11 +886,12 @@ export default function AdminPage({ authUser }) {
                   ))}
                 </div>
               )}
-              {activeTab === 'dashboard' && <DashboardTab data={data} />}
-              {activeTab === 'errors'    && <ErrorsTab data={data} />}
-              {activeTab === 'survey'    && <SurveyTab data={data} />}
-              {activeTab === 'shares'    && <SharesTab data={data} />}
-              {activeTab === 'paid'      && <PaidEstimateTab data={data} />}
+              {activeTab === 'dashboard'  && <DashboardTab data={data} />}
+              {activeTab === 'autoErrors' && <AutoErrorsTab data={data} />}
+              {activeTab === 'errors'     && <ErrorsTab data={data} />}
+              {activeTab === 'survey'     && <SurveyTab data={data} />}
+              {activeTab === 'shares'     && <SharesTab data={data} />}
+              {activeTab === 'paid'       && <PaidEstimateTab data={data} />}
             </>
           )}
         </div>

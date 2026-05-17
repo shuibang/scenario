@@ -4,6 +4,7 @@ import { useApp } from '../../store/AppContext';
 import { parseHwpxFile } from '../../utils/hwpxParser';
 import { parseScriptText } from '../../utils/parseScriptText';
 import { genId, now } from '../../store/db';
+import { reportError } from '../../utils/errorTracker';
 
 export default function ImportHwpxModal({ open, onClose }) {
   const { state, dispatch } = useApp();
@@ -54,7 +55,8 @@ export default function ImportHwpxModal({ open, onClose }) {
       setMode(hasContent ? 'new' : 'append');
       setStep('confirm');
     } catch (err) {
-      setError('HWPX 파일을 읽을 수 없습니다: ' + (err?.message || String(err)));
+      reportError({ source: 'manual', message: err?.message || String(err), stack: err?.stack });
+      setError('HWPX 파일을 읽을 수 없어요. 파일이 손상되었거나 지원되지 않는 형식일 수 있어요.');
     } finally {
       setLoading(false);
       // input 초기화 — 같은 파일 재선택 허용

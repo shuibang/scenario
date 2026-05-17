@@ -3,6 +3,7 @@ import Modal, { ModalBtn } from './Modal';
 import { useApp } from '../../store/AppContext';
 import { buildReviewURL } from '../../App';
 import { buildSceneListShareURL } from '../../utils/sceneListShare';
+import { reportError } from '../../utils/errorTracker';
 
 const SHARE_SELECTIONS_STORAGE_KEY = 'drama_share_link_selections_v1';
 
@@ -94,7 +95,8 @@ export default function ShareLinkModal({ open, onClose }) {
       const url = await buildReviewURL(state, sel);
       setShareUrl(url);
     } catch (err) {
-      setError('링크 생성 실패: ' + (err?.message || err));
+      reportError({ source: 'manual', message: err?.message || String(err), stack: err?.stack });
+      setError('링크 생성에 실패했어요. 잠시 후 다시 시도해주세요.');
     } finally {
       setGenerating(false);
     }

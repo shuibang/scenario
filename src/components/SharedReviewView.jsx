@@ -7,6 +7,7 @@ import { supabase } from '../store/supabaseClient';
 import { guardedSignInWithGoogle } from '../utils/guardedSignIn';
 import { setAccessToken, saveDirectorScript } from '../store/googleDrive';
 import { buildFeedbackViewerState } from '../utils/feedbackVersions';
+import { reportError } from '../utils/errorTracker';
 
 const RETURN_HASH_KEY = 'drama_pending_return_hash';
 
@@ -168,9 +169,10 @@ export default function SharedReviewView() {
         window.location.hash = '#director';
       }, 1200);
     } catch (error) {
+      reportError({ source: 'manual', message: error?.message || String(error), stack: error?.stack });
       setImportToast('');
       setImporting(false);
-      alert(`오류: ${error.message}`);
+      alert('연출 작업실로 가져오는 중 문제가 발생했어요. 잠시 후 다시 시도해주세요.');
     }
   }, [resource, snapshotContent]);
 
@@ -182,7 +184,8 @@ export default function SharedReviewView() {
     try {
       await exportPdf(appState, selections, { onStep: setPdfStep });
     } catch (error) {
-      alert(`PDF 다운로드 실패: ${error.message}`);
+      reportError({ source: 'manual', message: error?.message || String(error), stack: error?.stack });
+      alert('PDF 다운로드에 실패했어요. 잠시 후 다시 시도해주세요.');
     } finally {
       setPdfExporting(false);
       setPdfStep('');

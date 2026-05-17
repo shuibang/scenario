@@ -18,6 +18,7 @@ import {
   markFeedbackSessionRead,
   renameFeedbackVersion,
 } from '../utils/reviewShare';
+import { reportError } from '../utils/errorTracker';
 
 const ACTIVE_VERSION_KEY = 'drama_active_feedback_version_id';
 const ACTIVE_SESSION_KEY = 'drama_active_feedback_session_id';
@@ -158,7 +159,8 @@ export default function DirectorNotesPage() {
         else localStorage.removeItem(ACTIVE_VERSION_KEY);
       } catch (loadError) {
         if (!mounted) return;
-        setError(loadError.message || '피드백 노트를 불러오지 못했습니다.');
+        reportError({ source: 'manual', message: loadError?.message || String(loadError), stack: loadError?.stack });
+        setError('피드백 노트를 불러오지 못했어요. 잠시 후 다시 시도해주세요.');
         setVersions([]);
         setAllSessions([]);
         setComments([]);
@@ -229,7 +231,8 @@ export default function DirectorNotesPage() {
         }
       } catch (loadError) {
         if (!mounted) return;
-        setError(loadError.message || '피드백 코멘트를 불러오지 못했습니다.');
+        reportError({ source: 'manual', message: loadError?.message || String(loadError), stack: loadError?.stack });
+        setError('피드백 코멘트를 불러오지 못했어요. 잠시 후 다시 시도해주세요.');
         setComments([]);
       }
     };
@@ -322,7 +325,8 @@ export default function DirectorNotesPage() {
       setRenameVersionId('');
       setRenameValue('');
     } catch (renameError) {
-      setError(renameError.message || '버전 이름을 바꾸지 못했습니다.');
+      reportError({ source: 'manual', message: renameError?.message || String(renameError), stack: renameError?.stack });
+      setError('버전 이름을 바꾸지 못했어요. 잠시 후 다시 시도해주세요.');
     }
   };
 
@@ -343,7 +347,8 @@ export default function DirectorNotesPage() {
       else localStorage.removeItem(ACTIVE_VERSION_KEY);
       setDeleteVersionId('');
     } catch (deleteError) {
-      setError(deleteError.message || '버전을 삭제하지 못했습니다.');
+      reportError({ source: 'manual', message: deleteError?.message || String(deleteError), stack: deleteError?.stack });
+      setError('버전을 삭제하지 못했어요. 잠시 후 다시 시도해주세요.');
     } finally {
       setDeleting(false);
     }

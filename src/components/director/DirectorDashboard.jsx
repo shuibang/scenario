@@ -12,6 +12,7 @@ import { parseFullScript, buildPanelsFromScenes, detectScenes } from '../../util
 import { getStoredFeedbackDisplayName } from '../../utils/feedbackDisplayName';
 import { createFeedbackReplyLink, submitFeedbackSession } from '../../utils/reviewShare';
 import { buildFeedbackCommentPayload } from '../../utils/feedbackVersions';
+import { reportError } from '../../utils/errorTracker';
 import ExcelJS from 'exceljs';
 
 /*
@@ -163,12 +164,23 @@ const DirectorAdBanner = memo(function DirectorAdBanner({ height = 20, slot = 'd
 class ViewerErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { error: null }; }
   static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(error, info) {
+    try {
+      reportError({
+        source: 'react',
+        message: error?.message || String(error),
+        stack: (info && info.componentStack)
+          ? `${error?.stack || ''}\n\n[componentStack]\n${info.componentStack}`
+          : error?.stack,
+      });
+    } catch {}
+  }
   render() {
     if (this.state.error) {
       return (
-        <div style={{ padding: 32, textAlign: 'center', color: '#c00', fontSize: 13 }}>
-          대본을 표시하는 중 오류가 발생했습니다.<br />
-          <span style={{ color: '#999', fontSize: 11 }}>{String(this.state.error)}</span>
+        <div style={{ padding: 32, textAlign: 'center', color: '#999', fontSize: 13, lineHeight: 1.7 }}>
+          대본을 표시하는 중 문제가 발생했어요.<br />
+          잠시 후 다시 시도하거나 새로고침해주세요.
         </div>
       );
     }
@@ -1405,7 +1417,11 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
         .eq('id', script.id)
         .eq('director_id', session.user.id)
         .select('id');
-      if (error) { alert(`삭제 중 오류가 발생했어요.\n${error.message}`); return; }
+      if (error) {
+        reportError({ source: 'manual', message: error.message, stack: error.stack });
+        alert('삭제 중 오류가 발생했어요. 잠시 후 다시 시도해주세요.');
+        return;
+      }
       if (!deleted || deleted.length === 0) {
         // 이미 다른 요청으로 지워진 상태일 뿐이므로 목록에서만 제거하고 조용히 안내
         setScripts(prev => prev.filter(s => s.id !== script.id));
@@ -1433,7 +1449,8 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
         .eq('id', script.id)
         .eq('director_id', session.user.id);
       if (error) {
-        alert(`목록에서 제거 실패: ${error.message}`);
+        reportError({ source: 'manual', message: error.message, stack: error.stack });
+        alert('목록에서 제거하지 못했어요. 잠시 후 다시 시도해주세요.');
         return;
       }
       try { localStorage.removeItem(`director_private_notes_${script.id}`); } catch {}
@@ -1839,7 +1856,8 @@ function SendButton({ scriptRow, viewing }) {
       setToast(success ? '링크 복사됨 ✓' : '링크 생성됨');
       setTimeout(() => setToast(''), 3000);
     } catch (err) {
-      setToast(`오류: ${err.message}`);
+      reportError({ source: 'manual', message: err?.message || String(err), stack: err?.stack });
+      setToast('링크 생성에 실패했어요. 잠시 후 다시 시도해주세요.');
       setTimeout(() => setToast(''), 3000);
     } finally {
       setSending(false);
@@ -1932,7 +1950,8 @@ function SendButton({ scriptRow, viewing }) {
       setToast(success ? '링크 복사됨 ✓' : '링크 생성됨');
       setTimeout(() => setToast(''), 3000);
     } catch (err) {
-      setToast(`오류: ${err.message}`);
+      reportError({ source: 'manual', message: err?.message || String(err), stack: err?.stack });
+      setToast('링크 생성에 실패했어요. 잠시 후 다시 시도해주세요.');
       setTimeout(() => setToast(''), 3000);
     } finally {
       setSending(false);
@@ -3573,7 +3592,11 @@ function StoryboardPanel({ isGuest, isMobile = false, mobilePreSelected = null, 
       setPanels(recalced);
       saveStoryboard(selected.id, recalced);
     } catch (err) {
-      setError(err.message);
+      // 입력 검증성 에러("씬 헤더가 없어 패널을 나눌 수 없습니다")는 유저에게 그대로 보여주는 게 도움이 되므로 메시지를 유지.
+      // 그 외 예기치 못한 에러는 자동 캡처로 흘려보냄.
+      const expected = err?.message?.includes('씬 헤더');
+      if (!expected) reportError({ source: 'manual', message: err?.message || String(err), stack: err?.stack });
+      setError(expected ? err.message : '패널 자동 생성에 실패했어요. 잠시 후 다시 시도해주세요.');
     } finally {
       setLoading(false);
     }

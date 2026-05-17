@@ -20,6 +20,7 @@ import {
 } from '../store/googleDrive';
 import { refreshDriveToken } from '../store/supabaseClient';
 import { formatSnapshotMetaLine } from '../utils/snapshotMeta';
+import { reportError } from '../utils/errorTracker';
 
 // ── 날짜 포맷 ────────────────────────────────────────────────────────────────
 function fmtDate(iso) {
@@ -184,7 +185,8 @@ export default function SnapshotPanel({ onClose }) {
       setConfirm(null);
       onClose();
     } catch (e) {
-      setError(e.message || '복원 중 오류가 발생했습니다.');
+      reportError({ source: 'manual', message: e?.message || String(e), stack: e?.stack });
+      setError('복원 중 문제가 발생했어요. 잠시 후 다시 시도해주세요.');
       setConfirm(null);
     } finally {
       setRestoring(false);

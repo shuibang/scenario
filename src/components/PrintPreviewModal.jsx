@@ -6,6 +6,7 @@ import { exportDocx }             from '../print/printDocx';
 import { exportHancom, exportHwpx } from '../print/hancomExporter';
 import PreviewRenderer  from '../print/PreviewRenderer';
 import { buildReviewURL } from '../App';
+import { reportError } from '../utils/errorTracker';
 import {
   checkFontsAvailability,
   getFontWarnings,
@@ -70,6 +71,9 @@ export default function PrintPreviewModal({ onClose, defaultFormat }) {
   const [sharing, setSharing]     = useState(false);
   const [exportStep, setExportStep] = useState('');  // '직렬화' | '레이아웃' | '파일 생성' | '다운로드'
   const [error, setError]         = useState(null);
+  // 라이선스/시스템 폰트 → PDF 폴백 발생 시 사용자에게 알리는 인라인 메시지.
+  // 메시지 표시 동안 모달 닫힘을 2.5초 지연시킨다.
+  const [fontFallbackMsg, setFontFallbackMsg] = useState('');
 
   // 열리는 순간의 클릭 이벤트가 백드롭에 전달되는 것을 막기 위해
   // 마운트 후 150ms 동안 백드롭 클릭을 무시한다.
@@ -114,19 +118,33 @@ export default function PrintPreviewModal({ onClose, defaultFormat }) {
   const handleExport = useCallback(async () => {
     setError(null);
     setExportStep('');
+    setFontFallbackMsg('');
     setExporting(true);
     const onStep = (label) => {
       setExportStep(label);
     };
     try {
-      if (format === 'pdf')         await exportPdf(state, sel, { onStep });
+      let pdfResult = null;
+      if (format === 'pdf')         pdfResult = await exportPdf(state, sel, { onStep });
       else if (format === 'docx')   await exportDocx(state, sel, { onStep });
       else if (format === 'hancom') await exportHancom(state, sel, { onStep });
       else if (format === 'hwpx')   await exportHwpx(state, sel);
+
+      // PDF 폰트 폴백 발생 시 사용자에게 알리고 잠시 모달 유지 후 닫는다.
+      if (pdfResult?.usedFontFallback) {
+        const name = pdfResult.fallbackName || 'Noto Serif KR';
+        setFontFallbackMsg(`PDF 출력에는 ${name}이(가) 적용되었습니다.`);
+        setExportStep('');
+        setExporting(false);
+        await new Promise(resolve => setTimeout(resolve, 2500));
+        onClose();
+        return;
+      }
       onClose();
     } catch (err) {
       console.error('[PrintPreviewModal] export failed:', err);
-      setError(err.message || '내보내기 실패');
+      reportError({ source: 'manual', message: err?.message || String(err), stack: err?.stack });
+      setError('내보내기에 실패했어요. 잠시 후 다시 시도해주세요.');
       setExportStep('');
     } finally {
       setExporting(false);
@@ -148,7 +166,8 @@ export default function PrintPreviewModal({ onClose, defaultFormat }) {
       setShareMsg('링크 복사됨 (7일 후 만료)');
       setTimeout(() => setShareMsg(''), 3000);
     } catch (err) {
-      setShareMsg(`링크 생성 실패: ${err.message}`);
+      reportError({ source: 'manual', message: err?.message || String(err), stack: err?.stack });
+      setShareMsg('링크 생성에 실패했어요. 잠시 후 다시 시도해주세요.');
       setTimeout(() => setShareMsg(''), 5000);
     } finally {
       setSharing(false);
@@ -297,6 +316,14 @@ export default function PrintPreviewModal({ onClose, defaultFormat }) {
             <div className="mb-3 px-2 py-2 rounded" style={{ color: '#c00', background: '#fee', lineHeight: 1.5 }}>
               <div className="text-[11px] font-medium mb-0.5">내보내기 실패</div>
               <div className="text-[10px]" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{error}</div>
+            </div>
+          )}
+
+          {/* PDF 폰트 폴백 알림 (라이선스 제한·시스템 폰트가 선택된 경우) */}
+          {fontFallbackMsg && (
+            <div className="mb-3 px-2 py-2 rounded" style={{ color: '#2d7a3d', background: '#e6f4ea', border: '1px solid #b5dcc1', lineHeight: 1.5 }}>
+              <div className="text-[11px] font-medium mb-0.5">PDF 폰트 자동 변경</div>
+              <div className="text-[10px]">{fontFallbackMsg}</div>
             </div>
           )}
 
