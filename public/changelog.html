@@ -263,17 +263,115 @@
 
   <div class="timeline">
 
-    <!-- v34 (2026-05-14) -->
+    <!-- v39 (2026-05-18) — 씬리스트 자동 반영 버그 + 인물 서사 역할 다중 분류 -->
     <div class="cl-entry">
       <div class="cl-dot"></div>
       <div class="cl-card">
         <details open>
           <summary>
             <div class="cl-meta">
+              <div class="cl-date">2026-05-18</div>
+              <div class="cl-title">🎭 인물 서사 역할 다중 분류 · 🐞 씬리스트 자동 반영 버그 수정</div>
+            </div>
+            <span class="new-badge">최신</span>
+            <span class="arrow">▶</span>
+          </summary>
+          <div class="cl-body">
+            <div class="cl-section">
+              <div class="cl-section-head">인물 역할 카탈로그 확장</div>
+              <ul>
+                <li>기존 "주연/조연/단역" 구분 대신 <strong>서사 역할 50개</strong>로 교체 (7 카테고리: 주인공/대립/조력/감정관계/사건유발/긴장/세계관/기타)</li>
+                <li>예: 적대자·라이벌·흑막·배신자·반동인물·멘토·스승·사이드킥·러브인터레스트·복수 대상·운명적 상대·트러블메이커·해설자 등</li>
+                <li>한 인물에 <strong>여러 역할 동시 부여</strong> 가능 (예: 주인공 + 복수 대상 + 성장형 주인공)</li>
+                <li>인물 관계도에서 카드 아래에 모든 역할이 세로 칩으로 표시</li>
+                <li>인물 리스트는 한 줄 유지 (첫 역할 + 나머지 개수)</li>
+                <li>옛 데이터(주연/조연/단역)는 자동 변환되어 별도 작업 불필요</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">버그 수정</div>
+              <ul>
+                <li>대본 본문 씬 헤더에 입력한 <strong>장소·세부장소·시간대가 씬리스트에 자동 반영</strong>됩니다 (이전엔 씬번호와 등장인물만 들어갔어요)</li>
+                <li>본문 텍스트는 입력한 포맷 그대로 유지 — 씬리스트 표시만 보강</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- v38 (2026-05-17) — 아이디어 노트 -->
+    <div class="cl-entry">
+      <div class="cl-dot"></div>
+      <div class="cl-card">
+        <details>
+          <summary>
+            <div class="cl-meta">
+              <div class="cl-date">2026-05-17</div>
+              <div class="cl-title">💡 아이디어 노트 신규 · 화면 오류 자동 기록</div>
+            </div>
+            <span class="arrow">▶</span>
+          </summary>
+          <div class="cl-body">
+            <div class="cl-section">
+              <div class="cl-section-head">💡 아이디어 노트 (신규)</div>
+              <ul>
+                <li>작품과 독립된 소재·아이디어 정리 공간이 추가됐어요</li>
+                <li><strong>여러 진입점</strong>: 데스크톱 메뉴바 옆 <code>💡 아이디어 노트</code> 버튼 → 우측 사이드 시트 / 모바일 햄버거 메뉴 → 바텀 시트 / 분할보기 페인 / <code>⛶</code>로 전체화면 전환</li>
+                <li><strong>블록 편집기</strong>: 본문에 <code>/</code> 또는 + 버튼으로 구조 블록 삽입 — 로그라인 · 장르 · 주제 · 기획의도 · 줄거리 · 간략 트리트먼트 · 인물(다중 역할) · 메모 · 링크 · 이미지(드래그앤드롭)</li>
+                <li><strong>자유 태그</strong>: <code>#멜로</code> <code>#가족</code> 같은 태그로 분류·검색</li>
+                <li><strong>이 아이디어로 작품 만들기</strong>: 블록이 새 작품의 시놉시스 항목·등장인물·자료수집으로 자동 시드. 시트를 띄워두고 작품 만들면서 원본 참고 가능</li>
+                <li>시트 열리면 우측 패널 자동 닫힘 → 닫으면 복원</li>
+                <li>구글 드라이브 자동 백업</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">🛟 화면 오류 자동 기록 · 친절한 안내</div>
+              <ul>
+                <li>화면 렌더링 중 예기치 못한 오류가 발생하면 자동으로 기록되고, 사용자에겐 친절한 안내문 + 새로고침 버튼을 보여드려요</li>
+                <li>곳곳의 raw 에러 메시지가 친절한 한국어로 정리됐어요 (파일 가져오기/내보내기/공유/폰트 등 29곳)</li>
+                <li>피드백 노트 버전 삭제 시 Drive 토큰 만료 상태에서도 진행되도록 안정화</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- v35 (2026-05-16) — 베타 설문 다듬기 -->
+    <div class="cl-entry">
+      <div class="cl-dot"></div>
+      <div class="cl-card">
+        <details>
+          <summary>
+            <div class="cl-meta">
+              <div class="cl-date">2026-05-16</div>
+              <div class="cl-title">📋 베타 설문 다듬기</div>
+            </div>
+            <span class="arrow">▶</span>
+          </summary>
+          <div class="cl-body">
+            <div class="cl-section">
+              <ul>
+                <li>Q6(사용 난이도) 문구 직관성 개선</li>
+                <li>척도 라벨 가독성 향상</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- v34 (2026-05-14) -->
+    <div class="cl-entry">
+      <div class="cl-dot"></div>
+      <div class="cl-card">
+        <details>
+          <summary>
+            <div class="cl-meta">
               <div class="cl-date">2026-05-14</div>
               <div class="cl-title">📊 작업현황 페이지 개편 · 이벤트 배너</div>
             </div>
-            <span class="new-badge">최신</span>
             <span class="arrow">▶</span>
           </summary>
           <div class="cl-body">

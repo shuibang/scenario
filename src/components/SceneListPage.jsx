@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useApp } from '../store/AppContext';
-import { resolveSceneLabel, parseSceneContent, TIME_OF_DAY_OPTIONS } from '../utils/sceneResolver';
+import { resolveSceneLabel, parseSceneContent, TIME_OF_DAY_OPTIONS, SCENE_PREFIX_STRIP_RE } from '../utils/sceneResolver';
 import { buildSceneLabel } from '../utils/scenePrefix';
 import { getSceneFormat, formatSceneHeader } from '../utils/sceneFormat';
 import { now, genId } from '../store/db';
@@ -334,15 +334,31 @@ export default function SceneListPage() {
     }
   };
 
-  // 대본 편집기에서 씬 헤더(scene_number 블록)가 바뀌면 scene 객체 필드도 동기화
-  // 구조화 필드(block.location 등)를 직접 읽어 포맷 독립적
+  // 대본 편집기에서 씬 헤더(scene_number 블록)가 바뀌면 scene 객체 필드도 동기화.
+  //
+  // 1차: 블록의 구조화 필드(block.location 등)를 우선 사용 — 포맷 독립적.
+  // 2차(fallback): 구조화 필드가 모두 빈 "레거시 씬"인 경우 block.content 를
+  //   parseSceneContent 로 한 번 해석해서 씬리스트에 반영.
+  //   본문에서 'S#1. 카페, 낮' 처럼 입력한 장소/시간대가 씬리스트에 자동으로
+  //   들어가도록 — 블록 자체의 구조화 필드는 변경하지 않으므로 본문 텍스트는
+  //   사용자가 입력한 원본 포맷 그대로 유지된다.
   useEffect(() => {
     epScenes.forEach(scene => {
       const block = epBlocks.find(b => b.type === 'scene_number' && b.sceneId === scene.id);
       if (!block) return;
-      const loc = block.location    || '';
-      const sub = block.subLocation || '';
-      const tod = block.timeOfDay   || '';
+      let loc = block.location    || '';
+      let sub = block.subLocation || '';
+      let tod = block.timeOfDay   || '';
+      if (!loc && !sub && !tod && block.content) {
+        // 레거시 블록 — content 에서 label 제거 후 파싱
+        const stripped = block.content.replace(SCENE_PREFIX_STRIP_RE, '').trim();
+        if (stripped) {
+          const parsed = parseSceneContent(stripped);
+          loc = parsed.location    || '';
+          sub = parsed.subLocation || '';
+          tod = parsed.timeOfDay   || '';
+        }
+      }
       if (loc !== (scene.location || '') || sub !== (scene.subLocation || '') || tod !== (scene.timeOfDay || '')) {
         dispatch({ type: 'UPDATE_SCENE', payload: { id: scene.id, location: loc, subLocation: sub, timeOfDay: tod, updatedAt: now() } });
       }
