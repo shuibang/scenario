@@ -34,14 +34,14 @@ export function createSeedData() {
       id: char1Id, projectId,
       surname: '', givenName: '주인공', name: '주인공',
       gender: '', age: '', occupation: '', intro: '',
-      role: 'lead', extraFields: [],
+      role: 'protagonist', extraFields: [],
       createdAt: t,
     },
     {
       id: char2Id, projectId,
       surname: '', givenName: '상대역', name: '상대역',
       gender: '', age: '', occupation: '', intro: '',
-      role: 'lead', extraFields: [],
+      role: 'love', extraFields: [],
       createdAt: t,
     },
   ];

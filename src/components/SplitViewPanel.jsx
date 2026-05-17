@@ -7,6 +7,7 @@ import TreatmentPage from './TreatmentPage';
 import BiographyPage from './BiographyPage';
 import RelationshipsPage from './RelationshipsPage';
 import DirectorNotesPage from './DirectorNotesPage';
+import IdeaNotePanel from './ideas/IdeaNotePanel';
 
 const TABS = [
   { id: 'main',           label: '본문',       group: '본문' },
@@ -18,9 +19,10 @@ const TABS = [
   { id: 'treatment',      label: '트리트먼트', group: '설계' },
   { id: 'structure',      label: '구조',       group: '설계' },
   { id: 'director_notes', label: '피드백',     group: '피드백' },
+  { id: 'ideas',          label: '💡 아이디어', group: '아이디어' },
 ];
 
-const ALL_GROUPS = ['본문', '자료', '설계', '피드백'];
+const ALL_GROUPS = ['본문', '자료', '설계', '피드백', '아이디어'];
 
 function PanelContent({ docId }) {
   if (docId === 'characters')     return <CharacterPanel />;
@@ -31,6 +33,7 @@ function PanelContent({ docId }) {
   if (docId === 'treatment')      return <TreatmentPage />;
   if (docId === 'structure')      return <StructurePage />;
   if (docId === 'director_notes') return <DirectorNotesPage />;
+  if (docId === 'ideas')          return <IdeaNotePanel density="comfortable" showHeader={false} />;
   return null;
 }
 

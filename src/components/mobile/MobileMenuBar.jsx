@@ -302,6 +302,17 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
                 </button>
               ))}
 
+              {/* 아이디어 노트 — 항상 노출 */}
+              <button
+                style={{ ...dropItemStyle, color: 'var(--c-accent)' }}
+                onClick={() => {
+                  onMenuAction?.('ideas:open');
+                  setMenuOpen(false);
+                }}
+              >
+                <span>💡</span><span>아이디어 노트</span>
+              </button>
+
               {/* 어드민 — admin 이메일이고 라우트 토큰이 설정된 경우에만 노출 */}
               {isAdminUser(authUser) && getAdminHash() && (
                 <button

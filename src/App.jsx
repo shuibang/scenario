@@ -36,7 +36,10 @@ import DirectorDeliveryView from './components/DirectorDeliveryView';
 import SurveyPage from './components/SurveyPage';
 import AdminPage from './components/admin/AdminPage';
 import { isAdminHash, isAdminUser, getAdminHash } from './utils/adminAuth';
-import { Wrench } from 'lucide-react';
+import { Wrench, Lightbulb } from 'lucide-react';
+import IdeaSheet from './components/ideas/IdeaSheet';
+import IdeasFullPage from './components/ideas/IdeasFullPage';
+import { applyIdeaSeed, buildProjectSeedFromIdea } from './store/promoteToProject';
 import AdBanner, { KakaoAdBanner } from './components/AdBanner';
 // ─── v2: extracted mobile components ──────────────────────────────────────────
 import MobileMenuBar    from './components/mobile/MobileMenuBar';
@@ -759,7 +762,7 @@ function DropdownMenu({ label, items, disabled }) {
 }
 
 // ─── MenuBar ──────────────────────────────────────────────────────────────────
-function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, authUser, setAuthUser, onSyncConflict, onMenuAction, recentProjects, menuCheckedItems }) {
+function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, authUser, setAuthUser, onSyncConflict, onMenuAction, recentProjects, menuCheckedItems, isMobile = false }) {
   const { state, dispatch, loadFromDriveData } = useApp();
   const { saveStatus, saveErrorMsg, activeProjectId, stylePreset, undoStack, redoStack, savedAt } = state;
   const canUndo = undoStack?.length > 0 || !!activeProjectId;
@@ -917,6 +920,23 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
     })();
     return () => { cancelled = true; };
   }, [authUser, driveAuthSettled, driveTokenValid, driveStatus, runDriveSync]);
+
+  // 아이디어 노트 — Drive 동기화 후 한 번 머지 pull
+  useEffect(() => {
+    if (!authUser || !driveTokenValid) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { pullIdeasFromDrive } = await import('./store/ideasStore');
+        const res = await pullIdeasFromDrive();
+        if (cancelled) return;
+        if (res?.ok && (res.added > 0 || res.updated > 0)) {
+          console.log('[ideas] Drive 머지 완료:', res);
+        }
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [authUser, driveTokenValid]);
 
   const handleDriveReconnect = useCallback(async () => {
     if (reconnecting) return;
@@ -1139,12 +1159,46 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
         </div>
       </div>
 
-      {/* ── Row 2: Radix 메뉴바 ── */}
-      <Menubar
-        onAction={onMenuAction}
-        recentProjects={recentProjects}
-        checkedItems={menuCheckedItems}
-      />
+      {/* ── Row 2: Radix 메뉴바 + 아이디어 노트 버튼 ── */}
+      <div style={{ display: 'flex', alignItems: 'center' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Menubar
+            onAction={onMenuAction}
+            recentProjects={recentProjects}
+            checkedItems={menuCheckedItems}
+          />
+        </div>
+        {!isMobile && (
+          <button
+            onClick={() => onMenuAction?.('ideas:open')}
+            title="아이디어 노트"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              height: 24, padding: '0 10px',
+              margin: '0 8px',
+              fontSize: 12, fontWeight: 600,
+              color: 'var(--c-accent)',
+              background: 'var(--c-active)',
+              border: '1px solid var(--c-accent)',
+              borderRadius: 6,
+              cursor: 'pointer',
+              flexShrink: 0,
+              transition: 'background 0.12s, color 0.12s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'var(--c-accent)';
+              e.currentTarget.style.color = '#fff';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'var(--c-active)';
+              e.currentTarget.style.color = 'var(--c-accent)';
+            }}
+          >
+            <Lightbulb size={13} strokeWidth={2.2} />
+            <span>아이디어 노트</span>
+          </button>
+        )}
+      </div>
 
       {/* ── Row 3: 포맷 툴바 ── */}
       <div className="flex items-center h-10 px-3 gap-1" style={{ overflowX: 'auto', scrollbarWidth: 'none', borderBottom: '1px solid var(--c-border2)' }}>
@@ -1375,6 +1429,30 @@ function Shell({ authUser, setAuthUser }) {
   // ── Tablet panel collapse state
   const [leftCollapsed,  setLeftCollapsed]  = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
+
+  // ── 아이디어 노트 시트
+  const [ideaSheetOpen, setIdeaSheetOpen] = useState(false);
+  const [promoteIdea, setPromoteIdea] = useState(null);   // 작품으로 승격 중인 아이디어
+  const savedRightCollapsedRef = useRef(null);            // 시트 열기 직전 우측 패널 상태
+
+  // 시트 열림 ↔ 우측 패널 자동 닫음 / 복원
+  useEffect(() => {
+    if (ideaSheetOpen) {
+      if (savedRightCollapsedRef.current === null) {
+        savedRightCollapsedRef.current = rightCollapsed;
+        if (!rightCollapsed) setRightCollapsed(true);
+      }
+    } else {
+      if (savedRightCollapsedRef.current !== null) {
+        const prev = savedRightCollapsedRef.current;
+        savedRightCollapsedRef.current = null;
+        // 시트 열린 동안 사용자가 직접 토글했으면 강제로 복원하지 않음
+        // — 현재 rightCollapsed 가 우리가 닫은 그 상태 그대로일 때만 복원
+        if (rightCollapsed === true) setRightCollapsed(prev);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ideaSheetOpen]);
 
   // ── Focus mode
   const [focusMode, setFocusMode] = useState(false);
@@ -1907,6 +1985,7 @@ function Shell({ authUser, setAuthUser }) {
     if (action === 'help:about')   { window.open('/changelog.html', '_blank', 'noopener,noreferrer'); return; }
     if (action === 'help:notices') { setNoticesOpen(true); return; }
     if (action === 'help:qa')      { setQaOpen(true); return; }
+    if (action === 'ideas:open')   { setIdeaSheetOpen((v) => !v); return; }
     if (action === 'help:kakao')   { window.open('https://open.kakao.com/me/daejak', '_blank', 'noopener,noreferrer'); return; }
     if (action === 'help:resetTour') {
       if (!window.confirm('시작 안내 팝업을 처음부터 다시 보려면 페이지를 새로고침합니다. 계속할까요?')) return;
@@ -1952,14 +2031,28 @@ function Shell({ authUser, setAuthUser }) {
       onMenuAction={handleMenuAction}
       recentProjects={recentProjects}
       menuCheckedItems={menuCheckedItems}
+      isMobile={isMobile}
     />
   );
   const modals = (
     <>
+      {/* ── 아이디어 노트 시트 ── */}
+      <IdeaSheet
+        open={ideaSheetOpen}
+        onClose={() => setIdeaSheetOpen(false)}
+        onExpand={() => { setIdeaSheetOpen(false); window.location.hash = '#ideas'; }}
+        onPromote={(idea) => {
+          setPromoteIdea(idea);
+          setNewProjectOpen(true);
+        }}
+        isMobile={isMobile}
+      />
+
       {/* ── Radix 기반 모달들 ── */}
       <NewProjectModal
         open={newProjectOpen}
-        onClose={() => setNewProjectOpen(false)}
+        onClose={() => { setNewProjectOpen(false); setPromoteIdea(null); }}
+        initialTitle={buildProjectSeedFromIdea(promoteIdea).title}
         onCommit={({ title, projectType, totalEpisodes, createEpisodes, totalMins, climaxStart, climaxEnd }) => {
           const p = { id: genId(), title, genre: '', status: 'draft', projectType, totalEpisodes, totalMins, climaxStart, climaxEnd, createdAt: now(), updatedAt: now() };
           dispatch({ type: 'ADD_PROJECT', payload: p });
@@ -1972,6 +2065,16 @@ function Shell({ authUser, setAuthUser }) {
           }));
           eps.forEach(ep => dispatch({ type: 'ADD_EPISODE', payload: ep }));
           dispatch({ type: 'SET_ACTIVE_EPISODE', id: eps[0].id });
+          // 아이디어로부터 시드 적용 (있을 때만)
+          if (promoteIdea) {
+            applyIdeaSeed({
+              idea: promoteIdea,
+              projectId: p.id,
+              firstEpisodeId: eps[0]?.id,
+              dispatch,
+            });
+            setPromoteIdea(null);
+          }
         }}
       />
       <OpenProjectModal
@@ -2763,6 +2866,15 @@ export default function App() {
 
   // 연출 작업실 — 감독 전용 독립 페이지
   if (window.location.hash === '#director')         return <DirectorApp authUser={authUser} />;
+
+  // 아이디어 노트 풀스크린 — 정리·검색용. 인증 불필요(로컬 데이터).
+  if (window.location.hash === '#ideas') {
+    return (
+      <AppProvider>
+        <IdeasFullPage onBack={() => { window.location.hash = ''; }} />
+      </AppProvider>
+    );
+  }
 
   // public — 감독 전송 링크 (인증 불필요, 의도적)
   if (window.location.hash.startsWith('#delivery=')) return <DirectorDeliveryView />;

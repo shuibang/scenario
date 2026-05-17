@@ -90,7 +90,50 @@ function buildPairResult(pair, pairIdx, { projectBlocks, synopsisDoc, projectCha
   return { pairIdx, label: pair.label, oldText: pair.oldText, newText: pair.newText, searchScope: pair.searchScope, blockGroups, synopsisGroups, charIntroGroups, episodeGroups, coverGroups, coverCustomGroups };
 }
 
-const ROLE_LABELS = { lead: '주인공', support: '조연', extra: '단역' };
+// 새 분류: 비중(주조연) 대신 서사 역할(주인공/적대자/라이벌/조력자 등)
+// 옛 데이터('lead'/'support'/'extra')는 ROLE_LEGACY_MIGRATE 로 한 번에 매핑한다.
+// 공란('')도 허용 — 사용자가 역할 분류를 원치 않을 때.
+const ROLE_OPTIONS = [
+  { value: '',            label: '— 미지정 —', color: 'var(--c-text6)' },
+  { value: 'protagonist', label: '주인공',  color: 'var(--c-accent)' },
+  { value: 'antagonist',  label: '적대자',  color: '#dc2626' },
+  { value: 'rival',       label: '라이벌',  color: '#ea580c' },
+  { value: 'ally',        label: '조력자',  color: '#16a34a' },
+  { value: 'mentor',      label: '멘토',    color: '#8b5cf6' },
+  { value: 'love',        label: '연인',    color: '#ec4899' },
+  { value: 'family',      label: '가족',    color: '#0891b2' },
+  { value: 'comic',       label: '감초',    color: '#f59e0b' },
+  { value: 'other',       label: '기타',    color: 'var(--c-text5)' },
+];
+
+const ROLE_LEGACY_MIGRATE = {
+  lead:    'protagonist',
+  support: 'other',
+  extra:   'other',
+};
+
+// 옛 키 → 새 키 매핑(렌더·편집 시 항상 normalize 해서 사용)
+// null/undefined/'' 는 모두 공란('')으로 통일 — 사용자가 미지정 상태.
+function normalizeRole(role) {
+  if (role == null || role === '') return '';
+  if (ROLE_LEGACY_MIGRATE[role]) return ROLE_LEGACY_MIGRATE[role];
+  return role;
+}
+
+const ROLE_LABELS = Object.fromEntries(ROLE_OPTIONS.map((o) => [o.value, o.label]));
+const ROLE_COLORS = Object.fromEntries(ROLE_OPTIONS.map((o) => [o.value, o.color]));
+
+// 공란이면 빈 문자열을 돌려줌 — 칩이 비어 보이도록.
+export function getRoleLabel(role) {
+  const k = normalizeRole(role);
+  if (k === '') return '';
+  return ROLE_LABELS[k] || '';
+}
+export function getRoleColor(role) {
+  const k = normalizeRole(role);
+  return ROLE_COLORS[k] || 'var(--c-text5)';
+}
+export { ROLE_OPTIONS, normalizeRole };
 
 // ─── Compat helpers ────────────────────────────────────────────────────────────
 export function charDisplayName(char) {
@@ -115,12 +158,12 @@ function charToForm(char) {
       gender:      char.gender      ?? '',
       age:         char.age         ?? '',
       occupation:  charOccupation(char),
-      role:        char.role        ?? 'lead',
+      role:        normalizeRole(char.role),
       intro:       charIntro(char),
       extraFields: charExtraFields(char),
     };
   }
-  return { surname: '', givenName: '', gender: '', age: '', occupation: '', role: 'lead', intro: '', extraFields: [] };
+  return { surname: '', givenName: '', gender: '', age: '', occupation: '', role: '', intro: '', extraFields: [] };
 }
 
 // ─── CharacterForm ─────────────────────────────────────────────────────────────
@@ -171,9 +214,9 @@ function CharacterForm({ initial, onSave, onCancel }) {
             onKeyDown={e => e.key === 'Escape' && onCancel()} style={inputStyle} placeholder="길동" />
         </div>
         <div>
-          <label className="block text-[10px] mb-1 uppercase tracking-wider" style={{ color: 'var(--c-text5)' }}>비중</label>
+          <label className="block text-[10px] mb-1 uppercase tracking-wider" style={{ color: 'var(--c-text5)' }}>역할</label>
           <select value={form.role} onChange={e => f('role', e.target.value)} style={{ ...inputStyle, fontSize: '0.8125rem' }}>
-            {Object.entries(ROLE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            {ROLE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </div>
       </div>
@@ -370,7 +413,7 @@ function CharacterUsage({ char, episodes, scenes, scriptBlocks }) {
 function CharacterIndexItem({ char, isSelected, onClick }) {
   const fullName = charFullName(char);
   const displayName = charDisplayName(char);
-  const roleColor = { lead: 'var(--c-accent)', support: 'var(--c-accent2)', extra: 'var(--c-text5)' }[char.role] || 'var(--c-text5)';
+  const roleColor = getRoleColor(char.role);
 
   return (
     <div
@@ -386,7 +429,7 @@ function CharacterIndexItem({ char, isSelected, onClick }) {
       <div className="text-sm font-medium truncate" style={{ color: isSelected ? 'var(--c-text)' : 'var(--c-text3)' }}>
         {fullName || displayName}
       </div>
-      <div className="text-[10px] truncate" style={{ color: roleColor }}>{ROLE_LABELS[char.role] || ''}</div>
+      <div className="text-[10px] truncate" style={{ color: roleColor }}>{getRoleLabel(char.role)}</div>
     </div>
   );
 }
@@ -396,7 +439,7 @@ function CharacterDetail({ char, onEdit, onDelete, episodes, scenes, scriptBlock
   const [confirmDelete, setConfirmDelete] = useState(false);
   const fullName = charFullName(char);
   const displayName = charDisplayName(char);
-  const roleColor = { lead: 'var(--c-accent)', support: 'var(--c-accent2)', extra: 'var(--c-text5)' }[char.role] || 'var(--c-text5)';
+  const roleColor = getRoleColor(char.role);
 
   return (
     <div className="rounded-lg p-4" style={{ background: 'var(--c-card)', border: '1px solid var(--c-accent)' }}>
@@ -427,8 +470,14 @@ function CharacterDetail({ char, onEdit, onDelete, episodes, scenes, scriptBlock
 
       {/* Role + occupation */}
       <div className="flex items-center gap-2 mb-2">
-        <span className="text-xs font-medium" style={{ color: roleColor }}>{ROLE_LABELS[char.role] || char.role}</span>
-        {charOccupation(char) && <span className="text-xs" style={{ color: 'var(--c-text5)' }}>· {charOccupation(char)}</span>}
+        {getRoleLabel(char.role) && (
+          <span className="text-xs font-medium" style={{ color: roleColor }}>{getRoleLabel(char.role)}</span>
+        )}
+        {charOccupation(char) && (
+          <span className="text-xs" style={{ color: 'var(--c-text5)' }}>
+            {getRoleLabel(char.role) ? '· ' : ''}{charOccupation(char)}
+          </span>
+        )}
       </div>
 
       {/* Intro */}

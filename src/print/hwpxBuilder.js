@@ -415,7 +415,13 @@ function xmlSection(printModel, margins, blockStyles = {}) {
   const transition = (t)      => paras.push(para(t, { cid: 0, parid: 6 }));
   const dialogue   = (n, c)   => paras.push(dialoguePara(n, c, { charNameCid: cnCid, speechCid: dgCid }));
 
-  const roleLabel = { lead: '주인공', support: '조연', extra: '단역' };
+  // 출력 라벨: 새 분류(서사 역할) + 옛 데이터 호환 매핑
+  const roleLabel = {
+    protagonist: '주인공', antagonist: '적대자', rival: '라이벌',
+    ally: '조력자',        mentor: '멘토',       love: '연인',
+    family: '가족',        comic: '감초',        other: '기타',
+    lead: '주인공', support: '기타', extra: '기타',
+  };
 
   // 표지는 쪽번호 없이, 나머지 섹션은 각각 1부터 리셋
   // 섹션 구분: pageBreak 단락 대신 새 secPrPara 삽입 (쪽번호 리셋 포함)

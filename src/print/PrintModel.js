@@ -159,11 +159,22 @@ export function buildPrintModel(appState, selections, preset) {
 
   // ── 4. Characters reference
   if (selections.chars) {
-    const roleLabel = { lead: '주인공', support: '조연', extra: '단역' };
-    const sorted = [...projectChars].sort((a, b) => {
-      const o = { lead: 0, support: 1, extra: 2 };
-      return (o[a.role] ?? 3) - (o[b.role] ?? 3);
-    });
+    // 출력 정렬·라벨: 새 분류(서사 역할) 우선, 옛 키도 호환 매핑.
+    const roleLabel = {
+      protagonist: '주인공', antagonist: '적대자', rival: '라이벌',
+      ally: '조력자',        mentor: '멘토',       love: '연인',
+      family: '가족',        comic: '감초',        other: '기타',
+      // 옛 데이터 호환
+      lead: '주인공', support: '기타', extra: '기타',
+    };
+    const roleOrder = {
+      protagonist: 0, antagonist: 1, rival: 2, love: 3, mentor: 4,
+      ally: 5, family: 6, comic: 7, other: 8,
+      lead: 0, support: 8, extra: 8,
+    };
+    const sorted = [...projectChars].sort((a, b) =>
+      (roleOrder[a.role] ?? 99) - (roleOrder[b.role] ?? 99)
+    );
     if (sorted.length) {
       sections.push({
         type:       'characters',

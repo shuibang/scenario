@@ -7,7 +7,7 @@ import { PROJECT_TYPE_PRESETS } from '../../utils/projectTypes';
  * @param {function}  onClose
  * @param {function}  onCommit  - ({ title, projectType, totalEpisodes, createEpisodes, totalMins, climaxStart, climaxEnd }) => void
  */
-export default function NewProjectModal({ open, onClose, onCommit }) {
+export default function NewProjectModal({ open, onClose, onCommit, initialTitle = '' }) {
   const [title,          setTitle]          = useState('');
   const [selectedType,   setSelectedType]   = useState(null);
   const [totalMins,      setTotalMins]      = useState(60);
@@ -35,7 +35,7 @@ export default function NewProjectModal({ open, onClose, onCommit }) {
   // 모달 열릴 때 초기화
   useEffect(() => {
     if (open) {
-      setTitle('');
+      setTitle(initialTitle || '');
       setSelectedType(null);
       setTotalMins(60);
       setClimaxStart(48);
@@ -44,7 +44,7 @@ export default function NewProjectModal({ open, onClose, onCommit }) {
       setCreateEpisodes(1);
       setTimeout(() => titleRef.current?.focus(), 80);
     }
-  }, [open]);
+  }, [open, initialTitle]);
 
   const preset = PROJECT_TYPE_PRESETS.find(p => p.id === selectedType);
   const isMulti = preset?.isMulti ?? false;

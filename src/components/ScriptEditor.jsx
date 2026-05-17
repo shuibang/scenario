@@ -4264,7 +4264,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
             const blockId = charPickerState.blockId;
             suppressCharPickerOpenUntilRef.current = performance.now() + 300;
             setCharPickerState(null);
-            const newChar = { id: genId(), projectId: activeProjectId, name, givenName: name, role: 'extra', createdAt: now() };
+            const newChar = { id: genId(), projectId: activeProjectId, name, givenName: name, role: '', createdAt: now() };
             dispatch({ type: 'ADD_CHARACTER', payload: newChar });
             requestAnimationFrame(() => {
               surfaceApiRef.current?.updateBlockChar(blockId, newChar.id, name);

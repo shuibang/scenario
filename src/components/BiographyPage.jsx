@@ -1,9 +1,7 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { useApp } from '../store/AppContext';
-import { charDisplayName, charFullName } from './CharacterPanel';
+import { charDisplayName, charFullName, getRoleColor, getRoleLabel } from './CharacterPanel';
 import { genId } from '../store/db';
-
-const ROLE_LABELS = { lead: '주인공', support: '조연', extra: '단역' };
 
 // Auto-grow textarea — height matches content (no scrollbar)
 // box-sizing: border-box 가정 — scrollHeight(=padding+content)에 border(2px) 보정
@@ -142,7 +140,7 @@ export default function BiographyPage() {
         <div className="flex-1 overflow-y-auto py-1 space-y-0.5" style={{ paddingLeft: 6, paddingRight: 4 }}>
           {projectChars.map(c => {
             const isSelected = selectedId === c.id;
-            const roleColor = { lead: 'var(--c-accent)', support: 'var(--c-accent2)', extra: 'var(--c-text5)' }[c.role] || 'var(--c-text5)';
+            const roleColor = getRoleColor(c.role);
             return (
               <div
                 key={c.id}
@@ -156,7 +154,7 @@ export default function BiographyPage() {
                 <div className="text-sm font-medium truncate" style={{ color: isSelected ? 'var(--c-text)' : 'var(--c-text3)' }}>
                   {charFullName(c) || charDisplayName(c)}
                 </div>
-                <div className="text-[10px] truncate" style={{ color: roleColor }}>{ROLE_LABELS[c.role] || ''}</div>
+                <div className="text-[10px] truncate" style={{ color: roleColor }}>{getRoleLabel(c.role)}</div>
               </div>
             );
           })}

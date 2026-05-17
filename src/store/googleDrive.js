@@ -338,6 +338,43 @@ export async function saveToDrive(payload) {
   return next;
 }
 
+// ── 아이디어 노트 (단일 파일 동기화) ───────────────────────────────────────
+const IDEAS_FILE_NAME = 'daejak_ideas.json';
+let _pendingIdeasSave = Promise.resolve();
+
+async function _doSaveIdeasToDrive(payload) {
+  if (!isTokenValid()) return { ok: false, reason: 'no-token' };
+  try {
+    await upsertFile(IDEAS_FILE_NAME, JSON.stringify(payload));
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, reason: err.driveReason || err.message, error: err };
+  }
+}
+
+/** 아이디어 컬렉션 전체를 Drive 에 백업. 동시 호출은 직렬화 */
+export async function saveIdeasToDrive(ideas) {
+  const payload = { ideas: ideas || [], savedAt: Date.now() };
+  const next = _pendingIdeasSave.catch(() => {}).then(() => _doSaveIdeasToDrive(payload));
+  _pendingIdeasSave = next.catch(() => {});
+  return next;
+}
+
+/** Drive 에서 아이디어 컬렉션 로드. 없으면 null. */
+export async function loadIdeasFromDrive() {
+  if (!isTokenValid()) return null;
+  try {
+    const data = await readFileByName(IDEAS_FILE_NAME);
+    if (!data) return null;
+    return Array.isArray(data.ideas) ? data.ideas : null;
+  } catch (err) {
+    if (typeof console !== 'undefined' && console.warn) {
+      console.warn('[loadIdeasFromDrive] failed:', err);
+    }
+    return null;
+  }
+}
+
 // 작품별 PUT 직렬화 — 같은 작품 파일에 동시 PUT 발생 시 Drive API의 도착 순서가
 // 보장되지 않아 옛 PUT이 새 PUT을 덮어쓰는 race 방지. saveToDrive(구 형식)와 동일 패턴.
 // 다른 작품끼리는 병렬 그대로 (큐 키가 projectId별로 분리됨).
