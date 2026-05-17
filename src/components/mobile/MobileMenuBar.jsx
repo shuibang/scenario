@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Clapperboard, ExternalLink, CloudOff } from 'lucide-react';
 import { useApp } from '../../store/AppContext';
-import { FONTS } from '../../print/FontRegistry';
+import { FONTS, getFontPdfTooltip } from '../../print/FontRegistry';
 import AdBanner from '../AdBanner';
 import { mobileTbtnStyle } from '../../styles/tokens';
 import { applyInlineFormat } from '../../utils/textFormat';
@@ -14,6 +14,7 @@ import { shouldRunInitialSync, markInitialSyncDone } from '../../store/driveSync
 import { buildProjectConflicts } from '../../utils/projectConflict';
 import Menubar from '../Menubar/Menubar';
 import PublicPcBadge from '../PublicPcBadge';
+import { isAdminUser, getAdminHash } from '../../utils/adminAuth';
 
 export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, WorkTimer, authUser, onLogout, onMenuAction, onSyncConflict, recentProjects = [], checkedItems = {} }) {
   const { state, dispatch, loadFromDriveData } = useApp();
@@ -301,6 +302,19 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
                 </button>
               ))}
 
+              {/* 어드민 — admin 이메일이고 라우트 토큰이 설정된 경우에만 노출 */}
+              {isAdminUser(authUser) && getAdminHash() && (
+                <button
+                  style={{ ...dropItemStyle, color: 'var(--c-accent)' }}
+                  onClick={() => {
+                    window.location.hash = getAdminHash();
+                    setMenuOpen(false);
+                  }}
+                >
+                  <span>🛠</span><span>관리자</span>
+                </button>
+              )}
+
               <div style={{ height: 1, background: 'var(--c-border)', margin: '4px 0' }} />
               <AdBanner slot="mobile-bottom" mobileHide={false} height={32} />
 
@@ -446,10 +460,10 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
           style={{ ...mobileTbtnStyle, padding: '2px 4px', maxWidth: 90 }}
         >
           {FONTS.filter(f => f.sourceType === 'bundled').map(f => (
-            <option key={f.id} value={f.cssFamily}>{f.displayName}</option>
+            <option key={f.id} value={f.cssFamily} title={getFontPdfTooltip(f)}>{f.displayName}</option>
           ))}
           {FONTS.filter(f => f.sourceType === 'system').map(f => (
-            <option key={f.id} value={f.cssFamily}>{f.displayName}</option>
+            <option key={f.id} value={f.cssFamily} title={getFontPdfTooltip(f)}>{f.displayName}</option>
           ))}
         </select>
         <span style={{ fontSize: 'clamp(9px, 2.4vw, 11px)', color: 'var(--c-text6)', flexShrink: 0 }}>크기</span>

@@ -5,7 +5,7 @@ import { getTimelineColor } from './utils/color';
 import { loadLogPayload, isShortReviewId as isUUID } from './utils/reviewShare';
 import { AppProvider, useApp, mergeWorkLog, reducer as appReducer } from './store/AppContext';
 import { getSceneFormat, rebuildSceneContent } from './utils/sceneFormat';
-import { FONTS, FONT_STATUS, checkFontsAvailability, getFontPdfStatus, getFontByCssFamily } from './print/FontRegistry';
+import { FONTS, FONT_STATUS, checkFontsAvailability, getFontPdfStatus, getFontByCssFamily, getFontPdfTooltip } from './print/FontRegistry';
 import { getItem, setItem, getAll, setAll, DB_KEYS, clearDramaStorage, isPublicPcMode, genId, now } from './store/db';
 import { setAccessToken, clearAccessToken, loadAllProjectsFromDrive, isTokenValid, saveSnapshot, saveProjectToDrive, deleteProjectFromDrive, saveProjectsIndex, saveToDrive } from './store/googleDrive';
 import { serializeProject } from './utils/projectSerializer';
@@ -34,6 +34,9 @@ import MobileOnboardingTour from './components/mobile/MobileOnboardingTour';
 import SharedReviewView from './components/SharedReviewView';
 import DirectorDeliveryView from './components/DirectorDeliveryView';
 import SurveyPage from './components/SurveyPage';
+import AdminPage from './components/admin/AdminPage';
+import { isAdminHash, isAdminUser, getAdminHash } from './utils/adminAuth';
+import { Wrench } from 'lucide-react';
 import AdBanner, { KakaoAdBanner } from './components/AdBanner';
 // ─── v2: extracted mobile components ──────────────────────────────────────────
 import MobileMenuBar    from './components/mobile/MobileMenuBar';
@@ -1120,6 +1123,19 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
           >
             <User size={14} strokeWidth={2} />
           </button>
+          {/* 어드민 진입 — admin 이메일이고 라우트 토큰이 설정된 경우에만 노출 */}
+          {isAdminUser(authUser) && getAdminHash() && (
+            <button
+              onClick={() => { window.location.hash = getAdminHash(); }}
+              title="관리자"
+              className="flex items-center justify-center rounded"
+              style={{ ...iconBtnStyle, color: 'var(--c-accent)' }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-hover)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+            >
+              <Wrench size={14} strokeWidth={2} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -1153,14 +1169,16 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
         <select value={stylePreset?.fontFamily ?? '함초롬바탕'} onChange={handleFontFamily} style={{ ...selectStyle, maxWidth: 110 }}>
           <optgroup label="내장 글꼴">
             {FONTS.filter(f => f.sourceType === 'bundled').map(f => {
-              const status = getFontPdfStatus(f.id, fontAvailability);
-              const badge  = status === FONT_STATUS.FULL ? ' ✓' : status === FONT_STATUS.PARTIAL ? ' △' : status === FONT_STATUS.UNAVAILABLE ? ' ✗' : '';
-              return <option key={f.id} value={f.cssFamily}>{f.displayName}{badge}</option>;
+              const status  = getFontPdfStatus(f.id, fontAvailability);
+              // pdfBlocked는 SYSTEM 상태로 통일 → ⚠ 뱃지 + 툴팁 안내.
+              const badge   = status === FONT_STATUS.FULL ? ' ✓' : status === FONT_STATUS.PARTIAL ? ' △' : status === FONT_STATUS.UNAVAILABLE ? ' ✗' : status === FONT_STATUS.SYSTEM ? ' ⚠' : '';
+              const tooltip = getFontPdfTooltip(f);
+              return <option key={f.id} value={f.cssFamily} title={tooltip}>{f.displayName}{badge}</option>;
             })}
           </optgroup>
           <optgroup label="시스템 글꼴">
             {FONTS.filter(f => f.sourceType === 'system').map(f => (
-              <option key={f.id} value={f.cssFamily}>{f.displayName}</option>
+              <option key={f.id} value={f.cssFamily} title={getFontPdfTooltip(f)}>{f.displayName}</option>
             ))}
           </optgroup>
         </select>
@@ -2727,6 +2745,20 @@ export default function App() {
       }
     } catch {}
     return <DirectorApp authUser={authUser} />;
+  }
+
+  // 어드민 — env에 박힌 hash 토큰 + 이메일 화이트리스트 모두 만족해야 함.
+  // 비인가 시 404 위장으로 어드민 존재 자체를 노출하지 않음.
+  // 실제 데이터 가드는 Supabase RLS(`public.is_admin_user()`).
+  if (isAdminHash(window.location.hash)) {
+    if (!authUser || !isAdminUser(authUser)) {
+      return (
+        <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--c-bg)' }}>
+          <div style={{ color: 'var(--c-text6)', fontSize: 14 }}>정상적인 페이지가 아닙니다.</div>
+        </div>
+      );
+    }
+    return <AdminPage authUser={authUser} />;
   }
 
   // 연출 작업실 — 감독 전용 독립 페이지
