@@ -169,7 +169,51 @@ function useAdminData() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { ...state, refetch };
+  /**
+   * 오류 보고 row 의 resolved_at 토글.
+   * optimistic update → 실패 시 롤백.
+   */
+  const toggleErrorResolved = async (row) => {
+    if (!supabase || !row?.id) return;
+    const next = row.resolved_at ? null : new Date().toISOString();
+    const prev = state.errors;
+    setState((s) => ({
+      ...s,
+      errors: s.errors.map((r) => (r.id === row.id ? { ...r, resolved_at: next } : r)),
+    }));
+    const { error } = await supabase
+      .from('error_reports')
+      .update({ resolved_at: next })
+      .eq('id', row.id);
+    if (error) {
+      setState((s) => ({ ...s, errors: prev }));
+      alert(`상태 변경에 실패했어요.\n\n${error.message || error}\n\n(Supabase 마이그레이션이 아직 적용 안 됐다면 SQL Editor에서 적용해주세요.)`);
+    }
+  };
+
+  /**
+   * 자동 오류 그룹 토글 — fingerprint 의 모든 row 를 일괄 update.
+   * 그룹 안 한 row 라도 미해결이면 전체를 해결로 마킹, 전부 해결이면 전체 해제.
+   */
+  const toggleAutoErrorGroup = async (fingerprint, currentlyAllResolved) => {
+    if (!supabase || !fingerprint) return;
+    const next = currentlyAllResolved ? null : new Date().toISOString();
+    const prev = state.autoErrors;
+    setState((s) => ({
+      ...s,
+      autoErrors: s.autoErrors.map((r) => (r.fingerprint === fingerprint ? { ...r, resolved_at: next } : r)),
+    }));
+    const { error } = await supabase
+      .from('client_errors')
+      .update({ resolved_at: next })
+      .eq('fingerprint', fingerprint);
+    if (error) {
+      setState((s) => ({ ...s, autoErrors: prev }));
+      alert(`상태 변경에 실패했어요.\n\n${error.message || error}\n\n(Supabase 마이그레이션이 아직 적용 안 됐다면 SQL Editor에서 적용해주세요.)`);
+    }
+  };
+
+  return { ...state, refetch, toggleErrorResolved, toggleAutoErrorGroup };
 }
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -249,6 +293,7 @@ function DashboardTab({ data }) {
 function AutoErrorsTab({ data }) {
   const [sourceFilter, setSourceFilter] = useState('all');
   const [windowFilter, setWindowFilter] = useState('7d');
+  const [hideResolved, setHideResolved] = useState(true);
 
   const filtered = useMemo(() => {
     const now = Date.now();
@@ -281,6 +326,7 @@ function AutoErrorsTab({ data }) {
           firstAt: r.created_at,
           lastAt: r.created_at,
           samples: [r],
+          unresolvedCount: r.resolved_at ? 0 : 1,
         });
       } else {
         g.count++;
@@ -289,15 +335,33 @@ function AutoErrorsTab({ data }) {
         if (new Date(r.created_at) > new Date(g.lastAt)) g.lastAt = r.created_at;
         if (new Date(r.created_at) < new Date(g.firstAt)) g.firstAt = r.created_at;
         if (g.samples.length < 5) g.samples.push(r);
+        if (!r.resolved_at) g.unresolvedCount++;
       }
     });
-    return Array.from(map.values()).sort((a, b) => {
-      // 최근 발생 우선 → 그 다음 발생 횟수
+    // 모든 row가 resolved 인 그룹은 allResolved 표시
+    const arr = Array.from(map.values()).map((g) => ({ ...g, allResolved: g.unresolvedCount === 0 }));
+    const visible = hideResolved ? arr.filter((g) => !g.allResolved) : arr;
+    return visible.sort((a, b) => {
+      // 미해결 우선 → 최근 발생 → 발생 횟수
+      if (a.allResolved !== b.allResolved) return a.allResolved ? 1 : -1;
       const dt = new Date(b.lastAt) - new Date(a.lastAt);
       if (dt !== 0) return dt;
       return b.count - a.count;
     });
-  }, [filtered]);
+  }, [filtered, hideResolved]);
+
+  const resolvedGroupCount = useMemo(() => {
+    const seen = new Map();
+    (data.autoErrors || []).forEach((r) => {
+      const g = seen.get(r.fingerprint) || { total: 0, resolved: 0 };
+      g.total++;
+      if (r.resolved_at) g.resolved++;
+      seen.set(r.fingerprint, g);
+    });
+    let n = 0;
+    seen.forEach((g) => { if (g.resolved === g.total && g.total > 0) n++; });
+    return n;
+  }, [data.autoErrors]);
 
   const sources = [
     { id: 'all',     label: `전체 (${(data.autoErrors || []).length})` },
@@ -343,11 +407,23 @@ function AutoErrorsTab({ data }) {
             }}
           >{w.label}</button>
         ))}
+        <label
+          className="flex items-center gap-1.5 cursor-pointer"
+          style={{ fontSize: 11, color: 'var(--c-text4)', marginLeft: 4 }}
+        >
+          <input
+            type="checkbox"
+            checked={hideResolved}
+            onChange={(e) => setHideResolved(e.target.checked)}
+            style={{ accentColor: 'var(--c-accent)', width: 13, height: 13, cursor: 'pointer' }}
+          />
+          해결됨 숨김 ({resolvedGroupCount})
+        </label>
       </div>
 
       <div style={cardStyle}>
         <div style={{ ...labelStyle, marginBottom: 8 }}>
-          {groups.length}개 그룹 · 총 {filtered.length}건 (최근 발생순)
+          {groups.length}개 그룹 · 총 {filtered.length}건 (미해결 → 최근 발생순)
         </div>
         {groups.length === 0 ? (
           <div style={{ fontSize: 13, color: 'var(--c-text6)', padding: '20px 0', textAlign: 'center' }}>
@@ -355,7 +431,13 @@ function AutoErrorsTab({ data }) {
           </div>
         ) : (
           <div className="space-y-2">
-            {groups.map((g) => <AutoErrorGroup key={g.fingerprint} group={g} />)}
+            {groups.map((g) => (
+              <AutoErrorGroup
+                key={g.fingerprint}
+                group={g}
+                onToggleResolved={() => data.toggleAutoErrorGroup?.(g.fingerprint, g.allResolved)}
+              />
+            ))}
           </div>
         )}
       </div>
@@ -363,19 +445,34 @@ function AutoErrorsTab({ data }) {
   );
 }
 
-function AutoErrorGroup({ group }) {
+function AutoErrorGroup({ group, onToggleResolved }) {
   const [open, setOpen] = useState(false);
   const sourceLabel = group.source === 'window' ? '🌐' : group.source === 'promise' ? '⛓️' : group.source === 'react' ? '⚛️' : '✋';
+  const resolved = !!group.allResolved;
   return (
-    <div style={{ borderTop: '1px solid var(--c-border3)', paddingTop: 8 }}>
-      <div className="flex items-start gap-2 cursor-pointer" onClick={() => setOpen((v) => !v)}>
-        <span style={{ fontSize: 12, minWidth: 18 }}>{sourceLabel}</span>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12.5, color: 'var(--c-text2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: open ? 'normal' : 'nowrap', fontWeight: 500 }}>
+    <div style={{
+      borderTop: '1px solid var(--c-border3)', paddingTop: 8,
+      opacity: resolved ? 0.45 : 1,
+    }}>
+      <div className="flex items-start gap-2">
+        <input
+          type="checkbox"
+          checked={resolved}
+          onChange={(e) => { e.stopPropagation(); onToggleResolved?.(); }}
+          onClick={(e) => e.stopPropagation()}
+          title={resolved ? '이 그룹의 모든 발생이 해결됨으로 표시됨 (같은 오류가 새로 들어오면 자동 재노출)' : '이 fingerprint 의 모든 발생을 확인·수정 완료로 표시'}
+          style={{ accentColor: 'var(--c-accent)', width: 14, height: 14, cursor: 'pointer', flexShrink: 0, marginTop: 2 }}
+        />
+        <span style={{ fontSize: 12, minWidth: 18, cursor: 'pointer' }} onClick={() => setOpen((v) => !v)}>{sourceLabel}</span>
+        <div style={{ flex: 1, minWidth: 0, cursor: 'pointer' }} onClick={() => setOpen((v) => !v)}>
+          <div style={{ fontSize: 12.5, color: 'var(--c-text2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: open ? 'normal' : 'nowrap', fontWeight: 500, textDecoration: resolved ? 'line-through' : 'none' }}>
             {group.message}
           </div>
           <div style={{ fontSize: 10.5, color: 'var(--c-text6)', marginTop: 2 }}>
             {fmtRelative(group.lastAt)} · 발생 {group.count}회 · 영향 {group.users.size > 0 ? `유저 ${group.users.size}명` : '로그인 X'} · 세션 {group.sessions.size}개
+            {!resolved && group.unresolvedCount < group.count && (
+              <span style={{ color: 'var(--c-accent2)', marginLeft: 6 }}>· 미해결 {group.unresolvedCount}/{group.count}</span>
+            )}
           </div>
         </div>
         <span style={{ fontSize: 10, color: 'var(--c-text6)' }}>{open ? '▲' : '▼'}</span>
@@ -422,14 +519,16 @@ function AutoErrorGroup({ group }) {
 function ErrorsTab({ data }) {
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
+  const [hideResolved, setHideResolved] = useState(true);
 
   const filtered = useMemo(() => {
     let rows = data.errors;
     if (filter !== 'all') rows = rows.filter((r) => r.type === filter);
+    if (hideResolved) rows = rows.filter((r) => !r.resolved_at);
     const q = search.trim().toLowerCase();
     if (q) rows = rows.filter((r) => (r.description || '').toLowerCase().includes(q) || (r.email || '').toLowerCase().includes(q));
     return rows;
-  }, [data.errors, filter, search]);
+  }, [data.errors, filter, search, hideResolved]);
 
   const types = [
     { id: 'all', label: '전체' },
@@ -438,6 +537,8 @@ function ErrorsTab({ data }) {
     { id: 'feature', label: '💡 제안' },
     { id: 'other', label: '📝 기타' },
   ];
+
+  const resolvedCount = data.errors.filter((r) => r.resolved_at).length;
 
   return (
     <div className="flex flex-col gap-3">
@@ -455,6 +556,18 @@ function ErrorsTab({ data }) {
             }}
           >{t.label} {filter === t.id ? '' : `(${t.id === 'all' ? data.errors.length : data.errors.filter((r) => r.type === t.id).length})`}</button>
         ))}
+        <label
+          className="flex items-center gap-1.5 cursor-pointer"
+          style={{ fontSize: 11, color: 'var(--c-text4)', marginLeft: 4 }}
+        >
+          <input
+            type="checkbox"
+            checked={hideResolved}
+            onChange={(e) => setHideResolved(e.target.checked)}
+            style={{ accentColor: 'var(--c-accent)', width: 13, height: 13, cursor: 'pointer' }}
+          />
+          해결됨 숨김 ({resolvedCount})
+        </label>
         <input
           type="text"
           value={search}
@@ -474,7 +587,7 @@ function ErrorsTab({ data }) {
           <div style={{ fontSize: 13, color: 'var(--c-text6)', padding: '20px 0', textAlign: 'center' }}>데이터가 없습니다</div>
         ) : (
           <div className="space-y-2">
-            {filtered.map((r) => <ErrorRow key={r.id} row={r} />)}
+            {filtered.map((r) => <ErrorRow key={r.id} row={r} onToggleResolved={data.toggleErrorResolved} />)}
           </div>
         )}
       </div>
@@ -482,24 +595,39 @@ function ErrorsTab({ data }) {
   );
 }
 
-function ErrorRow({ row }) {
+function ErrorRow({ row, onToggleResolved }) {
   const [open, setOpen] = useState(false);
+  const resolved = !!row.resolved_at;
   return (
-    <div style={{ borderTop: '1px solid var(--c-border3)', paddingTop: 8 }}>
-      <div className="flex items-start gap-3 cursor-pointer" onClick={() => setOpen((v) => !v)}>
-        <span style={{ fontSize: 11, color: 'var(--c-text6)', minWidth: 90, tabularNums: true }}>{fmtDateTime(row.created_at)}</span>
-        <span style={{ fontSize: 11, color: 'var(--c-text5)', minWidth: 56 }}>{row.type}</span>
-        <span style={{ fontSize: 12, color: 'var(--c-text3)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: open ? 'normal' : 'nowrap' }}>
-          {row.description}
-        </span>
-        <span style={{ fontSize: 10, color: 'var(--c-text6)' }}>{open ? '▲' : '▼'}</span>
+    <div style={{
+      borderTop: '1px solid var(--c-border3)', paddingTop: 8,
+      opacity: resolved ? 0.45 : 1,
+    }}>
+      <div className="flex items-start gap-3">
+        <input
+          type="checkbox"
+          checked={resolved}
+          onChange={(e) => { e.stopPropagation(); onToggleResolved?.(row); }}
+          onClick={(e) => e.stopPropagation()}
+          title={resolved ? `해결됨 (${fmtDateTime(row.resolved_at)})` : '확인·수정 완료 표시'}
+          style={{ accentColor: 'var(--c-accent)', width: 14, height: 14, cursor: 'pointer', flexShrink: 0, marginTop: 2 }}
+        />
+        <div className="flex items-start gap-3 cursor-pointer" style={{ flex: 1, minWidth: 0 }} onClick={() => setOpen((v) => !v)}>
+          <span style={{ fontSize: 11, color: 'var(--c-text6)', minWidth: 90, tabularNums: true, textDecoration: resolved ? 'line-through' : 'none' }}>{fmtDateTime(row.created_at)}</span>
+          <span style={{ fontSize: 11, color: 'var(--c-text5)', minWidth: 56 }}>{row.type}</span>
+          <span style={{ fontSize: 12, color: 'var(--c-text3)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: open ? 'normal' : 'nowrap', textDecoration: resolved ? 'line-through' : 'none' }}>
+            {row.description}
+          </span>
+          <span style={{ fontSize: 10, color: 'var(--c-text6)' }}>{open ? '▲' : '▼'}</span>
+        </div>
       </div>
       {open && (
-        <div style={{ marginTop: 8, marginLeft: 0, fontSize: 11, color: 'var(--c-text5)', lineHeight: 1.7 }}>
+        <div style={{ marginTop: 8, marginLeft: 22, fontSize: 11, color: 'var(--c-text5)', lineHeight: 1.7 }}>
           <div>이메일: {row.email || '—'}</div>
           <div>user_id: {shortId(row.user_id)}</div>
           <div>page: {row.page || '—'}</div>
           <div>source: {row.source || '—'}</div>
+          {resolved && <div style={{ color: 'var(--c-accent2)' }}>해결됨: {fmtDateTime(row.resolved_at)}</div>}
         </div>
       )}
     </div>
