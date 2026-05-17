@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useApp } from '../store/AppContext';
-import { charDisplayName } from './CharacterPanel';
+import { charDisplayName, getCharRoles, getRoleColor, getRoleLabel } from './CharacterPanel';
 import { genId } from '../store/db';
 
 const NODE_W = 110;
@@ -81,54 +81,79 @@ function EdgeArrow({ from, to, label, sideOffset = 0 }) {
 }
 
 // ─── CharNode ──────────────────────────────────────────────────────────────────
+// 카드 자체는 NODE_W × NODE_H 고정(엣지 계산 일관성 유지).
+// 다중 역할 칩은 카드 아래로 별도 줄로 배치 — 노드 위치(pos)에는 영향 없음.
 function CharNode({ char, pos, onDragStart, printMode }) {
   const initial = charDisplayName(char).charAt(0) || '?';
+  const roles = getCharRoles(char);
   return (
     <div
-      onMouseDown={!printMode ? (e) => onDragStart(char.id, e) : undefined}
       style={{
         position: 'absolute',
         left: pos.x - NODE_W / 2,
         top: pos.y - NODE_H / 2,
         width: NODE_W,
-        height: NODE_H,
-        background: 'var(--c-card)',
-        border: '1.5px solid var(--c-border2)',
-        borderRadius: '8px',
-        cursor: printMode ? 'default' : 'grab',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '4px 8px',
         userSelect: 'none',
-        boxShadow: '0 2px 6px rgba(0,0,0,0.10)',
-        gap: '2px',
+        pointerEvents: 'none', // 자식 카드만 mouseDown 받도록
       }}
     >
-      <div style={{
-        width: 26, height: 26, borderRadius: '50%',
-        background: 'var(--c-accent)', flexShrink: 0,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: '12px', color: '#fff', fontWeight: 700,
-      }}>
-        {initial}
-      </div>
-      <div style={{
-        fontSize: '11px', fontWeight: 600, color: 'var(--c-text)',
-        textAlign: 'center', lineHeight: 1.2,
-        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        width: '100%',
-      }}>
-        {charDisplayName(char)}
-      </div>
-      {char.role && (
+      <div
+        onMouseDown={!printMode ? (e) => onDragStart(char.id, e) : undefined}
+        style={{
+          height: NODE_H,
+          background: 'var(--c-card)',
+          border: '1.5px solid var(--c-border2)',
+          borderRadius: '8px',
+          cursor: printMode ? 'default' : 'grab',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '4px 8px',
+          boxShadow: '0 2px 6px rgba(0,0,0,0.10)',
+          gap: '2px',
+          pointerEvents: 'auto',
+        }}
+      >
         <div style={{
-          fontSize: '9px', color: 'var(--c-text5)', lineHeight: 1.2,
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          width: '100%', textAlign: 'center',
+          width: 26, height: 26, borderRadius: '50%',
+          background: 'var(--c-accent)', flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '12px', color: '#fff', fontWeight: 700,
         }}>
-          {char.role}
+          {initial}
+        </div>
+        <div style={{
+          fontSize: '11px', fontWeight: 600, color: 'var(--c-text)',
+          textAlign: 'center', lineHeight: 1.2,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          width: '100%',
+        }}>
+          {charDisplayName(char)}
+        </div>
+      </div>
+      {roles.length > 0 && (
+        <div style={{
+          marginTop: 4,
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          gap: 2,
+        }}>
+          {roles.map((r) => (
+            <span
+              key={r}
+              style={{
+                fontSize: 8.5, lineHeight: 1.3,
+                padding: '1px 6px',
+                borderRadius: 6,
+                background: 'var(--c-card)',
+                color: getRoleColor(r),
+                border: `1px solid ${getRoleColor(r)}`,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {getRoleLabel(r)}
+            </span>
+          ))}
         </div>
       )}
     </div>

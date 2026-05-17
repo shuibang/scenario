@@ -10,6 +10,7 @@ import {
 } from '../utils/findReplace';
 import { generateRenamePairs } from '../utils/characterRename';
 import RenameConfirmDialog from './Modals/RenameConfirmDialog';
+import RolePicker from './RolePicker';
 import RenamePreviewDialog from './Modals/RenamePreviewDialog';
 
 // ─── 페어별 검색 결과 그룹핑 헬퍼 ────────────────────────────────────────────
@@ -90,38 +91,172 @@ function buildPairResult(pair, pairIdx, { projectBlocks, synopsisDoc, projectCha
   return { pairIdx, label: pair.label, oldText: pair.oldText, newText: pair.newText, searchScope: pair.searchScope, blockGroups, synopsisGroups, charIntroGroups, episodeGroups, coverGroups, coverCustomGroups };
 }
 
-// 새 분류: 비중(주조연) 대신 서사 역할(주인공/적대자/라이벌/조력자 등)
-// 옛 데이터('lead'/'support'/'extra')는 ROLE_LEGACY_MIGRATE 로 한 번에 매핑한다.
-// 공란('')도 허용 — 사용자가 역할 분류를 원치 않을 때.
-const ROLE_OPTIONS = [
-  { value: '',            label: '— 미지정 —', color: 'var(--c-text6)' },
-  { value: 'protagonist', label: '주인공',  color: 'var(--c-accent)' },
-  { value: 'antagonist',  label: '적대자',  color: '#dc2626' },
-  { value: 'rival',       label: '라이벌',  color: '#ea580c' },
-  { value: 'ally',        label: '조력자',  color: '#16a34a' },
-  { value: 'mentor',      label: '멘토',    color: '#8b5cf6' },
-  { value: 'love',        label: '연인',    color: '#ec4899' },
-  { value: 'family',      label: '가족',    color: '#0891b2' },
-  { value: 'comic',       label: '감초',    color: '#f59e0b' },
-  { value: 'other',       label: '기타',    color: 'var(--c-text5)' },
+// ─── 서사 역할 카탈로그 (다중 선택) ──────────────────────────────────────────
+// 카테고리 + 색상별로 정리. 한 인물은 여러 역할을 동시에 가질 수 있다.
+// 옛 단일 키('lead'/'support'/'extra' + 1차 단일키들)는 ROLE_LEGACY_MIGRATE 로 매핑.
+const ROLE_CATEGORIES = [
+  {
+    id: 'protagonist',
+    label: '주인공 계열',
+    color: 'var(--c-accent)',
+    items: [
+      { value: 'protagonist',          label: '주인공' },
+      { value: 'hero',                 label: '히어로' },
+      { value: 'antihero',             label: '안티히어로' },
+      { value: 'anti_protagonist',     label: '반주인공' },
+      { value: 'deuteragonist',        label: '공동주인공' },
+      { value: 'narrator_observer',    label: '관찰자 화자' },
+      { value: 'growth_protagonist',   label: '성장형 주인공' },
+      { value: 'tragic_protagonist',   label: '비극적 주인공' },
+    ],
+  },
+  {
+    id: 'opposition',
+    label: '대립 계열',
+    color: '#dc2626',
+    items: [
+      { value: 'antagonist',     label: '적대자' },
+      { value: 'villain',        label: '빌런' },
+      { value: 'rival',          label: '라이벌' },
+      { value: 'competitor',     label: '경쟁자' },
+      { value: 'mastermind',     label: '흑막' },
+      { value: 'final_boss',     label: '최종보스' },
+      { value: 'traitor',        label: '배신자' },
+      { value: 'internal_enemy', label: '내부 적' },
+      { value: 'false_ally',     label: '거짓 조력자' },
+      { value: 'foil',           label: '반동인물' },
+    ],
+  },
+  {
+    id: 'helper',
+    label: '조력 계열',
+    color: '#16a34a',
+    items: [
+      { value: 'ally',       label: '조력자' },
+      { value: 'mentor',     label: '멘토' },
+      { value: 'teacher',    label: '스승' },
+      { value: 'partner',    label: '파트너' },
+      { value: 'companion',  label: '동료' },
+      { value: 'sidekick',   label: '사이드킥' },
+      { value: 'patron',     label: '후원자' },
+      { value: 'savior',     label: '구원자' },
+      { value: 'informant',  label: '정보 제공자' },
+      { value: 'mediator',   label: '중재자' },
+    ],
+  },
+  {
+    id: 'relational',
+    label: '감정·관계 역할',
+    color: '#ec4899',
+    items: [
+      { value: 'love',             label: '러브인터레스트' },
+      { value: 'family_protector', label: '가족 보호자' },
+      { value: 'protectee',        label: '보호 대상' },
+      { value: 'victim',           label: '희생자' },
+      { value: 'revenge_target',   label: '복수 대상' },
+      { value: 'salvation_target', label: '구원 대상' },
+      { value: 'friend',           label: '친구' },
+      { value: 'crush',            label: '썸 상대' },
+      { value: 'ex_lover',         label: '전 연인' },
+      { value: 'destined',         label: '운명적 상대' },
+      { value: 'family',           label: '가족' },
+    ],
+  },
+  {
+    id: 'trigger',
+    label: '사건 유발',
+    color: '#0891b2',
+    items: [
+      { value: 'inciter',         label: '촉발자' },
+      { value: 'client',          label: '의뢰인' },
+      { value: 'messenger',       label: '메신저' },
+      { value: 'event_provider',  label: '사건 제공자' },
+      { value: 'scapegoat',       label: '희생양' },
+      { value: 'survivor',        label: '생존자' },
+    ],
+  },
+  {
+    id: 'tension',
+    label: '긴장 조성',
+    color: '#ea580c',
+    items: [
+      { value: 'troublemaker', label: '트러블메이커' },
+      { value: 'obstructor',   label: '방해자' },
+      { value: 'tempter',      label: '유혹자' },
+      { value: 'instigator',   label: '선동가' },
+      { value: 'watcher',      label: '감시자' },
+      { value: 'judge',        label: '심판자' },
+      { value: 'negotiator',   label: '협상자' },
+    ],
+  },
+  {
+    id: 'worldbuilding',
+    label: '세계관 설명',
+    color: '#8b5cf6',
+    items: [
+      { value: 'explainer', label: '해설자' },
+      { value: 'narrator',  label: '화자' },
+      { value: 'observer',  label: '관찰자' },
+      { value: 'guide',     label: '안내자' },
+      { value: 'briefer',   label: '정보 브리핑' },
+    ],
+  },
+  {
+    id: 'misc',
+    label: '기타',
+    color: '#f59e0b',
+    items: [
+      { value: 'comic', label: '감초' },
+      { value: 'other', label: '기타' },
+    ],
+  },
 ];
 
+// 평탄화된 옵션·라벨·색상 맵
+const ALL_ROLE_OPTIONS = ROLE_CATEGORIES.flatMap((cat) =>
+  cat.items.map((it) => ({ ...it, categoryId: cat.id, color: cat.color }))
+);
+const ROLE_LABELS = Object.fromEntries(ALL_ROLE_OPTIONS.map((o) => [o.value, o.label]));
+const ROLE_COLORS = Object.fromEntries(ALL_ROLE_OPTIONS.map((o) => [o.value, o.color]));
+
+// 호환: 단일-선택 시기 (1차 9개) 변수 유지 — 일부 외부 의존성 보존
+const ROLE_OPTIONS = [
+  { value: '', label: '— 미지정 —', color: 'var(--c-text6)' },
+  ...ALL_ROLE_OPTIONS,
+];
+
+// 옛 키 → 새 키 매핑
 const ROLE_LEGACY_MIGRATE = {
+  // v1: 비중 라벨
   lead:    'protagonist',
   support: 'other',
   extra:   'other',
+  // 그 외 1차 단일키들은 그대로 새 카탈로그에 존재해서 매핑 불필요.
 };
 
-// 옛 키 → 새 키 매핑(렌더·편집 시 항상 normalize 해서 사용)
-// null/undefined/'' 는 모두 공란('')으로 통일 — 사용자가 미지정 상태.
+// 옛 키 → 새 키 정규화. null/undefined/'' 는 공란.
 function normalizeRole(role) {
   if (role == null || role === '') return '';
   if (ROLE_LEGACY_MIGRATE[role]) return ROLE_LEGACY_MIGRATE[role];
   return role;
 }
 
-const ROLE_LABELS = Object.fromEntries(ROLE_OPTIONS.map((o) => [o.value, o.label]));
-const ROLE_COLORS = Object.fromEntries(ROLE_OPTIONS.map((o) => [o.value, o.color]));
+/**
+ * 캐릭터에서 역할 배열을 추출.
+ * 우선순위: char.roles (다중) > char.role (단일, 옛 데이터)
+ * 모든 항목에 normalizeRole 적용.
+ */
+export function getCharRoles(char) {
+  if (!char) return [];
+  if (Array.isArray(char.roles) && char.roles.length > 0) {
+    return char.roles.map(normalizeRole).filter(Boolean);
+  }
+  if (char.role) {
+    const r = normalizeRole(char.role);
+    return r ? [r] : [];
+  }
+  return [];
+}
 
 // 공란이면 빈 문자열을 돌려줌 — 칩이 비어 보이도록.
 export function getRoleLabel(role) {
@@ -133,7 +268,7 @@ export function getRoleColor(role) {
   const k = normalizeRole(role);
   return ROLE_COLORS[k] || 'var(--c-text5)';
 }
-export { ROLE_OPTIONS, normalizeRole };
+export { ROLE_CATEGORIES, ROLE_OPTIONS, ALL_ROLE_OPTIONS, normalizeRole };
 
 // ─── Compat helpers ────────────────────────────────────────────────────────────
 export function charDisplayName(char) {
@@ -158,12 +293,12 @@ function charToForm(char) {
       gender:      char.gender      ?? '',
       age:         char.age         ?? '',
       occupation:  charOccupation(char),
-      role:        normalizeRole(char.role),
+      roles:       getCharRoles(char),
       intro:       charIntro(char),
       extraFields: charExtraFields(char),
     };
   }
-  return { surname: '', givenName: '', gender: '', age: '', occupation: '', role: '', intro: '', extraFields: [] };
+  return { surname: '', givenName: '', gender: '', age: '', occupation: '', roles: [], intro: '', extraFields: [] };
 }
 
 // ─── CharacterForm ─────────────────────────────────────────────────────────────
@@ -197,12 +332,14 @@ function CharacterForm({ initial, onSave, onCancel }) {
   const handleSave = () => {
     if (!canSave) return;
     const fullName = [form.surname, form.givenName].filter(Boolean).join('') || form.givenName;
-    onSave({ ...form, name: fullName });
+    // role(단일) 필드는 더 이상 사용하지 않음 — roles[]만 저장.
+    const { role: _legacy, ...rest } = form;
+    onSave({ ...rest, name: fullName });
   };
 
   return (
     <div className="rounded-lg p-4 space-y-3" style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)' }}>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-2">
         <div>
           <label className="block text-[10px] mb-1 uppercase tracking-wider" style={{ color: 'var(--c-text5)' }}>성</label>
           <input value={form.surname} onChange={e => f('surname', e.target.value)}
@@ -213,12 +350,13 @@ function CharacterForm({ initial, onSave, onCancel }) {
           <input autoFocus value={form.givenName} onChange={e => f('givenName', e.target.value)}
             onKeyDown={e => e.key === 'Escape' && onCancel()} style={inputStyle} placeholder="길동" />
         </div>
-        <div>
-          <label className="block text-[10px] mb-1 uppercase tracking-wider" style={{ color: 'var(--c-text5)' }}>역할</label>
-          <select value={form.role} onChange={e => f('role', e.target.value)} style={{ ...inputStyle, fontSize: '0.8125rem' }}>
-            {ROLE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-        </div>
+      </div>
+      <div>
+        <label className="block text-[10px] mb-1 uppercase tracking-wider" style={{ color: 'var(--c-text5)' }}>서사 역할 (다중 선택)</label>
+        <RolePicker
+          value={form.roles || []}
+          onChange={(next) => f('roles', next)}
+        />
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
@@ -413,7 +551,9 @@ function CharacterUsage({ char, episodes, scenes, scriptBlocks }) {
 function CharacterIndexItem({ char, isSelected, onClick }) {
   const fullName = charFullName(char);
   const displayName = charDisplayName(char);
-  const roleColor = getRoleColor(char.role);
+  const roles = getCharRoles(char);
+  const primary = roles[0];
+  const extraCount = Math.max(0, roles.length - 1);
 
   return (
     <div
@@ -429,7 +569,12 @@ function CharacterIndexItem({ char, isSelected, onClick }) {
       <div className="text-sm font-medium truncate" style={{ color: isSelected ? 'var(--c-text)' : 'var(--c-text3)' }}>
         {fullName || displayName}
       </div>
-      <div className="text-[10px] truncate" style={{ color: roleColor }}>{getRoleLabel(char.role)}</div>
+      {primary && (
+        <div className="text-[10px] truncate" style={{ color: getRoleColor(primary) }}>
+          {getRoleLabel(primary)}
+          {extraCount > 0 && <span style={{ color: 'var(--c-text6)', marginLeft: 4 }}>+{extraCount}</span>}
+        </div>
+      )}
     </div>
   );
 }
@@ -439,7 +584,7 @@ function CharacterDetail({ char, onEdit, onDelete, episodes, scenes, scriptBlock
   const [confirmDelete, setConfirmDelete] = useState(false);
   const fullName = charFullName(char);
   const displayName = charDisplayName(char);
-  const roleColor = getRoleColor(char.role);
+  const roles = getCharRoles(char);
 
   return (
     <div className="rounded-lg p-4" style={{ background: 'var(--c-card)', border: '1px solid var(--c-accent)' }}>
@@ -468,14 +613,24 @@ function CharacterDetail({ char, onEdit, onDelete, episodes, scenes, scriptBlock
         </div>
       </div>
 
-      {/* Role + occupation */}
-      <div className="flex items-center gap-2 mb-2">
-        {getRoleLabel(char.role) && (
-          <span className="text-xs font-medium" style={{ color: roleColor }}>{getRoleLabel(char.role)}</span>
-        )}
+      {/* Roles + occupation */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center', marginBottom: 8 }}>
+        {roles.map((r) => (
+          <span
+            key={r}
+            style={{
+              fontSize: 10.5, fontWeight: 600,
+              padding: '1px 7px', borderRadius: 10,
+              background: 'var(--c-active)', color: getRoleColor(r),
+              border: `1px solid ${getRoleColor(r)}`,
+            }}
+          >
+            {getRoleLabel(r)}
+          </span>
+        ))}
         {charOccupation(char) && (
-          <span className="text-xs" style={{ color: 'var(--c-text5)' }}>
-            {getRoleLabel(char.role) ? '· ' : ''}{charOccupation(char)}
+          <span className="text-xs" style={{ color: 'var(--c-text5)', marginLeft: roles.length > 0 ? 4 : 0 }}>
+            {roles.length > 0 ? '· ' : ''}{charOccupation(char)}
           </span>
         )}
       </div>

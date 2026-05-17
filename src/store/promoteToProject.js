@@ -82,12 +82,13 @@ export function applyIdeaSeed({ idea, projectId, firstEpisodeId, dispatch }) {
   blocks
     .filter((b) => b.type === 'character' && ((b.name || '').trim() || (b.content || '').trim()))
     .forEach((b, i) => {
+      // roles 배열을 우선 사용, 옛 단일 role 도 호환.
+      const blockRoles = Array.isArray(b.roles) ? b.roles : (b.role ? [b.role] : []);
       const c = {
         id: genId(),
         projectId,
         name: (b.name || '').trim() || `인물 ${i + 1}`,
-        // 역할은 사용자가 명시한 값 그대로 — 공란이면 공란으로 저장.
-        role: b.role ?? '',
+        roles: blockRoles,
         description: (b.content || '').trim(),
         createdAt: ts + i,
         updatedAt: ts + i,

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { newBlock } from '../../store/ideasStore';
+import RolePicker from '../RolePicker';
 
 /**
  * IdeaNoteEditor — 단일 아이디어 편집기
@@ -35,20 +36,7 @@ const BLOCK_META = {
 // 슬래시 메뉴 — 그룹화: 시놉시스 항목 → 트리트먼트 → 인물 → 참고/첨부
 const SLASH_TYPES = ['logline', 'genre', 'theme', 'intent', 'story', 'treatment', 'character', 'note', 'link', 'image'];
 
-// 캐릭터 블록의 역할 옵션 — CharacterPanel 의 ROLE_LABELS 와 동일 enum
-// 공란(미지정)도 허용 — 분류하고 싶지 않은 경우.
-const CHARACTER_ROLE_OPTIONS = [
-  { value: '',            label: '— 역할 미지정 —' },
-  { value: 'protagonist', label: '주인공' },
-  { value: 'antagonist',  label: '적대자' },
-  { value: 'rival',       label: '라이벌' },
-  { value: 'ally',        label: '조력자' },
-  { value: 'mentor',      label: '멘토' },
-  { value: 'love',        label: '연인' },
-  { value: 'family',      label: '가족' },
-  { value: 'comic',       label: '감초' },
-  { value: 'other',       label: '기타' },
-];
+// 캐릭터 블록의 역할은 RolePicker(다중)를 사용. ROLE_CATEGORIES 는 CharacterPanel 에서 정의.
 
 export default function IdeaNoteEditor({ idea, onChange, onPromote, onDelete, compact = false }) {
   const [tagDraft, setTagDraft] = useState('');
@@ -231,7 +219,7 @@ export default function IdeaNoteEditor({ idea, onChange, onPromote, onDelete, co
 }
 
 function defaultBlockExtras(type) {
-  if (type === 'character') return { name: '', role: '', content: '' };
+  if (type === 'character') return { name: '', roles: [], content: '' };
   if (type === 'link')      return { url: '', title: '' };
   if (type === 'image')     return { url: '' };
   return { content: '' };
@@ -309,23 +297,19 @@ function BlockRow({ block, isFirst, isLast, onUpdate, onInsertAfter, onRemove, o
       <div style={{ padding: '8px 10px' }}>
         {block.type === 'character' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <input
-                type="text"
-                value={block.name || ''}
-                onChange={(e) => onUpdate({ name: e.target.value })}
-                placeholder="인물 이름 (예: 서주)"
-                style={{ ...inputStyle, flex: 1 }}
+            <input
+              type="text"
+              value={block.name || ''}
+              onChange={(e) => onUpdate({ name: e.target.value })}
+              placeholder="인물 이름 (예: 서주)"
+              style={inputStyle}
+            />
+            <div>
+              <RolePicker
+                value={Array.isArray(block.roles) ? block.roles : (block.role ? [block.role] : [])}
+                onChange={(next) => onUpdate({ roles: next, role: undefined })}
+                compact
               />
-              <select
-                value={block.role ?? ''}
-                onChange={(e) => onUpdate({ role: e.target.value })}
-                style={{ ...inputStyle, width: 130, flexShrink: 0 }}
-              >
-                {CHARACTER_ROLE_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
             </div>
             <textarea
               ref={textareaRef}

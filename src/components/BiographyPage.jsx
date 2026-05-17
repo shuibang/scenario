@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { useApp } from '../store/AppContext';
-import { charDisplayName, charFullName, getRoleColor, getRoleLabel } from './CharacterPanel';
+import { charDisplayName, charFullName, getRoleColor, getRoleLabel, getCharRoles } from './CharacterPanel';
 import { genId } from '../store/db';
 
 // Auto-grow textarea — height matches content (no scrollbar)
@@ -140,7 +140,9 @@ export default function BiographyPage() {
         <div className="flex-1 overflow-y-auto py-1 space-y-0.5" style={{ paddingLeft: 6, paddingRight: 4 }}>
           {projectChars.map(c => {
             const isSelected = selectedId === c.id;
-            const roleColor = getRoleColor(c.role);
+            const roles = getCharRoles(c);
+            const primaryRole = roles[0];
+            const extraRoleCount = Math.max(0, roles.length - 1);
             return (
               <div
                 key={c.id}
@@ -154,7 +156,12 @@ export default function BiographyPage() {
                 <div className="text-sm font-medium truncate" style={{ color: isSelected ? 'var(--c-text)' : 'var(--c-text3)' }}>
                   {charFullName(c) || charDisplayName(c)}
                 </div>
-                <div className="text-[10px] truncate" style={{ color: roleColor }}>{getRoleLabel(c.role)}</div>
+                {primaryRole && (
+                  <div className="text-[10px] truncate" style={{ color: getRoleColor(primaryRole) }}>
+                    {getRoleLabel(primaryRole)}
+                    {extraRoleCount > 0 && <span style={{ color: 'var(--c-text6)', marginLeft: 4 }}>+{extraRoleCount}</span>}
+                  </div>
+                )}
               </div>
             );
           })}

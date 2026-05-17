@@ -471,7 +471,10 @@ function xmlSection(printModel, margins, blockStyles = {}) {
           head('등장인물');
           empty();
           for (const c of sec.characters) {
-            const meta = [c.gender, c.age, c.job, roleLabel[c.role] || c.role].filter(Boolean).join(' · ');
+            // c.roleLabel 은 PrintModel 에서 다중 역할을 ' · '로 join한 문자열.
+            // 옛 데이터 호환: 없으면 c.role 단일 키로 fallback.
+            const roleText = c.roleLabel || roleLabel[c.role] || c.role || '';
+            const meta = [c.gender, c.age, c.job, roleText].filter(Boolean).join(' · ');
             normal(`${c.name}${meta ? '  (' + meta + ')' : ''}`);
             if (c.description) multiLine(c.description);
           }
