@@ -76,20 +76,24 @@ export const FONTS = [
   },
 
   // ── Bundled: 맑은 고딕 ─────────────────────────────────────────────────────
-  // italic/boldItalic 파일 미제공 → null
+  // Microsoft 저작권 폰트. TTF 파일을 빌드 산출물에서 제거함(2026-05-13).
+  // 화면 렌더링은 사용자 OS에 설치된 'Malgun Gothic'을 그대로 사용(CSS fallback).
+  // PDF 임베드는 라이선스상 차단 → Noto Serif KR로 폴백.
   {
     id:          'malgun-gothic',
     displayName: '맑은 고딕',
     sourceType:  'bundled',
+    pdfBlocked:  true,
     cssFamily:   'Malgun Gothic',
     pdfFiles: {
-      normal:     '/fonts/malgun.ttf',
-      bold:       '/fonts/malgunbd.ttf',
+      normal:     null,
+      bold:       null,
       italic:     null,
       boldItalic: null,
     },
-    docxFontName: '맑은 고딕',
-    cssFallback:  "'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif",
+    docxFontName:  '맑은 고딕',
+    cssFallback:   "'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif",
+    pdfFallbackId: 'noto-serif-kr',
   },
 
   // ── System fonts ─────────────────────────────────────────────────────────────
@@ -104,6 +108,8 @@ export const FONTS = [
     pdfFallbackId: 'hcr-batang',
   },
   {
+    // Apple SD Gothic Neo — macOS/iOS 전용 시스템 폰트. 파일 임베드 라이선스 위반 소지.
+    // PDF 폴백 대상: Noto Serif KR (라이선스 안전, SIL OFL).
     id:            'apple-sd',
     displayName:   'Apple SD Gothic Neo',
     sourceType:    'system',
@@ -111,7 +117,7 @@ export const FONTS = [
     pdfFiles:      null,
     docxFontName:  'Apple SD Gothic Neo',
     cssFallback:   "'Malgun Gothic', 'Noto Sans KR', sans-serif",
-    pdfFallbackId: 'noto-sans-kr',
+    pdfFallbackId: 'noto-serif-kr',
   },
 ];
 
@@ -167,7 +173,8 @@ export function checkFontsAvailability() {
     const missing      = [];
     const partialStyles = {};
 
-    for (const font of FONTS.filter(f => f.sourceType === 'bundled')) {
+    // pdfBlocked 폰트는 의도적으로 임베드 차단되므로 HEAD 프로브 생략 — 불필요한 404 방지.
+    for (const font of FONTS.filter(f => f.sourceType === 'bundled' && !f.pdfBlocked)) {
       const checks      = {};
       const missedStyles = [];
 
@@ -194,10 +201,19 @@ export function checkFontsAvailability() {
 }
 
 // ─── Status helpers ────────────────────────────────────────────────────────────
+/**
+ * Return true if this font cannot legally/technically be embedded in PDF.
+ * Covers both system fonts (no file) and license-blocked bundled fonts.
+ */
+export function isFontPdfRestricted(font) {
+  return !!font && (font.sourceType === 'system' || font.pdfBlocked === true);
+}
+
 /** Return FONT_STATUS constant for a given fontId + availability result. */
 export function getFontPdfStatus(fontId, availability) {
   const font = getFontById(fontId);
-  if (font.sourceType === 'system') return FONT_STATUS.SYSTEM;
+  // pdfBlocked는 시스템 폰트와 동일하게 "PDF 임베드 불가"로 취급 → SYSTEM 상태로 통일.
+  if (isFontPdfRestricted(font)) return FONT_STATUS.SYSTEM;
   if (!availability) return font.pdfVfOnly ? FONT_STATUS.PARTIAL : FONT_STATUS.FULL; // loading
 
   const checks = availability.byFont?.[fontId] ?? {};
@@ -227,6 +243,19 @@ export function getFontStatusLabel(fontId, availability) {
   }
 }
 
+// ─── Dropdown tooltip (user-facing) ───────────────────────────────────────────
+const PDF_RESTRICTED_TOOLTIP = '이 폰트는 PDF 출력 시 지원되지 않을 수 있습니다.';
+
+/**
+ * Returns the tooltip text for a font in the family-select dropdown.
+ * - system 또는 pdfBlocked 폰트 → PDF 출력 제한 안내.
+ * - 그 외 → undefined (툴팁 미부착).
+ */
+export function getFontPdfTooltip(font) {
+  if (!font) return undefined;
+  return isFontPdfRestricted(font) ? PDF_RESTRICTED_TOOLTIP : undefined;
+}
+
 // ─── Warning messages (user-facing) ───────────────────────────────────────────
 const STYLE_LABELS = { bold: '굵게', italic: '기울임', boldItalic: '굵은 기울임' };
 
@@ -240,11 +269,14 @@ export function getFontWarnings(stylePreset, availability) {
   const font   = getFontByCssFamily(family);
   const warnings = [];
 
-  // ── System font → always warn about PDF fallback
-  if (font.sourceType === 'system') {
+  // ── System font 또는 pdfBlocked → 항상 PDF 폴백 경고
+  if (isFontPdfRestricted(font)) {
     const fallback = getFontById(font.pdfFallbackId ?? FALLBACK_BUNDLED_ID);
+    const reason = font.pdfBlocked
+      ? '라이선스상 PDF 임베드가 제한된 글꼴로'
+      : '시스템 글꼴로 PDF에 포함할 수 없으므로';
     warnings.push(
-      `'${font.displayName}'은 시스템 글꼴로 PDF에 포함할 수 없습니다. ` +
+      `'${font.displayName}'은(는) ${reason} ` +
       `PDF에서는 '${fallback.displayName}'으로 출력됩니다.`
     );
     return warnings;
@@ -287,7 +319,7 @@ export function getEffectivePdfFontName(stylePreset, availability) {
   const family = stylePreset?.fontFamily || '함초롬바탕';
   const font   = getFontByCssFamily(family);
 
-  if (font.sourceType === 'system') {
+  if (isFontPdfRestricted(font)) {
     return getFontById(font.pdfFallbackId ?? FALLBACK_BUNDLED_ID).displayName;
   }
 
@@ -311,18 +343,28 @@ export function resolveFont(stylePreset, target) {
   const font   = getFontByCssFamily(family);
 
   if (target === 'pdf') {
-    if (font.sourceType === 'bundled') {
+    // bundled + 라이선스 안전 → 그대로 임베드
+    if (!isFontPdfRestricted(font)) {
       return { pdfFamily: font.cssFamily, pdfFiles: font.pdfFiles };
     }
+    // system 또는 pdfBlocked → 폴백
     const fallback = getFontById(font.pdfFallbackId ?? FALLBACK_BUNDLED_ID);
+    const reason   = font.pdfBlocked ? '라이선스 제한' : '시스템 글꼴';
     console.warn(
-      `[FontRegistry] PDF: 시스템 글꼴 "${font.displayName}" →`,
+      `[FontRegistry] PDF: ${reason} "${font.displayName}" →`,
       `"${fallback.displayName}" 대체 사용`
     );
-    return { pdfFamily: fallback.cssFamily, pdfFiles: fallback.pdfFiles, usedFallback: true };
+    return {
+      pdfFamily:           fallback.cssFamily,
+      pdfFiles:            fallback.pdfFiles,
+      usedFallback:        true,
+      fallbackDisplayName: fallback.displayName,
+    };
   }
 
   if (target === 'docx') {
+    // DOCX는 사용자 PC의 폰트로 렌더 → 시스템 폰트는 폴백 폰트명을 함께 전달.
+    // pdfBlocked는 DOCX와 무관 (DOCX는 임베드하지 않음) → 폴백 미적용.
     const fallback = font.sourceType === 'system'
       ? getFontById(font.pdfFallbackId ?? FALLBACK_BUNDLED_ID)
       : null;

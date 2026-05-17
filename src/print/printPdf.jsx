@@ -25,7 +25,9 @@ export function ensureFontsRegistered() {
 
   const alreadyRegistered = new Set(Font.getRegisteredFontFamilies());
 
-  FONTS.filter(f => f.sourceType === 'bundled').forEach(f => {
+  // pdfBlocked 폰트(예: 맑은 고딕)는 PDF 임베드 차단 — TTF가 PDF 바이트에 들어가지 않음.
+  // 화면 렌더링은 영향 없음 (Font.register는 PDF 전용).
+  FONTS.filter(f => f.sourceType === 'bundled' && !f.pdfBlocked).forEach(f => {
     if (alreadyRegistered.has(f.cssFamily)) return;
     const variants = [];
     const { normal, bold, italic, boldItalic } = f.pdfFiles;
@@ -337,10 +339,17 @@ async function mergePdfBlobs(blobs) {
 
 export async function exportPdf(appState, selections, { onStep = () => {} } = {}) {
   ensureFontsRegistered();
+
+  const preset = appState.stylePreset;
+  // 폴백 발생 여부를 사전에 판정 (resolveFont를 미리 호출해 결과만 캐치).
+  // 실제 임베드는 makeStyles → resolveFont에서 다시 호출되지만 부작용이 없으므로 OK.
+  const resolved        = resolveFont(preset, 'pdf');
+  const usedFontFallback = resolved.usedFallback === true;
+  const fallbackName     = resolved.fallbackDisplayName ?? null;
+
   let printModel, blob;
   try {
     onStep('직렬화');
-    const preset = appState.stylePreset;
     printModel   = buildPrintModel(appState, selections, preset);
 
     onStep('레이아웃');
@@ -368,6 +377,8 @@ export async function exportPdf(appState, selections, { onStep = () => {} } = {}
     console.error('[printPdf] FAILED at download step:', err);
     throw new Error(`다운로드 실패: ${err.message}`);
   }
+
+  return { usedFontFallback, fallbackName };
 }
 
 export async function getPdfBlob(appState, selections) {
