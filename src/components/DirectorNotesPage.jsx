@@ -348,7 +348,13 @@ export default function DirectorNotesPage() {
       setDeleteVersionId('');
     } catch (deleteError) {
       reportError({ source: 'manual', message: deleteError?.message || String(deleteError), stack: deleteError?.stack });
-      setError('버전을 삭제하지 못했어요. 잠시 후 다시 시도해주세요.');
+      const msg = deleteError?.message || '';
+      if (msg.includes('권한이 없') || msg.includes('이미 삭제')) {
+        // RLS로 row 0개 삭제된 경우 — 다른 계정/이미 지운 항목
+        setError('이 버전을 삭제할 권한이 없거나 이미 삭제된 항목이에요. 새로고침 후 다시 확인해주세요.');
+      } else {
+        setError('버전을 삭제하지 못했어요. 잠시 후 다시 시도해주세요.');
+      }
     } finally {
       setDeleting(false);
     }

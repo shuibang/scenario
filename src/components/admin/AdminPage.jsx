@@ -52,6 +52,39 @@ function shortId(id) {
   return s.slice(0, 6) + '…' + s.slice(-2);
 }
 
+// ─── 설문 질문 메타데이터 ──────────────────────────────────────────────────
+// DB 컬럼명 → 화면에 보여줄 질문 텍스트.
+// 'scale': 1~5 척도 답변 (leftLabel / rightLabel 함께 표시)
+// 'array': 복수 선택 — 배열을 bullet 리스트로 렌더
+// 'text' : 단답·서술
+// 'meta' : 시각 등 메타 정보(렌더 시 별도 처리)
+const SURVEY_QUESTIONS = [
+  { key: 'q1',  label: 'Q1. 주로 어떤 글을 쓰시나요?', kind: 'text' },
+  { key: 'q2',  label: 'Q2. 평소 대본 작업에 주로 사용하는 툴은? (복수)', kind: 'array' },
+  { key: 'q_type', label: '대본 작업 툴 형태 선호 (선택)', kind: 'text' },
+  { key: 'q3',  label: 'Q3. 실제로 사용해본 기능 (복수)', kind: 'array' },
+  { key: 'q5',  label: 'Q4. 좋았던 기능과 이유', kind: 'text' },
+  { key: 'q6',  label: 'Q5. 손이 안 갔던 기능과 이유', kind: 'text' },
+  { key: 'q7',  label: 'Q6. 사용이 전반적으로 쉬웠나요?', kind: 'scale', leftLabel: '전혀 아니다', rightLabel: '아주 쉽다' },
+  { key: 'q_ui', label: '바뀐 UI에 대한 느낌 (선택)', kind: 'text' },
+  { key: 'q8',  label: 'Q7. 특별히 어렵거나 헷갈렸던 부분', kind: 'text' },
+  { key: 'q9',  label: 'Q8. 모바일/태블릿 사용 경험', kind: 'text' },
+  { key: 'q9_detail', label: '↳ 어떤 점이 불편했나요?', kind: 'text', subOf: 'q9' },
+  { key: 'q10', label: 'Q9. 출력(PDF/DOCX/HWPX) 사용 경험', kind: 'text' },
+  { key: 'q10_detail', label: '↳ 어떤 문제가 있었나요?', kind: 'text', subOf: 'q10' },
+  { key: 'q12', label: 'Q10. 꼭 추가됐으면 하는 기능', kind: 'text' },
+  { key: 'q13', label: 'Q11. 가장 불편했던 점', kind: 'text' },
+  { key: 'q14', label: 'Q12. 다른 작가에게 추천할 의향', kind: 'scale', leftLabel: '전혀 없어요', rightLabel: '무조건 추천' },
+  { key: 'q15', label: 'Q13. 추천하거나 안 하는 이유', kind: 'text' },
+  { key: 'q16', label: 'Q14. 이건 무료였으면 하는 기능 (복수)', kind: 'array' },
+  { key: 'q17', label: 'Q15. 사용해보신 결과 계속 사용 계획', kind: 'text' },
+  { key: 'q18', label: 'Q16. 유료라면 선호하는 결제 방식', kind: 'text' },
+  { key: 'q19', label: 'Q17. 광고 없는 버전에 낼 수 있는 금액', kind: 'text' },
+  { key: 'q20_email', label: 'Q18. 업데이트 알림 이메일', kind: 'text' },
+  { key: 'q_work_status_link', label: 'Q19. 작업현황 읽기전용 링크 (추첨 자격)', kind: 'link' },
+  { key: 'q_phone', label: 'Q20. 경품 수령용 전화번호', kind: 'text' },
+];
+
 function extractUserId(row, table) {
   if (!row) return null;
   if (table === 'shared_scripts')    return row.director_id || row.user_id || null;
@@ -477,6 +510,7 @@ function ErrorRow({ row }) {
 // 설문 응답 탭
 // ───────────────────────────────────────────────────────────────────────────
 function SurveyTab({ data }) {
+  const [viewMode, setViewMode] = useState('byQuestion'); // 'byRespondent' | 'byQuestion'
   const [sort, setSort] = useState('eligibleFirst');
 
   const sorted = useMemo(() => {
@@ -499,6 +533,11 @@ function SurveyTab({ data }) {
   const eligibleCount = data.surveys.filter((r) => !!r.q_work_status_link).length;
   const phoneCount = data.surveys.filter((r) => !!r.q_phone).length;
 
+  const views = [
+    { id: 'byQuestion',   label: '📋 질문별 보기' },
+    { id: 'byRespondent', label: '👤 응답자별 보기' },
+  ];
+
   return (
     <div className="flex flex-col gap-3">
       <div className="grid grid-cols-3 gap-3">
@@ -518,39 +557,325 @@ function SurveyTab({ data }) {
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
-        <span style={{ fontSize: 11, color: 'var(--c-text6)' }}>정렬:</span>
-        {[
-          { id: 'eligibleFirst', label: '추첨 자격 우선' },
-          { id: 'recent', label: '최신순' },
-          { id: 'nps', label: 'NPS 높은 순' },
-        ].map((s) => (
+      {/* 뷰 모드 토글 */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {views.map((v) => (
           <button
-            key={s.id}
-            onClick={() => setSort(s.id)}
+            key={v.id}
+            onClick={() => setViewMode(v.id)}
             style={{
-              padding: '3px 9px', borderRadius: 4, fontSize: 11,
-              border: '1px solid', borderColor: sort === s.id ? 'var(--c-accent)' : 'var(--c-border3)',
-              background: sort === s.id ? 'var(--c-active)' : 'transparent',
-              color: sort === s.id ? 'var(--c-accent)' : 'var(--c-text4)',
+              padding: '5px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+              border: '1px solid', borderColor: viewMode === v.id ? 'var(--c-accent)' : 'var(--c-border3)',
+              background: viewMode === v.id ? 'var(--c-active)' : 'transparent',
+              color: viewMode === v.id ? 'var(--c-accent)' : 'var(--c-text4)',
               cursor: 'pointer',
             }}
-          >{s.label}</button>
+          >{v.label}</button>
         ))}
       </div>
 
-      <div style={cardStyle}>
-        <div style={{ ...labelStyle, marginBottom: 8 }}>응답 목록 ({sorted.length}건)</div>
-        {sorted.length === 0 ? (
-          <div style={{ fontSize: 13, color: 'var(--c-text6)', padding: '20px 0', textAlign: 'center' }}>데이터가 없습니다</div>
-        ) : (
-          <div className="space-y-2">
-            {sorted.map((r) => <SurveyRow key={r.id || r.created_at} row={r} />)}
+      {viewMode === 'byRespondent' && (
+        <>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span style={{ fontSize: 11, color: 'var(--c-text6)' }}>정렬:</span>
+            {[
+              { id: 'eligibleFirst', label: '추첨 자격 우선' },
+              { id: 'recent', label: '최신순' },
+              { id: 'nps', label: '추천도 높은 순' },
+            ].map((s) => (
+              <button
+                key={s.id}
+                onClick={() => setSort(s.id)}
+                style={{
+                  padding: '3px 9px', borderRadius: 4, fontSize: 11,
+                  border: '1px solid', borderColor: sort === s.id ? 'var(--c-accent)' : 'var(--c-border3)',
+                  background: sort === s.id ? 'var(--c-active)' : 'transparent',
+                  color: sort === s.id ? 'var(--c-accent)' : 'var(--c-text4)',
+                  cursor: 'pointer',
+                }}
+              >{s.label}</button>
+            ))}
           </div>
+
+          <div style={cardStyle}>
+            <div style={{ ...labelStyle, marginBottom: 8 }}>응답 목록 ({sorted.length}건)</div>
+            {sorted.length === 0 ? (
+              <div style={{ fontSize: 13, color: 'var(--c-text6)', padding: '20px 0', textAlign: 'center' }}>데이터가 없습니다</div>
+            ) : (
+              <div className="space-y-2">
+                {sorted.map((r) => <SurveyRow key={r.id || r.created_at} row={r} />)}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {viewMode === 'byQuestion' && (
+        <div className="flex flex-col gap-3">
+          {data.surveys.length === 0 ? (
+            <div style={{ ...cardStyle, fontSize: 13, color: 'var(--c-text6)', textAlign: 'center', padding: '40px 0' }}>
+              데이터가 없습니다
+            </div>
+          ) : (
+            SURVEY_QUESTIONS.filter((q) => !q.subOf).map((q) => (
+              <QuestionAggregateCard key={q.key} question={q} responses={data.surveys} />
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── 질문별 집계 카드 ──────────────────────────────────────────────────────
+function QuestionAggregateCard({ question, responses }) {
+  const [open, setOpen] = useState(false);
+
+  // 응답한 사람만 모음 (빈 답변은 제외)
+  const answered = useMemo(() => {
+    return responses
+      .filter((r) => !isEmptyAnswer(r[question.key]))
+      .map((r) => ({
+        value: r[question.key],
+        email: r.q20_email,
+        created_at: r.created_at,
+        eligible: !!r.q_work_status_link,
+        // sub-question(q9_detail/q10_detail)는 부모와 같은 row에서 같이 보여줘야 의미가 있음
+        subDetail: question.key === 'q9' ? r.q9_detail
+                 : question.key === 'q10' ? r.q10_detail
+                 : null,
+      }));
+  }, [responses, question.key]);
+
+  const totalResponses = responses.length;
+  const answeredCount = answered.length;
+  const responseRate = totalResponses > 0 ? Math.round((answeredCount / totalResponses) * 100) : 0;
+
+  // 척도/배열 답변은 항상 펼친 상태(전체가 짧음), 텍스트는 응답 수가 많으면 접어둠
+  const defaultOpen = question.kind === 'scale' || question.kind === 'array' || answeredCount <= 10;
+  const isOpen = open || defaultOpen;
+
+  return (
+    <div style={cardStyle}>
+      <div
+        className="flex items-start gap-2 cursor-pointer"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-text2)', lineHeight: 1.5 }}>
+            {question.label}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--c-text6)', marginTop: 3 }}>
+            응답 {answeredCount}명 · 응답률 {responseRate}%
+          </div>
+        </div>
+        {!defaultOpen && (
+          <span style={{ fontSize: 11, color: 'var(--c-text6)', marginTop: 2 }}>{isOpen ? '▲' : '▼'}</span>
         )}
+      </div>
+
+      {isOpen && answeredCount > 0 && (
+        <div style={{ marginTop: 14 }}>
+          {question.kind === 'scale' && <ScaleSummary question={question} answered={answered} />}
+          {question.kind === 'array' && <ArraySummary answered={answered} />}
+          {(question.kind === 'text' || question.kind === 'link') && (
+            <TextResponseList question={question} answered={answered} />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ScaleSummary({ question, answered }) {
+  // 1~10 분포 + 평균 (+ NPS-style: 9~10 추천 / 7~8 중립 / 1~6 비추천)
+  const counts = new Array(10).fill(0); // index 0=1점 ~ 9=10점
+  let sum = 0, n = 0;
+  answered.forEach((a) => {
+    const v = Number(a.value);
+    if (v >= 1 && v <= 10) {
+      counts[v - 1]++;
+      sum += v;
+      n++;
+    }
+  });
+  const avg = n > 0 ? (sum / n).toFixed(2) : '—';
+  const max = Math.max(...counts, 1);
+  const promoters = counts[8] + counts[9];          // 9, 10
+  const passives = counts[6] + counts[7];           // 7, 8
+  const detractors = counts.slice(0, 6).reduce((s, c) => s + c, 0); // 1~6
+  const npsLike = n > 0 ? Math.round(((promoters - detractors) / n) * 100) : 0;
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 22, fontWeight: 700, color: 'var(--c-accent)' }}>{avg}</span>
+        <span style={{ fontSize: 11, color: 'var(--c-text6)' }}>평균 (1~10)</span>
+        <span style={{ fontSize: 11, color: 'var(--c-text5)' }}>
+          · 추천 {promoters} · 중립 {passives} · 비추천 {detractors}
+          {' '}<span style={{ color: 'var(--c-text6)' }}>(NPS-style {npsLike >= 0 ? '+' : ''}{npsLike})</span>
+        </span>
+        {question.leftLabel && question.rightLabel && (
+          <span style={{ fontSize: 10, color: 'var(--c-text6)', marginLeft: 'auto' }}>
+            {question.leftLabel} ↔ {question.rightLabel}
+          </span>
+        )}
+      </div>
+      <div className="flex flex-col gap-1">
+        {[10, 9, 8, 7, 6, 5, 4, 3, 2, 1].map((score) => {
+          const c = counts[score - 1];
+          const pct = c / max;
+          // NPS 색상: 9~10 promoters, 7~8 passives, 1~6 detractors
+          const color = score >= 9 ? 'var(--c-accent)'
+                      : score >= 7 ? 'var(--c-accent2)'
+                      : 'var(--c-border3)';
+          return (
+            <div key={score} className="flex items-center gap-2">
+              <span style={{ fontSize: 11, color: 'var(--c-text5)', width: 28, textAlign: 'right', tabularNums: true }}>
+                {score}점
+              </span>
+              <div style={{ flex: 1, height: 14, background: 'var(--c-input)', borderRadius: 3, overflow: 'hidden' }}>
+                <div
+                  style={{
+                    height: '100%',
+                    width: `${Math.max(pct * 100, c > 0 ? 4 : 0)}%`,
+                    background: color,
+                    transition: 'width 0.2s',
+                  }}
+                />
+              </div>
+              <span style={{ fontSize: 11, color: 'var(--c-text5)', width: 36, tabularNums: true }}>{c}명</span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
+}
+
+function ArraySummary({ answered }) {
+  // 항목별 빈도 카운트
+  const freq = new Map();
+  answered.forEach((a) => {
+    (a.value || []).forEach((item) => {
+      const label = String(item).replace(/^__other__:/, '기타: ');
+      freq.set(label, (freq.get(label) || 0) + 1);
+    });
+  });
+  const ranked = Array.from(freq.entries()).sort((a, b) => b[1] - a[1]);
+  const max = ranked.length > 0 ? ranked[0][1] : 1;
+  const total = answered.length;
+  return (
+    <div className="flex flex-col gap-1.5">
+      {ranked.map(([label, count]) => {
+        const pct = count / max;
+        const sharePct = total > 0 ? Math.round((count / total) * 100) : 0;
+        return (
+          <div key={label} className="flex items-center gap-2">
+            <span style={{ fontSize: 12, color: 'var(--c-text3)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {label}
+            </span>
+            <div style={{ width: 120, height: 14, background: 'var(--c-input)', borderRadius: 3, overflow: 'hidden', flexShrink: 0 }}>
+              <div style={{ height: '100%', width: `${pct * 100}%`, background: 'var(--c-accent2)' }} />
+            </div>
+            <span style={{ fontSize: 11, color: 'var(--c-text5)', width: 64, textAlign: 'right', tabularNums: true, flexShrink: 0 }}>
+              {count}명 ({sharePct}%)
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function TextResponseList({ question, answered }) {
+  // 최근순으로 정렬
+  const sorted = [...answered].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  return (
+    <div className="flex flex-col gap-2">
+      {sorted.map((a, i) => (
+        <div
+          key={i}
+          style={{
+            padding: '8px 10px',
+            background: 'var(--c-input)',
+            borderRadius: 6,
+            borderLeft: '3px solid var(--c-border3)',
+          }}
+        >
+          <div style={{ fontSize: 13, color: 'var(--c-text2)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.6 }}>
+            {question.kind === 'link' ? (
+              <a href={a.value} target="_blank" rel="noreferrer noopener" style={{ color: 'var(--c-accent)' }}>
+                {a.value}
+              </a>
+            ) : (
+              String(a.value).replace(/^__other__:/, '기타: ')
+            )}
+          </div>
+          {a.subDetail && (
+            <div style={{
+              marginTop: 6, padding: '6px 8px', background: 'var(--c-bg)', borderRadius: 4,
+              fontSize: 12, color: 'var(--c-text3)', lineHeight: 1.6, whiteSpace: 'pre-wrap',
+            }}>
+              <span style={{ color: 'var(--c-text6)', fontSize: 10, marginRight: 4 }}>↳ 상세:</span>
+              {a.subDetail}
+            </div>
+          )}
+          <div style={{ marginTop: 6, fontSize: 10.5, color: 'var(--c-text6)' }}>
+            {a.eligible && <span style={{ color: '#d97706', marginRight: 4 }}>🏆</span>}
+            {a.email || '(이메일 없음)'} · {fmtDateTime(a.created_at)}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function isEmptyAnswer(v) {
+  if (v == null) return true;
+  if (typeof v === 'string') return v.trim().length === 0;
+  if (Array.isArray(v)) return v.length === 0;
+  if (typeof v === 'number') return false;
+  return false;
+}
+
+function SurveyAnswerValue({ q, value }) {
+  if (isEmptyAnswer(value)) {
+    return <span style={{ color: 'var(--c-text6)' }}>—</span>;
+  }
+  if (q.kind === 'scale') {
+    const n = Number(value);
+    const clamped = Math.max(0, Math.min(10, n));
+    const dots = '●'.repeat(clamped) + '○'.repeat(Math.max(0, 10 - clamped));
+    return (
+      <span>
+        <span style={{ color: 'var(--c-accent)', letterSpacing: 1 }}>{dots}</span>
+        <span style={{ marginLeft: 8 }}>{n} / 10</span>
+        {q.leftLabel && q.rightLabel && (
+          <span style={{ color: 'var(--c-text6)', marginLeft: 8, fontSize: 10 }}>
+            ({q.leftLabel} ↔ {q.rightLabel})
+          </span>
+        )}
+      </span>
+    );
+  }
+  if (q.kind === 'array') {
+    return (
+      <ul style={{ margin: 0, paddingLeft: 16, listStyle: 'disc' }}>
+        {value.map((v, i) => (
+          <li key={i} style={{ marginBottom: 2 }}>{String(v).replace(/^__other__:/, '기타: ')}</li>
+        ))}
+      </ul>
+    );
+  }
+  if (q.kind === 'link') {
+    return (
+      <a href={value} target="_blank" rel="noreferrer noopener" style={{ color: 'var(--c-accent)', wordBreak: 'break-all' }}>
+        {value}
+      </a>
+    );
+  }
+  return <span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{String(value).replace(/^__other__:/, '기타: ')}</span>;
 }
 
 function SurveyRow({ row }) {
@@ -564,25 +889,31 @@ function SurveyRow({ row }) {
         <span style={{ fontSize: 12, color: 'var(--c-text3)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {row.q20_email || '(이메일 없음)'}
         </span>
-        <span style={{ fontSize: 11, color: 'var(--c-text5)' }}>NPS {row.q14 ?? '—'}</span>
+        <span style={{ fontSize: 11, color: 'var(--c-text5)' }}>추천 {row.q14 ?? '—'}/10</span>
         <span style={{ fontSize: 10, color: 'var(--c-text6)' }}>{open ? '▲' : '▼'}</span>
       </div>
       {open && (
-        <div style={{ marginTop: 8, fontSize: 11, color: 'var(--c-text5)', lineHeight: 1.8 }}>
-          {row.q_work_status_link && (
-            <div>
-              작업현황 링크: <a href={row.q_work_status_link} target="_blank" rel="noreferrer noopener" style={{ color: 'var(--c-accent)' }}>{row.q_work_status_link}</a>
-            </div>
-          )}
-          <div>전화번호: {row.q_phone || '—'}</div>
-          <div>Q14(NPS): {row.q14 ?? '—'}</div>
-          <div>Q7: {row.q7 ?? '—'}</div>
-          {row.q15 && <div>Q15(자유): {row.q15}</div>}
-          {row.q18 && <div>Q18: {row.q18}</div>}
-          {row.q19 && <div>Q19: {row.q19}</div>}
-          <details style={{ marginTop: 6 }}>
-            <summary style={{ cursor: 'pointer', color: 'var(--c-text6)' }}>전체 응답 보기 (JSON)</summary>
-            <pre style={{ whiteSpace: 'pre-wrap', fontSize: 10, color: 'var(--c-text5)', background: 'var(--c-input)', padding: 8, borderRadius: 4, marginTop: 6 }}>
+        <div style={{ marginTop: 12, padding: '12px 14px', background: 'var(--c-input)', borderRadius: 8 }}>
+          {SURVEY_QUESTIONS.map((q) => {
+            const v = row[q.key];
+            // 빈 답변은 숨김 (sub 질문이거나, 사용자가 미응답)
+            if (isEmptyAnswer(v)) return null;
+            // sub-of 부모가 비어있으면 함께 숨김
+            if (q.subOf && isEmptyAnswer(row[q.subOf])) return null;
+            return (
+              <div key={q.key} style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px dashed var(--c-border3)' }}>
+                <div style={{ fontSize: 11, color: 'var(--c-text5)', fontWeight: 600, marginBottom: 4 }}>
+                  {q.label}
+                </div>
+                <div style={{ fontSize: 12.5, color: 'var(--c-text2)', lineHeight: 1.7 }}>
+                  <SurveyAnswerValue q={q} value={v} />
+                </div>
+              </div>
+            );
+          })}
+          <details style={{ marginTop: 4 }}>
+            <summary style={{ cursor: 'pointer', color: 'var(--c-text6)', fontSize: 11 }}>전체 응답 보기 (JSON)</summary>
+            <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 10, color: 'var(--c-text5)', background: 'var(--c-bg)', padding: 8, borderRadius: 4, marginTop: 6 }}>
 {JSON.stringify(row, null, 2)}
             </pre>
           </details>
@@ -815,7 +1146,7 @@ export default function AdminPage({ authUser }) {
   }
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col" style={{ background: 'var(--c-bg)', minHeight: '100vh' }}>
+    <div className="flex-1 min-h-0 flex flex-col" style={{ background: 'var(--c-bg)', height: '100vh' }}>
       {/* 상단바 */}
       <div style={{
         flexShrink: 0, borderBottom: '1px solid var(--c-border)', background: 'var(--c-panel)',

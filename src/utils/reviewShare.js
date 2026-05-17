@@ -318,12 +318,32 @@ export async function markFeedbackSessionRead(sessionId) {
 export async function deleteFeedbackVersion(version) {
   ensureSupabase();
   if (!version?.id) throw new Error('Missing version id.');
-  await ensureDriveAccessToken();
+
+  // 1) Drive 파일 삭제 — best-effort.
+  //    Drive 토큰이 만료됐거나 파일이 이미 사라졌어도 DB 삭제는 진행해야 한다.
+  //    (예전엔 token 만료 → throw 로 DB 삭제까지 도달 못 해서 "삭제가 안 됨" 으로 보였음)
   if (version.drive_file_id) {
-    await deleteFileById(version.drive_file_id);
+    try {
+      await ensureDriveAccessToken();
+      await deleteFileById(version.drive_file_id);
+    } catch (driveError) {
+      if (typeof console !== 'undefined' && console.warn) {
+        console.warn('[deleteFeedbackVersion] Drive 파일 삭제 실패(무시하고 DB 삭제 진행):', driveError);
+      }
+    }
   }
-  const { error } = await supabase.from('feedback_versions').delete().eq('id', version.id);
+
+  // 2) DB 삭제 — 진짜 삭제. RLS 로 다른 author 의 row 가 필터되면 0 row 가 반환되므로
+  //    .select() 로 실제 삭제된 row 를 확인해 명확한 에러를 던진다.
+  const { data, error } = await supabase
+    .from('feedback_versions')
+    .delete()
+    .eq('id', version.id)
+    .select('id');
   if (error) throw new Error(error.message);
+  if (!data || data.length === 0) {
+    throw new Error('이 버전을 삭제할 권한이 없거나 이미 삭제된 항목입니다.');
+  }
 }
 
 export async function saveLogPayload(payload) {
