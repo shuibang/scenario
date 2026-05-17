@@ -88,7 +88,7 @@ export async function loadReviewPayload(id) {
   return data.payload;
 }
 
-export async function createFeedbackVersionShare({ scriptId, title, snapshotContent }) {
+export async function createFeedbackVersionShare({ scriptId, title, snapshotContent, watermarkText = null }) {
   ensureSupabase();
   if (!scriptId) throw new Error('대본이 선택되지 않았습니다. 대본을 연 뒤 다시 시도해주세요.');
   const session = await getRequiredSession();
@@ -136,12 +136,14 @@ export async function createFeedbackVersionShare({ scriptId, title, snapshotCont
     versionId = version.id;
 
     const linkId = genId();
+    const trimmedWatermark = (watermarkText || '').trim().slice(0, 100);
     const { error: linkError } = await supabase.from('review_links').insert({
       id: linkId,
       created_by: session.user.id,
       link_type: 'feedback_version',
       link_role: 'request',
       version_id: version.id,
+      watermark_text: trimmedWatermark || null,
       expires_at: feedbackExpiresAt(),
     });
 
@@ -240,6 +242,36 @@ export async function createFeedbackReplyLink({ versionId, sessionId }) {
   return {
     linkId,
     url: `${window.location.origin}/app#delivery=${linkId}`,
+  };
+}
+
+/**
+ * 기존 feedback_version 에 새 review_link 만 추가.
+ * 같은 버전에 여러 명에게 보낼 때 사용 — 피드백은 모두 그 버전 한 곳에 모임.
+ * @param {object}  p
+ * @param {string}  p.versionId
+ * @param {string?} p.watermarkText
+ * @returns {Promise<{ linkId, url }>}
+ */
+export async function createReviewLinkForExistingVersion({ versionId, watermarkText = null }) {
+  ensureSupabase();
+  if (!versionId) throw new Error('Missing version id.');
+  const session = await getRequiredSession();
+  const linkId = genId();
+  const trimmedWatermark = (watermarkText || '').trim().slice(0, 100);
+  const { error } = await supabase.from('review_links').insert({
+    id: linkId,
+    created_by: session.user.id,
+    link_type: 'feedback_version',
+    link_role: 'request',
+    version_id: versionId,
+    watermark_text: trimmedWatermark || null,
+    expires_at: feedbackExpiresAt(),
+  });
+  if (error) throw new Error(error.message);
+  return {
+    linkId,
+    url: `${window.location.origin}/app#review=${linkId}`,
   };
 }
 

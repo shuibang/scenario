@@ -75,6 +75,10 @@ export default function PrintPreviewModal({ onClose, defaultFormat }) {
   // 메시지 표시 동안 모달 닫힘을 2.5초 지연시킨다.
   const [fontFallbackMsg, setFontFallbackMsg] = useState('');
 
+  // ─── PDF 워터마크 (선택)
+  const [watermarkOn, setWatermarkOn]     = useState(false);
+  const [watermarkText, setWatermarkText] = useState('');
+
   // 열리는 순간의 클릭 이벤트가 백드롭에 전달되는 것을 막기 위해
   // 마운트 후 150ms 동안 백드롭 클릭을 무시한다.
   const backdropReady = useRef(false);
@@ -125,7 +129,8 @@ export default function PrintPreviewModal({ onClose, defaultFormat }) {
     };
     try {
       let pdfResult = null;
-      if (format === 'pdf')         pdfResult = await exportPdf(state, sel, { onStep });
+      const effectiveWatermark = watermarkOn ? watermarkText.trim() : null;
+      if (format === 'pdf')         pdfResult = await exportPdf(state, sel, { onStep, watermarkText: effectiveWatermark || null });
       else if (format === 'docx')   await exportDocx(state, sel, { onStep });
       else if (format === 'hancom') await exportHancom(state, sel, { onStep });
       else if (format === 'hwpx')   await exportHwpx(state, sel);
@@ -149,7 +154,7 @@ export default function PrintPreviewModal({ onClose, defaultFormat }) {
     } finally {
       setExporting(false);
     }
-  }, [format, state, sel, onClose]);
+  }, [format, state, sel, onClose, watermarkOn, watermarkText]);
 
   const handleShare = useCallback(async () => {
     setSharing(true);
@@ -309,7 +314,38 @@ export default function PrintPreviewModal({ onClose, defaultFormat }) {
             </p>
           )}
 
-
+          {/* PDF 워터마크 옵션 — PDF 형식 선택 시에만 표시 */}
+          {format === 'pdf' && (
+            <div className="mb-3">
+              <label className="flex items-center gap-2 cursor-pointer mb-1">
+                <input
+                  type="checkbox"
+                  checked={watermarkOn}
+                  onChange={(e) => setWatermarkOn(e.target.checked)}
+                  className="accent-[#8DA0BB]"
+                />
+                <span className="text-xs" style={{ color: 'var(--c-text2)' }}>워터마크 넣기</span>
+              </label>
+              {watermarkOn && (
+                <input
+                  type="text"
+                  value={watermarkText}
+                  onChange={(e) => setWatermarkText(e.target.value.slice(0, 100))}
+                  placeholder="예: DRAFT · 외부 유출 금지 · 작가명"
+                  className="w-full text-xs px-2 py-1.5 rounded outline-none"
+                  style={{
+                    background: 'var(--c-input)', color: 'var(--c-text)',
+                    border: '1px solid var(--c-border3)',
+                  }}
+                />
+              )}
+              {watermarkOn && !watermarkText.trim() && (
+                <p className="text-[10px] mt-1" style={{ color: 'var(--c-text5)' }}>
+                  텍스트를 입력하지 않으면 워터마크가 들어가지 않아요.
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Export error */}
           {error && (

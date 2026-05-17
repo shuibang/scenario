@@ -48,7 +48,7 @@ export default function DirectorHistoryPage({ onBack, isGuest, D, onOpenScript }
     setLocalScripts(loadLocalScripts());
     if (isGuest) { setScripts([]); return; }
     if (!supabase) { setScripts([]); return; }
-    supabase.from('shared_scripts').select('id, title, imported_at, drive_file_id')
+    supabase.from('shared_scripts').select('id, title, imported_at, drive_file_id, watermark_text')
       .order('imported_at', { ascending: false })
       .then(({ data }) => setScripts(data || []));
   }, [isGuest]);

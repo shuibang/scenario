@@ -463,13 +463,14 @@ function CenterPanel({ scrollToSceneId, onScrollHandled, keyboardUp, isMobile, f
 }
 
 // ─── Share helper ─────────────────────────────────────────────────────────────
-export async function buildReviewURL(state, selections) {
+export async function buildReviewURL(state, selections, options = {}) {
   const snapshotContent = buildFeedbackSnapshot(state, selections);
   const title = snapshotContent.projects?.[0]?.title || '피드백 버전';
   const share = await createFeedbackVersionShare({
     scriptId: state.activeProjectId,
     title,
     snapshotContent,
+    watermarkText: options.watermarkText || null,
   });
   return share.url;
 }

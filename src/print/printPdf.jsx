@@ -201,15 +201,49 @@ function TokenEl({ token, text, S }) {
   }
 }
 
+// ─── PDF Watermark — 모든 페이지에 fixed로 한 번에 깔리는 반복 텍스트 ──────────
+// 본문 가독성을 너무 해치지 않도록 opacity 낮게(0.10) 깔고, 페이지 가로 폭의
+// 대각선 방향으로 큰 글자 1개만 배치(타일링이 react-pdf에선 비용 크고 폰트 임베드
+// 영향이 있어 단일 텍스트 한 줄로 단순화).
+function WatermarkPdf({ text }) {
+  if (!text || !text.trim()) return null;
+  const safe = String(text).trim();
+  return (
+    <View
+      fixed
+      style={{
+        position: 'absolute',
+        top: 0, left: 0, right: 0, bottom: 0,
+        alignItems: 'center', justifyContent: 'center',
+        zIndex: -1,
+      }}
+    >
+      <Text
+        style={{
+          fontSize: 64,
+          fontWeight: 700,
+          color: '#000000',
+          opacity: 0.08,
+          transform: 'rotate(-30deg)',
+          letterSpacing: 4,
+        }}
+      >
+        {safe}
+      </Text>
+    </View>
+  );
+}
+
 // ─── A PDF section page (react-pdf handles pagination automatically) ──────────
 // paginate()를 사용하지 않고 전체 토큰을 react-pdf에 넘겨 자동 페이지 분할.
 // 각 블록의 첫 토큰(isFirstOfBlock !== false)만 사용하고 blockText 원문을 전달해
 // react-pdf가 실제 폰트 메트릭스로 정확하게 줄바꿈/페이지 분할을 처리.
 // 쪽번호는 fixed + render prop으로 모든 페이지에 자동 표시.
-function SectionPage({ tokens, S }) {
+function SectionPage({ tokens, S, watermarkText }) {
   const blockTokens = tokens.filter(tok => tok.isFirstOfBlock !== false);
   return (
     <Page size="A4" style={S.page}>
+      <WatermarkPdf text={watermarkText} />
       {blockTokens.map((token, i) => (
         <TokenEl
           key={i}
@@ -224,12 +258,13 @@ function SectionPage({ tokens, S }) {
 }
 
 // ─── Cover page ───────────────────────────────────────────────────────────────
-function CoverPage({ section, S }) {
+function CoverPage({ section, S, watermarkText }) {
   const subtitleField   = section.fields.find(f => f.label === '부제목' || f.id === 'subtitle');
   const secondaryFields = section.fields.filter(f => f !== subtitleField);
 
   return (
     <Page size="A4" style={S.page}>
+      <WatermarkPdf text={watermarkText} />
       <View style={S.coverWrap}>
         <View style={S.coverTitleGroup}>
           <Text style={S.coverTitle}>{section.title}</Text>
@@ -253,7 +288,7 @@ function CoverPage({ section, S }) {
 const SYNOPSIS_TYPES   = new Set(['synopsis', 'treatment']);
 const CHARACTER_TYPES  = new Set(['characters', 'biography']);
 
-function buildPdfGroups(printModel) {
+function buildPdfGroups(printModel, watermarkText) {
   const { sections, preset } = printModel;
   const metrics = getLayoutMetrics(preset);
   const S       = makeStyles(preset, metrics);
@@ -274,7 +309,7 @@ function buildPdfGroups(printModel) {
       flush();
       docs.push(
         <Document key="cover">
-          <CoverPage section={section} S={S} />
+          <CoverPage section={section} S={S} watermarkText={watermarkText} />
         </Document>
       );
       continue;
@@ -287,7 +322,7 @@ function buildPdfGroups(printModel) {
       const tokens = tokenizeSection(section, metrics);
       if (tokens.length) {
         curPages.push(
-          <SectionPage key={`ep-${section.episodeId}`} tokens={tokens} S={S} />
+          <SectionPage key={`ep-${section.episodeId}`} tokens={tokens} S={S} watermarkText={watermarkText} />
         );
       }
       continue;
@@ -300,7 +335,7 @@ function buildPdfGroups(printModel) {
       const tokens = tokenizeSection(section, metrics);
       if (tokens.length) {
         curPages.push(
-          <SectionPage key={section.type} tokens={tokens} S={S} />
+          <SectionPage key={section.type} tokens={tokens} S={S} watermarkText={watermarkText} />
         );
       }
       continue;
@@ -312,7 +347,7 @@ function buildPdfGroups(printModel) {
       const tokens = tokenizeSection(section, metrics);
       if (tokens.length) {
         curPages.push(
-          <SectionPage key={section.type} tokens={tokens} S={S} />
+          <SectionPage key={section.type} tokens={tokens} S={S} watermarkText={watermarkText} />
         );
       }
     }
@@ -337,7 +372,7 @@ async function mergePdfBlobs(blobs) {
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-export async function exportPdf(appState, selections, { onStep = () => {} } = {}) {
+export async function exportPdf(appState, selections, { onStep = () => {}, watermarkText = null } = {}) {
   ensureFontsRegistered();
 
   const preset = appState.stylePreset;
@@ -353,7 +388,7 @@ export async function exportPdf(appState, selections, { onStep = () => {} } = {}
     printModel   = buildPrintModel(appState, selections, preset);
 
     onStep('레이아웃');
-    const docs   = buildPdfGroups(printModel);
+    const docs   = buildPdfGroups(printModel, watermarkText);
 
     onStep('파일 생성');
     const blobs  = await Promise.all(docs.map(doc => pdf(doc).toBlob()));
@@ -381,11 +416,11 @@ export async function exportPdf(appState, selections, { onStep = () => {} } = {}
   return { usedFontFallback, fallbackName };
 }
 
-export async function getPdfBlob(appState, selections) {
+export async function getPdfBlob(appState, selections, { watermarkText = null } = {}) {
   ensureFontsRegistered();
   const preset     = appState.stylePreset;
   const printModel = buildPrintModel(appState, selections, preset);
-  const docs       = buildPdfGroups(printModel);
+  const docs       = buildPdfGroups(printModel, watermarkText);
   const blobs      = await Promise.all(docs.map(doc => pdf(doc).toBlob()));
   return blobs.length === 1 ? blobs[0] : mergePdfBlobs(blobs);
 }

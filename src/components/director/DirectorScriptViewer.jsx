@@ -17,6 +17,7 @@ import {
   saveFeedbackDisplayName,
 } from '../../utils/feedbackDisplayName';
 import { buildFeedbackNoteMeta } from '../../utils/feedbackNoteMeta';
+import WatermarkOverlay from '../WatermarkOverlay';
 
 const NOTE_COLORS = ['#fef08a', '#86efac', '#93c5fd', '#f9a8d4', '#fdba74'];
 const RETURN_HASH_KEY = 'drama_pending_return_hash';
@@ -516,6 +517,7 @@ export default function DirectorScriptViewer({
   initialNotes = null,
   localOnly = false,
   highlightSessionId = null,
+  watermarkText = null,
 }) {
   const [scriptNotes, setScriptNotes] = useState(initialNotes || {});
   const [privateNotes, setPrivateNotes] = useState(() =>
@@ -834,7 +836,8 @@ export default function DirectorScriptViewer({
 
   return (
     <>
-      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', position: 'relative' }}>
+        <WatermarkOverlay text={watermarkText} />
         {!readOnly && (
           <div
             style={{

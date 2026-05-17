@@ -4,12 +4,23 @@ import { useApp } from '../../store/AppContext';
 import { buildReviewURL } from '../../App';
 import { buildSceneListShareURL } from '../../utils/sceneListShare';
 import { reportError } from '../../utils/errorTracker';
+import { listFeedbackVersions, createReviewLinkForExistingVersion } from '../../utils/reviewShare';
 
-const SHARE_SELECTIONS_STORAGE_KEY = 'drama_share_link_selections_v1';
+// 작품별로 분리 저장. 옛 글로벌 키('drama_share_link_selections_v1')는 같은 key가
+// 모든 작품에서 공유돼 다른 작품의 회차 ID 가 섞이면 normalize 가 자동으로 모두
+// true 로 기본화되는 문제가 있었음.
+const SHARE_SELECTIONS_STORAGE_PREFIX = 'drama_share_link_selections_v2:';
 
-function readSavedSelections() {
+function storageKeyFor(projectId) {
+  if (!projectId) return null;
+  return SHARE_SELECTIONS_STORAGE_PREFIX + projectId;
+}
+
+function readSavedSelections(projectId) {
+  const key = storageKeyFor(projectId);
+  if (!key) return null;
   try {
-    const raw = localStorage.getItem(SHARE_SELECTIONS_STORAGE_KEY);
+    const raw = localStorage.getItem(key);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     return parsed && typeof parsed === 'object' ? parsed : null;
@@ -42,16 +53,22 @@ export default function ShareLinkModal({ open, onClose }) {
     .filter(e => e.projectId === activeProjectId)
     .sort((a, b) => a.number - b.number);
 
-  // ── 검토 링크 선택 상태 (마지막 체크 상태 localStorage 유지)
+  // ── 검토 링크 선택 상태 (마지막 체크 상태 localStorage 유지, 작품별 분리)
   const makeInitialSel = useCallback(() => {
-    return normalizeSelections(allEpisodes, readSavedSelections());
-  }, [allEpisodes.map(e => e.id).join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
+    return normalizeSelections(allEpisodes, readSavedSelections(activeProjectId));
+  }, [activeProjectId, allEpisodes.map(e => e.id).join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [sel,        setSel]        = useState(makeInitialSel);
   const [shareUrl,   setShareUrl]   = useState(null);
   const [copied,     setCopied]     = useState(false);
   const [generating, setGenerating] = useState(false);
   const [error,      setError]      = useState(null);
+  const [watermarkText, setWatermarkText] = useState('');
+
+  // 버전 선택 — 'new' 면 새 버전 생성, 그 외엔 기존 versionId
+  const [versionMode,    setVersionMode]    = useState('new');
+  const [existingVersions, setExistingVersions] = useState([]);
+  const [versionsLoading, setVersionsLoading] = useState(false);
 
   // ── 씬리스트 공유 상태
   const [slEpId,      setSlEpId]      = useState(activeEpisodeId || allEpisodes[0]?.id || '');
@@ -66,18 +83,35 @@ export default function ShareLinkModal({ open, onClose }) {
       setShareUrl(null);
       setCopied(false);
       setError(null);
+      setWatermarkText('');
+      setVersionMode('new');
       setSlEpId(activeEpisodeId || allEpisodes[0]?.id || '');
       setSlCopied(false);
       setSlError(null);
+      // 기존 버전 목록 fetch
+      if (activeProjectId) {
+        setVersionsLoading(true);
+        listFeedbackVersions(activeProjectId)
+          .then((vs) => setExistingVersions(vs || []))
+          .catch(() => setExistingVersions([]))
+          .finally(() => setVersionsLoading(false));
+      } else {
+        setExistingVersions([]);
+      }
     }
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, activeProjectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 체크 상태 변경 시 localStorage에 저장 (다음에 모달 열 때 복원)
+  // 체크 상태 변경 시 localStorage에 저장 (다음에 모달 열 때 복원).
+  // 모달이 닫혀있을 때는 저장하지 않음 — open ↔ open=false 의 setSel 초기화가
+  // 잘못된 디폴트로 옛 저장값을 덮어쓰는 위험을 차단.
   useEffect(() => {
+    if (!open) return;
+    const key = storageKeyFor(activeProjectId);
+    if (!key) return;
     try {
-      localStorage.setItem(SHARE_SELECTIONS_STORAGE_KEY, JSON.stringify(sel));
+      localStorage.setItem(key, JSON.stringify(sel));
     } catch {}
-  }, [sel]);
+  }, [sel, open, activeProjectId]);
 
   const toggle = (key, id) => {
     setSel(prev => {
@@ -92,7 +126,19 @@ export default function ShareLinkModal({ open, onClose }) {
     setGenerating(true);
     setError(null);
     try {
-      const url = await buildReviewURL(state, sel);
+      const wm = watermarkText.trim() || null;
+      let url;
+      if (versionMode === 'new') {
+        // 새 버전 + 새 링크 생성
+        url = await buildReviewURL(state, sel, { watermarkText: wm });
+      } else {
+        // 기존 버전에 새 링크만 추가 — 피드백은 그 버전 한 곳에 모임
+        const { url: u } = await createReviewLinkForExistingVersion({
+          versionId: versionMode,
+          watermarkText: wm,
+        });
+        url = u;
+      }
       setShareUrl(url);
     } catch (err) {
       reportError({ source: 'manual', message: err?.message || String(err), stack: err?.stack });
@@ -159,7 +205,59 @@ export default function ShareLinkModal({ open, onClose }) {
           읽기 전용 검토 링크를 생성합니다. 공유할 항목을 선택하세요.
         </p>
 
+        {/* 버전 선택 — 새 버전 vs 기존 버전에 링크 추가 */}
         <div style={{ borderTop: '1px solid var(--c-border2)', paddingTop: 10, marginBottom: 10 }}>
+          <div style={{ fontSize: 10, color: 'var(--c-text5)', marginBottom: 4 }}>버전</div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', cursor: 'pointer' }}>
+            <input
+              type="radio"
+              name="versionMode"
+              checked={versionMode === 'new'}
+              onChange={() => setVersionMode('new')}
+              style={{ accentColor: 'var(--c-accent)', flexShrink: 0 }}
+              disabled={!!shareUrl}
+            />
+            <span style={{ fontSize: 12, color: 'var(--c-text3)' }}>🆕 새 버전 생성 (현재 상태 스냅샷)</span>
+          </label>
+          {existingVersions.length > 0 && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name="versionMode"
+                checked={versionMode !== 'new'}
+                onChange={() => setVersionMode(existingVersions[0]?.id || 'new')}
+                style={{ accentColor: 'var(--c-accent)', flexShrink: 0 }}
+                disabled={!!shareUrl}
+              />
+              <span style={{ fontSize: 12, color: 'var(--c-text3)' }}>📑 기존 버전에 링크만 추가:</span>
+              <select
+                value={versionMode === 'new' ? (existingVersions[0]?.id || '') : versionMode}
+                onChange={e => setVersionMode(e.target.value)}
+                disabled={versionMode === 'new' || !!shareUrl}
+                style={{
+                  fontSize: 11, padding: '2px 6px', borderRadius: 4,
+                  background: 'var(--c-input)', color: 'var(--c-text2)',
+                  border: '1px solid var(--c-border3)', outline: 'none',
+                  opacity: versionMode === 'new' ? 0.5 : 1,
+                }}
+              >
+                {existingVersions.map(v => (
+                  <option key={v.id} value={v.id}>{v.version_name}</option>
+                ))}
+              </select>
+            </label>
+          )}
+          {versionsLoading && (
+            <div style={{ fontSize: 10, color: 'var(--c-text6)', marginTop: 2 }}>버전 목록 불러오는 중…</div>
+          )}
+          {versionMode !== 'new' && (
+            <p style={{ fontSize: 11, color: 'var(--c-text6)', marginTop: 4, lineHeight: 1.5 }}>
+              선택한 버전에 새 링크만 추가합니다. 항목 선택은 무시되고 기존 버전 내용으로 공유됩니다.
+            </p>
+          )}
+        </div>
+
+        <div style={{ marginBottom: 10, opacity: versionMode === 'new' ? 1 : 0.4, pointerEvents: versionMode === 'new' ? 'auto' : 'none' }}>
           <ShareCheck label="표지"     checked={sel.cover}    onChange={() => toggle('cover')} />
           <ShareCheck label="시놉시스" checked={sel.synopsis} onChange={() => toggle('synopsis')} />
 
@@ -184,6 +282,30 @@ export default function ShareLinkModal({ open, onClose }) {
           <ShareCheck label="트리트먼트" checked={sel.treatment} onChange={() => toggle('treatment')} indent />
         </div>
 
+        {/* 워터마크 텍스트 — 선택. 비우면 워터마크 안 나옴. */}
+        <div style={{ marginTop: 10, marginBottom: 10 }}>
+          <div style={{ fontSize: 10, color: 'var(--c-text5)', marginBottom: 4 }}>
+            워터마크 (선택)
+          </div>
+          <input
+            type="text"
+            value={watermarkText}
+            onChange={e => setWatermarkText(e.target.value.slice(0, 100))}
+            placeholder="받는 사람 이름이나 식별 문구"
+            disabled={!!shareUrl}
+            style={{
+              width: '100%', fontSize: 12, padding: '6px 10px', borderRadius: 4,
+              background: 'var(--c-input)', color: 'var(--c-text)',
+              border: '1px solid var(--c-border3)', outline: 'none',
+              boxSizing: 'border-box',
+              opacity: shareUrl ? 0.5 : 1,
+            }}
+          />
+          <p style={{ fontSize: 11, color: 'var(--c-text6)', marginTop: 4, lineHeight: 1.5 }}>
+            입력한 문구가 검토 화면과 PDF 다운로드본의 워터마크로 박힙니다. 비우면 워터마크 없이 공유됩니다.
+          </p>
+        </div>
+
         {shareUrl ? (
           <div>
             <div className="modal-link-row">
@@ -191,13 +313,10 @@ export default function ShareLinkModal({ open, onClose }) {
               <ModalBtn variant="primary" onClick={handleCopy}>
                 {copied ? '복사됨 ✓' : '복사'}
               </ModalBtn>
+              <ModalBtn variant="secondary" onClick={() => setShareUrl(null)}>
+                다시 생성
+              </ModalBtn>
             </div>
-            <button
-              onClick={() => setShareUrl(null)}
-              style={{ fontSize: 11, color: 'var(--c-text5)', background: 'none', border: 'none', cursor: 'pointer', marginTop: 6, padding: 0 }}
-            >
-              항목 변경 후 다시 생성
-            </button>
           </div>
         ) : null}
 

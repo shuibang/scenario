@@ -8,6 +8,7 @@ import { guardedSignInWithGoogle } from '../utils/guardedSignIn';
 import { setAccessToken, saveDirectorScript } from '../store/googleDrive';
 import { buildFeedbackViewerState } from '../utils/feedbackVersions';
 import { reportError } from '../utils/errorTracker';
+import WatermarkOverlay from './WatermarkOverlay';
 
 const RETURN_HASH_KEY = 'drama_pending_return_hash';
 
@@ -161,6 +162,7 @@ export default function SharedReviewView() {
         title,
         drive_file_id: driveFileId,
         source_url: getSafeSourceUrl(),
+        watermark_text: watermarkText || null,
       });
       if (error) throw new Error(error.message);
 
@@ -176,13 +178,15 @@ export default function SharedReviewView() {
     }
   }, [resource, snapshotContent]);
 
+  const watermarkText = resource?.link?.watermark_text || null;
+
   const handlePdfDownload = useCallback(async () => {
     if (!snapshotContent) return;
     setPdfExporting(true);
     setPdfStep('');
     const { appState, selections } = buildFeedbackViewerState(snapshotContent);
     try {
-      await exportPdf(appState, selections, { onStep: setPdfStep });
+      await exportPdf(appState, selections, { onStep: setPdfStep, watermarkText });
     } catch (error) {
       reportError({ source: 'manual', message: error?.message || String(error), stack: error?.stack });
       alert('PDF 다운로드에 실패했어요. 잠시 후 다시 시도해주세요.');
@@ -190,7 +194,7 @@ export default function SharedReviewView() {
       setPdfExporting(false);
       setPdfStep('');
     }
-  }, [snapshotContent]);
+  }, [snapshotContent, watermarkText]);
 
   if (expired) {
     return (
@@ -227,8 +231,10 @@ export default function SharedReviewView() {
         flexDirection: 'column',
         background: '#d8d8d8',
         fontFamily: 'sans-serif',
+        position: 'relative',
       }}
     >
+      <WatermarkOverlay text={watermarkText} />
       <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', padding: isMobile ? 8 : 16 }}>
         <div style={{ display: 'flex', flexDirection: 'column', marginBottom: 4, gap: 6 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>

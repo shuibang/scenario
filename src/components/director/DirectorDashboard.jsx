@@ -364,7 +364,7 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
     setLocalScripts(loadLocalScripts());
     if (isGuest) { setScripts([]); return; }
     if (!supabase) { setScripts([]); return; }
-    supabase.from('shared_scripts').select('id, title, imported_at, drive_file_id')
+    supabase.from('shared_scripts').select('id, title, imported_at, drive_file_id, watermark_text')
       .order('imported_at', { ascending: false })
       .then(({ data }) => setScripts(data || []));
   }, []);
@@ -605,7 +605,7 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
       if (projViewing) return (
         <div style={{ height: '100%', overflow: 'auto', background: '#d8d8d8' }}>
           <ViewerErrorBoundary>
-            <DirectorScriptViewer appState={projViewing.appState} selections={projViewing.selections} sharedScriptId={projSelected.id} localOnly={!!projSelected._isLocal} />
+            <DirectorScriptViewer appState={projViewing.appState} selections={projViewing.selections} sharedScriptId={projSelected.id} localOnly={!!projSelected._isLocal} watermarkText={projSelected.watermark_text || null} />
           </ViewerErrorBoundary>
         </div>
       );
@@ -1323,7 +1323,7 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
     if (!supabase) { setScripts([]); return; }
     supabase
       .from('shared_scripts')
-      .select('id, title, imported_at, drive_file_id')
+      .select('id, title, imported_at, drive_file_id, watermark_text')
       .order('imported_at', { ascending: false })
       .then(({ data, error }) => {
         if (error) { setError(error.message); setScripts([]); }
@@ -1613,7 +1613,7 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
           )}
           {selected && !loading && viewing?.appState && (
             <ViewerErrorBoundary key={selected.id}>
-              <DirectorScriptViewer appState={viewing.appState} selections={viewing.selections} sharedScriptId={selected.id} localOnly={!!selected._isLocal} />
+              <DirectorScriptViewer appState={viewing.appState} selections={viewing.selections} sharedScriptId={selected.id} localOnly={!!selected._isLocal} watermarkText={selected.watermark_text || null} />
             </ViewerErrorBoundary>
           )}
         </div>
@@ -2170,7 +2170,7 @@ function SceneListPanel({ isMobile = false, mobileSelected = null }) {
   // 클라우드 스크립트 목록
   useEffect(() => {
     if (!supabase) { setScripts([]); return; }
-    supabase.from('shared_scripts').select('id, title, imported_at, drive_file_id')
+    supabase.from('shared_scripts').select('id, title, imported_at, drive_file_id, watermark_text')
       .order('imported_at', { ascending: false })
       .then(({ data }) => setScripts(data || []));
   }, []);
@@ -3521,7 +3521,7 @@ function StoryboardPanel({ isGuest, isMobile = false, mobilePreSelected = null, 
   useEffect(() => {
     if (isGuest) { setScripts([]); return; }
     if (!supabase) { setScripts([]); return; }
-    supabase.from('shared_scripts').select('id, title, imported_at, drive_file_id')
+    supabase.from('shared_scripts').select('id, title, imported_at, drive_file_id, watermark_text')
       .order('imported_at', { ascending: false })
       .then(({ data }) => setScripts(data || []));
   }, []);
