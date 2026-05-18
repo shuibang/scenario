@@ -1056,6 +1056,15 @@ function SurveyRow({ row }) {
 // ───────────────────────────────────────────────────────────────────────────
 function SharesTab({ data }) {
   const [typeFilter, setTypeFilter] = useState('all');
+  const [expiryFilter, setExpiryFilter] = useState('all'); // 'all' | 'active' | 'expired'
+
+  // review_links 만 만료 개념이 있음 — 다른 종류는 항상 'active' 취급
+  const isExpired = (r) => {
+    if (r.type !== 'review_link') return false;
+    const exp = r.raw?.expires_at;
+    if (!exp) return false;
+    return new Date(exp).getTime() < Date.now();
+  };
 
   const unified = useMemo(() => {
     const rows = [];
@@ -1089,7 +1098,18 @@ function SharesTab({ data }) {
     return rows;
   }, [data]);
 
-  const filtered = typeFilter === 'all' ? unified : unified.filter((r) => r.type === typeFilter);
+  const filtered = useMemo(() => {
+    let rows = unified;
+    if (typeFilter !== 'all') rows = rows.filter((r) => r.type === typeFilter);
+    if (expiryFilter === 'active')  rows = rows.filter((r) => !isExpired(r));
+    if (expiryFilter === 'expired') rows = rows.filter((r) => isExpired(r));
+    return rows;
+  }, [unified, typeFilter, expiryFilter]);
+
+  const expiredReviewLinkCount = useMemo(
+    () => unified.filter((r) => r.type === 'review_link' && isExpired(r)).length,
+    [unified]
+  );
 
   const types = [
     { id: 'all',             label: `전체 (${unified.length})` },
@@ -1097,6 +1117,11 @@ function SharesTab({ data }) {
     { id: 'review_link',     label: `검토 (${data.reviewLinks.length})` },
     { id: 'feedback_version',label: `버전 (${data.feedbackVersions.length})` },
     { id: 'feedback_session',label: `세션 (${data.feedbackSessions.length})` },
+  ];
+  const expiryOptions = [
+    { id: 'all',     label: '전체' },
+    { id: 'active',  label: '활성' },
+    { id: 'expired', label: `만료 (${expiredReviewLinkCount})` },
   ];
 
   return (
@@ -1115,6 +1140,20 @@ function SharesTab({ data }) {
             }}
           >{t.label}</button>
         ))}
+        <span style={{ width: 1, height: 16, background: 'var(--c-border3)', margin: '0 4px' }} />
+        {expiryOptions.map((o) => (
+          <button
+            key={o.id}
+            onClick={() => setExpiryFilter(o.id)}
+            style={{
+              padding: '4px 10px', borderRadius: 6, fontSize: 12,
+              border: '1px solid', borderColor: expiryFilter === o.id ? 'var(--c-accent)' : 'var(--c-border3)',
+              background: expiryFilter === o.id ? 'var(--c-active)' : 'transparent',
+              color: expiryFilter === o.id ? 'var(--c-accent)' : 'var(--c-text4)',
+              cursor: 'pointer',
+            }}
+          >{o.label}</button>
+        ))}
       </div>
 
       <div style={cardStyle}>
@@ -1123,14 +1162,36 @@ function SharesTab({ data }) {
           <div style={{ fontSize: 13, color: 'var(--c-text6)', padding: '20px 0', textAlign: 'center' }}>데이터가 없습니다</div>
         ) : (
           <div className="space-y-1">
-            {filtered.slice(0, 200).map((r, i) => (
-              <div key={`${r.type}-${r.raw?.id || i}`} className="flex items-center gap-3" style={{ borderTop: '1px solid var(--c-border3)', paddingTop: 6 }}>
-                <span style={{ fontSize: 11, color: 'var(--c-text6)', minWidth: 90, tabularNums: true }}>{fmtDateTime(r.ts)}</span>
-                <span style={{ fontSize: 11, color: 'var(--c-text5)', minWidth: 100 }}>{r.label}</span>
-                <span style={{ fontSize: 11, color: 'var(--c-text4)', minWidth: 90 }}>user: {shortId(r.user)}</span>
-                <span style={{ fontSize: 11, color: 'var(--c-text3)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.ref}</span>
-              </div>
-            ))}
+            {filtered.slice(0, 200).map((r, i) => {
+              const expired = isExpired(r);
+              return (
+                <div
+                  key={`${r.type}-${r.raw?.id || i}`}
+                  className="flex items-center gap-3"
+                  style={{
+                    borderTop: '1px solid var(--c-border3)',
+                    paddingTop: 6,
+                    opacity: expired ? 0.55 : 1,
+                  }}
+                >
+                  <span style={{ fontSize: 11, color: 'var(--c-text6)', minWidth: 90, tabularNums: true }}>{fmtDateTime(r.ts)}</span>
+                  <span style={{ fontSize: 11, color: 'var(--c-text5)', minWidth: 100 }}>{r.label}</span>
+                  {r.type === 'review_link' && (
+                    <span style={{
+                      fontSize: 9.5, padding: '1px 6px', borderRadius: 8,
+                      background: expired ? 'var(--c-tag, var(--c-input))' : 'var(--c-active)',
+                      color: expired ? 'var(--c-text6)' : 'var(--c-accent2)',
+                      border: `1px solid ${expired ? 'var(--c-border3)' : 'var(--c-accent2)'}`,
+                      flexShrink: 0,
+                    }}>
+                      {expired ? '만료' : '활성'}
+                    </span>
+                  )}
+                  <span style={{ fontSize: 11, color: 'var(--c-text4)', minWidth: 90 }}>user: {shortId(r.user)}</span>
+                  <span style={{ fontSize: 11, color: 'var(--c-text3)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.ref}</span>
+                </div>
+              );
+            })}
             {filtered.length > 200 && (
               <div style={{ fontSize: 11, color: 'var(--c-text6)', padding: 8, textAlign: 'center' }}>
                 ⋯ 상위 200건만 표시 (총 {filtered.length}건)
@@ -1138,6 +1199,12 @@ function SharesTab({ data }) {
             )}
           </div>
         )}
+      </div>
+
+      <div style={{ ...cardStyle, fontSize: 11, color: 'var(--c-text5)', lineHeight: 1.6 }}>
+        ℹ️ 검토링크는 발행 후 7일까지 유효하고, 만료 + 30일 = 발행 37일 후 DB 에서 자동 삭제(pg_cron 일간 작업).
+        feedback_versions 도 같이 정리됨. Drive 첨부 파일은 작가의 OAuth 권한이 필요해 서버에서 자동 삭제가 어렵고
+        별도 client-side 정리는 추후 작업.
       </div>
     </div>
   );
