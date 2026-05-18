@@ -48,9 +48,17 @@ export default function DirectorHistoryPage({ onBack, isGuest, D, onOpenScript }
     setLocalScripts(loadLocalScripts());
     if (isGuest) { setScripts([]); return; }
     if (!supabase) { setScripts([]); return; }
-    supabase.from('shared_scripts').select('id, title, imported_at, drive_file_id, watermark_text')
-      .order('imported_at', { ascending: false })
-      .then(({ data }) => setScripts(data || []));
+    let cancelled = false;
+    // 본인 import 만 (admin 계정 우회 방지)
+    supabase.auth.getSession().then(({ data }) => {
+      const uid = data?.session?.user?.id;
+      if (!uid) { if (!cancelled) setScripts([]); return; }
+      supabase.from('shared_scripts').select('id, title, imported_at, drive_file_id, watermark_text')
+        .eq('director_id', uid)
+        .order('imported_at', { ascending: false })
+        .then(({ data }) => { if (!cancelled) setScripts(data || []); });
+    });
+    return () => { cancelled = true; };
   }, [isGuest]);
 
   const loading = scripts === null;

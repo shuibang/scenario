@@ -360,14 +360,17 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
   const [boardScript, setBoardScript] = useState(isGuest ? DEMO_SCRIPT : null);
 
   // ── 데이터 로드 ────────────────────────────────────────────────────────────
+  // 명시적 director_id 필터 — admin 계정에서도 자기 import 만 보이도록.
+  // (admin SELECT 정책이 다른 사람 행도 통과시키지만 연출 화면은 본인 것만.)
   useEffect(() => {
     setLocalScripts(loadLocalScripts());
     if (isGuest) { setScripts([]); return; }
-    if (!supabase) { setScripts([]); return; }
+    if (!supabase || !session?.user?.id) { setScripts([]); return; }
     supabase.from('shared_scripts').select('id, title, imported_at, drive_file_id, watermark_text')
+      .eq('director_id', session.user.id)
       .order('imported_at', { ascending: false })
       .then(({ data }) => setScripts(data || []));
-  }, []);
+  }, [session]);
 
   useEffect(() => {
     if (!noteScript) { setNotes([]); return; }
@@ -1319,17 +1322,19 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
   // Drive 토큰 유효성 사전 확인 (로그인은 됐지만 Drive 권한 만료 상태)
   const driveDisconnected = !isGuest && session && !session.provider_token && !isTokenValid();
 
+  // 본인 import 만 (admin 계정의 admin SELECT 정책 우회 방지)
   useEffect(() => {
-    if (!supabase) { setScripts([]); return; }
+    if (!supabase || !session?.user?.id) { setScripts([]); return; }
     supabase
       .from('shared_scripts')
       .select('id, title, imported_at, drive_file_id, watermark_text')
+      .eq('director_id', session.user.id)
       .order('imported_at', { ascending: false })
       .then(({ data, error }) => {
         if (error) { setError(error.message); setScripts([]); }
         else setScripts(data || []);
       });
-  }, []);
+  }, [session]);
 
   const handleSelect = async (script) => {
     if (selected?.id === script.id) return;
@@ -2167,12 +2172,19 @@ function SceneListPanel({ isMobile = false, mobileSelected = null }) {
 
   const contentStorageKey = selected ? `director_scenelist_${selected.id}` : null;
 
-  // 클라우드 스크립트 목록
+  // 클라우드 스크립트 목록 — 본인 import 만 (admin 계정의 admin SELECT 정책 우회 방지)
   useEffect(() => {
     if (!supabase) { setScripts([]); return; }
-    supabase.from('shared_scripts').select('id, title, imported_at, drive_file_id, watermark_text')
-      .order('imported_at', { ascending: false })
-      .then(({ data }) => setScripts(data || []));
+    let cancelled = false;
+    supabase.auth.getSession().then(({ data }) => {
+      const uid = data?.session?.user?.id;
+      if (!uid) { if (!cancelled) setScripts([]); return; }
+      supabase.from('shared_scripts').select('id, title, imported_at, drive_file_id, watermark_text')
+        .eq('director_id', uid)
+        .order('imported_at', { ascending: false })
+        .then(({ data }) => { if (!cancelled) setScripts(data || []); });
+    });
+    return () => { cancelled = true; };
   }, []);
 
   // 선택 시 씬 파싱 + 내용 로드
@@ -3517,13 +3529,20 @@ function StoryboardPanel({ isGuest, isMobile = false, mobilePreSelected = null, 
     setPanels(loaded);
   }, [mobilePreSelected?.id]);
 
-  // Supabase 스크립트 목록
+  // Supabase 스크립트 목록 — 본인 import 만 (admin 계정 우회 방지)
   useEffect(() => {
     if (isGuest) { setScripts([]); return; }
     if (!supabase) { setScripts([]); return; }
-    supabase.from('shared_scripts').select('id, title, imported_at, drive_file_id, watermark_text')
-      .order('imported_at', { ascending: false })
-      .then(({ data }) => setScripts(data || []));
+    let cancelled = false;
+    supabase.auth.getSession().then(({ data }) => {
+      const uid = data?.session?.user?.id;
+      if (!uid) { if (!cancelled) setScripts([]); return; }
+      supabase.from('shared_scripts').select('id, title, imported_at, drive_file_id, watermark_text')
+        .eq('director_id', uid)
+        .order('imported_at', { ascending: false })
+        .then(({ data }) => { if (!cancelled) setScripts(data || []); });
+    });
+    return () => { cancelled = true; };
   }, []);
 
   // 외부 파일 업로드 완료 핸들러
