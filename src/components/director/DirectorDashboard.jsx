@@ -2479,14 +2479,21 @@ function NotesPanel({ isMobile = false }) {
   const [editText,  setEditText]  = useState('');
   const addRef = useRef();
 
-  // 스크립트 목록 로드
+  // 스크립트 목록 로드 — 본인 import 만 (admin 계정 우회 방지)
   useEffect(() => {
     if (!supabase) { setScripts([]); return; }
-    supabase
-      .from('shared_scripts')
-      .select('id, title, imported_at')
-      .order('imported_at', { ascending: false })
-      .then(({ data }) => setScripts(data || []));
+    let cancelled = false;
+    supabase.auth.getSession().then(({ data }) => {
+      const uid = data?.session?.user?.id;
+      if (!uid) { if (!cancelled) setScripts([]); return; }
+      supabase
+        .from('shared_scripts')
+        .select('id, title, imported_at')
+        .eq('director_id', uid)
+        .order('imported_at', { ascending: false })
+        .then(({ data }) => { if (!cancelled) setScripts(data || []); });
+    });
+    return () => { cancelled = true; };
   }, []);
 
   // 선택된 스크립트의 private notes 로드
