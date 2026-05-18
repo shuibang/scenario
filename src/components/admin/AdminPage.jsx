@@ -1057,6 +1057,10 @@ function SurveyRow({ row }) {
 function SharesTab({ data }) {
   const [typeFilter, setTypeFilter] = useState('all');
   const [expiryFilter, setExpiryFilter] = useState('all'); // 'all' | 'active' | 'expired'
+  const SHARES_PAGE_SIZE = 50;
+  const [page, setPage] = useState(0);
+  // 필터 변경 시 첫 페이지로
+  useEffect(() => { setPage(0); }, [typeFilter, expiryFilter]);
 
   // review_links 만 만료 개념이 있음 — 다른 종류는 항상 'active' 취급
   const isExpired = (r) => {
@@ -1157,48 +1161,116 @@ function SharesTab({ data }) {
       </div>
 
       <div style={cardStyle}>
-        <div style={{ ...labelStyle, marginBottom: 8 }}>{filtered.length}건 (최근순)</div>
-        {filtered.length === 0 ? (
-          <div style={{ fontSize: 13, color: 'var(--c-text6)', padding: '20px 0', textAlign: 'center' }}>데이터가 없습니다</div>
-        ) : (
-          <div className="space-y-1">
-            {filtered.slice(0, 200).map((r, i) => {
-              const expired = isExpired(r);
-              return (
-                <div
-                  key={`${r.type}-${r.raw?.id || i}`}
-                  className="flex items-center gap-3"
-                  style={{
-                    borderTop: '1px solid var(--c-border3)',
-                    paddingTop: 6,
-                    opacity: expired ? 0.55 : 1,
-                  }}
-                >
-                  <span style={{ fontSize: 11, color: 'var(--c-text6)', minWidth: 90, tabularNums: true }}>{fmtDateTime(r.ts)}</span>
-                  <span style={{ fontSize: 11, color: 'var(--c-text5)', minWidth: 100 }}>{r.label}</span>
-                  {r.type === 'review_link' && (
-                    <span style={{
-                      fontSize: 9.5, padding: '1px 6px', borderRadius: 8,
-                      background: expired ? 'var(--c-tag, var(--c-input))' : 'var(--c-active)',
-                      color: expired ? 'var(--c-text6)' : 'var(--c-accent2)',
-                      border: `1px solid ${expired ? 'var(--c-border3)' : 'var(--c-accent2)'}`,
-                      flexShrink: 0,
-                    }}>
-                      {expired ? '만료' : '활성'}
+        {(() => {
+          const totalPages = Math.max(1, Math.ceil(filtered.length / SHARES_PAGE_SIZE));
+          const safePage = Math.min(page, totalPages - 1);
+          const startIdx = safePage * SHARES_PAGE_SIZE;
+          const paged = filtered.slice(startIdx, startIdx + SHARES_PAGE_SIZE);
+          return (
+            <>
+              <div className="flex items-center justify-between" style={{ marginBottom: 8 }}>
+                <div style={labelStyle}>
+                  총 {filtered.length}건
+                  {filtered.length > SHARES_PAGE_SIZE && (
+                    <span style={{ fontSize: 9, color: 'var(--c-text6)', textTransform: 'none', letterSpacing: 0, marginLeft: 6 }}>
+                      · {startIdx + 1}–{Math.min(startIdx + SHARES_PAGE_SIZE, filtered.length)}
                     </span>
                   )}
-                  <span style={{ fontSize: 11, color: 'var(--c-text4)', minWidth: 90 }}>user: {shortId(r.user)}</span>
-                  <span style={{ fontSize: 11, color: 'var(--c-text3)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.ref}</span>
                 </div>
-              );
-            })}
-            {filtered.length > 200 && (
-              <div style={{ fontSize: 11, color: 'var(--c-text6)', padding: 8, textAlign: 'center' }}>
-                ⋯ 상위 200건만 표시 (총 {filtered.length}건)
+                {totalPages > 1 && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setPage((p) => Math.max(0, p - 1))}
+                      disabled={safePage === 0}
+                      style={{
+                        fontSize: 11, padding: '2px 8px', borderRadius: 4,
+                        border: '1px solid var(--c-border3)', background: 'transparent',
+                        color: safePage === 0 ? 'var(--c-text6)' : 'var(--c-text3)',
+                        cursor: safePage === 0 ? 'not-allowed' : 'pointer',
+                      }}
+                    >이전</button>
+                    <span className="tabular-nums" style={{ fontSize: 11, color: 'var(--c-text5)', minWidth: 48, textAlign: 'center' }}>
+                      {safePage + 1} / {totalPages}
+                    </span>
+                    <button
+                      onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                      disabled={safePage >= totalPages - 1}
+                      style={{
+                        fontSize: 11, padding: '2px 8px', borderRadius: 4,
+                        border: '1px solid var(--c-border3)', background: 'transparent',
+                        color: safePage >= totalPages - 1 ? 'var(--c-text6)' : 'var(--c-text3)',
+                        cursor: safePage >= totalPages - 1 ? 'not-allowed' : 'pointer',
+                      }}
+                    >다음</button>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        )}
+              {filtered.length === 0 ? (
+                <div style={{ fontSize: 13, color: 'var(--c-text6)', padding: '20px 0', textAlign: 'center' }}>데이터가 없습니다</div>
+              ) : (
+                <div className="space-y-1">
+                  {paged.map((r, i) => {
+                    const expired = isExpired(r);
+                    return (
+                      <div
+                        key={`${r.type}-${r.raw?.id || i}`}
+                        className="flex items-center gap-3"
+                        style={{
+                          borderTop: '1px solid var(--c-border3)',
+                          paddingTop: 6,
+                          opacity: expired ? 0.55 : 1,
+                        }}
+                      >
+                        <span style={{ fontSize: 11, color: 'var(--c-text6)', minWidth: 90, tabularNums: true }}>{fmtDateTime(r.ts)}</span>
+                        <span style={{ fontSize: 11, color: 'var(--c-text5)', minWidth: 100 }}>{r.label}</span>
+                        {r.type === 'review_link' && (
+                          <span style={{
+                            fontSize: 9.5, padding: '1px 6px', borderRadius: 8,
+                            background: expired ? 'var(--c-tag, var(--c-input))' : 'var(--c-active)',
+                            color: expired ? 'var(--c-text6)' : 'var(--c-accent2)',
+                            border: `1px solid ${expired ? 'var(--c-border3)' : 'var(--c-accent2)'}`,
+                            flexShrink: 0,
+                          }}>
+                            {expired ? '만료' : '활성'}
+                          </span>
+                        )}
+                        <span style={{ fontSize: 11, color: 'var(--c-text4)', minWidth: 90 }}>user: {shortId(r.user)}</span>
+                        <span style={{ fontSize: 11, color: 'var(--c-text3)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.ref}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-center gap-1" style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--c-border3)' }}>
+                  <button
+                    onClick={() => setPage((p) => Math.max(0, p - 1))}
+                    disabled={safePage === 0}
+                    style={{
+                      fontSize: 11, padding: '3px 10px', borderRadius: 4,
+                      border: '1px solid var(--c-border3)', background: 'transparent',
+                      color: safePage === 0 ? 'var(--c-text6)' : 'var(--c-text3)',
+                      cursor: safePage === 0 ? 'not-allowed' : 'pointer',
+                    }}
+                  >← 이전</button>
+                  <span className="tabular-nums" style={{ fontSize: 11, color: 'var(--c-text5)', minWidth: 48, textAlign: 'center' }}>
+                    {safePage + 1} / {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                    disabled={safePage >= totalPages - 1}
+                    style={{
+                      fontSize: 11, padding: '3px 10px', borderRadius: 4,
+                      border: '1px solid var(--c-border3)', background: 'transparent',
+                      color: safePage >= totalPages - 1 ? 'var(--c-text6)' : 'var(--c-text3)',
+                      cursor: safePage >= totalPages - 1 ? 'not-allowed' : 'pointer',
+                    }}
+                  >다음 →</button>
+                </div>
+              )}
+            </>
+          );
+        })()}
       </div>
 
       <div style={{ ...cardStyle, fontSize: 11, color: 'var(--c-text5)', lineHeight: 1.6 }}>
