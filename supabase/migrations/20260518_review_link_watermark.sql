@@ -40,10 +40,12 @@ declare
   v_session public.feedback_sessions%rowtype;
   v_comments jsonb := '[]'::jsonb;
 begin
+  -- review_links.id 는 text 타입 — 인자 uuid 와 비교하려면 ::text 캐스트 필요
+  -- (옛 20260422_fix_review_links_id_cast 마이그레이션의 패턴 보존)
   select *
     into v_link
     from public.review_links
-   where id = p_link_id
+   where id = p_link_id::text
      and link_type = 'feedback_version'
      and expires_at > now();
 
