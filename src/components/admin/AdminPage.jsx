@@ -1,5 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../store/supabaseClient';
+import { markAdminVisited, fetchAdminUnreadCounts } from '../../utils/adminBadge';
+
+// 탭 → unread breakdown 키 매핑
+const TAB_UNREAD_KEY = {
+  autoErrors: 'unresolved_client_errors',
+  errors:     'unresolved_error_reports',
+  survey:     'new_survey_responses',
+};
 
 /**
  * AdminPage — 운영자 본인 전용 현황 대시보드
@@ -1402,6 +1410,29 @@ export default function AdminPage({ authUser }) {
   const [activeTab, setActiveTab] = useState('dashboard');
   const data = useAdminData();
 
+  // 진입 시 unread breakdown 스냅샷 → 탭 옆 빨간점에 사용. 스냅샷 후 last_visit_at 갱신.
+  // 사용자가 탭을 직접 누르면 그 탭의 카운트는 로컬에서 0 으로 떨어뜨려 점 제거.
+  const [unread, setUnread] = useState({
+    unresolved_error_reports: 0,
+    unresolved_client_errors: 0,
+    new_survey_responses: 0,
+  });
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { breakdown } = await fetchAdminUnreadCounts();
+      if (!cancelled && breakdown) setUnread(breakdown);
+      await markAdminVisited();
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleSelectTab = (id) => {
+    setActiveTab(id);
+    const key = TAB_UNREAD_KEY[id];
+    if (key) setUnread((u) => ({ ...u, [key]: 0 }));
+  };
+
   const goBack = () => { window.location.hash = ''; };
 
   if (!supabase) {
@@ -1441,20 +1472,38 @@ export default function AdminPage({ authUser }) {
       {/* 탭바 */}
       <div style={{ flexShrink: 0, borderBottom: '1px solid var(--c-border)', background: 'var(--c-panel)' }}>
         <div style={{ display: 'flex', alignItems: 'center', padding: '0 16px', overflowX: 'auto' }}>
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setActiveTab(t.id)}
-              style={{
-                padding: '8px 14px',
-                fontSize: 13, fontWeight: activeTab === t.id ? 600 : 400,
-                color: activeTab === t.id ? 'var(--c-accent)' : 'var(--c-text5)',
-                background: 'none', border: 'none',
-                borderBottom: activeTab === t.id ? '2px solid var(--c-accent)' : '2px solid transparent',
-                cursor: 'pointer', marginBottom: -1, whiteSpace: 'nowrap',
-              }}
-            >{t.label}</button>
-          ))}
+          {TABS.map((t) => {
+            const unreadKey = TAB_UNREAD_KEY[t.id];
+            const count = unreadKey ? unread[unreadKey] : 0;
+            return (
+              <button
+                key={t.id}
+                onClick={() => handleSelectTab(t.id)}
+                style={{
+                  padding: '8px 14px',
+                  fontSize: 13, fontWeight: activeTab === t.id ? 600 : 400,
+                  color: activeTab === t.id ? 'var(--c-accent)' : 'var(--c-text5)',
+                  background: 'none', border: 'none',
+                  borderBottom: activeTab === t.id ? '2px solid var(--c-accent)' : '2px solid transparent',
+                  cursor: 'pointer', marginBottom: -1, whiteSpace: 'nowrap',
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                }}
+              >
+                <span>{t.label}</span>
+                {count > 0 && (
+                  <span
+                    aria-label={`새 자료 ${count}건`}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      minWidth: 16, height: 16, padding: '0 5px',
+                      borderRadius: 8, background: '#ef4444', color: '#fff',
+                      fontSize: 10, fontWeight: 700, lineHeight: 1,
+                    }}
+                  >{count > 99 ? '99+' : count}</span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 

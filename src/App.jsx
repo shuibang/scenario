@@ -36,6 +36,7 @@ import DirectorDeliveryView from './components/DirectorDeliveryView';
 import SurveyPage from './components/SurveyPage';
 import AdminPage from './components/admin/AdminPage';
 import { isAdminHash, isAdminUser, getAdminHash } from './utils/adminAuth';
+import { fetchAdminUnreadCounts } from './utils/adminBadge';
 import { Wrench, Lightbulb } from 'lucide-react';
 import IdeaSheet from './components/ideas/IdeaSheet';
 import IdeasFullPage from './components/ideas/IdeasFullPage';
@@ -774,6 +775,23 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
 
+  // 어드민 unread 뱃지 — 미해결 오류/자동오류/새 설문응답 합계
+  const [adminUnread, setAdminUnread] = useState(0);
+  useEffect(() => {
+    if (!isAdminUser(authUser)) { setAdminUnread(0); return; }
+    let cancelled = false;
+    const tick = async () => {
+      const { total } = await fetchAdminUnreadCounts();
+      if (!cancelled) setAdminUnread(total);
+    };
+    tick();
+    // 어드민 진입/탈출 시(hashchange)와 5분 간격으로 갱신
+    const onHash = () => tick();
+    window.addEventListener('hashchange', onHash);
+    const id = setInterval(tick, 5 * 60 * 1000);
+    return () => { cancelled = true; window.removeEventListener('hashchange', onHash); clearInterval(id); };
+  }, [authUser]);
+
   // savedAt/activeProjectId 기준 라벨 계산. 마운트 시 (창 크기 변경 등) 빈 라벨로 잠깐 보였다가 채워지는 깜빡임 방지 위해 함수 추출 + 첫 useState에서 즉시 평가.
   const computeSavedLabel = (sa, pid) => {
     if (!sa || !pid) return '';
@@ -1148,13 +1166,27 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
           {isAdminUser(authUser) && getAdminHash() && (
             <button
               onClick={() => { window.location.hash = getAdminHash(); }}
-              title="관리자"
+              title={adminUnread > 0 ? `관리자 — 새 자료 ${adminUnread}건` : '관리자'}
               className="flex items-center justify-center rounded"
-              style={{ ...iconBtnStyle, color: 'var(--c-accent)' }}
+              style={{ ...iconBtnStyle, color: 'var(--c-accent)', position: 'relative' }}
               onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-hover)'; }}
               onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
             >
               <Wrench size={14} strokeWidth={2} />
+              {adminUnread > 0 && (
+                <span
+                  aria-label={`새 자료 ${adminUnread}건`}
+                  style={{
+                    position: 'absolute',
+                    top: 2, right: 2,
+                    width: 7, height: 7,
+                    borderRadius: '50%',
+                    background: '#ef4444',
+                    boxShadow: '0 0 0 1.5px var(--c-bg)',
+                    pointerEvents: 'none',
+                  }}
+                />
+              )}
             </button>
           )}
         </div>

@@ -15,6 +15,7 @@ import { buildProjectConflicts } from '../../utils/projectConflict';
 import Menubar from '../Menubar/Menubar';
 import PublicPcBadge from '../PublicPcBadge';
 import { isAdminUser, getAdminHash } from '../../utils/adminAuth';
+import { fetchAdminUnreadCounts } from '../../utils/adminBadge';
 
 export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, WorkTimer, authUser, onLogout, onMenuAction, onSyncConflict, recentProjects = [], checkedItems = {} }) {
   const { state, dispatch, loadFromDriveData } = useApp();
@@ -26,6 +27,22 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
   const [reconnecting, setReconnecting] = useState(false);
   const syncingRef = useRef(false);
   const latestStateRef = useRef(state);
+
+  // 어드민 unread 뱃지 — 햄버거의 🛠 항목 옆 빨간점
+  const [adminUnread, setAdminUnread] = useState(0);
+  useEffect(() => {
+    if (!isAdminUser(authUser)) { setAdminUnread(0); return; }
+    let cancelled = false;
+    const tick = async () => {
+      const { total } = await fetchAdminUnreadCounts();
+      if (!cancelled) setAdminUnread(total);
+    };
+    tick();
+    const onHash = () => tick();
+    window.addEventListener('hashchange', onHash);
+    const id = setInterval(tick, 5 * 60 * 1000);
+    return () => { cancelled = true; window.removeEventListener('hashchange', onHash); clearInterval(id); };
+  }, [authUser]);
 
   useEffect(() => {
     latestStateRef.current = state;
@@ -316,13 +333,30 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
               {/* 어드민 — admin 이메일이고 라우트 토큰이 설정된 경우에만 노출 */}
               {isAdminUser(authUser) && getAdminHash() && (
                 <button
-                  style={{ ...dropItemStyle, color: 'var(--c-accent)' }}
+                  style={{ ...dropItemStyle, color: 'var(--c-accent)', position: 'relative' }}
                   onClick={() => {
                     window.location.hash = getAdminHash();
                     setMenuOpen(false);
                   }}
                 >
-                  <span>🛠</span><span>관리자</span>
+                  <span style={{ position: 'relative', display: 'inline-flex' }}>
+                    🛠
+                    {adminUnread > 0 && (
+                      <span
+                        aria-label={`새 자료 ${adminUnread}건`}
+                        style={{
+                          position: 'absolute',
+                          top: -2, right: -4,
+                          width: 7, height: 7,
+                          borderRadius: '50%',
+                          background: '#ef4444',
+                          boxShadow: '0 0 0 1.5px var(--c-bg)',
+                          pointerEvents: 'none',
+                        }}
+                      />
+                    )}
+                  </span>
+                  <span>관리자{adminUnread > 0 ? ` · 새 자료 ${adminUnread}건` : ''}</span>
                 </button>
               )}
 
