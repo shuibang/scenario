@@ -4,7 +4,7 @@
  *
  * 블록 → 대본 필드 매핑:
  *   logline    → synopsisDoc.logline
- *   genre      → synopsisDoc.genre
+ *   genre      → synopsisDoc.genre + coverDoc.genre (표지 입력란도 동시 채움)
  *   theme      → synopsisDoc.theme
  *   intent     → synopsisDoc.intent
  *   story      → synopsisDoc.story
@@ -53,6 +53,20 @@ export function applyIdeaSeed({ idea, projectId, firstEpisodeId, dispatch }) {
       updatedAt: ts,
     };
     try { dispatch({ type: 'SET_SYNOPSIS', payload: doc }); } catch {}
+  }
+
+  // 1-b) coverDoc.genre — 표지 입력란도 동시에 채움.
+  // 시놉시스와 표지는 별도 doc 이라 한쪽만 채우면 다른 쪽이 비어 보이는 회귀.
+  if (genre) {
+    const coverDoc = {
+      id: genId(),
+      projectId,
+      genre,
+      fields: [{ id: 'genre', label: '장르', value: genre }],
+      createdAt: ts,
+      updatedAt: ts,
+    };
+    try { dispatch({ type: 'SET_COVER', payload: coverDoc }); } catch {}
   }
 
   // 2) treatment 블록 → 첫 회차 summaryItems (한 줄 = 한 항목)

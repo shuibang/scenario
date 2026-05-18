@@ -25,13 +25,34 @@ const IDB_KEY = 'ideas';
 // Drive 백업 debounce — 변경 후 2초 멈춤이면 1회 업로드
 const DRIVE_DEBOUNCE_MS = 2000;
 let _driveTimer = null;
+
+// Drive 동기화 정책 (사용자 피드백 반영: 네트워크/배터리 절약):
+// - 편집 시 IDB 저장은 즉시. Drive push 는 다음 조건이 모두 맞을 때 1회만.
+//   1) Drive 토큰 valid (끊긴 동안 자동 재연결 시도 안 함 — 사용자가 수동저장으로 재연결)
+//   2) 첫 pull 완료 (덮어쓰기 race 방지)
+//   3) 보낼 변경 있음 (_hasUnsyncedChanges)
+// - 끊긴 동안 누적된 변경은 _hasUnsyncedChanges 로 보존 → 재연결 시 1회 일괄 push.
+let _pullSettled = false;
+let _hasUnsyncedChanges = false;
+
 function scheduleDriveSave() {
-  if (!isTokenValid()) return;
+  if (!_hasUnsyncedChanges) return;
+  if (!isTokenValid()) return;       // Drive 끊김 → 다음 재연결까지 보류 (dirty 유지)
+  if (!_pullSettled) return;          // 첫 pull 완료까지 보류 (finally 에서 자동 재시도)
   if (_driveTimer) clearTimeout(_driveTimer);
   _driveTimer = setTimeout(() => {
     _driveTimer = null;
-    saveIdeasToDrive(_cache || []).catch(() => {});
+    saveIdeasToDrive(_cache || [])
+      .then((res) => {
+        if (res?.ok) _hasUnsyncedChanges = false;  // 성공 시에만 dirty 해제
+      })
+      .catch(() => {});
   }, DRIVE_DEBOUNCE_MS);
+}
+
+function markDirtyAndSave() {
+  _hasUnsyncedChanges = true;
+  scheduleDriveSave();
 }
 
 // 시놉시스 본문은 통합 'synopsis' 가 아닌 시놉시스 페이지의 항목별(genre/theme/logline/intent/story)
@@ -78,7 +99,7 @@ async function persist() {
       console.warn('[ideasStore] persist failed:', err);
     }
   }
-  scheduleDriveSave();
+  markDirtyAndSave();
 }
 
 /**
@@ -87,26 +108,54 @@ async function persist() {
  * 사용자가 다른 기기에서 작성한 아이디어를 잃지 않게.
  */
 export async function pullIdeasFromDrive() {
-  await ensureLoaded();
-  if (!isTokenValid()) return { ok: false, reason: 'no-token' };
-  const remote = await loadIdeasFromDrive();
-  if (!Array.isArray(remote)) return { ok: false, reason: 'no-remote' };
-
-  const byId = new Map(_cache.map((it) => [it.id, it]));
-  let added = 0, updated = 0;
-  for (const r of remote) {
-    if (!r || !r.id) continue;
-    const local = byId.get(r.id);
-    if (!local) { byId.set(r.id, r); added++; continue; }
-    if ((r.updatedAt || 0) > (local.updatedAt || 0)) {
-      byId.set(r.id, r);
-      updated++;
+  try {
+    await ensureLoaded();
+    if (!isTokenValid()) return { ok: false, reason: 'no-token' };
+    let remote;
+    try {
+      remote = await loadIdeasFromDrive();
+    } catch (err) {
+      return { ok: false, reason: 'load-error', error: err };
     }
+    if (!Array.isArray(remote)) {
+      // Drive 파일 자체가 없음 → 로컬 캐시가 있다면 그게 곧 dirty.
+      // 첫 사용 케이스든, 다른 기기가 아직 push 안 한 케이스든 push 해서 만들어줌.
+      if ((_cache || []).length > 0) _hasUnsyncedChanges = true;
+      return { ok: false, reason: 'no-remote' };
+    }
+
+    const remoteById = new Map(remote.filter((r) => r?.id).map((r) => [r.id, r]));
+    const byId = new Map(_cache.map((it) => [it.id, it]));
+    let added = 0, updated = 0;
+    for (const r of remote) {
+      if (!r || !r.id) continue;
+      const local = byId.get(r.id);
+      if (!local) { byId.set(r.id, r); added++; continue; }
+      if ((r.updatedAt || 0) > (local.updatedAt || 0)) {
+        byId.set(r.id, r);
+        updated++;
+      }
+    }
+
+    // dirty 자동 감지 — 모듈 변수 _hasUnsyncedChanges 가 새로고침에 사라지므로
+    // 매 pull 마다 로컬·리모트 비교로 재계산. 로컬에만 있거나(다른 기기가 못 본 것)
+    // 로컬이 더 새것(편집 후 push 못한 것)이면 push 필요.
+    for (const item of _cache) {
+      if (!remoteById.has(item.id)) { _hasUnsyncedChanges = true; break; }
+      const r = remoteById.get(item.id);
+      if ((item.updatedAt || 0) > (r.updatedAt || 0)) { _hasUnsyncedChanges = true; break; }
+    }
+
+    _cache = Array.from(byId.values()).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    notify();
+    try { await setAll(IDB_KEY, _cache); } catch {}
+    return { ok: true, added, updated };
+  } finally {
+    // pull 결과와 무관하게 settled 로 표시. dirty 가 감지되면 (자동 또는 편집으로)
+    // scheduleDriveSave 가 처리 — 사용자의 수동저장 → 재연결 → pull 흐름에 자연스럽게 묻어감.
+    _pullSettled = true;
+    scheduleDriveSave();
   }
-  _cache = Array.from(byId.values()).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-  notify();
-  try { await setAll(IDB_KEY, _cache); } catch {}
-  return { ok: true, added, updated };
 }
 
 export async function listIdeas() {
