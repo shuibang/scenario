@@ -60,6 +60,81 @@ interface SourceDef {
   url: string;
   /** HTML 또는 RSS 본문 → 후보 목록 */
   parse: (body: string, sourceUrl: string) => Candidate[];
+  /** 선택: candidate 의 상세 페이지를 fetch 해서 정확한 일정/공식 URL 등으로 enrich */
+  enrich?: (cand: Candidate) => Promise<Candidate>;
+}
+
+// 외부 링크 추출 시 푸터/사이드바 노이즈로 제외할 도메인 (공통 + storyum 푸터에서 관찰됨)
+const EXTERNAL_LINK_EXCLUDE_HOSTS = [
+  'storyum.kr', 'kocca.kr', 'mcst.go.kr', 'ckl.or.kr', 'kcdrc.kr', 'edu.kocca.kr',
+  'kakao.com', 'facebook.com', 'twitter.com', 'instagram.com', 'youtube.com',
+  'naver.com', 'google.com', 'jquery.com',
+];
+
+/** 첫 외부 링크 (푸터/소셜 제외) 추출 */
+function extractFirstExternalLink(html: string, baseUrl: string): string | null {
+  let baseHost = '';
+  try { baseHost = new URL(baseUrl).hostname.toLowerCase(); } catch {}
+  const linkRe = /href=(?:"([^"]+)"|'([^']+)')/gi;
+  let m: RegExpExecArray | null;
+  while ((m = linkRe.exec(html)) !== null) {
+    const href = (m[1] || m[2] || '').trim();
+    if (!/^https?:\/\//i.test(href)) continue;
+    let host = '';
+    try { host = new URL(href).hostname.toLowerCase(); } catch { continue; }
+    if (!host) continue;
+    if (host === baseHost) continue;
+    if (EXTERNAL_LINK_EXCLUDE_HOSTS.some((eh) => host === eh || host.endsWith('.' + eh))) continue;
+    return href;
+  }
+  return null;
+}
+
+/** storyum 상세 본문에서 "기간: YYYY. M. D. ... ~ M. D." 형태 추출 */
+function extractStoryumPeriod(plainText: string): { start: string | null; end: string | null } {
+  // 같은 연도 또는 다른 연도 둘 다 매칭 (~ 뒤에 연도 없으면 시작과 같은 해로)
+  const re = /기간[:\s]*([\d]{4})\s*\.\s*(\d{1,2})\s*\.\s*(\d{1,2})\s*\.[^~]*?~\s*(?:(\d{4})\s*\.\s*)?(\d{1,2})\s*\.\s*(\d{1,2})\s*\./;
+  const m = plainText.match(re);
+  if (!m) return { start: null, end: null };
+  const y1 = m[1];
+  const mo1 = m[2].padStart(2, '0');
+  const d1 = m[3].padStart(2, '0');
+  const y2 = m[4] || y1;
+  const mo2 = m[5].padStart(2, '0');
+  const d2 = m[6].padStart(2, '0');
+  return {
+    start: `${y1}-${mo1}-${d1}`,
+    end: `${y2}-${mo2}-${d2}`,
+  };
+}
+
+/** storyum candidate enrich — 상세 페이지에서 정확한 일정 + 공식 URL 추출 */
+async function enrichStoryum(cand: Candidate): Promise<Candidate> {
+  // source_url 형태: '...listStartN.do?...#983' → fragment 가 prgSn
+  const hashIdx = cand.source_url.lastIndexOf('#');
+  if (hashIdx < 0) return cand;
+  const sn = decodeURIComponent(cand.source_url.slice(hashIdx + 1));
+  if (!sn || !/^\d+$/.test(sn)) return cand;
+  const detailUrl = `https://www.storyum.kr/story/progrm/master/view.do?prgSn=${sn}&siteSe=story&menuNo=500024&siteId=5`;
+  try {
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), 10_000);
+    const res = await fetch(detailUrl, { headers: HEADERS, signal: ctrl.signal });
+    clearTimeout(timeout);
+    if (!res.ok) return cand;
+    const html = await res.text();
+    const text = stripTags(html);
+    const period = extractStoryumPeriod(text);
+    const officialUrl = extractFirstExternalLink(html, detailUrl);
+    return {
+      ...cand,
+      source_url: officialUrl || cand.source_url,
+      submit_start: period.start || cand.submit_start,
+      submit_end: period.end || cand.submit_end,
+    };
+  } catch {
+    return cand;
+  }
 }
 
 // ─── 유틸 ────────────────────────────────────────────────────────────────────
@@ -263,6 +338,7 @@ const SOURCES: SourceDef[] = [
     organizer: '스토리움',
     url: 'https://www.storyum.kr/story/progrm/master/listStartN.do?siteSe=story&menuNo=500024&siteId=5',
     parse: (html, url) => genericTableListParse(html, url, '스토리움'),
+    enrich: enrichStoryum,
   },
 ];
 
@@ -299,9 +375,29 @@ async function runScrape() {
       }
       // 한글 사이트는 EUC-KR 인 경우도 있음. 우선 utf-8 시도.
       const html = await res.text();
-      const candidates = src.parse(html, src.url);
+      let candidates = src.parse(html, src.url);
       srcResult.candidate_count = candidates.length;
       report.total_candidates += candidates.length;
+
+      // 상세 페이지에서 정확한 일정·공식 URL 가져오기 (소스별 옵션).
+      // 순차 fetch — 사이트 부담 최소 + 타임아웃 누적 방지.
+      if (src.enrich && candidates.length > 0) {
+        const enriched: Candidate[] = [];
+        let enrichedCount = 0;
+        for (const c of candidates) {
+          try {
+            const next = await src.enrich(c);
+            if (next.source_url !== c.source_url || next.submit_end !== c.submit_end) {
+              enrichedCount++;
+            }
+            enriched.push(next);
+          } catch {
+            enriched.push(c);
+          }
+        }
+        candidates = enriched;
+        srcResult.enriched_count = enrichedCount;
+      }
 
       // ── hash 기반 페이지 변경 감지 ───────────────────────────────────────
       // generic 파서가 못 잡는 SPA/응모페이지형 사이트의 변경을 감지하기 위해
