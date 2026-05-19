@@ -44,6 +44,8 @@ import { Wrench, Lightbulb } from 'lucide-react';
 import IdeaSheet from './components/ideas/IdeaSheet';
 import IdeasFullPage from './components/ideas/IdeasFullPage';
 import { applyIdeaSeed, buildProjectSeedFromIdea } from './store/promoteToProject';
+import { migrateChecklistItemsToIdeas, hasMigrated as hasChecklistMigrated } from './utils/migrateChecklistToIdeas';
+import { fetchActiveContests as primeContestsCache } from './store/contestsApi';
 import AdBanner, { KakaoAdBanner } from './components/AdBanner';
 // ─── v2: extracted mobile components ──────────────────────────────────────────
 import MobileMenuBar    from './components/mobile/MobileMenuBar';
@@ -518,6 +520,40 @@ function WorkTimer({ projectId, documentId, onComplete, saveRef }) {
   const workLogsRef  = useRef(state.workTimeLogs);
   useEffect(() => { checklistRef.current = state.checklistItems; }, [state.checklistItems]);
   useEffect(() => { workLogsRef.current  = state.workTimeLogs;   }, [state.workTimeLogs]);
+
+  // 공모전 보드 캐시 미리 채우기 — 메뉴 빨간점이 부팅 직후 정확하게 뜨도록
+  useEffect(() => {
+    const t = setTimeout(() => {
+      primeContestsCache().catch(() => {});
+    }, 2000);
+    return () => clearTimeout(t);
+  }, []);
+
+  // 메모탭이 공모전 보드로 교체되면서 기존 checklistItems → 아이디어 노트 1회 자동 이전.
+  // INIT 충분히 끝난 시점에 1회 실행, hasMigrated 가드.
+  const checklistMigratedRef = useRef(false);
+  useEffect(() => {
+    if (checklistMigratedRef.current || hasChecklistMigrated()) {
+      checklistMigratedRef.current = true;
+      return;
+    }
+    const t = setTimeout(() => {
+      if (checklistMigratedRef.current) return;
+      checklistMigratedRef.current = true;
+      migrateChecklistItemsToIdeas(checklistRef.current)
+        .then((res) => {
+          if (res?.migrated > 0 && typeof console !== 'undefined') {
+            console.log(`[checklist→ideas] ${res.migrated}개 메모 → ${res.groups}개 아이디어로 이전 완료`);
+          }
+        })
+        .catch((err) => {
+          if (typeof console !== 'undefined' && console.warn) {
+            console.warn('[checklist→ideas] migration failed', err);
+          }
+        });
+    }, 5000);
+    return () => clearTimeout(t);
+  }, []);
 
   // 당일 누적 baseline — workTimeLogs 갱신 또는 projectId 변경 시 재계산
   useEffect(() => {
@@ -1127,10 +1163,9 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
 
           <div style={{ width: 1, height: 16, background: 'var(--c-border3)', flexShrink: 0 }} />
 
-          {/* 사용자 */}
+          {/* 사용자 — 프로필 아이콘은 우측 마이페이지 진입 버튼에서만 노출(중복 방지) */}
           {authUser ? (
             <div className="flex items-center gap-1.5">
-              {authUser.picture && <img src={authUser.picture} alt="" style={{ width: 22, height: 22, borderRadius: 4 }} />}
               {userBadge && <BadgeChip badge={userBadge} size={18} tooltip="label" />}
               <span style={{ fontSize: 12, color: 'var(--c-text4)', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{authUser.name}</span>
               <button onClick={async () => {

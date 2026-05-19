@@ -75,8 +75,14 @@ export function useBadges() {
   const featured    = featuredId ? getBadge(featuredId) : null;
 
   // 새 획득 toast — 마운트 후 한 번, 이후 earnedIds 변경 시
+  // 로그인 안 한 상태에서는 토스트도 seen 기록도 건너뜀. 뱃지는 계정에 묶이는 개념이라
+  // 로그인 전 활동은 평가만 하고 알림은 보류 — 로그인 후 Drive 동기화로 earnedIds 가
+  // 바뀌면 그때 토스트가 발사된다.
   useEffect(() => {
     if (earnedIds.length === 0) return;
+    let isLoggedIn = false;
+    try { isLoggedIn = !!localStorage.getItem('drama_auth_user'); } catch {}
+    if (!isLoggedIn) return;
     const seen = loadSeen();
     const newOnes = earnedIds.filter((id) => !seen.has(id));
     if (newOnes.length === 0) return;

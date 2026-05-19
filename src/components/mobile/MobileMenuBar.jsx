@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Clapperboard, ExternalLink, CloudOff } from 'lucide-react';
+import { Clapperboard, ExternalLink, Cloud, CloudOff } from 'lucide-react';
 import { useApp } from '../../store/AppContext';
 import { FONTS, getFontPdfTooltip } from '../../print/FontRegistry';
 import AdBanner from '../AdBanner';
@@ -433,26 +433,39 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
 
         {/* 오른쪽 spacer + Drive 인디케이터 + timer */}
         <div style={{ flex: 1 }} />
-        {/* Drive 연결 인디케이터 — 끊김일 때만 노출(공간 제약). 정상은 햄버거 안 텍스트로 확인.
-            settled 가드: 부팅 직후 토큰 도착 전 잠깐 끊김 깜빡 방지. */}
-        {authUser && !driveTokenValid && driveAuthSettled && (
-          <button
-            type="button"
-            onClick={handleDriveReconnect}
-            disabled={reconnecting}
-            title="Drive 연결이 끊겼어요. 탭해서 재연결하세요"
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 3,
-              background: 'transparent', border: 'none',
-              padding: '4px 4px', borderRadius: 4, flexShrink: 0,
-              color: '#f59e0b', fontSize: 11,
-              cursor: reconnecting ? 'wait' : 'pointer',
-              WebkitTapHighlightColor: 'transparent',
-            }}
-          >
-            <CloudOff size={13} strokeWidth={2} />
-            <span>{reconnecting ? '재연결…' : '끊김'}</span>
-          </button>
+        {/* Drive 연결 인디케이터 — 연결됨 상태에도 작은 아이콘으로 노출(상태 확인용).
+            settled 가드: 부팅 직후 토큰 도착 전 잠깐 깜빡임 방지. */}
+        {authUser && driveAuthSettled && (
+          driveTokenValid ? (
+            <span
+              title="Drive 연결됨"
+              style={{
+                display: 'inline-flex', alignItems: 'center',
+                padding: '4px 4px', flexShrink: 0,
+                color: 'var(--c-text6)',
+              }}
+            >
+              <Cloud size={13} strokeWidth={1.75} />
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={handleDriveReconnect}
+              disabled={reconnecting}
+              title="Drive 연결이 끊겼어요. 탭해서 재연결하세요"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 3,
+                background: 'transparent', border: 'none',
+                padding: '4px 4px', borderRadius: 4, flexShrink: 0,
+                color: '#f59e0b', fontSize: 11,
+                cursor: reconnecting ? 'wait' : 'pointer',
+                WebkitTapHighlightColor: 'transparent',
+              }}
+            >
+              <CloudOff size={13} strokeWidth={2} />
+              <span>{reconnecting ? '재연결…' : '끊김'}</span>
+            </button>
+          )
         )}
         <PublicPcBadge compact onClick={() => onMenuAction?.('tools:settings')} />
         <div data-tour-id="mobile-timer" style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
