@@ -534,12 +534,12 @@ export default function RightPanel({ onScrollToScene }) {
     </>
   );
 
-  // 2개 광고 + 메모 채움 레이아웃 (7개 패널 공통)
-  // baseSlot: 'cover-panel' → 실제 slot은 'cover-panel-1', 'cover-panel-2'로 분기 (각 고유 ad unit)
+  // 광고 1개 + 메모(공모전 보드) 채움 레이아웃 (7개 패널 공통).
+  // 이전엔 광고 2개였으나 공모전 정보가 잘 안 보여 1개로 축소 — 보드 영역이 더 크게 위로 올라옴.
+  // baseSlot 의 '-1' 슬롯만 노출. '-2' 슬롯은 사용 안 함.
   const twoAdPanel = (baseSlot, docKey) => withMemo(
-    <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div style={{ padding: '12px', display: 'flex', flexDirection: 'column' }}>
       <AdBanner slot={`${baseSlot}-1`} mobileHide={false} height={120} style={{ width: '100%' }} />
-      <AdBanner slot={`${baseSlot}-2`} mobileHide={false} height={120} style={{ width: '100%' }} />
     </div>,
     docKey,
     true
@@ -560,9 +560,8 @@ export default function RightPanel({ onScrollToScene }) {
     contextContent = twoAdPanel('treatment-panel', 'treatment');
   } else if (activeDoc === 'scenelist') {
     contextContent = withMemo(
-      <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ padding: '12px', display: 'flex', flexDirection: 'column' }}>
         <AdBanner slot="scenelist-panel-1" mobileHide={false} height={120} style={{ width: '100%' }} />
-        <AdBanner slot="scenelist-panel-2" mobileHide={false} height={120} style={{ width: '100%' }} />
       </div>,
       'scenelist',
       true
@@ -585,9 +584,8 @@ export default function RightPanel({ onScrollToScene }) {
     contextContent = twoAdPanel('characters-panel', 'characters');
   } else if (activeDoc === 'mypage') {
     contextContent = withMemo(
-      <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ padding: '12px', display: 'flex', flexDirection: 'column' }}>
         <AdBanner slot="settings-panel-1" mobileHide={false} height={120} style={{ width: '100%' }} />
-        <AdBanner slot="settings-panel-2" mobileHide={false} height={120} style={{ width: '100%' }} />
       </div>,
       'mypage',
       true
