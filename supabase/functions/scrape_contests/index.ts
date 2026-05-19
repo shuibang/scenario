@@ -179,7 +179,7 @@ function inferCategory(title: string): string[] | null {
   if (/웹드라마|웹\s?드라마/.test(title)) cats.push('웹드라마');
   if (/웹\s?소설|웹소설/.test(title)) cats.push('웹소설');
   if (/문학|소설/.test(title) && cats.length === 0) cats.push('문학');
-  if (/스토리|원작|IP/.test(title) && cats.length === 0) cats.push('스토리/IP');
+  if (/스토리|원작|IP/.test(title) && cats.length === 0) cats.push('IP/원작');
   if (cats.length === 0 && /드라마|극본|대본/.test(title)) cats.push('미니시리즈');
   return cats.length > 0 ? Array.from(new Set(cats)) : ['기타'];
 }

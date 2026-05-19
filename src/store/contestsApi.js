@@ -10,7 +10,8 @@ import { supabase } from './supabaseClient';
 
 // 공통 카테고리 옵션 — 한 공모전이 여러 부문(단막+미니+영화 등)을 동시에
 // 모집하는 경우가 많아 다중 선택 (text[] 컬럼).
-export const CONTEST_CATEGORIES = ['미니시리즈', '단막', '시나리오', '영화', '웹드라마', '기타'];
+// inferCategory(Edge Function) 출력과 동기화 — 자동수집 카테고리가 UI 필터에서도 선택 가능하게.
+export const CONTEST_CATEGORIES = ['미니시리즈', '단막', '시나리오', '영화', '웹드라마', '웹소설', '문학', 'IP/원작', '기타'];
 
 function normalizeCategories(input) {
   if (!input) return null;
