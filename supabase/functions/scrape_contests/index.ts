@@ -299,6 +299,19 @@ async function runScrape() {
             if (debugAction.length < 5) debugAction.push(txt.slice(0, 80));
             if (!EXCLUDE_RE.test(txt)) {
               if (debugPassed.length < 5) debugPassed.push(txt.slice(0, 80));
+              // 첫 통과 항목의 href + URL 게이트 시뮬레이션 결과 기록
+              if (!srcResult.dbg_first_passed_href) {
+                const hrefRaw = dbgM[1].trim();
+                srcResult.dbg_first_passed_href = hrefRaw.slice(0, 120);
+                if (!hrefRaw) srcResult.dbg_url_gate = 'EMPTY';
+                else if (hrefRaw.startsWith('#')) srcResult.dbg_url_gate = 'HASH';
+                else if (hrefRaw.toLowerCase().startsWith('javascript:')) {
+                  const idMatch = hrefRaw.match(/\(['"]?([^'")]+)['"]?\)/);
+                  srcResult.dbg_url_gate = idMatch ? `JS_OK id=${idMatch[1]}` : 'JS_NO_ID';
+                } else {
+                  srcResult.dbg_url_gate = `HTTP ${absoluteUrl(hrefRaw, src.url).slice(0, 80)}`;
+                }
+              }
             }
           }
         }
@@ -306,6 +319,7 @@ async function runScrape() {
       srcResult.dbg_domain_matched = debugDomain;
       srcResult.dbg_action_matched = debugAction;
       srcResult.dbg_passed_filter = debugPassed;
+      srcResult.dbg_code_version = 'v3-js-link-handling'; // 배포 버전 확인용
       // ─────────────────────────────────────────────────────────────────────
 
       const candidates = src.parse(html, src.url);
