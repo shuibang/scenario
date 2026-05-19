@@ -115,13 +115,14 @@ function passesFilter(title: string): boolean {
  */
 function genericTableListParse(html: string, sourceUrl: string, organizer: string): Candidate[] {
   const results: Candidate[] = [];
-  const linkRe = /<a\b[^>]*\bhref=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  // 따옴표 종류 별도 매칭 (안쪽 반대 따옴표로 잘리지 않게).
+  const linkRe = /<a\b[^>]*?\bhref=(?:"([^"]*)"|'([^']*)')[^>]*>([\s\S]*?)<\/a>/gi;
   const baseOrigin = new URL(sourceUrl).origin;
   let m: RegExpExecArray | null;
   const seen = new Set<string>();
   while ((m = linkRe.exec(html)) !== null) {
-    const href = m[1].trim();
-    const inner = decodeHtmlEntities(stripTags(m[2]));
+    const href = (m[1] !== undefined ? m[1] : m[2] || '').trim();
+    const inner = decodeHtmlEntities(stripTags(m[3]));
     if (!passesFilter(inner)) continue;
     if (seen.has(inner)) continue;
     seen.add(inner);
@@ -289,10 +290,13 @@ async function runScrape() {
       const debugDomain: string[] = [];
       const debugAction: string[] = [];
       const debugPassed: string[] = [];
-      const debugLinkRe = /<a\b[^>]*\bhref=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+      // 따옴표 종류를 큰따옴표/작은따옴표 별도 매칭 — 안쪽에 반대 따옴표가
+      // 있어도 잘리지 않음 (storyum 의 href="javascript:goMasterView('986')" 케이스).
+      const debugLinkRe = /<a\b[^>]*?\bhref=(?:"([^"]*)"|'([^']*)')[^>]*>([\s\S]*?)<\/a>/gi;
       let dbgM: RegExpExecArray | null;
       while ((dbgM = debugLinkRe.exec(html)) !== null) {
-        const txt = decodeHtmlEntities(stripTags(dbgM[2]));
+        const dbgHref = (dbgM[1] !== undefined ? dbgM[1] : dbgM[2] || '');
+        const txt = decodeHtmlEntities(stripTags(dbgM[3]));
         if (txt.length >= 10 && DOMAIN_RE.test(txt)) {
           if (debugDomain.length < 5) debugDomain.push(txt.slice(0, 80));
           if (ACTION_RE.test(txt)) {
@@ -301,7 +305,7 @@ async function runScrape() {
               if (debugPassed.length < 5) debugPassed.push(txt.slice(0, 80));
               // 첫 통과 항목의 href + URL 게이트 시뮬레이션 결과 기록
               if (!srcResult.dbg_first_passed_href) {
-                const hrefRaw = dbgM[1].trim();
+                const hrefRaw = dbgHref.trim();
                 srcResult.dbg_first_passed_href = hrefRaw.slice(0, 120);
                 if (!hrefRaw) srcResult.dbg_url_gate = 'EMPTY';
                 else if (hrefRaw.startsWith('#')) srcResult.dbg_url_gate = 'HASH';
