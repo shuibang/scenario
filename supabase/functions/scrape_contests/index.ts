@@ -226,6 +226,12 @@ const SOURCES: SourceDef[] = [
     url: 'https://writer.imbc.com/notice/',
     parse: (html, url) => genericTableListParse(html, url, 'MBC'),
   },
+  {
+    name: 'storyum',
+    organizer: '스토리움',
+    url: 'https://www.storyum.kr/story/progrm/master/listStartN.do?siteSe=story&menuNo=500024&siteId=5',
+    parse: (html, url) => genericTableListParse(html, url, '스토리움'),
+  },
 ];
 
 // ─── 메인 ────────────────────────────────────────────────────────────────────
