@@ -8,10 +8,12 @@
  * 표시 컴포넌트(BadgeChip, BadgesPanel)는 이 훅의 결과만 받는다 — 분리 유지.
  */
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../../store/AppContext';
 import { BADGES, getBadge, compareBadgeTier } from './catalog';
 import { evaluateBadges } from './evaluate';
+import { getCachedShareStats, refreshShareStats } from '../shareStats';
+import { listIdeasSync, subscribeIdeas } from '../../store/ideasStore';
 
 const PIN_KEY  = 'drama_badge_pin';
 const SEEN_KEY = 'drama_badges_seen';
@@ -52,19 +54,43 @@ export function useBadges() {
   const { state } = useApp();
   const workTimeLogs = state?.workTimeLogs || [];
   const projects     = state?.projects     || [];
+  const scriptBlocks = state?.scriptBlocks || [];
+
+  // 공유/피드백 누계 — Supabase user_share_counters 캐시 값.
+  // 마운트 시 백그라운드 갱신, 'share-stats:updated' 이벤트로 재렌더.
+  const [shareStats, setShareStats] = useState(() => getCachedShareStats());
+  useEffect(() => {
+    const handler = (e) => {
+      const next = e?.detail || getCachedShareStats();
+      setShareStats(next);
+    };
+    window.addEventListener('share-stats:updated', handler);
+    let isLoggedIn = false;
+    try { isLoggedIn = !!localStorage.getItem('drama_auth_user'); } catch {}
+    if (isLoggedIn) refreshShareStats();
+    return () => window.removeEventListener('share-stats:updated', handler);
+  }, []);
+
+  // 아이디어 노트 수 — ideasStore 는 AppContext 밖이라 별도 구독.
+  const [ideaCount, setIdeaCount] = useState(() => listIdeasSync().length);
+  useEffect(() => {
+    const unsub = subscribeIdeas((next) => setIdeaCount(Array.isArray(next) ? next.length : 0));
+    return () => { try { unsub?.(); } catch {} };
+  }, []);
 
   const { stats, earnedIds } = useMemo(
-    () => evaluateBadges(workTimeLogs, projects),
-    [workTimeLogs, projects]
+    () => evaluateBadges(workTimeLogs, projects, scriptBlocks, shareStats, ideaCount),
+    [workTimeLogs, projects, scriptBlocks, shareStats, ideaCount]
   );
 
   const earnedSet = useMemo(() => new Set(earnedIds), [earnedIds]);
   const autoFeaturedId = useMemo(() => pickAutoFeatured(earnedIds), [earnedIds]);
 
-  // 핀 — pin-changed 이벤트로 재렌더 트리거
-  const pinTick = useRef(0);
+  // 핀 — pin-changed 이벤트로 재렌더 트리거.
+  // (useRef 는 변경해도 재렌더가 일어나지 않아 useState 사용.)
+  const [, bumpPinTick] = useState(0);
   useEffect(() => {
-    const h = () => { pinTick.current += 1; };
+    const h = () => bumpPinTick((n) => n + 1);
     window.addEventListener('badge:pin-changed', h);
     return () => window.removeEventListener('badge:pin-changed', h);
   }, []);

@@ -1,13 +1,14 @@
 import React, { useMemo } from 'react';
 import { BADGES, CATEGORY_LABEL, TIER_COLOR } from '../utils/badges/catalog';
-import { useBadges, setPinnedBadgeId, getPinnedBadgeId } from '../utils/badges';
+import { useBadges, setPinnedBadgeId } from '../utils/badges';
 
 /**
  * MyPage 🏅 뱃지 탭 — 획득/미획득 그리드 + 핀(대표 뱃지) 변경 UI
  */
 export default function BadgesPanel() {
-  const { earnedSet, stats, featured } = useBadges();
-  const pinnedId = getPinnedBadgeId();
+  // pinnedId 는 useBadges 가 pin-changed 이벤트를 듣고 갱신해서 돌려준다.
+  // (getPinnedBadgeId 를 직접 부르면 이벤트 구독 없이 stale 값이 잡힘.)
+  const { earnedSet, stats, featured, pinnedId } = useBadges();
 
   const byCategory = useMemo(() => {
     const map = {};
@@ -41,7 +42,7 @@ export default function BadgesPanel() {
             {totalEarned} <span style={{ fontSize: 14, color: 'var(--c-text6)', fontWeight: 400 }}>/ {BADGES.length}</span>
           </div>
           <div style={{ fontSize: 11, color: 'var(--c-text5)', marginTop: 6 }}>
-            누적 {Math.round((stats.totalSec || 0) / 3600)}시간 · 최장 연속 {stats.longestStreak || 0}일 · 작품 {stats.projectCount || 0}개
+            누적 {Math.round((stats.totalSec || 0) / 3600)}시간 · 최장 연속 {stats.longestStreak || 0}일 · 작품 {stats.projectCount || 0}개(탈고 {stats.finalProjectCount || 0}) · {(stats.totalChars || 0).toLocaleString()}자 · 검토링크 {stats.shareLinksCreated || 0}개 · 피드백 {stats.feedbackReceived || 0}회 · 아이디어 {stats.ideaNoteCount || 0}개
           </div>
         </div>
         {featured && (

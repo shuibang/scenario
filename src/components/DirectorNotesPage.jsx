@@ -18,6 +18,7 @@ import {
   markFeedbackSessionRead,
   renameFeedbackVersion,
 } from '../utils/reviewShare';
+import { refreshShareStats } from '../utils/shareStats';
 import { reportError } from '../utils/errorTracker';
 
 const ACTIVE_VERSION_KEY = 'drama_active_feedback_version_id';
@@ -144,6 +145,9 @@ export default function DirectorNotesPage() {
 
         setVersions(nextVersions);
         setAllSessions(nextSessions);
+
+        // 피드백 리스트 로드 = 새 세션이 도착했을 수도 있는 시점. 뱃지용 누계도 새로고침.
+        refreshShareStats().catch(() => {});
 
         const storedVersionId = localStorage.getItem(ACTIVE_VERSION_KEY);
         const preferredVersionId =

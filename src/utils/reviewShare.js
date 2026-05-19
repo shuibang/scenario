@@ -5,6 +5,7 @@ import {
   setAccessToken,
 } from '../store/googleDrive';
 import { supabase } from '../store/supabaseClient';
+import { refreshShareStats } from './shareStats';
 
 const MAX_PAYLOAD_BYTES = 5 * 1024 * 1024;
 const FEEDBACK_LINK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -159,6 +160,10 @@ export async function createFeedbackVersionShare({ scriptId, title, snapshotCont
 
     if (linkError) throw new Error(linkError.message);
 
+    // 뱃지 카운터(서버 트리거가 올린 값) 즉시 캐시 갱신 → 'share-stats:updated' →
+    // useBadges 가 신규 뱃지 감지 후 토스트 발사.
+    refreshShareStats(true).catch(() => {});
+
     return {
       linkId,
       versionId: version.id,
@@ -282,6 +287,7 @@ export async function createReviewLinkForExistingVersion({ versionId, watermarkT
     expires_at: feedbackExpiresAt(),
   });
   if (error) throw new Error(error.message);
+  refreshShareStats(true).catch(() => {});
   return {
     linkId,
     url: `${window.location.origin}/app#review=${linkId}`,
