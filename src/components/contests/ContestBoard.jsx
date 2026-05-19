@@ -38,73 +38,72 @@ function ddayColor(d) {
 function ContestCard({ contest, isNew }) {
   const d = daysUntil(contest.submit_end);
   const dc = ddayColor(d);
-  const cats = Array.isArray(contest.category)
-    ? contest.category
-    : (contest.category ? [contest.category] : []);
+  // 마감일: MM-DD 만 표시 (한 줄 컴팩트). null/공백 안전.
+  const endShort = contest.submit_end ? contest.submit_end.slice(5) : '';
 
   return (
-    <div
+    <a
+      href={contest.source_url}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={contest.title}
       style={{
-        padding: '10px 12px',
-        marginBottom: 8,
-        borderRadius: 8,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '8px 10px',
+        marginBottom: 4,
+        borderRadius: 6,
         border: '1px solid var(--c-border3)',
         background: 'var(--c-panel2, var(--c-panel))',
+        textDecoration: 'none',
+        color: 'inherit',
+        cursor: 'pointer',
+        transition: 'background 0.15s, border-color 0.15s',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = 'var(--c-hover, var(--c-tag))';
+        e.currentTarget.style.borderColor = 'var(--c-accent)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = 'var(--c-panel2, var(--c-panel))';
+        e.currentTarget.style.borderColor = 'var(--c-border3)';
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 4 }}>
+      {/* 남은 날짜 */}
+      <span
+        style={{
+          fontSize: 10, fontWeight: 700,
+          padding: '2px 6px', borderRadius: 4,
+          background: dc.bg, color: dc.color,
+          whiteSpace: 'nowrap', flexShrink: 0,
+          minWidth: 38, textAlign: 'center',
+        }}
+      >{fmtDday(d)}</span>
+      {isNew && (
         <span
           style={{
-            fontSize: 10, fontWeight: 700,
-            padding: '2px 6px', borderRadius: 4,
-            background: dc.bg, color: dc.color,
-            whiteSpace: 'nowrap', flexShrink: 0,
+            fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
+            background: 'var(--c-accent)', color: '#fff', flexShrink: 0,
           }}
-        >{fmtDday(d)}</span>
-        {isNew && (
-          <span
-            style={{
-              fontSize: 9, fontWeight: 700, padding: '2px 5px', borderRadius: 4,
-              background: 'var(--c-accent)', color: '#fff', flexShrink: 0,
-            }}
-          >NEW</span>
-        )}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-text)', lineHeight: 1.3, wordBreak: 'keep-all' }}>
-            {contest.title}
-          </div>
-        </div>
-      </div>
-      <div style={{ fontSize: 11, color: 'var(--c-text5)', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '2px 6px', marginBottom: 6 }}>
-        {contest.organizer && <span>{contest.organizer}</span>}
-        {contest.prize && <span>· {contest.prize}</span>}
-        {cats.map((cat) => (
-          <span
-            key={cat}
-            style={{
-              fontSize: 10, padding: '1px 5px', borderRadius: 4,
-              background: 'var(--c-tag)', color: 'var(--c-accent2)',
-            }}
-          >{cat}</span>
-        ))}
-      </div>
-      <div style={{ fontSize: 11, color: 'var(--c-text6)' }}>
-        {contest.submit_end && <span>마감 {contest.submit_end}</span>}
-      </div>
-      <div style={{ marginTop: 6 }}>
-        <a
-          href={contest.source_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            display: 'inline-block', fontSize: 11, fontWeight: 600,
-            color: 'var(--c-accent)', textDecoration: 'none',
-            padding: '3px 8px', borderRadius: 4,
-            border: '1px solid var(--c-border3)',
-          }}
-        >원문 보기 →</a>
-      </div>
-    </div>
+        >N</span>
+      )}
+      {/* 제목 (1줄, ellipsis) */}
+      <span
+        style={{
+          flex: 1, minWidth: 0,
+          fontSize: 12, fontWeight: 500, color: 'var(--c-text)',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}
+      >{contest.title}</span>
+      {/* 마감일 */}
+      <span
+        style={{
+          fontSize: 11, color: 'var(--c-text6)',
+          flexShrink: 0, whiteSpace: 'nowrap',
+        }}
+      >{endShort}</span>
+    </a>
   );
 }
 
