@@ -3,13 +3,17 @@ import { useApp } from '../../store/AppContext';
 import MobileScriptTab from './MobileScriptTab';
 import MobileMemoTab, { MobileChecklistPanel } from './MobileMemoTab';
 import AdBanner from '../AdBanner';
+import ContestBoard from '../contests/ContestBoard';
+import { useNewContestsCount } from '../../hooks/useNewContestsCount';
 
+// tab id 'memo' 는 기존 코드 호환을 위해 유지.
+// 좌측 자유메모 영역은 공모전 보드로 교체됐지만, 우측 체크리스트는 그대로.
 const TABS = [
   { id: 'script',   icon: '📝', label: '대본' },
   { id: 'data',     icon: '👤', label: '자료' },
   { id: 'plan',     icon: '🗂',  label: '설계' },
   { id: 'feedback', icon: '📋', label: '피드백' },
-  { id: 'memo',     icon: '✏️',  label: '메모' },
+  { id: 'memo',     icon: '🏆', label: '공모/체크' },
 ];
 
 const DATA_DOCS = [
@@ -92,6 +96,7 @@ function FeedbackTabContent({ dispatch, onClose, activeDoc }) {
 export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, onClose }) {
   const { state, dispatch } = useApp();
   const { activeDoc } = state;
+  const newContestsCount = useNewContestsCount({ fetchOnMount: true });
 
   return (
     <div
@@ -116,25 +121,39 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, on
         borderBottom: open ? '1px solid var(--c-border2)' : 'none',
         userSelect: 'none', WebkitUserSelect: 'none',
       }}>
-        {TABS.map(({ id, icon, label }) => (
-          <button
-            key={id}
-            onClick={() => { onTabChange(id); if (!open) onToggle(); }}
-            style={{
-              flex: 1,
-              background: tab === id && open ? 'var(--c-active)' : 'none',
-              border: 'none', borderRight: '1px solid var(--c-border)',
-              cursor: 'pointer',
-              color: tab === id && open ? 'var(--c-accent)' : 'var(--c-text5)',
-              display: 'flex', flexDirection: 'column',
-              alignItems: 'center', justifyContent: 'center', gap: 4,
-              WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation',
-            }}
-          >
-            <span style={{ fontSize: 20, lineHeight: 1 }}>{icon}</span>
-            <span style={{ fontSize: 11, fontWeight: tab === id && open ? 600 : 400 }}>{label}</span>
-          </button>
-        ))}
+        {TABS.map(({ id, icon, label }) => {
+          const showContestDot = id === 'memo' && newContestsCount > 0 && !(tab === 'memo' && open);
+          return (
+            <button
+              key={id}
+              onClick={() => { onTabChange(id); if (!open) onToggle(); }}
+              style={{
+                flex: 1,
+                background: tab === id && open ? 'var(--c-active)' : 'none',
+                border: 'none', borderRight: '1px solid var(--c-border)',
+                cursor: 'pointer',
+                color: tab === id && open ? 'var(--c-accent)' : 'var(--c-text5)',
+                display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'center', gap: 4,
+                WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation',
+                position: 'relative',
+              }}
+            >
+              <span style={{ fontSize: 20, lineHeight: 1, position: 'relative' }}>
+                {icon}
+                {showContestDot && (
+                  <span style={{
+                    position: 'absolute', top: -2, right: -8,
+                    minWidth: 14, height: 14, padding: '0 4px',
+                    borderRadius: 7, background: '#dc2626', color: '#fff',
+                    fontSize: 9, fontWeight: 700, lineHeight: '14px',
+                  }}>{newContestsCount > 99 ? '99+' : newContestsCount}</span>
+                )}
+              </span>
+              <span style={{ fontSize: 11, fontWeight: tab === id && open ? 600 : 400 }}>{label}</span>
+            </button>
+          );
+        })}
         <button
           onClick={onToggle}
           onContextMenu={e => e.preventDefault()}
@@ -153,9 +172,9 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, on
         <div data-bottom-panel style={{ position: 'relative', flex: 1, minHeight: 0, overflow: 'hidden' }}>
           {tab === 'memo' ? (
             <>
-              {/* 좌: 코멘트 */}
+              {/* 좌: 공모전 보드 (구 자유메모 자리) */}
               <div style={{ position: 'absolute', top: 0, left: 0, width: '50%', bottom: 0, borderRight: '1px solid var(--c-border)', overflow: 'hidden' }}>
-                <MobileMemoTab />
+                <ContestBoard compact />
               </div>
               {/* 우: 체크리스트 */}
               <div style={{ position: 'absolute', top: 0, right: 0, width: '50%', bottom: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}>

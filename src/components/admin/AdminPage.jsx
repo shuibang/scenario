@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../store/supabaseClient';
 import { markAdminVisited, fetchAdminUnreadCounts } from '../../utils/adminBadge';
+import ContestsAdminTab from './ContestsAdminTab';
 
 // 탭 → unread breakdown 키 매핑
 const TAB_UNREAD_KEY = {
@@ -23,6 +24,7 @@ const TABS = [
   { id: 'errors',      label: '🐞 오류 보고' },
   { id: 'survey',      label: '📋 설문 응답' },
   { id: 'shares',      label: '🔗 공유 활동' },
+  { id: 'contests',    label: '🏆 공모 검토' },
   { id: 'paid',        label: '💰 유료 추정' },
 ];
 
@@ -1538,6 +1540,7 @@ export default function AdminPage({ authUser }) {
               {activeTab === 'errors'     && <ErrorsTab data={data} />}
               {activeTab === 'survey'     && <SurveyTab data={data} />}
               {activeTab === 'shares'     && <SharesTab data={data} />}
+              {activeTab === 'contests'   && <ContestsAdminTab />}
               {activeTab === 'paid'       && <PaidEstimateTab data={data} />}
             </>
           )}

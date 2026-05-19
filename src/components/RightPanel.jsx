@@ -9,6 +9,7 @@ import { stripHtml } from '../utils/textFormat';
 import { getChipInlineStyle } from '../utils/emotionColor';
 import { GuidePanel } from './StructurePage';
 import AdBanner from './AdBanner';
+import ContestBoard from './contests/ContestBoard';
 
 const STATUS_COLORS = { done: '#22c55e', writing: '#eab308', draft: 'var(--c-border3)' };
 const STATUS_LABELS = { done: '완료', writing: '작성 중', draft: '초안' };
@@ -406,46 +407,18 @@ function CoverMiniPreview() {
 }
 
 // ─── DocMemo ──────────────────────────────────────────────────────────────────
-// Internal (non-printable) memo per page.
+// 2026-05-19: 메모영역 자리를 공모전 보드로 전환.
+// 기존 사용자 메모(localStorage `drama_docMemo_<projectId>_<docKey>`)는
+// utils/migrateChecklistToIdeas.js 가 아이디어 노트로 1회 자동 이전.
+// 호출 위치/props 호환을 위해 함수명/시그니처는 유지.
 function DocMemo({ projectId, docKey, grow = false }) {
-  const storageKey = `drama_docMemo_${projectId}_${docKey}`;
-  const [memo, setMemo] = useState(() => {
-    try { return localStorage.getItem(storageKey) || ''; } catch { return ''; }
-  });
-  const timerRef = useRef(null);
-
-  const handleChange = (e) => {
-    const val = e.target.value;
-    setMemo(val);
-    clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => {
-      try { localStorage.setItem(storageKey, val); } catch {}
-    }, 400);
-  };
-
-  const panelStyle = grow
-    ? { borderTop: '1px solid var(--c-border)', padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minHeight: 0 }
-    : { borderTop: '1px solid var(--c-border)', padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 };
-
+  const wrapperStyle = grow
+    ? { borderTop: '1px solid var(--c-border)', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }
+    : { borderTop: '1px solid var(--c-border)', flexShrink: 0, height: 260, display: 'flex', flexDirection: 'column', overflow: 'hidden' };
   return (
-    <>
-      <div style={panelStyle}>
-        <div className="text-[10px] uppercase tracking-widest" style={{ color: 'var(--c-text6)' }}>메모</div>
-        <textarea
-          value={memo}
-          onChange={handleChange}
-          placeholder="메모 입력..."
-          style={{
-            width: '100%', background: 'var(--c-input)', color: 'var(--c-text2)',
-            border: '1px solid var(--c-border3)', borderRadius: 4,
-            padding: '4px 6px', fontSize: 11, lineHeight: 1.5,
-            fontFamily: 'inherit', resize: 'none', outline: 'none',
-            ...(grow ? { flex: 1, minHeight: 40 } : { height: 52 }),
-            boxSizing: 'border-box',
-          }}
-        />
-      </div>
-    </>
+    <div style={wrapperStyle}>
+      <ContestBoard compact />
+    </div>
   );
 }
 

@@ -38,13 +38,14 @@ import AdminPage from './components/admin/AdminPage';
 import { isAdminHash, isAdminUser, getAdminHash } from './utils/adminAuth';
 import { fetchAdminUnreadCounts } from './utils/adminBadge';
 import { useBadges } from './utils/badges';
+import { clearShareStatsCache } from './utils/shareStats';
 import BadgeChip from './components/BadgeChip';
 import BadgeToast from './components/BadgeToast';
 import { Wrench, Lightbulb } from 'lucide-react';
 import IdeaSheet from './components/ideas/IdeaSheet';
 import IdeasFullPage from './components/ideas/IdeasFullPage';
 import { applyIdeaSeed, buildProjectSeedFromIdea } from './store/promoteToProject';
-import { migrateChecklistItemsToIdeas, hasMigrated as hasChecklistMigrated } from './utils/migrateChecklistToIdeas';
+import { migrateDocMemosToIdeas, hasMigrated as hasDocMemoMigrated } from './utils/migrateChecklistToIdeas';
 import { fetchActiveContests as primeContestsCache } from './store/contestsApi';
 import AdBanner, { KakaoAdBanner } from './components/AdBanner';
 // ─── v2: extracted mobile components ──────────────────────────────────────────
@@ -529,26 +530,27 @@ function WorkTimer({ projectId, documentId, onComplete, saveRef }) {
     return () => clearTimeout(t);
   }, []);
 
-  // 메모탭이 공모전 보드로 교체되면서 기존 checklistItems → 아이디어 노트 1회 자동 이전.
-  // INIT 충분히 끝난 시점에 1회 실행, hasMigrated 가드.
-  const checklistMigratedRef = useRef(false);
+  // DocMemo (문맥 패널 하단의 메모영역) 자리가 공모전 보드로 교체되면서,
+  // 기존 사용자 메모(localStorage `drama_docMemo_<projectId>_<docKey>`)를
+  // 아이디어 노트로 1회 자동 이전. INIT 충분히 끝난 시점 1회만.
+  const docMemoMigratedRef = useRef(false);
   useEffect(() => {
-    if (checklistMigratedRef.current || hasChecklistMigrated()) {
-      checklistMigratedRef.current = true;
+    if (docMemoMigratedRef.current || hasDocMemoMigrated()) {
+      docMemoMigratedRef.current = true;
       return;
     }
     const t = setTimeout(() => {
-      if (checklistMigratedRef.current) return;
-      checklistMigratedRef.current = true;
-      migrateChecklistItemsToIdeas(checklistRef.current)
+      if (docMemoMigratedRef.current) return;
+      docMemoMigratedRef.current = true;
+      migrateDocMemosToIdeas()
         .then((res) => {
           if (res?.migrated > 0 && typeof console !== 'undefined') {
-            console.log(`[checklist→ideas] ${res.migrated}개 메모 → ${res.groups}개 아이디어로 이전 완료`);
+            console.log(`[docMemo→ideas] ${res.migrated}개 메모 → ${res.groups}개 아이디어로 이전 완료`);
           }
         })
         .catch((err) => {
           if (typeof console !== 'undefined' && console.warn) {
-            console.warn('[checklist→ideas] migration failed', err);
+            console.warn('[docMemo→ideas] migration failed', err);
           }
         });
     }, 5000);
@@ -2909,6 +2911,7 @@ export default function App() {
         try { localStorage.removeItem('drama_auth_user'); } catch {}
         clearAccessToken();
         resetInitialSyncGate();
+        clearShareStatsCache();
         setAuthUser(null);
       }
     });
