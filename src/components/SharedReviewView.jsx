@@ -348,6 +348,33 @@ export default function SharedReviewView() {
           <PreviewRenderer appState={appState} selections={selections} zoom={zoom} />
         </div>
       </div>
+
+      {/* 카카오 애드핏 — 검토링크 페이지 하단 고정 (PC 728×90 / 모바일 320×100) */}
+      <div
+        style={{
+          flexShrink: 0,
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: isMobile ? '6px 0' : '8px 0',
+          background: '#ececec',
+          borderTop: '1px solid #c4c4c4',
+        }}
+      >
+        {isMobile ? (
+          <KakaoAdBanner
+            unitId="DAN-DCImro84Aqn4N89r"
+            width={320}
+            height={100}
+          />
+        ) : (
+          <KakaoAdBanner
+            unitId="DAN-HDnkAFXFiZO9rZUw"
+            width={728}
+            height={90}
+          />
+        )}
+      </div>
     </div>
   );
 }
