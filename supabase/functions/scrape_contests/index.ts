@@ -33,10 +33,15 @@ const DOMAIN_RE  = /(드라마|극본|대본|미니시리즈|단막|방송작가
 const ACTION_RE  = /(공모|공고|모집|선정|접수|시상|당선|수상|기획안|아이디어\s?공모)/;
 const EXCLUDE_RE = /(용역|입찰|납품|구매|계약\s?공고|채용|모집공고\s?\(직원|강사\s?모집|교육생\s?모집|수강생\s?모집|운영업체|위탁\s?용역|결과\s?발표|당선작\s?발표|더보기|전체보기|바로가기|기업\s?모집|기업\s?대상|기업\s?지원|참여\s?기업|기업\s?공모|기업\s?선정)/;
 
+// 일반 브라우저 UA. 명시적 봇 UA 는 robots 정책 없이도 차단되는 사이트가 많아
+// (storyum 등) 일반 Chrome UA 로 fetch. 부담 최소화 정책(일 2회)은 유지.
 const HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (compatible; StarSky-ContestBot/1.0; +https://daejak.com)',
-  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-  'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.5',
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+  'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+  'Accept-Encoding': 'gzip, deflate, br',
+  'Cache-Control': 'no-cache',
+  'Pragma': 'no-cache',
 };
 
 // ─── 타입 ────────────────────────────────────────────────────────────────────
