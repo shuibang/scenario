@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useApp } from '../store/AppContext';
-import AdBanner from './AdBanner';
+import AdBanner, { KakaoAdBanner } from './AdBanner';
+import { useIsMobile } from '../hooks/useIsMobile';
 import { exportPdf }              from '../print/printPdf';
 import { exportDocx }             from '../print/printDocx';
 import { exportHancom, exportHwpx } from '../print/hancomExporter';
