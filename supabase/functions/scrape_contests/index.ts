@@ -281,6 +281,33 @@ async function runScrape() {
       }
       // 한글 사이트는 EUC-KR 인 경우도 있음. 우선 utf-8 시도.
       const html = await res.text();
+
+      // ── 디버그 정보 (왜 candidate 0건인지 파악용) ────────────────────────
+      srcResult.html_length = html.length;
+      srcResult.a_tag_count = (html.match(/<a\b/gi) || []).length;
+      // DOMAIN 만 통과한 raw 제목 (필터 단계별로 어디서 막히는지)
+      const debugDomain: string[] = [];
+      const debugAction: string[] = [];
+      const debugPassed: string[] = [];
+      const debugLinkRe = /<a\b[^>]*\bhref=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+      let dbgM: RegExpExecArray | null;
+      while ((dbgM = debugLinkRe.exec(html)) !== null) {
+        const txt = decodeHtmlEntities(stripTags(dbgM[2]));
+        if (txt.length >= 10 && DOMAIN_RE.test(txt)) {
+          if (debugDomain.length < 5) debugDomain.push(txt.slice(0, 80));
+          if (ACTION_RE.test(txt)) {
+            if (debugAction.length < 5) debugAction.push(txt.slice(0, 80));
+            if (!EXCLUDE_RE.test(txt)) {
+              if (debugPassed.length < 5) debugPassed.push(txt.slice(0, 80));
+            }
+          }
+        }
+      }
+      srcResult.dbg_domain_matched = debugDomain;
+      srcResult.dbg_action_matched = debugAction;
+      srcResult.dbg_passed_filter = debugPassed;
+      // ─────────────────────────────────────────────────────────────────────
+
       const candidates = src.parse(html, src.url);
       srcResult.candidate_count = candidates.length;
       report.total_candidates += candidates.length;
