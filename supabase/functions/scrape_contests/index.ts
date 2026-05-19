@@ -467,6 +467,20 @@ async function runScrape() {
 
       let inserted = 0, duplicate = 0, noDeadline = 0;
       for (const c of candidates) {
+        const titleTrim = c.title.slice(0, 200);
+        // dedupe: source_url 외에 (organizer, title) 도 체크.
+        // enrich 로 source_url 이 외부 공식 URL 로 바뀌어도 같은 제목/주최면 중복으로 본다.
+        // (UNIQUE(source_url) 만으론 enrich 전·후 같은 글이 두 번 들어옴)
+        const { data: existing } = await sb
+          .from('contests')
+          .select('id')
+          .eq('organizer', c.organizer)
+          .eq('title', titleTrim)
+          .limit(1);
+        if (existing && existing.length > 0) {
+          duplicate++;
+          continue;
+        }
         let submitEnd = c.submit_end;
         let reporterMemo: string | null = null;
         if (!submitEnd) {
@@ -479,7 +493,7 @@ async function runScrape() {
           noDeadline++;
         }
         const row = {
-          title: c.title.slice(0, 200),
+          title: titleTrim,
           organizer: c.organizer,
           source_url: c.source_url,
           category: c.category,
