@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import IdeaNotePanel from './IdeaNotePanel';
 
 /**
@@ -15,6 +15,8 @@ import IdeaNotePanel from './IdeaNotePanel';
  *   isMobile      — 모바일 모드 여부
  */
 export default function IdeaSheet({ open, onClose, onExpand, onPromote, isMobile = false }) {
+  const sheetRef = useRef(null);
+
   // ESC 닫기
   useEffect(() => {
     if (!open) return;
@@ -23,12 +25,34 @@ export default function IdeaSheet({ open, onClose, onExpand, onPromote, isMobile
     return () => window.removeEventListener('keydown', handler);
   }, [open, onClose]);
 
+  // 바깥 클릭 시 닫기 — 트리거 버튼, 시트 내부, 포털 모달(.radix-*) 은 제외
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      const target = e.target;
+      if (!(target instanceof Node)) return;
+      if (sheetRef.current?.contains(target)) return;
+      if (target instanceof Element) {
+        if (target.closest('[data-idea-trigger]')) return;
+        // Radix Dialog/Popover 등 포털로 떠 있는 오버레이 위 클릭은 무시
+        if (target.closest('[data-radix-portal], [role="dialog"], [data-radix-popper-content-wrapper]')) return;
+      }
+      onClose?.();
+    };
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('touchstart', handler);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('touchstart', handler);
+    };
+  }, [open, onClose]);
+
   if (!open) return null;
 
   // 데스크톱: 우측 패널, 모바일: 바텀 시트
   if (isMobile) {
     return (
-      <div style={{
+      <div ref={sheetRef} style={{
         position: 'fixed', left: 0, right: 0, bottom: 0, top: 50,
         zIndex: 9999,
         background: 'var(--c-bg)',
@@ -54,6 +78,7 @@ export default function IdeaSheet({ open, onClose, onExpand, onPromote, isMobile
 
   return (
     <div
+      ref={sheetRef}
       data-idea-sheet
       style={{
         position: 'fixed', top: 0, right: 0, bottom: 0,

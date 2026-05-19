@@ -1212,6 +1212,7 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
         </div>
         {!isMobile && (
           <button
+            data-idea-trigger
             onClick={() => onMenuAction?.('ideas:open')}
             title="아이디어 노트"
             style={{
