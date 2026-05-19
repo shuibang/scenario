@@ -282,50 +282,6 @@ async function runScrape() {
       }
       // 한글 사이트는 EUC-KR 인 경우도 있음. 우선 utf-8 시도.
       const html = await res.text();
-
-      // ── 디버그 정보 (왜 candidate 0건인지 파악용) ────────────────────────
-      srcResult.html_length = html.length;
-      srcResult.a_tag_count = (html.match(/<a\b/gi) || []).length;
-      // DOMAIN 만 통과한 raw 제목 (필터 단계별로 어디서 막히는지)
-      const debugDomain: string[] = [];
-      const debugAction: string[] = [];
-      const debugPassed: string[] = [];
-      // 따옴표 종류를 큰따옴표/작은따옴표 별도 매칭 — 안쪽에 반대 따옴표가
-      // 있어도 잘리지 않음 (storyum 의 href="javascript:goMasterView('986')" 케이스).
-      const debugLinkRe = /<a\b[^>]*?\bhref=(?:"([^"]*)"|'([^']*)')[^>]*>([\s\S]*?)<\/a>/gi;
-      let dbgM: RegExpExecArray | null;
-      while ((dbgM = debugLinkRe.exec(html)) !== null) {
-        const dbgHref = (dbgM[1] !== undefined ? dbgM[1] : dbgM[2] || '');
-        const txt = decodeHtmlEntities(stripTags(dbgM[3]));
-        if (txt.length >= 10 && DOMAIN_RE.test(txt)) {
-          if (debugDomain.length < 5) debugDomain.push(txt.slice(0, 80));
-          if (ACTION_RE.test(txt)) {
-            if (debugAction.length < 5) debugAction.push(txt.slice(0, 80));
-            if (!EXCLUDE_RE.test(txt)) {
-              if (debugPassed.length < 5) debugPassed.push(txt.slice(0, 80));
-              // 첫 통과 항목의 href + URL 게이트 시뮬레이션 결과 기록
-              if (!srcResult.dbg_first_passed_href) {
-                const hrefRaw = dbgHref.trim();
-                srcResult.dbg_first_passed_href = hrefRaw.slice(0, 120);
-                if (!hrefRaw) srcResult.dbg_url_gate = 'EMPTY';
-                else if (hrefRaw.startsWith('#')) srcResult.dbg_url_gate = 'HASH';
-                else if (hrefRaw.toLowerCase().startsWith('javascript:')) {
-                  const idMatch = hrefRaw.match(/\(['"]?([^'")]+)['"]?\)/);
-                  srcResult.dbg_url_gate = idMatch ? `JS_OK id=${idMatch[1]}` : 'JS_NO_ID';
-                } else {
-                  srcResult.dbg_url_gate = `HTTP ${absoluteUrl(hrefRaw, src.url).slice(0, 80)}`;
-                }
-              }
-            }
-          }
-        }
-      }
-      srcResult.dbg_domain_matched = debugDomain;
-      srcResult.dbg_action_matched = debugAction;
-      srcResult.dbg_passed_filter = debugPassed;
-      srcResult.dbg_code_version = 'v3-js-link-handling'; // 배포 버전 확인용
-      // ─────────────────────────────────────────────────────────────────────
-
       const candidates = src.parse(html, src.url);
       srcResult.candidate_count = candidates.length;
       report.total_candidates += candidates.length;
