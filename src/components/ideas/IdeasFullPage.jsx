@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import IdeaNotePanel from './IdeaNotePanel';
+import { KakaoAdBanner } from '../AdBanner';
 
 /**
  * IdeasFullPage — `/app#ideas` 풀스크린 라우트
@@ -9,6 +10,16 @@ import IdeaNotePanel from './IdeaNotePanel';
  * (필요하면 시트로 돌아가서 promote).
  */
 export default function IdeasFullPage({ onBack }) {
+  // 카카오 단위는 PC/모바일 분리 노출 필수 (정책) — 뷰포트 폭으로 분기.
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined' && window.innerWidth < 768
+  );
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
   return (
     <div style={{
       position: 'fixed', inset: 0,
@@ -35,6 +46,25 @@ export default function IdeasFullPage({ onBack }) {
       </div>
       <div style={{ flex: 1, minHeight: 0 }}>
         <IdeaNotePanel density="full" showHeader={false} />
+      </div>
+
+      {/* 카카오 애드핏 — 아이디어 노트 풀페이지 하단 (PC 728×90 / 모바일 320×100) */}
+      <div
+        style={{
+          flexShrink: 0,
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: isMobile ? '6px 0' : '8px 0',
+          background: 'var(--c-panel)',
+          borderTop: '1px solid var(--c-border3)',
+        }}
+      >
+        {isMobile ? (
+          <KakaoAdBanner unitId="DAN-LACmX7j4f8ZyVZ79" width={320} height={100} />
+        ) : (
+          <KakaoAdBanner unitId="DAN-nCDPMSOTtkmrGUWw" width={728} height={90} />
+        )}
       </div>
     </div>
   );
