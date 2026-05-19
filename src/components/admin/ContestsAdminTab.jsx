@@ -15,9 +15,9 @@ import {
   updateContest,
   deleteContest,
   createContestManual,
+  CONTEST_CATEGORIES,
 } from '../../store/contestsApi';
 
-const CATEGORIES = ['미니시리즈', '단막', '시나리오', '기타'];
 const SOURCE_LABELS = {
   manual: '수동',
   rss: 'RSS',
@@ -172,8 +172,14 @@ function Empty({ children }) {
   return <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--c-text6)', fontSize: 12 }}>{children}</div>;
 }
 
+function categoryList(cat) {
+  if (!cat) return [];
+  return Array.isArray(cat) ? cat : [cat];
+}
+
 function ContestRow({ contest, onApprove, onReject, onEdit, onClose, onDelete, isPending }) {
   const c = contest;
+  const cats = categoryList(c.category);
   return (
     <div style={{
       padding: 10, marginBottom: 6, borderRadius: 6,
@@ -184,12 +190,21 @@ function ContestRow({ contest, onApprove, onReject, onEdit, onClose, onDelete, i
         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-text)', marginBottom: 3 }}>
           {c.title}
         </div>
-        <div style={{ fontSize: 11, color: 'var(--c-text5)', marginBottom: 4 }}>
-          {c.organizer && <span>{c.organizer} · </span>}
-          {c.category && <span>{c.category} · </span>}
-          <span>마감 {c.submit_end}</span>
-          {c.prize && <span> · {c.prize}</span>}
-          <span style={{ marginLeft: 8, padding: '1px 5px', background: 'var(--c-tag)', borderRadius: 3, fontSize: 10 }}>
+        <div style={{ fontSize: 11, color: 'var(--c-text5)', marginBottom: 4, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '2px 6px' }}>
+          {c.organizer && <span>{c.organizer}</span>}
+          {cats.length > 0 && (
+            <span style={{ display: 'inline-flex', gap: 3 }}>
+              {cats.map((cat) => (
+                <span key={cat} style={{
+                  fontSize: 10, padding: '1px 5px', borderRadius: 3,
+                  background: 'var(--c-tag)', color: 'var(--c-accent2)',
+                }}>{cat}</span>
+              ))}
+            </span>
+          )}
+          <span>· 마감 {c.submit_end}</span>
+          {c.prize && <span>· {c.prize}</span>}
+          <span style={{ marginLeft: 4, padding: '1px 5px', background: 'var(--c-tag)', borderRadius: 3, fontSize: 10 }}>
             {SOURCE_LABELS[c.source_type] || c.source_type}
           </span>
         </div>
@@ -225,7 +240,7 @@ function EditModal({ contest, onClose, onSaved }) {
     source_url: contest.source_url || '',
     poster_url: contest.poster_url || '',
     prize: contest.prize || '',
-    category: contest.category || '미니시리즈',
+    category: categoryList(contest.category),
     submit_start: contest.submit_start || '',
     submit_end: contest.submit_end || '',
   });
@@ -270,7 +285,7 @@ function EditModal({ contest, onClose, onSaved }) {
 function CreateModal({ onClose, onCreated }) {
   const [form, setForm] = useState({
     title: '', organizer: '', source_url: '', poster_url: '',
-    prize: '', category: '미니시리즈', submit_start: '', submit_end: '',
+    prize: '', category: [], submit_start: '', submit_end: '',
   });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState(null);
@@ -333,10 +348,27 @@ function FormFields({ form, upd }) {
           <input type="date" value={form.submit_end} onChange={e => upd('submit_end', e.target.value)} style={inputStyle} />
         </FormRow>
       </div>
-      <FormRow label="카테고리">
-        <select value={form.category} onChange={e => upd('category', e.target.value)} style={inputStyle}>
-          {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
+      <FormRow label="카테고리 (복수 선택)">
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {CONTEST_CATEGORIES.map((c) => {
+            const cats = Array.isArray(form.category) ? form.category : [];
+            const active = cats.includes(c);
+            return (
+              <button
+                key={c}
+                type="button"
+                onClick={() => upd('category', active ? cats.filter((x) => x !== c) : [...cats, c])}
+                style={{
+                  fontSize: 11, padding: '4px 10px', borderRadius: 12,
+                  border: '1px solid ' + (active ? 'var(--c-accent)' : 'var(--c-border3)'),
+                  background: active ? 'var(--c-accent)' : 'transparent',
+                  color: active ? '#fff' : 'var(--c-text5)',
+                  fontWeight: active ? 600 : 400, cursor: 'pointer',
+                }}
+              >{c}</button>
+            );
+          })}
+        </div>
       </FormRow>
       <FormRow label="상금/시상">
         <input value={form.prize} onChange={e => upd('prize', e.target.value)} style={inputStyle} />

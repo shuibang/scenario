@@ -6,10 +6,10 @@
  * 데스크톱/모바일 공통 컴포넌트. 부모가 wrapper 크기를 잡음.
  */
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { fetchActiveContests, subscribeActiveContests, getActiveContestsCacheSync } from '../../store/contestsApi';
+import { fetchActiveContests, subscribeActiveContests, getActiveContestsCacheSync, CONTEST_CATEGORIES } from '../../store/contestsApi';
 import ReportContestModal from './ReportContestModal';
 
-const CATEGORIES = ['전체', '미니시리즈', '단막', '시나리오', '기타'];
+const CATEGORIES = ['전체', ...CONTEST_CATEGORIES];
 const LAST_SEEN_KEY = 'drama_contests_last_seen';
 
 function daysUntil(dateStr) {
@@ -38,6 +38,9 @@ function ddayColor(d) {
 function ContestCard({ contest, isNew }) {
   const d = daysUntil(contest.submit_end);
   const dc = ddayColor(d);
+  const cats = Array.isArray(contest.category)
+    ? contest.category
+    : (contest.category ? [contest.category] : []);
 
   return (
     <div
@@ -72,17 +75,18 @@ function ContestCard({ contest, isNew }) {
           </div>
         </div>
       </div>
-      <div style={{ fontSize: 11, color: 'var(--c-text5)', display: 'flex', flexWrap: 'wrap', gap: '2px 8px', marginBottom: 6 }}>
+      <div style={{ fontSize: 11, color: 'var(--c-text5)', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '2px 6px', marginBottom: 6 }}>
         {contest.organizer && <span>{contest.organizer}</span>}
         {contest.prize && <span>· {contest.prize}</span>}
-        {contest.category && (
+        {cats.map((cat) => (
           <span
+            key={cat}
             style={{
               fontSize: 10, padding: '1px 5px', borderRadius: 4,
               background: 'var(--c-tag)', color: 'var(--c-accent2)',
             }}
-          >{contest.category}</span>
-        )}
+          >{cat}</span>
+        ))}
       </div>
       <div style={{ fontSize: 11, color: 'var(--c-text6)' }}>
         {contest.submit_end && <span>마감 {contest.submit_end}</span>}
@@ -146,7 +150,11 @@ export default function ContestBoard({ compact = false }) {
 
   const filtered = useMemo(() => {
     if (category === '전체') return contests;
-    return contests.filter(c => (c.category || '기타') === category);
+    return contests.filter((c) => {
+      const cats = Array.isArray(c.category) ? c.category : (c.category ? [c.category] : []);
+      if (cats.length === 0) return category === '기타';
+      return cats.includes(category);
+    });
   }, [contests, category]);
 
   const newCount = useMemo(() => {

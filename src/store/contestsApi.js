@@ -8,6 +8,17 @@
  */
 import { supabase } from './supabaseClient';
 
+// 공통 카테고리 옵션 — 한 공모전이 여러 부문(단막+미니+영화 등)을 동시에
+// 모집하는 경우가 많아 다중 선택 (text[] 컬럼).
+export const CONTEST_CATEGORIES = ['미니시리즈', '단막', '시나리오', '영화', '웹드라마', '기타'];
+
+function normalizeCategories(input) {
+  if (!input) return null;
+  const arr = Array.isArray(input) ? input : [input];
+  const cleaned = arr.map((s) => String(s || '').trim()).filter(Boolean);
+  return cleaned.length > 0 ? Array.from(new Set(cleaned)) : null;
+}
+
 const _listeners = new Set();
 let _activeCache = null;        // Array | null  (active 만)
 let _lastFetchedAt = 0;
@@ -63,7 +74,7 @@ export async function reportContest(payload) {
     source_url: String(payload.source_url || '').trim(),
     poster_url: payload.poster_url ? String(payload.poster_url).trim() : null,
     prize: payload.prize ? String(payload.prize).trim() : null,
-    category: payload.category ? String(payload.category).trim() : null,
+    category: normalizeCategories(payload.category),
     submit_start: payload.submit_start || null,
     submit_end: payload.submit_end,
     reporter_memo: payload.reporter_memo ? String(payload.reporter_memo).trim() : null,
@@ -159,9 +170,11 @@ export async function rejectContest(id) {
 
 export async function updateContest(id, patch) {
   if (!supabase) throw new Error('Supabase 미설정');
+  const normalized = { ...patch };
+  if ('category' in normalized) normalized.category = normalizeCategories(normalized.category);
   const { data, error } = await supabase
     .from('contests')
-    .update(patch)
+    .update(normalized)
     .eq('id', id)
     .select()
     .single();
@@ -190,7 +203,7 @@ export async function createContestManual(payload) {
     source_url: String(payload.source_url || '').trim(),
     poster_url: payload.poster_url || null,
     prize: payload.prize || null,
-    category: payload.category || null,
+    category: normalizeCategories(payload.category),
     submit_start: payload.submit_start || null,
     submit_end: payload.submit_end,
     status: isPast ? 'closed' : 'active',

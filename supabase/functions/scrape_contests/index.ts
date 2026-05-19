@@ -46,7 +46,7 @@ interface Candidate {
   organizer: string;
   submit_end?: string | null;       // YYYY-MM-DD
   submit_start?: string | null;
-  category?: string | null;
+  category?: string[] | null;       // text[] (다중 선택)
 }
 
 interface SourceDef {
@@ -140,12 +140,16 @@ function genericTableListParse(html: string, sourceUrl: string, organizer: strin
   return results;
 }
 
-function inferCategory(title: string): string | null {
-  if (/미니시리즈/.test(title)) return '미니시리즈';
-  if (/단막|단편/.test(title)) return '단막';
-  if (/시나리오/.test(title)) return '시나리오';
-  if (/드라마|극본|대본/.test(title)) return '미니시리즈';
-  return '기타';
+function inferCategory(title: string): string[] | null {
+  // 한 공모전이 여러 부문을 동시에 모집하는 경우가 많아 다중 카테고리 반환.
+  const cats: string[] = [];
+  if (/미니시리즈/.test(title)) cats.push('미니시리즈');
+  if (/단막|단편/.test(title)) cats.push('단막');
+  if (/시나리오/.test(title)) cats.push('시나리오');
+  if (/영화/.test(title)) cats.push('영화');
+  if (/웹드라마|웹\s?드라마/.test(title)) cats.push('웹드라마');
+  if (cats.length === 0 && /드라마|극본|대본/.test(title)) cats.push('미니시리즈');
+  return cats.length > 0 ? Array.from(new Set(cats)) : ['기타'];
 }
 
 /**

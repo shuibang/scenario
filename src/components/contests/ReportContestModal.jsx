@@ -3,22 +3,26 @@
  * 제출하면 status='pending_review' 로 들어가고, 어드민 검토 후 활성화됨.
  */
 import React, { useState } from 'react';
-import { reportContest } from '../../store/contestsApi';
-
-const CATEGORIES = ['미니시리즈', '단막', '시나리오', '기타'];
+import { reportContest, CONTEST_CATEGORIES } from '../../store/contestsApi';
 
 export default function ReportContestModal({ onClose, onSubmitted }) {
   const [title, setTitle] = useState('');
   const [organizer, setOrganizer] = useState('');
   const [sourceUrl, setSourceUrl] = useState('');
   const [prize, setPrize] = useState('');
-  const [category, setCategory] = useState('미니시리즈');
+  const [categories, setCategories] = useState([]); // 다중 선택
   const [submitStart, setSubmitStart] = useState('');
   const [submitEnd, setSubmitEnd] = useState('');
   const [memo, setMemo] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
+
+  const toggleCategory = (cat) => {
+    setCategories((prev) =>
+      prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
+    );
+  };
 
   const onSubmit = async (e) => {
     e?.preventDefault?.();
@@ -30,7 +34,7 @@ export default function ReportContestModal({ onClose, onSubmitted }) {
         organizer: organizer || null,
         source_url: sourceUrl,
         prize: prize || null,
-        category,
+        category: categories,
         submit_start: submitStart || null,
         submit_end: submitEnd,
         reporter_memo: memo || null,
@@ -115,10 +119,26 @@ export default function ReportContestModal({ onClose, onSubmitted }) {
                 <input type="date" value={submitEnd} onChange={e => setSubmitEnd(e.target.value)} required style={inputStyle} />
               </Field>
             </div>
-            <Field label="카테고리">
-              <select value={category} onChange={e => setCategory(e.target.value)} style={inputStyle}>
-                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
+            <Field label="카테고리 (복수 선택)">
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {CONTEST_CATEGORIES.map((c) => {
+                  const active = categories.includes(c);
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => toggleCategory(c)}
+                      style={{
+                        fontSize: 11, padding: '4px 10px', borderRadius: 12,
+                        border: '1px solid ' + (active ? 'var(--c-accent)' : 'var(--c-border3)'),
+                        background: active ? 'var(--c-accent)' : 'transparent',
+                        color: active ? '#fff' : 'var(--c-text5)',
+                        fontWeight: active ? 600 : 400, cursor: 'pointer',
+                      }}
+                    >{c}</button>
+                  );
+                })}
+              </div>
             </Field>
             <Field label="상금/시상">
               <input
