@@ -31,7 +31,7 @@ const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 //   3) EXCLUDE — 명백히 무관한 키워드
 const DOMAIN_RE  = /(드라마|극본|대본|미니시리즈|단막|방송작가|시나리오|영상\s?콘텐츠|콘텐츠\s?창작)/;
 const ACTION_RE  = /(공모|공고|모집|선정|접수|시상|당선|수상|기획안|아이디어\s?공모)/;
-const EXCLUDE_RE = /(용역|입찰|납품|구매|계약\s?공고|채용|모집공고\s?\(직원|강사\s?모집|교육생\s?모집|수강생\s?모집|운영업체|위탁\s?용역|결과\s?발표|당선작\s?발표|더보기|전체보기|바로가기)/;
+const EXCLUDE_RE = /(용역|입찰|납품|구매|계약\s?공고|채용|모집공고\s?\(직원|강사\s?모집|교육생\s?모집|수강생\s?모집|운영업체|위탁\s?용역|결과\s?발표|당선작\s?발표|더보기|전체보기|바로가기|기업\s?모집|기업\s?대상|기업\s?지원|참여\s?기업|기업\s?공모|기업\s?선정)/;
 
 const HEADERS = {
   'User-Agent': 'Mozilla/5.0 (compatible; StarSky-ContestBot/1.0; +https://daejak.com)',
@@ -285,27 +285,34 @@ async function runScrape() {
         const previousHash = prevState?.last_hash || null;
         const nowIso = new Date().toISOString();
 
-        let changeDetected = false;
-        if (previousHash && previousHash !== currentHash) {
-          changeDetected = true;
-          const ts = Date.now();
-          const due = new Date();
-          due.setDate(due.getDate() + 60);
-          const { error: notifyErr } = await sb.from('contests').insert({
-            title: `[페이지 변경 감지] ${src.organizer}`,
-            organizer: src.organizer,
-            source_url: `${src.url}#change-${ts}`,
-            submit_end: due.toISOString().slice(0, 10),
-            source_type: 'scrape',
-            status: 'pending_review',
-            reporter_memo: '🔔 페이지 본문이 이전 점검 시와 달라짐 — 원문 확인 후 새 공모전이면 수동 등록, 무관한 변경이면 반려',
-          });
-          if (notifyErr && notifyErr.code !== '23505') {
-            srcResult.change_notify_error = notifyErr.message;
+        const hashChanged = !!(previousHash && previousHash !== currentHash);
+        let alertSent = false;
+        if (hashChanged) {
+          // 변경 알림은 본문에 드라마 + 공모 키워드가 모두 있을 때만 보냄.
+          // 사이트 timestamp/방문자수 같은 무관한 변경으로 인한 false positive 차단.
+          const plainText = stripTags(html).slice(0, 200_000);
+          const hasRelevant = DOMAIN_RE.test(plainText) && ACTION_RE.test(plainText) && !EXCLUDE_RE.test(plainText);
+          if (hasRelevant) {
+            const ts = Date.now();
+            const due = new Date();
+            due.setDate(due.getDate() + 60);
+            const { error: notifyErr } = await sb.from('contests').insert({
+              title: `[페이지 변경 감지] ${src.organizer}`,
+              organizer: src.organizer,
+              source_url: `${src.url}#change-${ts}`,
+              submit_end: due.toISOString().slice(0, 10),
+              source_type: 'scrape',
+              status: 'pending_review',
+              reporter_memo: '🔔 페이지 본문에 드라마 + 공모 키워드가 새로 감지됨 — 원문 확인 후 새 공모전이면 수동 등록, 아니면 반려',
+            });
+            if (notifyErr && notifyErr.code !== '23505') {
+              srcResult.change_notify_error = notifyErr.message;
+            }
+            alertSent = true;
           }
         }
 
-        if (changeDetected || !previousHash) {
+        if (hashChanged || !previousHash) {
           await sb.from('contest_source_state').upsert({
             name: src.name,
             url: src.url,
@@ -323,7 +330,8 @@ async function runScrape() {
         }
 
         srcResult.hash = currentHash.slice(0, 12);
-        srcResult.change_detected = changeDetected;
+        srcResult.hash_changed = hashChanged;
+        srcResult.alert_sent = alertSent;
         srcResult.baseline_set = !previousHash;
       } catch (hashErr) {
         srcResult.hash_error = String(hashErr);
