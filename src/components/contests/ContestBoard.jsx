@@ -8,8 +8,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { fetchActiveContests, subscribeActiveContests, getActiveContestsCacheSync, CONTEST_CATEGORIES } from '../../store/contestsApi';
 import ReportContestModal from './ReportContestModal';
-
-const CATEGORIES = ['전체', ...CONTEST_CATEGORIES];
 const LAST_SEEN_KEY = 'drama_contests_last_seen';
 
 function daysUntil(dateStr) {
@@ -111,8 +109,15 @@ export default function ContestBoard({ compact = false }) {
   const [contests, setContests] = useState(() => getActiveContestsCacheSync() || []);
   const [loading, setLoading] = useState(() => getActiveContestsCacheSync() == null);
   const [error, setError] = useState(null);
-  const [category, setCategory] = useState('전체');
+  // 다중 선택. 빈 배열 = 전체 표시.
+  const [selectedCats, setSelectedCats] = useState([]);
   const [showReportModal, setShowReportModal] = useState(false);
+
+  const toggleCat = (cat) => {
+    setSelectedCats((prev) =>
+      prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
+    );
+  };
 
   const lastSeen = useMemo(() => {
     try { return parseInt(localStorage.getItem(LAST_SEEN_KEY) || '0', 10) || 0; } catch { return 0; }
@@ -148,13 +153,13 @@ export default function ContestBoard({ compact = false }) {
   }, []);
 
   const filtered = useMemo(() => {
-    if (category === '전체') return contests;
+    if (selectedCats.length === 0) return contests;
     return contests.filter((c) => {
       const cats = Array.isArray(c.category) ? c.category : (c.category ? [c.category] : []);
-      if (cats.length === 0) return category === '기타';
-      return cats.includes(category);
+      if (cats.length === 0) return selectedCats.includes('기타');
+      return cats.some((cat) => selectedCats.includes(cat));
     });
-  }, [contests, category]);
+  }, [contests, selectedCats]);
 
   const newCount = useMemo(() => {
     if (!lastSeen) return 0;
@@ -203,17 +208,32 @@ export default function ContestBoard({ compact = false }) {
         >+ 제보</button>
       </div>
 
-      {/* 카테고리 칩 */}
+      {/* 카테고리 칩 (다중 선택 — '전체'는 모두 해제) */}
       <div style={{
         padding: `6px ${pad}px`, display: 'flex', gap: 4, flexWrap: 'wrap',
         borderBottom: '1px solid var(--c-border2)', flexShrink: 0,
       }}>
-        {CATEGORIES.map(cat => {
-          const active = category === cat;
+        {(() => {
+          const allOff = selectedCats.length === 0;
+          return (
+            <button
+              onClick={() => setSelectedCats([])}
+              style={{
+                fontSize: 10, padding: '2px 7px', borderRadius: 10,
+                border: '1px solid ' + (allOff ? 'var(--c-accent)' : 'var(--c-border3)'),
+                background: allOff ? 'var(--c-accent)' : 'transparent',
+                color: allOff ? '#fff' : 'var(--c-text5)',
+                cursor: 'pointer', fontWeight: allOff ? 600 : 400,
+              }}
+            >전체</button>
+          );
+        })()}
+        {CONTEST_CATEGORIES.map((cat) => {
+          const active = selectedCats.includes(cat);
           return (
             <button
               key={cat}
-              onClick={() => setCategory(cat)}
+              onClick={() => toggleCat(cat)}
               style={{
                 fontSize: 10, padding: '2px 7px', borderRadius: 10,
                 border: '1px solid ' + (active ? 'var(--c-accent)' : 'var(--c-border3)'),
