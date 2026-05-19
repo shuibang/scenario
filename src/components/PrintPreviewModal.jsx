@@ -46,6 +46,7 @@ function normalizeSelections(allEpisodes, source) {
 
 // ─── PrintPreviewModal ────────────────────────────────────────────────────────
 export default function PrintPreviewModal({ onClose, defaultFormat }) {
+  const isMobile = useIsMobile();
   const { state } = useApp();
   const {
     episodes, activeProjectId, stylePreset,
@@ -202,12 +203,22 @@ export default function PrintPreviewModal({ onClose, defaultFormat }) {
       onClick={handleBackdrop}
     >
       <div
+        style={{
+          display:       'flex',
+          flexDirection: 'column',
+          alignItems:    'center',
+          gap:           8,
+          width:         '95vw',
+          maxWidth:      '960px',
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+      <div
         className="flex rounded-xl shadow-2xl"
         style={{
           display:       'flex',
           flexDirection: 'row',
-          width:         '95vw',
-          maxWidth:      '960px',
+          width:         '100%',
           height:        '88vh',
           maxHeight:     '760px',
           background:    'var(--c-panel)',
@@ -216,7 +227,6 @@ export default function PrintPreviewModal({ onClose, defaultFormat }) {
           borderRadius:  '0.75rem',
           boxShadow:     '0 25px 50px -12px rgba(0,0,0,0.4)',
         }}
-        onClick={e => e.stopPropagation()}
       >
         {/* ── Left: Options ──────────────────────────────────────────────────── */}
         <div
@@ -406,6 +416,22 @@ export default function PrintPreviewModal({ onClose, defaultFormat }) {
 
           <AdBanner slot="print-modal-right" mobileHide={false} height={72} style={{ margin: '12px 16px 16px', borderRadius: 4 }} />
         </div>
+      </div>
+
+      {/* 카카오 애드핏 — 내보내기 모달 박스 하단 (PC 728×90 / 모바일 320×100) */}
+      <div style={{
+        display: 'flex', justifyContent: 'center', alignItems: 'center',
+        padding: '4px 8px',
+        background: 'rgba(255,255,255,0.06)',
+        borderRadius: 8,
+      }}>
+        {isMobile ? (
+          <KakaoAdBanner unitId="DAN-HPvaRzKFn2NHLGkU" width={320} height={100} />
+        ) : (
+          <KakaoAdBanner unitId="DAN-7X9Y55zUDzggrEAU" width={728} height={90} />
+        )}
+      </div>
+
       </div>
     </div>
   );

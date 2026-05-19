@@ -4,6 +4,8 @@ import { loadFromDrive } from '../../store/googleDrive';
 import { supabase } from '../../store/supabaseClient';
 import { isMultiEpisode, getTypeLabel } from '../../utils/projectTypes';
 import { deserializeProject, findImportConflict } from '../../utils/projectSerializer';
+import { KakaoAdBanner } from '../AdBanner';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
 const TAB_LOCAL = 'local';
 const TAB_DRIVE = 'drive';
@@ -13,6 +15,7 @@ export default function OpenProjectModal({ open, onClose, projects = [], activeP
   const [tab,      setTab]      = useState(TAB_LOCAL);
   const [selected, setSelected] = useState(null);
   const [query,    setQuery]    = useState('');
+  const isMobile = useIsMobile();
 
   const [driveProjects, setDriveProjects] = useState([]);
   const [driveLoading,  setDriveLoading]  = useState(false);
@@ -220,6 +223,17 @@ export default function OpenProjectModal({ open, onClose, projects = [], activeP
             </p>
           )}
         </>
+      )}
+
+      {/* 카카오 애드핏 — 모달 폭(md 480px)이 좁아 모바일 단위만 노출 */}
+      {isMobile && (
+        <div style={{
+          display: 'flex', justifyContent: 'center',
+          marginTop: 12, paddingTop: 10,
+          borderTop: '1px solid var(--c-border3)',
+        }}>
+          <KakaoAdBanner unitId="DAN-DCImro84Aqn4N89r" width={320} height={100} />
+        </div>
       )}
       </>}
     </Modal>

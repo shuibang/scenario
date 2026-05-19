@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Modal, { ModalBtn } from './Modal';
+import { KakaoAdBanner } from '../AdBanner';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
 /**
  * @param {boolean}  open
@@ -9,6 +11,7 @@ import Modal, { ModalBtn } from './Modal';
  */
 export default function ProjectInfoModal({ open, onClose, project, onSave }) {
   const [form, setForm] = useState({ title: '', genre: '', status: 'draft', totalEpisodes: 1, totalMins: 70 });
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     if (project) {
@@ -74,6 +77,17 @@ export default function ProjectInfoModal({ open, onClose, project, onSave }) {
         <div className="modal-meta">
           <span>생성일: {project.createdAt ? new Date(project.createdAt).toLocaleDateString('ko-KR') : '-'}</span>
           <span>최종 수정: {project.updatedAt ? new Date(project.updatedAt).toLocaleDateString('ko-KR') : '-'}</span>
+        </div>
+      )}
+
+      {/* 카카오 애드핏 — 모달 폭(sm 360px)이 좁아 모바일 단위만 노출 */}
+      {isMobile && (
+        <div style={{
+          display: 'flex', justifyContent: 'center',
+          marginTop: 12, paddingTop: 10,
+          borderTop: '1px solid var(--c-border3)',
+        }}>
+          <KakaoAdBanner unitId="DAN-LACmX7j4f8ZyVZ79" width={320} height={100} />
         </div>
       )}
     </Modal>
