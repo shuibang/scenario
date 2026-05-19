@@ -9,6 +9,7 @@ import { setAccessToken, saveDirectorScript } from '../store/googleDrive';
 import { buildFeedbackViewerState } from '../utils/feedbackVersions';
 import { reportError } from '../utils/errorTracker';
 import WatermarkOverlay from './WatermarkOverlay';
+import BadgeChip from './BadgeChip';
 
 const RETURN_HASH_KEY = 'drama_pending_return_hash';
 
@@ -163,6 +164,8 @@ export default function SharedReviewView() {
         drive_file_id: driveFileId,
         source_url: getSafeSourceUrl(),
         watermark_text: watermarkText || null,
+        sender_badge_emoji: resource?.link?.sender_badge_emoji || null,
+        sender_badge_label: resource?.link?.sender_badge_label || null,
       });
       if (error) throw new Error(error.message);
 
@@ -238,8 +241,19 @@ export default function SharedReviewView() {
       <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', padding: isMobile ? 8 : 16 }}>
         <div style={{ display: 'flex', flexDirection: 'column', marginBottom: 4, gap: 6 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-            <div style={{ fontSize: 13, color: '#555', fontWeight: 600 }}>
-              {title} 검토 요청
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#555', fontWeight: 600 }}>
+              {resource?.link?.sender_badge_emoji && (
+                <BadgeChip
+                  badge={{
+                    emoji: resource.link.sender_badge_emoji,
+                    label: resource.link.sender_badge_label || '',
+                    publicLabel: resource.link.sender_badge_label || '',
+                  }}
+                  size={18}
+                  tooltip="public"
+                />
+              )}
+              <span>{title} 검토 요청</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               {importToast && (

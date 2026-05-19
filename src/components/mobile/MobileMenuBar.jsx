@@ -16,6 +16,8 @@ import Menubar from '../Menubar/Menubar';
 import PublicPcBadge from '../PublicPcBadge';
 import { isAdminUser, getAdminHash } from '../../utils/adminAuth';
 import { fetchAdminUnreadCounts } from '../../utils/adminBadge';
+import { useBadges } from '../../utils/badges';
+import BadgeChip from '../BadgeChip';
 
 export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, WorkTimer, authUser, onLogout, onMenuAction, onSyncConflict, recentProjects = [], checkedItems = {} }) {
   const { state, dispatch, loadFromDriveData } = useApp();
@@ -27,6 +29,9 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
   const [reconnecting, setReconnecting] = useState(false);
   const syncingRef = useRef(false);
   const latestStateRef = useRef(state);
+
+  // 사용자 대표 뱃지 — 햄버거 안 사용자 이름 옆
+  const { featured: userBadge } = useBadges();
 
   // 어드민 unread 뱃지 — 햄버거의 🛠 항목 옆 빨간점
   const [adminUnread, setAdminUnread] = useState(0);
@@ -236,7 +241,10 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     {authUser.picture && <img src={authUser.picture} alt="" style={{ width: 28, height: 28, borderRadius: '50%' }} />}
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-text)' }}>{authUser.name}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: 'var(--c-text)' }}>
+                        {userBadge && <BadgeChip badge={userBadge} size={16} tooltip="label" />}
+                        <span>{authUser.name}</span>
+                      </div>
                       <div style={{ fontSize: 10, color: 'var(--c-text5)' }}>
                         {driveStatus === 'syncing' && '☁ 동기화 중…'}
                         {driveStatus === 'synced'  && '☁ Drive 연동됨'}

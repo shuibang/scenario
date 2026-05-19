@@ -518,6 +518,7 @@ export default function DirectorScriptViewer({
   localOnly = false,
   highlightSessionId = null,
   watermarkText = null,
+  senderBadge = null,
 }) {
   const [scriptNotes, setScriptNotes] = useState(initialNotes || {});
   const [privateNotes, setPrivateNotes] = useState(() =>
@@ -880,6 +881,20 @@ export default function DirectorScriptViewer({
                 ))}
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              {senderBadge?.emoji && (
+                <span
+                  title={senderBadge.label || ''}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    fontSize: 11, color: '#555',
+                    background: '#f3eee0', border: '1px solid #e8d59c',
+                    padding: '2px 8px', borderRadius: 12,
+                  }}
+                >
+                  <span>{senderBadge.emoji}</span>
+                  {senderBadge.label && <span>{senderBadge.label}</span>}
+                </span>
+              )}
               {noteType === 'script' ? (
                 renderScriptToolbarStatus()
               ) : (

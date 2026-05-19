@@ -3,6 +3,7 @@ import { supabase } from '../store/supabaseClient';
 import { QRCodeSVG } from 'qrcode.react';
 import { useApp } from '../store/AppContext';
 import QnATab from './QnATab';
+import BadgesPanel from './BadgesPanel';
 import { Document, Page, Text, View, StyleSheet, pdf, Font } from '@react-pdf/renderer';
 import { ensureFontsRegistered } from '../print/printPdf';
 import {
@@ -1275,6 +1276,7 @@ function PlaceholderTab({ icon, title, desc }) {
 // ─── MyPage — 마이페이지 ───────────────────────────────────────────────────────
 const TABS = [
   { id: 'stats',      label: '작업현황' },
+  { id: 'badges',     label: '🏅 뱃지' },
   { id: 'errors',     label: '오류제출' },
   { id: 'membership', label: '멤버십' },
 ];
@@ -1332,6 +1334,7 @@ export default function MyPage() {
         <div className="max-w-2xl mx-auto"
              style={isMobile ? { padding: '24px 20px', paddingBottom: 'calc((clamp(52px, 14vw, 64px) + 46dvh + 16px) / 4)' } : { padding: '24px 20px' }}>
           {activeTab === 'stats'      && <StatsTab />}
+          {activeTab === 'badges'     && <BadgesPanel />}
           {activeTab === 'errors'     && <ErrorReportTab />}
           {activeTab === 'membership' && (
             <div className="flex flex-col items-center gap-8">

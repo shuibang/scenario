@@ -37,6 +37,9 @@ import SurveyPage from './components/SurveyPage';
 import AdminPage from './components/admin/AdminPage';
 import { isAdminHash, isAdminUser, getAdminHash } from './utils/adminAuth';
 import { fetchAdminUnreadCounts } from './utils/adminBadge';
+import { useBadges } from './utils/badges';
+import BadgeChip from './components/BadgeChip';
+import BadgeToast from './components/BadgeToast';
 import { Wrench, Lightbulb } from 'lucide-react';
 import IdeaSheet from './components/ideas/IdeaSheet';
 import IdeasFullPage from './components/ideas/IdeasFullPage';
@@ -472,6 +475,7 @@ export async function buildReviewURL(state, selections, options = {}) {
     title,
     snapshotContent,
     watermarkText: options.watermarkText || null,
+    senderBadge: options.senderBadge || null,
   });
   return share.url;
 }
@@ -775,6 +779,9 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
 
+  // 사용자 대표 뱃지 — 메뉴바 이름 앞에 표시
+  const { featured: userBadge } = useBadges();
+
   // 어드민 unread 뱃지 — 미해결 오류/자동오류/새 설문응답 합계
   const [adminUnread, setAdminUnread] = useState(0);
   useEffect(() => {
@@ -940,7 +947,8 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
     return () => { cancelled = true; };
   }, [authUser, driveAuthSettled, driveTokenValid, driveStatus, runDriveSync]);
 
-  // 아이디어 노트 — Drive 동기화 후 한 번 머지 pull
+  // 아이디어 노트 — Drive 토큰이 valid 해지는 시점(앱 로드 / 수동저장 → 재연결)마다
+  // 1회 pull. pull 끝나면 ideasStore 가 누적된 unsynced 변경 자동 push.
   useEffect(() => {
     if (!authUser || !driveTokenValid) return;
     let cancelled = false;
@@ -1123,6 +1131,7 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
           {authUser ? (
             <div className="flex items-center gap-1.5">
               {authUser.picture && <img src={authUser.picture} alt="" style={{ width: 22, height: 22, borderRadius: 4 }} />}
+              {userBadge && <BadgeChip badge={userBadge} size={18} tooltip="label" />}
               <span style={{ fontSize: 12, color: 'var(--c-text4)', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{authUser.name}</span>
               <button onClick={async () => {
                 timerSaveRef.current?.();
@@ -2565,6 +2574,7 @@ function Shell({ authUser, setAuthUser }) {
       className="w-screen flex flex-col overflow-hidden"
       style={{ background: 'var(--c-bg)', position: 'fixed', top: 0, right: 0, bottom: 0, left: 0 }}
     >
+      <BadgeToast />
       <div style={{ display: (focusMode || !viewCheckedItems['toggle-topbar']) ? 'none' : 'contents' }}>
         {menuBar}
         <UpdateBanner />

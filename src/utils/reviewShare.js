@@ -88,7 +88,14 @@ export async function loadReviewPayload(id) {
   return data.payload;
 }
 
-export async function createFeedbackVersionShare({ scriptId, title, snapshotContent, watermarkText = null }) {
+function sanitizeBadge(senderBadge) {
+  if (!senderBadge || typeof senderBadge !== 'object') return { emoji: null, label: null };
+  const emoji = senderBadge.emoji ? String(senderBadge.emoji).slice(0, 8) : null;
+  const label = senderBadge.label ? String(senderBadge.label).slice(0, 40) : null;
+  return { emoji, label };
+}
+
+export async function createFeedbackVersionShare({ scriptId, title, snapshotContent, watermarkText = null, senderBadge = null }) {
   ensureSupabase();
   if (!scriptId) throw new Error('대본이 선택되지 않았습니다. 대본을 연 뒤 다시 시도해주세요.');
   const session = await getRequiredSession();
@@ -137,6 +144,7 @@ export async function createFeedbackVersionShare({ scriptId, title, snapshotCont
 
     const linkId = genId();
     const trimmedWatermark = (watermarkText || '').trim().slice(0, 100);
+    const badge = sanitizeBadge(senderBadge);
     const { error: linkError } = await supabase.from('review_links').insert({
       id: linkId,
       created_by: session.user.id,
@@ -144,6 +152,8 @@ export async function createFeedbackVersionShare({ scriptId, title, snapshotCont
       link_role: 'request',
       version_id: version.id,
       watermark_text: trimmedWatermark || null,
+      sender_badge_emoji: badge.emoji,
+      sender_badge_label: badge.label,
       expires_at: feedbackExpiresAt(),
     });
 
@@ -253,12 +263,13 @@ export async function createFeedbackReplyLink({ versionId, sessionId }) {
  * @param {string?} p.watermarkText
  * @returns {Promise<{ linkId, url }>}
  */
-export async function createReviewLinkForExistingVersion({ versionId, watermarkText = null }) {
+export async function createReviewLinkForExistingVersion({ versionId, watermarkText = null, senderBadge = null }) {
   ensureSupabase();
   if (!versionId) throw new Error('Missing version id.');
   const session = await getRequiredSession();
   const linkId = genId();
   const trimmedWatermark = (watermarkText || '').trim().slice(0, 100);
+  const badge = sanitizeBadge(senderBadge);
   const { error } = await supabase.from('review_links').insert({
     id: linkId,
     created_by: session.user.id,
@@ -266,6 +277,8 @@ export async function createReviewLinkForExistingVersion({ versionId, watermarkT
     link_role: 'request',
     version_id: versionId,
     watermark_text: trimmedWatermark || null,
+    sender_badge_emoji: badge.emoji,
+    sender_badge_label: badge.label,
     expires_at: feedbackExpiresAt(),
   });
   if (error) throw new Error(error.message);

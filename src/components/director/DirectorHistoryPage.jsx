@@ -53,7 +53,7 @@ export default function DirectorHistoryPage({ onBack, isGuest, D, onOpenScript }
     supabase.auth.getSession().then(({ data }) => {
       const uid = data?.session?.user?.id;
       if (!uid) { if (!cancelled) setScripts([]); return; }
-      supabase.from('shared_scripts').select('id, title, imported_at, drive_file_id, watermark_text')
+      supabase.from('shared_scripts').select('id, title, imported_at, drive_file_id, watermark_text, sender_badge_emoji, sender_badge_label')
         .eq('director_id', uid)
         .order('imported_at', { ascending: false })
         .then(({ data }) => { if (!cancelled) setScripts(data || []); });

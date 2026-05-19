@@ -366,7 +366,7 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
     setLocalScripts(loadLocalScripts());
     if (isGuest) { setScripts([]); return; }
     if (!supabase || !session?.user?.id) { setScripts([]); return; }
-    supabase.from('shared_scripts').select('id, title, imported_at, drive_file_id, watermark_text')
+    supabase.from('shared_scripts').select('id, title, imported_at, drive_file_id, watermark_text, sender_badge_emoji, sender_badge_label')
       .eq('director_id', session.user.id)
       .order('imported_at', { ascending: false })
       .then(({ data }) => setScripts(data || []));
@@ -608,7 +608,7 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
       if (projViewing) return (
         <div style={{ height: '100%', overflow: 'auto', background: '#d8d8d8' }}>
           <ViewerErrorBoundary>
-            <DirectorScriptViewer appState={projViewing.appState} selections={projViewing.selections} sharedScriptId={projSelected.id} localOnly={!!projSelected._isLocal} watermarkText={projSelected.watermark_text || null} />
+            <DirectorScriptViewer appState={projViewing.appState} selections={projViewing.selections} sharedScriptId={projSelected.id} localOnly={!!projSelected._isLocal} watermarkText={projSelected.watermark_text || null} senderBadge={projSelected.sender_badge_emoji ? { emoji: projSelected.sender_badge_emoji, label: projSelected.sender_badge_label || '' } : null} />
           </ViewerErrorBoundary>
         </div>
       );
@@ -1327,7 +1327,7 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
     if (!supabase || !session?.user?.id) { setScripts([]); return; }
     supabase
       .from('shared_scripts')
-      .select('id, title, imported_at, drive_file_id, watermark_text')
+      .select('id, title, imported_at, drive_file_id, watermark_text, sender_badge_emoji, sender_badge_label')
       .eq('director_id', session.user.id)
       .order('imported_at', { ascending: false })
       .then(({ data, error }) => {
@@ -1618,7 +1618,7 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
           )}
           {selected && !loading && viewing?.appState && (
             <ViewerErrorBoundary key={selected.id}>
-              <DirectorScriptViewer appState={viewing.appState} selections={viewing.selections} sharedScriptId={selected.id} localOnly={!!selected._isLocal} watermarkText={selected.watermark_text || null} />
+              <DirectorScriptViewer appState={viewing.appState} selections={viewing.selections} sharedScriptId={selected.id} localOnly={!!selected._isLocal} watermarkText={selected.watermark_text || null} senderBadge={selected.sender_badge_emoji ? { emoji: selected.sender_badge_emoji, label: selected.sender_badge_label || '' } : null} />
             </ViewerErrorBoundary>
           )}
         </div>
@@ -2179,7 +2179,7 @@ function SceneListPanel({ isMobile = false, mobileSelected = null }) {
     supabase.auth.getSession().then(({ data }) => {
       const uid = data?.session?.user?.id;
       if (!uid) { if (!cancelled) setScripts([]); return; }
-      supabase.from('shared_scripts').select('id, title, imported_at, drive_file_id, watermark_text')
+      supabase.from('shared_scripts').select('id, title, imported_at, drive_file_id, watermark_text, sender_badge_emoji, sender_badge_label')
         .eq('director_id', uid)
         .order('imported_at', { ascending: false })
         .then(({ data }) => { if (!cancelled) setScripts(data || []); });
@@ -3544,7 +3544,7 @@ function StoryboardPanel({ isGuest, isMobile = false, mobilePreSelected = null, 
     supabase.auth.getSession().then(({ data }) => {
       const uid = data?.session?.user?.id;
       if (!uid) { if (!cancelled) setScripts([]); return; }
-      supabase.from('shared_scripts').select('id, title, imported_at, drive_file_id, watermark_text')
+      supabase.from('shared_scripts').select('id, title, imported_at, drive_file_id, watermark_text, sender_badge_emoji, sender_badge_label')
         .eq('director_id', uid)
         .order('imported_at', { ascending: false })
         .then(({ data }) => { if (!cancelled) setScripts(data || []); });

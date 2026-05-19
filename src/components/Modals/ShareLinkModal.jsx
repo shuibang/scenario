@@ -5,6 +5,7 @@ import { buildReviewURL } from '../../App';
 import { buildSceneListShareURL } from '../../utils/sceneListShare';
 import { reportError } from '../../utils/errorTracker';
 import { listFeedbackVersions, createReviewLinkForExistingVersion } from '../../utils/reviewShare';
+import { useBadges } from '../../utils/badges';
 
 // 작품별로 분리 저장. 옛 글로벌 키('drama_share_link_selections_v1')는 같은 key가
 // 모든 작품에서 공유돼 다른 작품의 회차 ID 가 섞이면 normalize 가 자동으로 모두
@@ -64,6 +65,8 @@ export default function ShareLinkModal({ open, onClose }) {
   const [generating, setGenerating] = useState(false);
   const [error,      setError]      = useState(null);
   const [watermarkText, setWatermarkText] = useState('');
+  const { featured: senderBadgeObj } = useBadges();
+  const senderBadge = senderBadgeObj ? { emoji: senderBadgeObj.emoji, label: senderBadgeObj.label } : null;
 
   // 버전 선택 — 'new' 면 새 버전 생성, 그 외엔 기존 versionId
   const [versionMode,    setVersionMode]    = useState('new');
@@ -130,19 +133,25 @@ export default function ShareLinkModal({ open, onClose }) {
       let url;
       if (versionMode === 'new') {
         // 새 버전 + 새 링크 생성
-        url = await buildReviewURL(state, sel, { watermarkText: wm });
+        url = await buildReviewURL(state, sel, { watermarkText: wm, senderBadge });
       } else {
         // 기존 버전에 새 링크만 추가 — 피드백은 그 버전 한 곳에 모임
         const { url: u } = await createReviewLinkForExistingVersion({
           versionId: versionMode,
           watermarkText: wm,
+          senderBadge,
         });
         url = u;
       }
       setShareUrl(url);
     } catch (err) {
-      reportError({ source: 'manual', message: err?.message || String(err), stack: err?.stack });
-      setError('링크 생성에 실패했어요. 잠시 후 다시 시도해주세요.');
+      // 로그인 누락은 사용자 액션 결과(버그 아님) — 자동수집 보내지 않고 명확한 안내만.
+      if (err?.message === 'Login is required.') {
+        setError('로그인이 필요한 기능이에요. 먼저 로그인한 뒤 다시 시도해주세요.');
+      } else {
+        reportError({ source: 'manual', message: err?.message || String(err), stack: err?.stack });
+        setError('링크 생성에 실패했어요. 잠시 후 다시 시도해주세요.');
+      }
     } finally {
       setGenerating(false);
     }
@@ -172,7 +181,11 @@ export default function ShareLinkModal({ open, onClose }) {
       setSlCopied(true);
       setTimeout(() => setSlCopied(false), 3000);
     } catch (err) {
-      setSlError(err?.message || '공유 실패');
+      if (err?.message === 'Login is required.') {
+        setSlError('로그인이 필요한 기능이에요. 먼저 로그인한 뒤 다시 시도해주세요.');
+      } else {
+        setSlError(err?.message || '공유 실패');
+      }
     } finally {
       setSlGenerating(false);
     }
