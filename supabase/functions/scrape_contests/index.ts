@@ -29,7 +29,7 @@ const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 //   1) DOMAIN  — 드라마/극본 도메인 키워드 (콘텐츠 종류)
 //   2) ACTION  — 공모·모집·접수 같은 행위 키워드 (이게 핵심 — 메뉴/광고 거름)
 //   3) EXCLUDE — 명백히 무관한 키워드
-const DOMAIN_RE  = /(드라마|극본|대본|미니시리즈|단막|방송작가|시나리오|영상\s?콘텐츠|콘텐츠\s?창작)/;
+const DOMAIN_RE  = /(드라마|극본|대본|미니시리즈|단막|방송작가|시나리오|영상\s?콘텐츠|콘텐츠\s?창작|영화|웹\s?소설|문학\s?상|문학\s?공모|스토리|원작\s?IP|IP\s?모집|IP\s?발굴)/;
 const ACTION_RE  = /(공모|공고|모집|선정|접수|시상|당선|수상|기획안|아이디어\s?공모)/;
 const EXCLUDE_RE = /(용역|입찰|납품|구매|계약\s?공고|채용|모집공고\s?\(직원|강사\s?모집|교육생\s?모집|수강생\s?모집|운영업체|위탁\s?용역|결과\s?발표|당선작\s?발표|더보기|전체보기|바로가기|기업\s?모집|기업\s?대상|기업\s?지원|참여\s?기업|기업\s?공모|기업\s?선정)/;
 
@@ -77,7 +77,7 @@ function absoluteUrl(href: string, base: string): string {
   try { return new URL(href, base).toString(); } catch { return href; }
 }
 
-/** 제목/본문에서 YYYY.MM.DD, YYYY-MM-DD, YYYY/MM/DD, "~ M월 D일" 같은 패턴에서 마감일 추출 */
+/** 제목/본문에서 YYYY.MM.DD, M월 D일, ~M/D 같은 다양한 패턴에서 마감일 추출 */
 function extractDeadline(text: string, fallbackYear?: number): string | null {
   // YYYY[.-/]MM[.-/]DD (마지막 매치 = 마감일 가능성)
   const ymd = [...text.matchAll(/(20\d{2})[.\-/년\s]+(\d{1,2})[.\-/월\s]+(\d{1,2})/g)];
@@ -96,7 +96,19 @@ function extractDeadline(text: string, fallbackYear?: number): string | null {
     const m = md[md.length - 1];
     const mo = parseInt(m[1], 10);
     const d = parseInt(m[2], 10);
-    return `${fallbackYear}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
+      return `${fallbackYear}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    }
+  }
+  // ~M/D 또는 ~MM/DD (예: ~5/20, ~ 6/30) (연도 fallback)
+  const slashMd = [...text.matchAll(/[~\s\(](\d{1,2})\s*\/\s*(\d{1,2})\b/g)];
+  if (slashMd.length > 0 && fallbackYear) {
+    const m = slashMd[slashMd.length - 1];
+    const mo = parseInt(m[1], 10);
+    const d = parseInt(m[2], 10);
+    if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
+      return `${fallbackYear}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    }
   }
   return null;
 }
@@ -116,13 +128,15 @@ function passesFilter(title: string): boolean {
 function genericTableListParse(html: string, sourceUrl: string, organizer: string): Candidate[] {
   const results: Candidate[] = [];
   // 따옴표 종류 별도 매칭 (안쪽 반대 따옴표로 잘리지 않게).
-  const linkRe = /<a\b[^>]*?\bhref=(?:"([^"]*)"|'([^']*)')[^>]*>([\s\S]*?)<\/a>/gi;
+  // 마감일 게시판 컬럼은 a 태그 옆에 있으니, a 태그 뒤 300자도 함께 캡처해서 날짜 추출에 사용.
+  const linkRe = /<a\b[^>]*?\bhref=(?:"([^"]*)"|'([^']*)')[^>]*>([\s\S]*?)<\/a>([\s\S]{0,300})/gi;
   const baseOrigin = new URL(sourceUrl).origin;
   let m: RegExpExecArray | null;
   const seen = new Set<string>();
   while ((m = linkRe.exec(html)) !== null) {
     const href = (m[1] !== undefined ? m[1] : m[2] || '').trim();
     const inner = decodeHtmlEntities(stripTags(m[3]));
+    const tailText = decodeHtmlEntities(stripTags(m[4] || ''));
     if (!passesFilter(inner)) continue;
     if (seen.has(inner)) continue;
     seen.add(inner);
@@ -141,9 +155,9 @@ function genericTableListParse(html: string, sourceUrl: string, organizer: strin
       if (abs === sourceUrl || abs === baseOrigin || abs === baseOrigin + '/') continue;
     }
 
-    // 마감일은 본문 페이지로 들어가 봐야 정확하지만, 일단 제목 자체에서 추출 시도
+    // 마감일 추출: 제목 안 우선, 없으면 a 태그 옆 셀(tailText) 에서 추출.
     const year = new Date().getFullYear();
-    const deadline = extractDeadline(inner, year);
+    const deadline = extractDeadline(inner, year) || extractDeadline(tailText, year);
     results.push({
       title: inner,
       source_url: abs,
@@ -163,6 +177,9 @@ function inferCategory(title: string): string[] | null {
   if (/시나리오/.test(title)) cats.push('시나리오');
   if (/영화/.test(title)) cats.push('영화');
   if (/웹드라마|웹\s?드라마/.test(title)) cats.push('웹드라마');
+  if (/웹\s?소설|웹소설/.test(title)) cats.push('웹소설');
+  if (/문학|소설/.test(title) && cats.length === 0) cats.push('문학');
+  if (/스토리|원작|IP/.test(title) && cats.length === 0) cats.push('스토리/IP');
   if (cats.length === 0 && /드라마|극본|대본/.test(title)) cats.push('미니시리즈');
   return cats.length > 0 ? Array.from(new Set(cats)) : ['기타'];
 }
