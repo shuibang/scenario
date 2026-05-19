@@ -13,6 +13,27 @@ import { supabase } from './supabaseClient';
 // inferCategory(Edge Function) 출력과 동기화 — 자동수집 카테고리가 UI 필터에서도 선택 가능하게.
 export const CONTEST_CATEGORIES = ['미니시리즈', '단막', '시나리오', '영화', '웹드라마', '웹소설', '문학', 'IP/원작', '기타'];
 
+// 마지막 선택한 카테고리 — 같은 사용자가 단막은 단막, 웹소설은 웹소설 식으로
+// 일관되게 등록·제보하는 경우가 많아 기본값으로 자동 복원.
+const LAST_CATEGORIES_KEY = 'drama_contest_last_categories';
+
+export function loadLastSelectedCategories() {
+  try {
+    const raw = localStorage.getItem(LAST_CATEGORIES_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr.filter((s) => typeof s === 'string' && s.trim()) : [];
+  } catch { return []; }
+}
+
+export function saveLastSelectedCategories(cats) {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    const arr = Array.isArray(cats) ? cats : [];
+    localStorage.setItem(LAST_CATEGORIES_KEY, JSON.stringify(arr));
+  } catch {}
+}
+
 function normalizeCategories(input) {
   if (!input) return null;
   const arr = Array.isArray(input) ? input : [input];

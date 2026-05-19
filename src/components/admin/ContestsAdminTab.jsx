@@ -16,6 +16,8 @@ import {
   deleteContest,
   createContestManual,
   CONTEST_CATEGORIES,
+  loadLastSelectedCategories,
+  saveLastSelectedCategories,
 } from '../../store/contestsApi';
 
 const SOURCE_LABELS = {
@@ -283,10 +285,11 @@ function EditModal({ contest, onClose, onSaved }) {
 }
 
 function CreateModal({ onClose, onCreated }) {
-  const [form, setForm] = useState({
+  // 카테고리 만 마지막 선택 자동 복원 (등록 시 자주 같은 유형 반복).
+  const [form, setForm] = useState(() => ({
     title: '', organizer: '', source_url: '', poster_url: '',
-    prize: '', category: [], submit_start: '', submit_end: '',
-  });
+    prize: '', category: loadLastSelectedCategories(), submit_start: '', submit_end: '',
+  }));
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState(null);
 
@@ -357,7 +360,11 @@ function FormFields({ form, upd }) {
               <button
                 key={c}
                 type="button"
-                onClick={() => upd('category', active ? cats.filter((x) => x !== c) : [...cats, c])}
+                onClick={() => {
+                  const next = active ? cats.filter((x) => x !== c) : [...cats, c];
+                  upd('category', next);
+                  saveLastSelectedCategories(next);
+                }}
                 style={{
                   fontSize: 11, padding: '4px 10px', borderRadius: 12,
                   border: '1px solid ' + (active ? 'var(--c-accent)' : 'var(--c-border3)'),

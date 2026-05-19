@@ -3,14 +3,15 @@
  * 제출하면 status='pending_review' 로 들어가고, 어드민 검토 후 활성화됨.
  */
 import React, { useState } from 'react';
-import { reportContest, CONTEST_CATEGORIES } from '../../store/contestsApi';
+import { reportContest, CONTEST_CATEGORIES, loadLastSelectedCategories, saveLastSelectedCategories } from '../../store/contestsApi';
 
 export default function ReportContestModal({ onClose, onSubmitted }) {
   const [title, setTitle] = useState('');
   const [organizer, setOrganizer] = useState('');
   const [sourceUrl, setSourceUrl] = useState('');
   const [prize, setPrize] = useState('');
-  const [categories, setCategories] = useState([]); // 다중 선택
+  // 마지막 선택 자동 복원 — 같은 유형(단막/웹소설 등)을 반복 등록하는 패턴 지원.
+  const [categories, setCategories] = useState(() => loadLastSelectedCategories());
   const [submitStart, setSubmitStart] = useState('');
   const [submitEnd, setSubmitEnd] = useState('');
   const [memo, setMemo] = useState('');
@@ -19,9 +20,11 @@ export default function ReportContestModal({ onClose, onSubmitted }) {
   const [success, setSuccess] = useState(false);
 
   const toggleCategory = (cat) => {
-    setCategories((prev) =>
-      prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
-    );
+    setCategories((prev) => {
+      const next = prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat];
+      saveLastSelectedCategories(next);
+      return next;
+    });
   };
 
   const onSubmit = async (e) => {
