@@ -180,6 +180,10 @@ export async function deleteContest(id) {
 export async function createContestManual(payload) {
   if (!supabase) throw new Error('Supabase 미설정');
   const { data: { user } } = await supabase.auth.getUser();
+  // 마감일이 이미 지났으면 closed 로 바로 등록 — 활성 거치지 않고 "작년 이맘때" 섹션으로 직행.
+  // (활성으로 들어가면 다음날 close_expired_contests cron 까지 사용자 보드에 잘못 표시됨)
+  const today = new Date().toISOString().slice(0, 10);
+  const isPast = payload.submit_end && payload.submit_end < today;
   const row = {
     title: String(payload.title || '').trim(),
     organizer: payload.organizer || null,
@@ -189,7 +193,7 @@ export async function createContestManual(payload) {
     category: payload.category || null,
     submit_start: payload.submit_start || null,
     submit_end: payload.submit_end,
-    status: 'active',
+    status: isPast ? 'closed' : 'active',
     source_type: 'manual',
     approved_at: new Date().toISOString(),
     approved_by: user?.id || null,
