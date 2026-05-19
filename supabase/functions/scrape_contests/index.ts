@@ -126,10 +126,19 @@ function genericTableListParse(html: string, sourceUrl: string, organizer: strin
     if (seen.has(inner)) continue;
     seen.add(inner);
 
-    // URL 게이트: javascript:, #, 빈 값, 메인 페이지 자체 → 제외
-    if (!href || href.startsWith('#') || href.toLowerCase().startsWith('javascript:')) continue;
-    const abs = absoluteUrl(href, sourceUrl);
-    if (abs === sourceUrl || abs === baseOrigin || abs === baseOrigin + '/') continue;
+    // URL 게이트: 빈값/# 만 제외. javascript: 는 식별자 추출해서 보존
+    // (storyum 같은 사이트는 모든 글이 javascript:goMasterView('986') 식 — 차단하면 0건).
+    if (!href || href.startsWith('#')) continue;
+    let abs: string;
+    if (href.toLowerCase().startsWith('javascript:')) {
+      const idMatch = href.match(/\(['"]?([^'")]+)['"]?\)/);
+      if (!idMatch) continue;
+      // 게시판 URL + 글 식별자 fragment 로 UNIQUE 보장. 어드민이 클릭 시 게시판으로 이동.
+      abs = `${sourceUrl}#${encodeURIComponent(idMatch[1])}`;
+    } else {
+      abs = absoluteUrl(href, sourceUrl);
+      if (abs === sourceUrl || abs === baseOrigin || abs === baseOrigin + '/') continue;
+    }
 
     // 마감일은 본문 페이지로 들어가 봐야 정확하지만, 일단 제목 자체에서 추출 시도
     const year = new Date().getFullYear();
