@@ -76,24 +76,32 @@ function versionPlugin(version) {
   };
 }
 
-export default defineConfig({
-  plugins: [
-    react(),
-    tailwindcss(),
-    versionPlugin(buildVersion),
-    noticesPlugin(),
-    appHtmlAlias(),
-    // PWA는 베타 종료 후 활성화 예정
-  ],
-  define: {
-    'import.meta.env.VITE_BUILD_VERSION': JSON.stringify(buildVersion),
-  },
-  build: {
-    rollupOptions: {
-      input: {
-        main: path.resolve(__dirname, 'index.html'),  // 정적 랜딩 (SEO 진입점)
-        app:  path.resolve(__dirname, 'app.html'),    // React 앱 (vercel rewrite: /app)
+export default defineConfig(({ command }) => {
+  // 빌드 환경(예: Vercel)에 NODE_ENV=development 가 남아 있으면
+  // Vite 의 isProduction 이 false 가 되어 import.meta.env.DEV===true,
+  // React 가 jsxDEV(개발) 런타임으로 빌드된다. 그 결과 개발 전용 코드
+  // (예: 광고 자리 보라색 placeholder)가 minify 된 운영 번들에 섞여 나가고
+  // 앱 전체가 느린 dev React 로 동작한다. build 시 NODE_ENV 를 production 으로 고정.
+  if (command === 'build') process.env.NODE_ENV = 'production';
+  return {
+    plugins: [
+      react(),
+      tailwindcss(),
+      versionPlugin(buildVersion),
+      noticesPlugin(),
+      appHtmlAlias(),
+      // PWA는 베타 종료 후 활성화 예정
+    ],
+    define: {
+      'import.meta.env.VITE_BUILD_VERSION': JSON.stringify(buildVersion),
+    },
+    build: {
+      rollupOptions: {
+        input: {
+          main: path.resolve(__dirname, 'index.html'),  // 정적 랜딩 (SEO 진입점)
+          app:  path.resolve(__dirname, 'app.html'),    // React 앱 (vercel rewrite: /app)
+        },
       },
     },
-  },
+  };
 })
