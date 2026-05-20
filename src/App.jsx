@@ -974,10 +974,14 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
     let cancelled = false;
     (async () => {
       const result = await runDriveSync();
-      if (cancelled) return;
+      // sync 자체가 끝났으면(성공/충돌/무시) 게이트 기록 — 언마운트(cancelled)와 무관.
+      // 과거 버그: 창 크기 변경으로 MenuBar 가 unmount 되면 cancelled=true 라
+      // markInitialSyncDone 을 못 불러 게이트가 안 찍히고, 다음 mount 에서 또 sync →
+      // 창 크기 바꿀 때마다 Drive 조회 반복. markInitialSyncDone 은 모듈 변수만 건드려
+      // unmounted 후 호출도 안전하므로 cancelled 와 무관하게 기록한다.
       if (result === 'synced' || result === 'dismissed' || result === 'conflict') {
         markInitialSyncDone(authUser.email);
-      } else {
+      } else if (!cancelled) {
         // transient 실패(skipped/error/reauth)는 다음 기회에 재시도되어야 함
         initialSyncStartedRef.current = false;
       }
@@ -2314,9 +2318,10 @@ function Shell({ authUser, setAuthUser }) {
             window.dispatchEvent(new Event('script:requestSave'));
             await waitForEditorFlush();
             const baseState = latestStateRef.current;
-            setSyncConflictBusy('양쪽 데이터를 스냅샷에 보존 중…');
+            setSyncConflictBusy('이 기기 데이터를 스냅샷에 보존 중…');
             try {
-              // 1) 안전 스냅샷 — 양쪽 다 보존 (실수 복구용)
+              // 1) 안전 스냅샷 — 이 기기 데이터만 보존 (실수 복구용).
+              //    Drive 데이터는 방금 Drive에서 읽어온 것이라 이미 Drive에 존재 → 재업로드 스냅샷 제거.
               try {
                 const localSnap = {
                   projects:       baseState.projects,
@@ -2334,9 +2339,6 @@ function Shell({ authUser, setAuthUser }) {
                 };
                 if ((localSnap.projects?.length ?? 0) > 0) {
                   await saveSnapshot(localSnap, '충돌 해결 직전 이 기기 자동 보존', 'device_switch');
-                }
-                if (driveData && (driveData.projects?.length ?? 0) > 0) {
-                  await saveSnapshot(driveData, '충돌 해결 직전 Drive 자동 보존', 'device_switch');
                 }
               } catch (e) {
                 console.warn('[Drive] 충돌 해결 스냅샷 저장 실패 (계속):', e);
