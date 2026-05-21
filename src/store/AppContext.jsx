@@ -8,6 +8,7 @@ import { parsePath, syncUrl } from '../utils/urlSync';
 import { describeDriveError } from '../utils/driveError';
 import { detectScriptBlockDuplicates, dedupScriptBlocks } from '../utils/dedupBlocks';
 import { getDeviceId } from '../utils/deviceId';
+import { isPersistSaveSuppressed } from './driveSyncGate';
 
 // 복원 가능한 activeDoc 값 whitelist — localStorage에 주입된 예상 밖의 값 차단
 const ALLOWED_ACTIVE_DOCS = new Set([
@@ -967,7 +968,10 @@ export function AppProvider({ children }) {
       if (shouldUpdateSavedAt && skipDrive) {
         try { localStorage.setItem('drama_saved_at', savedAt); } catch {}
       }
-      if (isTokenValid() && !skipDrive) {
+      // 충돌 해결 적용 등 명시적 통제 업로드 중에는 persist 자동저장(Drive)을 건너뜀 —
+      // syncWorkspaceToDrive가 이미 같은 데이터를 올리므로 중복 업로드/요청 폭증 방지.
+      // IDB 자동저장은 위에서 이미 수행됨 (정책: IDB는 항상).
+      if (isTokenValid() && !skipDrive && !isPersistSaveSuppressed()) {
         // PATCH 발사 직전 갱신 — .then() 미도달 윈도우(unload/OAuth redirect)에서
         // 옛 시각으로 동결되어 Drive와 어긋나는 케이스 차단.
         // 의미: "마지막 업로드 시도 시각" — 실패 시 다음 사이클 성공으로 자연 회복.

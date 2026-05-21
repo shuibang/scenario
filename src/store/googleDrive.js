@@ -42,13 +42,19 @@ export function setAccessToken(token, expiresInSec) {
 export function clearAccessToken() {
   _accessToken = null;
   _tokenExpiry = 0;
-  // 다른 Google 계정으로 재로그인하면 이전 계정의 인덱스 fileId가 무효 → 미리 캐시 비움.
+  // 다른 Google 계정으로 재로그인하면 이전 계정의 fileId가 무효 → 미리 캐시 비움.
   invalidateIndexIdCache();
+  clearFileIdCache();
   emitAuthChange();
 }
 
 export function isTokenValid() {
   return !!_accessToken && Date.now() < _tokenExpiry;
+}
+
+// 현재 access token 값. refreshDriveToken이 "실제로 새 토큰을 받았는지" 비교용.
+export function getAccessToken() {
+  return _accessToken;
 }
 
 // ── 401 자동 재발행 ─────────────────────────────────────────────────────────
@@ -159,26 +165,57 @@ async function findFileByName(name) {
     );
     if (!res.ok) await throwDriveError(res, 'Drive 파일 검색 실패');
     const data = await res.json();
-    return data.files?.[0] || null;
+    const file = data.files?.[0] || null;
+    // 찾은 fileId를 즉시 캐싱 — 충돌 감지 등 읽기가 캐시를 데워두면 직후 쓰기가 검색을 건너뜀.
+    if (file?.id) _fileIdCache.set(name, file.id);
+    return file;
   });
 }
 
+// ── 범용 파일 ID 캐싱 ──────────────────────────────────────────────────────
+// 작품 파일·프로젝트 인덱스·legacy(drama_workspace.json)는 이름이 고정이고 한 번
+// 생성되면 fileId가 변하지 않음 → 매 쓰기 전 findFileByName 검색(1 RTT)을 회피.
+// 모듈 스코프 Map (세션 내 메모리). 드라이브 연결 해제 시 clearFileIdCache로 초기화 —
+// 다른 Google 계정으로 재로그인하면 이전 계정 fileId가 무효이므로.
+const _fileIdCache = new Map();
+
+function cacheFileId(name, id) { if (id) _fileIdCache.set(name, id); }
+function invalidateFileId(name) { _fileIdCache.delete(name); }
+function clearFileIdCache() { _fileIdCache.clear(); }
+
+async function getOrFindFileId(name) {
+  const cached = _fileIdCache.get(name);
+  if (cached) return cached;
+  const file = await findFileByName(name);
+  if (file?.id) { _fileIdCache.set(name, file.id); return file.id; }
+  return null;
+}
+
 async function upsertFile(name, jsonContent) {
-  const existing = await findFileByName(name);
-  const metadata = { name, ...(!existing && { parents: ['appDataFolder'] }) };
-  const url = existing
-    ? `${UPLOAD_API}/files/${existing.id}?uploadType=multipart`
-    : `${UPLOAD_API}/files?uploadType=multipart`;
+  const cachedId = await getOrFindFileId(name);
   return withAuthRetry(async () => {
-    const form = new FormData();
-    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-    form.append('file',     new Blob([jsonContent],              { type: 'application/json' }));
-    const res = await fetch(url, {
-      method:  existing ? 'PATCH' : 'POST',
-      headers: { Authorization: `Bearer ${_accessToken}` },
-      body:    form,
-    });
-    if (!res.ok) await throwDriveError(res, 'Drive 파일 저장 실패');
+    if (cachedId) {
+      const form = new FormData();
+      form.append('metadata', new Blob([JSON.stringify({ name })], { type: 'application/json' }));
+      form.append('file',     new Blob([jsonContent],            { type: 'application/json' }));
+      const res = await fetch(`${UPLOAD_API}/files/${cachedId}?uploadType=multipart`, {
+        method:  'PATCH',
+        headers: { Authorization: `Bearer ${_accessToken}` },
+        body:    form,
+      });
+      // 외부에서 삭제됨 → 캐시 비우고 새로 생성 (self-heal)
+      if (res.status === 404) {
+        invalidateFileId(name);
+        const created = await createNewFile(name, jsonContent);
+        cacheFileId(name, created?.id);
+        return;
+      }
+      if (!res.ok) await throwDriveError(res, 'Drive 파일 저장 실패');
+      return;
+    }
+    // 캐시·검색 모두 없음 → 새 파일 생성 + ID 캐싱
+    const created = await createNewFile(name, jsonContent);
+    cacheFileId(name, created?.id);
   });
 }
 
@@ -198,13 +235,14 @@ async function readFileByName(name) {
 
 async function deleteFileByName(name) {
   const file = await findFileByName(name);
-  if (!file) return;
+  if (!file) { invalidateFileId(name); return; }
   return withAuthRetry(async () => {
     const res = await fetch(`${DRIVE_API}/files/${file.id}`, {
       method:  'DELETE',
       headers: { Authorization: `Bearer ${_accessToken}` },
     });
     if (!res.ok && res.status !== 404) await throwDriveError(res, 'Drive 파일 삭제 실패');
+    invalidateFileId(name); // 삭제 후 캐시 무효화 — 같은 이름 재생성 시 stale id 방지
   });
 }
 
@@ -312,24 +350,32 @@ async function _doSaveToDrive(payload) {
   // 호출자가 지정하지 않은 경우(legacy) 현재 시각으로 대체.
   const savedAt = payload?.savedAt || new Date().toISOString();
   const content = JSON.stringify({ ...payload, savedAt });
-  const existing = await findFile();
-  const metadata = { name: FILE_NAME, ...(!existing && { parents: ['appDataFolder'] }) };
-
-  const url    = existing
-    ? `${UPLOAD_API}/files/${existing.id}?uploadType=multipart`
-    : `${UPLOAD_API}/files?uploadType=multipart`;
+  const cachedId = await getOrFindFileId(FILE_NAME);
 
   return withAuthRetry(async () => {
-    const form = new FormData();
-    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-    form.append('file',     new Blob([content],                  { type: 'application/json' }));
-    const res = await fetch(url, {
-      method:  existing ? 'PATCH' : 'POST',
-      headers: { Authorization: `Bearer ${_accessToken}` },
-      body:    form,
-    });
-    if (!res.ok) await throwDriveError(res, 'Drive 저장 실패');
-    return await res.json();
+    if (cachedId) {
+      const form = new FormData();
+      form.append('metadata', new Blob([JSON.stringify({ name: FILE_NAME })], { type: 'application/json' }));
+      form.append('file',     new Blob([content],                            { type: 'application/json' }));
+      const res = await fetch(`${UPLOAD_API}/files/${cachedId}?uploadType=multipart`, {
+        method:  'PATCH',
+        headers: { Authorization: `Bearer ${_accessToken}` },
+        body:    form,
+      });
+      // 외부에서 삭제됨 → 캐시 비우고 새로 생성 (self-heal)
+      if (res.status === 404) {
+        invalidateFileId(FILE_NAME);
+        const created = await createNewFile(FILE_NAME, content);
+        cacheFileId(FILE_NAME, created?.id);
+        return created;
+      }
+      if (!res.ok) await throwDriveError(res, 'Drive 저장 실패');
+      return await res.json();
+    }
+    // 캐시·검색 모두 없음 → 새 파일 생성 + ID 캐싱
+    const created = await createNewFile(FILE_NAME, content);
+    cacheFileId(FILE_NAME, created?.id);
+    return created;
   });
 }
 export async function saveToDrive(payload) {

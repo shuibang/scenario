@@ -19,3 +19,12 @@ export function markInitialSyncDone(userKey) {
 export function resetInitialSyncGate() {
   _syncedFor = null;
 }
+
+// ── persist 자동저장 일시 억제 ────────────────────────────────────────────────
+// 충돌 해결 적용처럼 명시적으로 통제 업로드(syncWorkspaceToDrive)를 하는 동안,
+// debounce persist effect가 같은 데이터를 중복 업로드하지 않도록 일시 억제.
+// apply 시작 시 suppress, 명시적 sync 완료 후 release. IDB 자동저장은 영향 없음.
+let _persistSuppressed = false;
+export function suppressPersistSave()   { _persistSuppressed = true; }
+export function releasePersistSave()    { _persistSuppressed = false; }
+export function isPersistSaveSuppressed() { return _persistSuppressed; }

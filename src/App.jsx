@@ -68,7 +68,7 @@ import SyncConflictModal from './components/SyncConflictModal';
 import SizeGuardModal from './components/SizeGuardModal';
 import { usePageTracking } from './hooks/usePageTracking';
 import { useDriveAuthState } from './hooks/useDriveAuthState';
-import { shouldRunInitialSync, markInitialSyncDone, resetInitialSyncGate } from './store/driveSyncGate';
+import { shouldRunInitialSync, markInitialSyncDone, resetInitialSyncGate, suppressPersistSave, releasePersistSave } from './store/driveSyncGate';
 import { guardedSignInWithGoogle } from './utils/guardedSignIn';
 import { describeDriveError } from './utils/driveError';
 import { getDeviceId } from './utils/deviceId';
@@ -950,6 +950,10 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
       if (e.message?.includes('401') || e.message?.includes('DRIVE_AUTH_REQUIRED')) {
         const newToken = await refreshDriveToken();
         if (newToken) { _driveSyncing = false; return runDriveSync(); }
+        // 갱신 실패(만료·거부, provider_token 동일) → 무한 재귀 대신 재연결 유도.
+        setDriveStatus('reauth');
+        console.warn('[Drive] 토큰 갱신 실패 — 재연결 필요');
+        return 'reauth';
       }
       if (e.message?.includes('403')) setDriveStatus('reauth');
       else setDriveStatus('error');
@@ -2315,6 +2319,8 @@ function Shell({ authUser, setAuthUser }) {
             const conflicts = syncConflict?.conflicts || [];
             const driveData = syncConflict?.driveData;
             if (!Array.isArray(conflicts) || conflicts.length === 0) return;
+            // 명시적 통제 업로드 동안 debounce persist effect의 중복 Drive 저장 억제.
+            suppressPersistSave();
             window.dispatchEvent(new Event('script:requestSave'));
             await waitForEditorFlush();
             const baseState = latestStateRef.current;
@@ -2380,6 +2386,10 @@ function Shell({ authUser, setAuthUser }) {
                 deleteProjectIds,
               });
 
+              // 명시적 sync로 이미 올렸으므로 fingerprint를 적용 후 상태로 갱신 —
+              // 억제 해제 후 persist effect가 같은 대본을 다시 PUT하지 않도록.
+              markProjectsSynced(resolvedState, resolvedState.projects.map(p => p.id));
+
               // 4) 정리 — drama_saved_at은 다음 persist 사이클이 갱신
               try { sessionStorage.removeItem('sync-conflict-dismissed'); } catch {}
               setSyncConflict(null);
@@ -2392,6 +2402,8 @@ function Shell({ authUser, setAuthUser }) {
               saveToastTimer.current = setTimeout(() => setSaveToast(false), 3500);
               if (kind === 'auth') promptDriveReauthForSave();
             } finally {
+              // 억제 해제 — 실패 시엔 fingerprint 미갱신 상태라 다음 persist가 자동 재시도.
+              releasePersistSave();
               setSyncConflictBusy(null);
             }
           }}
