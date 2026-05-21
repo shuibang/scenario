@@ -593,11 +593,10 @@ export default function RightPanel({ onScrollToScene }) {
   } else if (isScriptView) {
     contextContent = <SceneOutlineContent />;
   } else {
+    // 대본/프로젝트 미선택 상태 — 빈 패널 대신 공모전 보드를 띄움
     contextContent = (
-      <div className="flex-1 flex items-center justify-center">
-        <span className="text-xs text-center px-4" style={{ color: 'var(--c-text6)' }}>
-          회차 대본을<br/>열면 씬 목록이<br/>표시됩니다
-        </span>
+      <div className="flex-1 flex flex-col min-h-0">
+        <ContestBoard />
       </div>
     );
   }

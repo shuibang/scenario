@@ -348,10 +348,12 @@ export default function ContestBoard({ compact = false }) {
       {/* 핀된 공모전 (상단 고정 — D-day 클릭으로 토글, 마감 지나면 자동 정리) */}
       <PinnedHeader items={pinned} onUnpin={unpin} />
 
-      {/* 카테고리 칩 (다중 선택 — '전체'는 모두 해제) */}
+      {/* 카테고리 칩 (다중 선택 — '전체'는 모두 해제). 한 줄 고정 + 가로 스크롤 */}
       <div style={{
-        padding: `6px ${pad}px`, display: 'flex', gap: 4, flexWrap: 'wrap',
+        padding: `6px ${pad}px`, display: 'flex', gap: 4, flexWrap: 'nowrap',
         borderBottom: '1px solid var(--c-border2)', flexShrink: 0,
+        overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch',
+        scrollbarWidth: 'none',
       }}>
         {(() => {
           const allOff = selectedCats.length === 0;
@@ -364,6 +366,7 @@ export default function ContestBoard({ compact = false }) {
                 background: allOff ? 'var(--c-accent)' : 'transparent',
                 color: allOff ? '#fff' : 'var(--c-text5)',
                 cursor: 'pointer', fontWeight: allOff ? 600 : 400,
+                flexShrink: 0, whiteSpace: 'nowrap',
               }}
             >전체</button>
           );
@@ -380,6 +383,7 @@ export default function ContestBoard({ compact = false }) {
                 background: active ? 'var(--c-accent)' : 'transparent',
                 color: active ? '#fff' : 'var(--c-text5)',
                 cursor: 'pointer', fontWeight: active ? 600 : 400,
+                flexShrink: 0, whiteSpace: 'nowrap',
               }}
             >{cat}</button>
           );
