@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../store/supabaseClient';
+import { isSurveyEventActive } from '../utils/surveyEvent';
 
 const REPORT_TYPES = [
   { id: 'bug', label: '버그 제보' },
@@ -98,34 +99,36 @@ export default function FeedbackButtons() {
           flexShrink: 0,
         }}
       >
-        <button
-          onClick={() => {
-            window.location.href = '/app#survey';
-          }}
-          style={{
-            width: '100%',
-            padding: '7px 9px',
-            borderRadius: 6,
-            border: '1px solid rgba(217, 119, 6, 0.45)',
-            background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.14), rgba(245, 158, 11, 0.04))',
-            cursor: 'pointer',
-            textAlign: 'left',
-            fontFamily: 'inherit',
-            color: 'var(--c-text)',
-            lineHeight: 1.4,
-          }}
-          title="2시간 이상 사용 후 설문에 참여해주시면 추첨을 통해 2만원 커피쿠폰을 드려요"
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2 }}>
-            <span style={{ fontSize: 10 }}>🎁</span>
-            <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 0.3, color: '#d97706' }}>EVENT</span>
-            <span style={{ fontSize: 9, color: 'var(--c-text6)', marginLeft: 'auto' }}>~5/31</span>
-          </div>
-          <div style={{ fontSize: 10.5, color: 'var(--c-text4)' }}>
-            2시간 이상 사용 후 설문 참여하시면<br />
-            추첨으로 <strong style={{ color: 'var(--c-text)' }}>2만원 커피쿠폰</strong> 드려요
-          </div>
-        </button>
+        {isSurveyEventActive() && (
+          <button
+            onClick={() => {
+              window.location.href = '/app#survey';
+            }}
+            style={{
+              width: '100%',
+              padding: '7px 9px',
+              borderRadius: 6,
+              border: '1px solid rgba(217, 119, 6, 0.45)',
+              background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.14), rgba(245, 158, 11, 0.04))',
+              cursor: 'pointer',
+              textAlign: 'left',
+              fontFamily: 'inherit',
+              color: 'var(--c-text)',
+              lineHeight: 1.4,
+            }}
+            title="2시간 이상 사용 후 설문에 참여해주시면 추첨을 통해 2만원 커피쿠폰을 드려요"
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2 }}>
+              <span style={{ fontSize: 10 }}>🎁</span>
+              <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 0.3, color: '#d97706' }}>EVENT</span>
+              <span style={{ fontSize: 9, color: 'var(--c-text6)', marginLeft: 'auto' }}>~5/31</span>
+            </div>
+            <div style={{ fontSize: 10.5, color: 'var(--c-text4)' }}>
+              2시간 이상 사용 후 설문 참여하시면<br />
+              추첨으로 <strong style={{ color: 'var(--c-text)' }}>2만원 커피쿠폰</strong> 드려요
+            </div>
+          </button>
+        )}
         <button
           onClick={() => {
             window.location.href = '/app#survey';

@@ -10,6 +10,7 @@ import {
   storeFont, removeFont, loadFontMeta, saveFontMeta,
 } from '../print/fontStorage';
 import { resetPageHints } from './OnboardingTour';
+import { isSurveyEventActive } from '../utils/surveyEvent';
 import AdBanner from './AdBanner';
 import { ANNOUNCEMENTS } from './UpdateBanner';
 import { SCENE_PREFIX_OPTIONS, getScenePrefix, setScenePrefix } from '../utils/scenePrefix';
@@ -1144,25 +1145,27 @@ function ErrorReportTab() {
 
       {/* 이벤트 배너 + 설문 바로가기 */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <button
-          onClick={() => { window.location.href = '/app#survey'; }}
-          style={{
-            width: '100%', padding: '11px 14px', borderRadius: 10,
-            border: '1px solid rgba(217, 119, 6, 0.45)',
-            background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.14), rgba(245, 158, 11, 0.04))',
-            cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
-            color: 'var(--c-text)', lineHeight: 1.5,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-            <span style={{ fontSize: 13 }}>🎁</span>
-            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.3, color: '#d97706' }}>EVENT</span>
-            <span style={{ fontSize: 10.5, color: 'var(--c-text6)', marginLeft: 'auto' }}>~5/31</span>
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--c-text4)' }}>
-            2시간 이상 사용 후 설문에 참여해주시면 추첨을 통해 <strong style={{ color: 'var(--c-text)' }}>2만원 커피쿠폰</strong>을 드려요
-          </div>
-        </button>
+        {isSurveyEventActive() && (
+          <button
+            onClick={() => { window.location.href = '/app#survey'; }}
+            style={{
+              width: '100%', padding: '11px 14px', borderRadius: 10,
+              border: '1px solid rgba(217, 119, 6, 0.45)',
+              background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.14), rgba(245, 158, 11, 0.04))',
+              cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+              color: 'var(--c-text)', lineHeight: 1.5,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+              <span style={{ fontSize: 13 }}>🎁</span>
+              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.3, color: '#d97706' }}>EVENT</span>
+              <span style={{ fontSize: 10.5, color: 'var(--c-text6)', marginLeft: 'auto' }}>~5/31</span>
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--c-text4)' }}>
+              2시간 이상 사용 후 설문에 참여해주시면 추첨을 통해 <strong style={{ color: 'var(--c-text)' }}>2만원 커피쿠폰</strong>을 드려요
+            </div>
+          </button>
+        )}
 
         <button
           onClick={() => { window.location.href = '/app#survey'; }}

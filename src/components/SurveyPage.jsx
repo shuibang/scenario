@@ -5,6 +5,7 @@
  */
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../store/supabaseClient';
+import { isSurveyEventActive } from '../utils/surveyEvent';
 
 // ─── 전역 overflow:hidden 해제 ────────────────────────────────────────────────
 function usePageScroll() {
@@ -77,6 +78,17 @@ const Q16_PAID_ITEMS = [
   '추후 추가 기능 우선 제공',
   '광고 없음',
 ];
+
+// 답변 기본값 — 제출 후 수정 시 localStorage에서 복원하기 위해 모듈 상수로 분리.
+const DEFAULT_ANSWERS = {
+  q1: '', q2: [], q3: [], q5: '', q6: '',
+  q7: 0, q8: '', q9: '', q9Detail: '', q10: '', q10Detail: '',
+  q11: [], q11Other: '', q12: '', q13: '', q14: 0, q15: '',
+  q16: [], q17: '', q18: '', q19: '', q20Email: '',
+  qType: '', qUi: '',
+  qWorkStatusLink: '', qPhone: '',
+};
+const SURVEY_ANSWERS_KEY = 'survey_answers';
 
 // ─── 공용 스타일 ──────────────────────────────────────────────────────────────
 
@@ -275,15 +287,18 @@ function TextArea({ value, onChange, placeholder, rows = 3 }) {
 // ─── 진행률 바 ────────────────────────────────────────────────────────────────
 
 function ProgressBar({ answers }) {
-  const filled = [
+  // 이벤트 마감 후엔 작업현황/전화번호 문항이 사라지므로 진행률 분모에서도 제외.
+  const checks = [
     answers.q1, answers.q2.length > 0, answers.q3.length > 0, answers.q4,
     answers.q5, answers.q6.length > 0, answers.q7, answers.q8,
     answers.q9, answers.q10, answers.q12,
     answers.q13, answers.q14, answers.q15, answers.q16.length > 0,
     answers.q17, answers.q18, answers.q19, answers.q20Email,
-    answers.qType, answers.qUi, answers.qWorkStatusLink, answers.qPhone,
-  ].filter(Boolean).length;
-  const pct = Math.round((filled / 23) * 100);
+    answers.qType, answers.qUi,
+    ...(isSurveyEventActive() ? [answers.qWorkStatusLink, answers.qPhone] : []),
+  ];
+  const filled = checks.filter(Boolean).length;
+  const pct = Math.round((filled / checks.length) * 100);
 
   return (
     <div style={{
@@ -313,16 +328,17 @@ function ProgressBar({ answers }) {
 export default function SurveyPage() {
   usePageScroll();
 
-  const [answers, setAnswers] = useState({
-    q1: '', q2: [], q3: [], q5: '', q6: '',
-    q7: 0, q8: '', q9: '', q9Detail: '', q10: '', q10Detail: '',
-    q11: [], q11Other: '', q12: '', q13: '', q14: 0, q15: '',
-    q16: [], q17: '', q18: '', q19: '', q20Email: '',
-    qType: '', qUi: '',
-    qWorkStatusLink: '', qPhone: '',
+  // 제출했던 답변이 있으면 복원 (수정 모드 대비) — 없으면 기본값.
+  const [answers, setAnswers] = useState(() => {
+    try {
+      const saved = localStorage.getItem(SURVEY_ANSWERS_KEY);
+      if (saved) return { ...DEFAULT_ANSWERS, ...JSON.parse(saved) };
+    } catch { /* localStorage 접근 불가/파싱 실패 시 기본값 */ }
+    return { ...DEFAULT_ANSWERS };
   });
   const [errors, setErrors]       = useState({});
   const [submitted, setSubmitted] = useState(() => !!localStorage.getItem('survey_submitted'));
+  const [isEditing, setIsEditing] = useState(false);
   const [isDuplicate, setIsDuplicate] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
@@ -336,6 +352,11 @@ export default function SurveyPage() {
 
   const skipQ18Q19 = answers.q17 === '사용하지 않을 것 같아요';
 
+  // 설문 이벤트(커피쿠폰 추첨) 진행 중에만 경품 안내·작업현황 링크·전화번호 문항 노출.
+  // 마감(2026-05-31) 후에는 해당 문항/설명이 통째로 사라지고, 링크 필수도 해제된다.
+  const eventActive = isSurveyEventActive();
+  const workLinkRequired = eventActive;
+
   // ── 유효성 검사 ──
   const validate = () => {
     const e = {};
@@ -347,6 +368,7 @@ export default function SurveyPage() {
     if (!answers.q10)        e.q10 = true;
     if (!answers.q14)        e.q14 = true;
     if (!answers.q17)        e.q17 = true;
+    if (workLinkRequired && !answers.qWorkStatusLink.trim()) e.qWorkStatusLink = true;
     return e;
   };
 
@@ -360,9 +382,9 @@ export default function SurveyPage() {
       document.getElementById(firstKey)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
-    // 24시간 내 중복 제출 방지
+    // 24시간 내 중복 제출 방지 — 단, 본인이 "수정하기"로 들어온 경우는 허용.
     const lastAt = localStorage.getItem('survey_submitted_at');
-    if (lastAt && Date.now() - Number(lastAt) < 24 * 60 * 60 * 1000) {
+    if (!isEditing && lastAt && Date.now() - Number(lastAt) < 24 * 60 * 60 * 1000) {
       setIsDuplicate(true);
       return;
     }
@@ -402,6 +424,9 @@ export default function SurveyPage() {
       }
       localStorage.setItem('survey_submitted', '1');
       localStorage.setItem('survey_submitted_at', String(Date.now()));
+      // 수정 시 폼에 다시 채워주기 위해 답변 보존.
+      try { localStorage.setItem(SURVEY_ANSWERS_KEY, JSON.stringify(answers)); } catch { /* 저장 실패 무시 */ }
+      setIsEditing(false);
       setSubmitted(true);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
@@ -450,9 +475,22 @@ export default function SurveyPage() {
             여러분의 의견이 대본 작업실을 만들어갑니다.
           </p>
           <p style={{ marginTop: 16, fontSize: 12, color: 'var(--c-text5)' }}>
-            이미 제출하신 설문입니다.
+            이미 제출하신 설문입니다. 내용을 고치고 싶으면 아래에서 수정할 수 있어요.
           </p>
-          <HomeButton />
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => { setIsEditing(true); setSubmitted(false); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+              style={{
+                marginTop: 28, padding: '12px 28px', borderRadius: 10,
+                border: '1px solid var(--c-accent)', background: 'transparent',
+                color: 'var(--c-accent)', fontSize: 14, fontWeight: 700, cursor: 'pointer',
+              }}
+            >
+              응답 수정하기
+            </button>
+            <HomeButton />
+          </div>
         </div>
       </div>
     );
@@ -479,9 +517,75 @@ export default function SurveyPage() {
         <form onSubmit={handleSubmit}>
 
           {/* ══════════════════════════════════════════
+              경품 이벤트 (최상단) — 마감(2026-05-31) 후 통째로 숨김
+          ══════════════════════════════════════════ */}
+          {eventActive && (<>
+          <SectionHeader emoji="🎁" title="경품 이벤트" />
+
+          <Card>
+            <div style={{
+              background: 'var(--c-active)', border: '1px solid var(--c-accent)',
+              borderRadius: 10, padding: '16px 16px', marginBottom: 20,
+              fontSize: 13.5, color: 'var(--c-text2)', lineHeight: 1.8,
+            }}>
+              <strong>☕ [베타테스트 한달차 이벤트]</strong><br />
+              5월 13일부터 말일까지, <strong>2시간 이상</strong> 사용해보시고 설문에 참여해주시면
+              추첨을 통해 <strong>10분께 2만원 커피쿠폰</strong>을 보내드립니다.<br />
+              설문에 <strong>꼼꼼하게 참여하실수록 당첨 확률이 높아집니다.</strong><br />
+              <span style={{ fontSize: 12.5, color: 'var(--c-text4)' }}>
+                (대부분의 중요 기능 수정을 끝낸 오늘부터의 기록만 인정됩니다.)
+              </span>
+            </div>
+
+            <div id="qWorkStatusLink">
+              <QuestionLabel>작업현황 읽기 전용 링크를 붙여넣어 주세요.{workLinkRequired ? <Required /> : <Optional />}</QuestionLabel>
+              <div style={{ fontSize: 13, color: 'var(--c-text4)', lineHeight: 1.7, marginBottom: 10 }}>
+                · 모바일: 왼쪽 햄버거 버튼 → <strong>작업현황</strong><br />
+                · 데스크톱: 오른쪽 <strong>마이페이지</strong> → <strong>작업현황</strong><br />
+                위 화면에서 읽기 전용 링크를 생성한 뒤 아래에 붙여넣어 주세요.
+              </div>
+              <input
+                type="url"
+                value={answers.qWorkStatusLink}
+                onChange={e => { set('qWorkStatusLink', e.target.value); clearErr('qWorkStatusLink'); }}
+                placeholder="https://..."
+                style={{
+                  width: '100%', background: 'var(--c-input)', border: '1px solid var(--c-border3)',
+                  borderRadius: 8, padding: '10px 12px', color: 'var(--c-text)', fontSize: 14,
+                  outline: 'none', boxSizing: 'border-box',
+                }}
+              />
+              {errors.qWorkStatusLink && errMsg}
+            </div>
+          </Card>
+
+          <Card>
+            <div id="qPhone">
+              <QuestionLabel>경품 수령을 위한 전화번호를 남겨주세요.<Optional /></QuestionLabel>
+              <input
+                type="tel"
+                value={answers.qPhone}
+                onChange={e => set('qPhone', e.target.value)}
+                placeholder="010-1234-5678"
+                style={{
+                  width: '100%', background: 'var(--c-input)', border: '1px solid var(--c-border3)',
+                  borderRadius: 8, padding: '10px 12px', color: 'var(--c-text)', fontSize: 14,
+                  outline: 'none', boxSizing: 'border-box',
+                }}
+              />
+              <div style={{ marginTop: 10, fontSize: 13, color: 'var(--c-text4)', lineHeight: 1.6 }}>
+                🔒 수집된 전화번호는 경품 발송을 위해서만 사용되며, 이벤트 종료 후 파기됩니다.
+              </div>
+            </div>
+          </Card>
+          </>)}
+
+          {/* ══════════════════════════════════════════
               섹션 1: 기본 정보
           ══════════════════════════════════════════ */}
-          <SectionHeader emoji="📝" title="기본 정보" />
+          <div style={{ marginTop: eventActive ? 36 : 0 }}>
+            <SectionHeader emoji="📝" title="기본 정보" />
+          </div>
 
           <Card>
             <div id="q1">
@@ -868,65 +972,6 @@ export default function SurveyPage() {
             </div>
           </Card>
 
-          {/* ══════════════════════════════════════════
-              경품 이벤트
-          ══════════════════════════════════════════ */}
-          <Card>
-            <div style={{
-              background: 'var(--c-active)', border: '1px solid var(--c-accent)',
-              borderRadius: 10, padding: '16px 16px', marginBottom: 20,
-              fontSize: 13.5, color: 'var(--c-text2)', lineHeight: 1.8,
-            }}>
-              <strong>☕ [베타테스트 한달차 이벤트]</strong><br />
-              5월 13일부터 말일까지, <strong>2시간 이상</strong> 사용해보시고 설문에 참여해주시면
-              추첨을 통해 <strong>10분께 2만원 커피쿠폰</strong>을 보내드립니다.<br />
-              설문에 <strong>꼼꼼하게 참여하실수록 당첨 확률이 높아집니다.</strong><br />
-              <span style={{ fontSize: 12.5, color: 'var(--c-text4)' }}>
-                (대부분의 중요 기능 수정을 끝낸 오늘부터의 기록만 인정됩니다.)
-              </span>
-            </div>
-
-            <div id="qWorkStatusLink">
-              <QuestionLabel>Q19. 작업현황 읽기 전용 링크를 붙여넣어 주세요.<Optional /></QuestionLabel>
-              <div style={{ fontSize: 13, color: 'var(--c-text4)', lineHeight: 1.7, marginBottom: 10 }}>
-                · 모바일: 왼쪽 햄버거 버튼 → <strong>작업현황</strong><br />
-                · 데스크톱: 오른쪽 <strong>마이페이지</strong> → <strong>작업현황</strong><br />
-                위 화면에서 읽기 전용 링크를 생성한 뒤 아래에 붙여넣어 주세요.
-              </div>
-              <input
-                type="url"
-                value={answers.qWorkStatusLink}
-                onChange={e => set('qWorkStatusLink', e.target.value)}
-                placeholder="https://..."
-                style={{
-                  width: '100%', background: 'var(--c-input)', border: '1px solid var(--c-border3)',
-                  borderRadius: 8, padding: '10px 12px', color: 'var(--c-text)', fontSize: 14,
-                  outline: 'none', boxSizing: 'border-box',
-                }}
-              />
-            </div>
-          </Card>
-
-          <Card>
-            <div id="qPhone">
-              <QuestionLabel>Q20. 경품 수령을 위한 전화번호를 남겨주세요.<Optional /></QuestionLabel>
-              <input
-                type="tel"
-                value={answers.qPhone}
-                onChange={e => set('qPhone', e.target.value)}
-                placeholder="010-1234-5678"
-                style={{
-                  width: '100%', background: 'var(--c-input)', border: '1px solid var(--c-border3)',
-                  borderRadius: 8, padding: '10px 12px', color: 'var(--c-text)', fontSize: 14,
-                  outline: 'none', boxSizing: 'border-box',
-                }}
-              />
-              <div style={{ marginTop: 10, fontSize: 13, color: 'var(--c-text4)', lineHeight: 1.6 }}>
-                🔒 수집된 전화번호는 경품 발송을 위해서만 사용되며, 이벤트 종료 후 파기됩니다.
-              </div>
-            </div>
-          </Card>
-
           {/* 에러 요약 */}
           {Object.values(errors).some(Boolean) && (
             <div style={{
@@ -974,7 +1019,7 @@ export default function SurveyPage() {
               transition: 'background 0.15s',
             }}
           >
-            {submitting ? '제출 중...' : '설문 제출하기'}
+            {submitting ? '제출 중...' : (isEditing ? '수정 내용 제출하기' : '설문 제출하기')}
           </button>
 
         </form>
