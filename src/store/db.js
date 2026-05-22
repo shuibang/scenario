@@ -45,8 +45,10 @@ export const setItem = (key, value) => {
 
 // ─── 대형 배열 데이터 (IndexedDB — 사실상 무제한) ────────────────────────────
 const IDB_NAME    = 'drama_workspace';
-const IDB_VERSION = 1;
+const IDB_VERSION = 2;
 const IDB_STORE   = 'keyval';
+const SNAP_STORE  = 'snapshots';
+const SNAP_MAX    = 30;
 const FONT_IDB_NAME    = 'drama_fonts_db';
 const FONT_IDB_VERSION = 1;
 const FONT_IDB_STORE   = 'fonts';
@@ -58,7 +60,13 @@ function openIDB() {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(IDB_NAME, IDB_VERSION);
     req.onupgradeneeded = (e) => {
-      e.target.result.createObjectStore(IDB_STORE);
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) {
+        db.createObjectStore(IDB_STORE);
+      }
+      if (!db.objectStoreNames.contains(SNAP_STORE)) {
+        db.createObjectStore(SNAP_STORE, { keyPath: 'id' });
+      }
     };
     req.onsuccess = (e) => { _idb = e.target.result; resolve(_idb); };
     req.onerror   = (e) => reject(e.target.error);
@@ -137,6 +145,15 @@ export async function clearDramaStorage() {
       tx.onerror    = resolve;
       tx.onabort    = resolve;
     });
+    await new Promise((resolve) => {
+      try {
+        const tx = db.transaction(SNAP_STORE, 'readwrite');
+        tx.objectStore(SNAP_STORE).clear();
+        tx.oncomplete = resolve;
+        tx.onerror    = resolve;
+        tx.onabort    = resolve;
+      } catch { resolve(); }
+    });
     try { db.close(); } catch {}
   } catch {}
   _idb = null;
@@ -178,3 +195,88 @@ export const now = () => Date.now();
 export const clearAll = () => {
   Object.values(DB_KEYS).forEach(key => localStorage.removeItem(PREFIX + key));
 };
+
+// ─── 스냅샷 (IndexedDB snapshots 스토어) ─────────────────────────────────────
+// 레코드 스키마: { id, savedAt, label, type, device, projectCount, sceneCount, charCount, sizeBytes, data }
+// SNAP_MAX 초과 시 오래된 것부터 삭제 (savedAt 오름차순 기준)
+
+export async function saveSnapshotToIDB(record) {
+  try {
+    const db = await openIDB();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(SNAP_STORE, 'readwrite');
+      tx.objectStore(SNAP_STORE).put(record);
+      tx.oncomplete = resolve;
+      tx.onerror    = (e) => reject(e.target.error);
+    });
+    // 초과분 정리
+    const all = await new Promise((resolve) => {
+      const tx = db.transaction(SNAP_STORE, 'readonly');
+      const req = tx.objectStore(SNAP_STORE).getAll();
+      req.onsuccess = () => resolve(req.result ?? []);
+      req.onerror   = () => resolve([]);
+    });
+    if (all.length > SNAP_MAX) {
+      const toDelete = all
+        .sort((a, b) => a.savedAt.localeCompare(b.savedAt))
+        .slice(0, all.length - SNAP_MAX);
+      await new Promise((resolve) => {
+        const tx = db.transaction(SNAP_STORE, 'readwrite');
+        const store = tx.objectStore(SNAP_STORE);
+        toDelete.forEach(r => store.delete(r.id));
+        tx.oncomplete = resolve;
+        tx.onerror    = resolve;
+      });
+    }
+  } catch (e) {
+    console.error('[IDB] 스냅샷 저장 실패:', e?.message);
+  }
+}
+
+// data 필드 제외한 메타 목록, 최신순
+export async function loadSnapshotsList() {
+  try {
+    const db = await openIDB();
+    const all = await new Promise((resolve) => {
+      const tx = db.transaction(SNAP_STORE, 'readonly');
+      const req = tx.objectStore(SNAP_STORE).getAll();
+      req.onsuccess = () => resolve(req.result ?? []);
+      req.onerror   = () => resolve([]);
+    });
+    return all
+      .map(({ data: _omit, ...meta }) => meta)
+      .sort((a, b) => b.savedAt.localeCompare(a.savedAt));
+  } catch {
+    return [];
+  }
+}
+
+// id로 스냅샷 data 필드만 반환
+export async function loadSnapshotRecord(id) {
+  try {
+    const db = await openIDB();
+    return await new Promise((resolve) => {
+      const tx = db.transaction(SNAP_STORE, 'readonly');
+      const req = tx.objectStore(SNAP_STORE).get(id);
+      req.onsuccess = () => resolve(req.result?.data ?? null);
+      req.onerror   = () => resolve(null);
+    });
+  } catch {
+    return null;
+  }
+}
+
+export async function deleteSnapshotFromIDB(id) {
+  try {
+    const db = await openIDB();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(SNAP_STORE, 'readwrite');
+      tx.objectStore(SNAP_STORE).delete(id);
+      tx.oncomplete = resolve;
+      tx.onerror    = (e) => reject(e.target.error);
+    });
+  } catch (e) {
+    console.error('[IDB] 스냅샷 삭제 실패:', e?.message);
+    throw e;
+  }
+}

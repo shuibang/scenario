@@ -17,8 +17,9 @@ import {
   loadSnapshotData,
   deleteSnapshot,
   isTokenValid,
+  saveDriveBackup,
 } from '../store/googleDrive';
-import { refreshDriveToken } from '../store/supabaseClient';
+import { guardedSignInWithGoogle } from '../utils/guardedSignIn';
 import { formatSnapshotMetaLine } from '../utils/snapshotMeta';
 import { reportError } from '../utils/errorTracker';
 
@@ -29,6 +30,12 @@ function fmtDate(iso) {
   if (isNaN(d)) return '알 수 없음';
   const pad = n => String(n).padStart(2, '0');
   return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function makeDriveBackupFilename() {
+  const d = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  return `대본백업_${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}.djak`;
 }
 
 // ── 기기 뱃지 색 ─────────────────────────────────────────────────────────────
@@ -119,14 +126,15 @@ function ConfirmDialog({ snap, onConfirm, onCancel, loading }) {
 // ── 메인 ─────────────────────────────────────────────────────────────────────
 export default function SnapshotPanel({ onClose }) {
   const { state, loadFromDriveData } = useApp();
-  const [snapshots, setSnapshots]   = useState([]);
-  const [loading, setLoading]       = useState(true);
-  const [error, setError]           = useState(null);
-  const [confirm, setConfirm]       = useState(null);  // snap entry
-  const [restoring, setRestoring]   = useState(false);
-  const [deleting, setDeleting]     = useState(null);  // snap id
-  const [backing, setBacking]       = useState(false);
-  const [toast, setToast]           = useState(null);
+  const [snapshots, setSnapshots]     = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [error, setError]             = useState(null);
+  const [confirm, setConfirm]         = useState(null);
+  const [restoring, setRestoring]     = useState(false);
+  const [deleting, setDeleting]       = useState(null);
+  const [backing, setBacking]         = useState(false);
+  const [driveBacking, setDriveBacking] = useState(false);
+  const [toast, setToast]             = useState(null);
 
   const showToast = (msg) => {
     setToast(msg);
@@ -137,16 +145,10 @@ export default function SnapshotPanel({ onClose }) {
     setLoading(true);
     setError(null);
     try {
-      if (!isTokenValid()) await refreshDriveToken();
-      if (!isTokenValid()) {
-        setError('Drive 토큰이 만료되었습니다. Google 계정으로 다시 로그인해 주세요.');
-        setSnapshots([]);
-        return;
-      }
       const list = await loadSnapshots();
       setSnapshots(list);
     } catch {
-      setError('스냅샷 목록을 불러오지 못했습니다. Drive 로그인을 확인해 주세요.');
+      setError('스냅샷 목록을 불러오지 못했습니다.');
     } finally {
       setLoading(false);
     }
@@ -154,26 +156,27 @@ export default function SnapshotPanel({ onClose }) {
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  const currentPayload = () => ({
+    projects:       state.projects,
+    episodes:       state.episodes,
+    characters:     state.characters,
+    scenes:         state.scenes,
+    scriptBlocks:   state.scriptBlocks,
+    coverDocs:      state.coverDocs,
+    synopsisDocs:   state.synopsisDocs,
+    resources:      state.resources,
+    workTimeLogs:   state.workTimeLogs,
+    checklistItems: state.checklistItems,
+    trash:          state.trash,
+    stylePreset:    state.stylePreset,
+  });
+
   const handleRestore = async () => {
     if (!confirm) return;
     setRestoring(true);
     try {
-      if (!isTokenValid()) await refreshDriveToken();
       // 1) 현재 상태 백업
-      await saveSnapshot({
-        projects:       state.projects,
-        episodes:       state.episodes,
-        characters:     state.characters,
-        scenes:         state.scenes,
-        scriptBlocks:   state.scriptBlocks,
-        coverDocs:      state.coverDocs,
-        synopsisDocs:   state.synopsisDocs,
-        resources:      state.resources,
-        workTimeLogs:   state.workTimeLogs,
-        checklistItems: state.checklistItems,
-        trash:          state.trash,
-        stylePreset:    state.stylePreset,
-      }, '복원 전 자동저장', 'restore');
+      await saveSnapshot(currentPayload(), '복원 전 자동저장', 'restore');
 
       // 2) 선택 스냅샷 로드
       const data = await loadSnapshotData(confirm.id);
@@ -186,7 +189,7 @@ export default function SnapshotPanel({ onClose }) {
       onClose();
     } catch (e) {
       reportError({ source: 'manual', message: e?.message || String(e), stack: e?.stack });
-      setError('복원 중 문제가 발생했어요. 잠시 후 다시 시도해주세요.');
+      setError('복원 중 문제가 발생했어요.');
       setConfirm(null);
     } finally {
       setRestoring(false);
@@ -197,31 +200,35 @@ export default function SnapshotPanel({ onClose }) {
     setBacking(true);
     setError(null);
     try {
-      const token = await refreshDriveToken();
-      if (!token) {
-        setError('구글 드라이브 재연결이 필요해요');
-        return;
-      }
-      await saveSnapshot({
-        projects:       state.projects,
-        episodes:       state.episodes,
-        characters:     state.characters,
-        scenes:         state.scenes,
-        scriptBlocks:   state.scriptBlocks,
-        coverDocs:      state.coverDocs,
-        synopsisDocs:   state.synopsisDocs,
-        resources:      state.resources,
-        workTimeLogs:   state.workTimeLogs,
-        checklistItems: state.checklistItems,
-        trash:          state.trash,
-        stylePreset:    state.stylePreset,
-      }, '백업', 'backup');
+      await saveSnapshot(currentPayload(), '백업', 'backup');
       await refresh();
       showToast('백업 완료');
     } catch {
-      setError('백업 중 오류가 발생했습니다. Drive 로그인을 확인해 주세요.');
+      setError('백업 중 오류가 발생했습니다.');
     } finally {
       setBacking(false);
+    }
+  };
+
+  const handleDriveBackup = async () => {
+    if (!isTokenValid()) {
+      guardedSignInWithGoogle();
+      return;
+    }
+    setDriveBacking(true);
+    setError(null);
+    try {
+      const filename = makeDriveBackupFilename();
+      await saveDriveBackup(currentPayload(), filename);
+      showToast('Drive에 백업 완료');
+    } catch (e) {
+      if (e?.message === 'DRIVE_AUTH_REQUIRED') {
+        guardedSignInWithGoogle();
+      } else {
+        showToast('Drive 백업 실패 — 다시 시도');
+      }
+    } finally {
+      setDriveBacking(false);
     }
   };
 
@@ -237,8 +244,6 @@ export default function SnapshotPanel({ onClose }) {
       setDeleting(null);
     }
   };
-
-  const notLoggedIn = !isTokenValid();
 
   return (
     <div
@@ -279,27 +284,55 @@ export default function SnapshotPanel({ onClose }) {
           >×</button>
         </div>
 
-        {/* 백업 버튼 */}
-        <button
-          onClick={handleBackup}
-          disabled={backing}
-          style={{
-            width: '100%', padding: '9px 0', borderRadius: 8, marginBottom: 14,
-            background: backing ? 'transparent' : 'rgba(183,148,246,0.2)',
-            border: '1px solid rgba(183,148,246,0.4)',
-            color: '#b794f4', fontSize: 13, fontWeight: 700,
-            cursor: backing ? 'not-allowed' : 'pointer',
-          }}
-        >
-          {backing ? '백업 중…' : '지금 백업하기'}
-        </button>
+        {/* 백업 버튼 2개 */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+          <button
+            onClick={handleBackup}
+            disabled={backing}
+            style={{
+              flex: 1, padding: '9px 0', borderRadius: 8,
+              background: backing ? 'transparent' : 'rgba(183,148,246,0.2)',
+              border: '1px solid rgba(183,148,246,0.4)',
+              color: '#b794f4', fontSize: 13, fontWeight: 700,
+              cursor: backing ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {backing ? '백업 중…' : '지금 백업하기'}
+          </button>
+          <button
+            onClick={handleDriveBackup}
+            disabled={driveBacking}
+            style={{
+              flex: 1, padding: '9px 0', borderRadius: 8,
+              background: driveBacking ? 'transparent' : 'rgba(99,179,237,0.15)',
+              border: '1px solid rgba(99,179,237,0.35)',
+              color: '#63b3ed', fontSize: 13, fontWeight: 700,
+              cursor: driveBacking ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {driveBacking ? 'Drive 저장 중…' : 'Drive에 백업'}
+          </button>
+        </div>
 
         {/* 안내 */}
-        <div style={{ fontSize: 11, color: 'var(--c-text6)', marginBottom: 14, lineHeight: 1.7 }}>
-          <b style={{ color: 'var(--c-text5)' }}>자동저장</b> 10분마다 · 10개 보관 &nbsp;|&nbsp;
-          <b style={{ color: 'var(--c-text5)' }}>수동저장</b> 저장 버튼 시 · 10개 보관 &nbsp;|&nbsp;
-          <b style={{ color: 'var(--c-text5)' }}>백업</b> 직접 생성 · 10개 보관
-          {notLoggedIn && <span style={{ color: '#f6ad55' }}> &nbsp;— Drive 로그인 필요</span>}
+        <div style={{ fontSize: 11, color: 'var(--c-text6)', marginBottom: 10, lineHeight: 1.7 }}>
+          <b style={{ color: 'var(--c-text5)' }}>자동저장</b> 10분마다 &nbsp;|&nbsp;
+          <b style={{ color: 'var(--c-text5)' }}>수동저장</b> 저장 버튼 시 &nbsp;|&nbsp;
+          <b style={{ color: 'var(--c-text5)' }}>백업</b> 직접 생성 &nbsp;·&nbsp; 최대 30개 보관
+        </div>
+
+        {/* 브라우저 저장 경고 박스 */}
+        <div style={{
+          display: 'flex', gap: 8, alignItems: 'flex-start',
+          background: '#fff8e1', borderRadius: 7, padding: '9px 12px', marginBottom: 14,
+          border: '1px solid #ffe082',
+        }}>
+          <span style={{ fontSize: 14, lineHeight: 1, flexShrink: 0, marginTop: 1 }}>⚠</span>
+          <div style={{ fontSize: 11, color: '#795548', lineHeight: 1.6 }}>
+            자동 백업은 <b>이 브라우저에만</b> 저장됩니다.<br />
+            브라우저 캐시를 삭제하거나 다른 기기에서는 복원할 수 없어요.<br />
+            중요한 대본은 <b>Drive에 백업</b>으로 별도 저장하세요.
+          </div>
         </div>
 
         {/* 오류 */}
@@ -347,12 +380,11 @@ export default function SnapshotPanel({ onClose }) {
                 <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                   <button
                     onClick={() => setConfirm(snap)}
-                    disabled={notLoggedIn || !!deleting}
+                    disabled={!!deleting}
                     style={{
                       padding: '5px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600,
                       background: 'var(--c-accent)', color: '#fff', border: 'none',
-                      cursor: notLoggedIn ? 'not-allowed' : 'pointer',
-                      opacity: notLoggedIn ? 0.5 : 1,
+                      cursor: 'pointer',
                     }}
                   >
                     복원
@@ -382,7 +414,7 @@ export default function SnapshotPanel({ onClose }) {
             position: 'absolute', bottom: 20, left: '50%', transform: 'translateX(-50%)',
             background: 'var(--c-accent)', color: '#fff',
             padding: '6px 16px', borderRadius: 8, fontSize: 13,
-            pointerEvents: 'none',
+            pointerEvents: 'none', whiteSpace: 'nowrap',
           }}>
             {toast}
           </div>

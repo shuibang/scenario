@@ -5,21 +5,11 @@
  */
 
 import { computeSnapshotMeta } from '../utils/snapshotMeta';
+import { saveSnapshotToIDB, loadSnapshotsList, loadSnapshotRecord, deleteSnapshotFromIDB } from './db';
 
 const DRIVE_API  = 'https://www.googleapis.com/drive/v3';
 const UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3';
 const FILE_NAME  = 'drama_workspace.json';
-
-const SNAPSHOTS_INDEX = 'drama_snapshots.json';
-const SNAP_PREFIX     = 'drama_snap_';
-
-// 타입별 보관 한도
-//   auto:          10분 주기 자동 스냅샷 전용
-//   manual:        사용자 "저장" 버튼
-//   backup:        SnapshotPanel "지금 백업"
-//   restore:       SnapshotPanel 복원 직전 자동 보존 — 한도 없으면 무제한 누적
-//   device_switch: 기기 간 동기화 모달에서 덮어쓰기 직전 자동 보존 — auto와 분리해 밀려남 방지
-const SNAP_LIMITS = { auto: 10, manual: 10, backup: 10, restore: 5, device_switch: 5 };
 
 // ── Token 관리 ──────────────────────────────────────────────────────────────
 let _accessToken = null;
@@ -267,78 +257,6 @@ async function createNewFile(name, jsonContent) {
 // ── 인덱스 파일 ID 캐싱 ────────────────────────────────────────────────────
 // 인덱스(drama_snapshots.json)의 fileId는 한 번 만들어지면 변하지 않음 → 매 호출 search 회피.
 // localStorage에 저장해 다음 세션에서도 재사용. 파일이 외부에서 삭제·재생성된 경우 404 처리로 invalidate.
-const INDEX_ID_CACHE_KEY = 'drama_snap_index_id';
-let _indexFileIdCache = null;
-
-function loadIndexIdFromLS() {
-  try { return localStorage.getItem(INDEX_ID_CACHE_KEY); } catch { return null; }
-}
-function saveIndexIdToLS(id) {
-  try { id ? localStorage.setItem(INDEX_ID_CACHE_KEY, id) : localStorage.removeItem(INDEX_ID_CACHE_KEY); } catch {}
-}
-function invalidateIndexIdCache() {
-  _indexFileIdCache = null;
-  saveIndexIdToLS(null);
-}
-
-async function getOrFindIndexFileId() {
-  if (_indexFileIdCache) return _indexFileIdCache;
-  const fromLs = loadIndexIdFromLS();
-  if (fromLs) { _indexFileIdCache = fromLs; return fromLs; }
-  const file = await findFileByName(SNAPSHOTS_INDEX);
-  if (file?.id) {
-    _indexFileIdCache = file.id;
-    saveIndexIdToLS(file.id);
-    return file.id;
-  }
-  return null;
-}
-
-// 인덱스 읽기 — 캐시된 ID로 바로 GET, 404면 invalidate 후 fallback 검색+읽기.
-async function readIndexFile() {
-  const cachedId = await getOrFindIndexFileId();
-  if (!cachedId) return null;
-  return withAuthRetry(async () => {
-    const res = await fetch(`${DRIVE_API}/files/${cachedId}?alt=media`, {
-      headers: { Authorization: `Bearer ${_accessToken}` },
-    });
-    if (res.status === 404) {
-      invalidateIndexIdCache();
-      return await readFileByName(SNAPSHOTS_INDEX); // fallback: 새 ID 검색
-    }
-    if (!res.ok) await throwDriveError(res, 'Drive 인덱스 읽기 실패');
-    return await res.json();
-  });
-}
-
-// 인덱스 쓰기 — 캐시된 ID로 PATCH, 없으면 새 파일 POST + ID 캐싱.
-async function writeIndexFile(jsonContent) {
-  const cachedId = await getOrFindIndexFileId();
-  if (cachedId) {
-    return withAuthRetry(async () => {
-      const form = new FormData();
-      form.append('metadata', new Blob([JSON.stringify({ name: SNAPSHOTS_INDEX })], { type: 'application/json' }));
-      form.append('file',     new Blob([jsonContent], { type: 'application/json' }));
-      const res = await fetch(`${UPLOAD_API}/files/${cachedId}?uploadType=multipart`, {
-        method:  'PATCH',
-        headers: { Authorization: `Bearer ${_accessToken}` },
-        body:    form,
-      });
-      if (res.status === 404) {
-        // 외부에서 삭제됨 → 캐시 비우고 새로 생성
-        invalidateIndexIdCache();
-        const created = await createNewFile(SNAPSHOTS_INDEX, jsonContent);
-        if (created?.id) { _indexFileIdCache = created.id; saveIndexIdToLS(created.id); }
-        return;
-      }
-      if (!res.ok) await throwDriveError(res, 'Drive 인덱스 저장 실패');
-    });
-  }
-  // 캐시 없음 + 검색도 없음 → 새 인덱스 파일 생성
-  const created = await createNewFile(SNAPSHOTS_INDEX, jsonContent);
-  if (created?.id) { _indexFileIdCache = created.id; saveIndexIdToLS(created.id); }
-}
-
 // ── Drive에 저장 ────────────────────────────────────────────────────────────
 // 여러 요청이 겹쳤을 때 응답 순서 역전으로 이전 savedAt이 최신을 덮어쓰는 사고를 막기 위해
 // 모든 호출을 Promise chain으로 직렬화한다.
@@ -427,86 +345,94 @@ export async function loadIdeasFromDrive() {
 const _pendingProjectSaves = {};
 let _pendingIndexSave = Promise.resolve();
 
-// ── 스냅샷 ──────────────────────────────────────────────────────────────────
+// ── Drive 수동 백업 (My Drive "대본작업실 백업" 폴더) ────────────────────────
+// appDataFolder 스냅샷과 완전히 분리 — 사용자가 Drive에서 직접 볼 수 있는 파일
 
-/** 스냅샷 인덱스 목록 반환 (없으면 []) */
-export async function loadSnapshots() {
-  if (!isTokenValid()) return [];
-  try {
-    const index = await readFileByName(SNAPSHOTS_INDEX);
-    return index?.snapshots ?? [];
-  } catch {
-    return [];
-  }
+const BACKUP_FOLDER_NAME = '대본작업실 백업';
+let _backupFolderId = null; // 세션 내 메모리 캐시
+
+async function findOrCreateBackupFolder() {
+  if (_backupFolderId) return _backupFolderId;
+  return withAuthRetry(async () => {
+    const q = encodeURIComponent(`name='${BACKUP_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+    const res = await fetch(`${DRIVE_API}/files?q=${q}&fields=files(id)`, {
+      headers: { Authorization: `Bearer ${_accessToken}` },
+    });
+    if (!res.ok) await throwDriveError(res, 'Drive 폴더 검색 실패');
+    const data = await res.json();
+    if (data.files?.[0]?.id) {
+      _backupFolderId = data.files[0].id;
+      return _backupFolderId;
+    }
+    // 폴더 없음 → 생성
+    const createRes = await fetch(`${DRIVE_API}/files`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${_accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: BACKUP_FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder' }),
+    });
+    if (!createRes.ok) await throwDriveError(createRes, 'Drive 폴더 생성 실패');
+    const folder = await createRes.json();
+    _backupFolderId = folder.id;
+    return _backupFolderId;
+  });
 }
 
 /**
- * 현재 workspace 상태를 스냅샷으로 저장
- * @param {object} payload - 저장할 state (projects, episodes, scriptBlocks …)
+ * My Drive "대본작업실 백업" 폴더에 .djak 파일로 저장
+ * @param {object} data     - 전체 workspace payload
+ * @param {string} filename - '대본백업_YYYY-MM-DD_HH-MM.djak'
+ */
+export async function saveDriveBackup(data, filename) {
+  if (!isTokenValid()) throw new Error('DRIVE_AUTH_REQUIRED');
+  const folderId = await findOrCreateBackupFolder();
+  const content  = JSON.stringify(data);
+  return withAuthRetry(async () => {
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify({ name: filename, parents: [folderId] })], { type: 'application/json' }));
+    form.append('file',     new Blob([content], { type: 'application/json' }));
+    const res = await fetch(`${UPLOAD_API}/files?uploadType=multipart&fields=id`, {
+      method:  'POST',
+      headers: { Authorization: `Bearer ${_accessToken}` },
+      body:    form,
+    });
+    if (!res.ok) await throwDriveError(res, 'Drive 백업 저장 실패');
+    return await res.json();
+  });
+}
+
+// ── 스냅샷 (IndexedDB 기반) ──────────────────────────────────────────────────
+
+/** 스냅샷 메타 목록 반환 (최신순, data 필드 제외) */
+export async function loadSnapshots() {
+  return await loadSnapshotsList();
+}
+
+/**
+ * 현재 workspace 상태를 스냅샷으로 IndexedDB에 저장
+ * @param {object} payload - 저장할 state
  * @param {string} label   - '자동저장' | '수동저장' | '백업' | '복원 전 자동저장'
- * @param {'auto'|'manual'|'backup'} type
+ * @param {'auto'|'manual'|'backup'|'restore'|'device_switch'} type
  */
 export async function saveSnapshot(payload, label = '수동저장', type = 'manual') {
-  if (!isTokenValid()) throw new Error('DRIVE_AUTH_REQUIRED');
-
   const id      = `${Date.now()}`;
   const savedAt = new Date().toISOString();
   const device  = getDeviceLabel();
-
-  // 메타 계산: 같은 jsonStr을 업로드와 sizeBytes 양쪽에 재사용 (한 번만 직렬화)
   const jsonStr = JSON.stringify({ ...payload, savedAt });
   const meta    = computeSnapshotMeta(payload, jsonStr);
-
-  // 최적화: Step 1(스냅샷 데이터 업로드)와 Step 2(인덱스 읽기)는 독립이라 병렬화 가능.
-  // - 스냅샷 데이터 파일은 timestamp ID로 unique → upsertFile의 search 스킵하고 createNewFile 직접 사용.
-  // - 인덱스 file id는 캐싱(localStorage)해 매 호출 search 회피.
-  const [, existing] = await Promise.all([
-    createNewFile(`${SNAP_PREFIX}${id}.json`, jsonStr),
-    readIndexFile(),
-  ]);
-
-  const prev     = existing?.snapshots ?? [];
-  const entry    = { id, savedAt, label, type, device, ...meta };
-  const updated  = [entry, ...prev];
-
-  // 3) 타입별 한도 초과분 삭제
-  const byType = { auto: [], manual: [], backup: [], restore: [] };
-  updated.forEach(s => {
-    const t = s.type ?? 'manual';
-    if (!byType[t]) byType[t] = [];
-    byType[t].push(s);
-  });
-  const toDelete = [];
-  Object.entries(SNAP_LIMITS).forEach(([t, limit]) => {
-    if (byType[t]?.length > limit) {
-      toDelete.push(...byType[t].slice(limit));
-      byType[t] = byType[t].slice(0, limit);
-    }
-  });
-  toDelete.forEach(old => deleteFileByName(`${SNAP_PREFIX}${old.id}.json`).catch(() => {}));
-
-  // 4) 전체 목록 최신순 정렬 후 저장 — 캐싱된 인덱스 ID로 직접 PATCH (search 회피).
-  const kept = Object.values(byType).flat()
-    .sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt));
-  await writeIndexFile(JSON.stringify({ snapshots: kept }));
-  return entry;
+  await saveSnapshotToIDB({ id, savedAt, label, type, device, ...meta, data: payload });
+  return { id, savedAt, label, type, device, ...meta };
 }
 
-/** 특정 스냅샷의 전체 데이터 반환 */
+/** 특정 스냅샷의 전체 data 반환 */
 export async function loadSnapshotData(id) {
-  if (!isTokenValid()) throw new Error('DRIVE_AUTH_REQUIRED');
-  return await readFileByName(`${SNAP_PREFIX}${id}.json`);
+  const data = await loadSnapshotRecord(id);
+  if (!data) throw new Error('스냅샷 데이터를 찾을 수 없습니다.');
+  return data;
 }
 
 /** 스냅샷 삭제 */
 export async function deleteSnapshot(id) {
-  if (!isTokenValid()) throw new Error('DRIVE_AUTH_REQUIRED');
-  const existing  = await readFileByName(SNAPSHOTS_INDEX);
-  const snapshots = (existing?.snapshots ?? []).filter(s => s.id !== id);
-  await Promise.all([
-    upsertFile(SNAPSHOTS_INDEX, JSON.stringify({ snapshots })),
-    deleteFileByName(`${SNAP_PREFIX}${id}.json`),
-  ]);
+  await deleteSnapshotFromIDB(id);
 }
 
 // ── 감독 전용: 대본 저장 / 불러오기 ────────────────────────────────────────
