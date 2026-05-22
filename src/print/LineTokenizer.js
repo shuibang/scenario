@@ -201,6 +201,7 @@ export function tokenizeSection(section, metrics) {
 
     let prevBlock = null;
     for (const block of section.blocks) {
+      const tokensBefore = tokens.length;
 
       switch (block.type) {
         case 'scene_number': {
@@ -304,6 +305,13 @@ export function tokenizeSection(section, metrics) {
             );
           }
       }
+
+      // 블록의 주석(annotations)을 해당 블록 첫 번째 토큰에 붙인다.
+      const annots = (block.annotations || []).filter(a => a.note?.trim());
+      if (annots.length && tokens.length > tokensBefore) {
+        tokens[tokensBefore] = { ...tokens[tokensBefore], annotations: annots };
+      }
+
       prevBlock = block;
     }
     return tokens;

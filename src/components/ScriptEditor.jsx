@@ -1,6 +1,6 @@
 import React, {
   useState, useEffect, useRef, useCallback, useMemo,
-  forwardRef, useImperativeHandle,
+  forwardRef, useImperativeHandle, useLayoutEffect,
 } from 'react';
 import { createPortal } from 'react-dom';
 import DOMPurify from 'dompurify';
@@ -15,6 +15,9 @@ import { resolveFont } from '../print/FontRegistry';
 import { getLayoutMetrics } from '../print/LineTokenizer';
 import EmotionTagPicker from './EmotionTagPicker';
 import UnifiedTagPicker from './UnifiedTagPicker';
+import AnnotationPopover from './annotations/AnnotationPopover';
+import BlockAnnotations from './annotations/BlockAnnotations';
+import { createAnnotation } from '../utils/annotationUtils';
 import { BUILTIN_GUIDES } from '../data/structureTags';
 import { resolveAnchorRect } from '../utils/pickerPosition';
 
@@ -719,6 +722,7 @@ function parseSurface(surface, metaRef, epId, projId) {
       sceneRefs,
       emotionTag: prev.emotionTag || null,
       alignment: div.dataset.alignment || prev.alignment || undefined,
+      annotations: prev.annotations ?? [],
     };
     if (type === 'scene_number') {
       const label = prev.label || div.dataset.label || '';
@@ -2231,6 +2235,86 @@ const EditorSurface = forwardRef(function EditorSurface({
   );
 });
 
+// ─── AnnotationLayer ─────────────────────────────────────────────────────────
+// 모든 주석(position 무관)을 블록 바로 뒤 contenteditable="false" placeholder에
+// createPortal로 렌더링 → 문서 흐름에 참여해 이후 블록과 겹치지 않음.
+function AnnotationLayer({ blocks, onAnnotationsChange }) {
+  const placeholderMap = useRef({}); // blockId → placeholder div
+  const [tick, setTick] = useState(0); // force re-render after placeholders are created
+
+  useLayoutEffect(() => {
+    const surface = document.querySelector('[data-editor-surface]');
+    if (!surface) return;
+
+    // 주석이 있는 블록의 DOM 요소 수집
+    const needPlaceholder = new Map(); // blockId → blockEl
+    for (const b of blocks) {
+      if (!b.annotations?.some(a => a.note?.trim())) continue;
+      const el = surface.querySelector(`[data-block-id="${b.id}"]`);
+      if (el) needPlaceholder.set(b.id, el);
+    }
+
+    // 불필요해진 placeholder 제거
+    for (const id of Object.keys(placeholderMap.current)) {
+      if (!needPlaceholder.has(id)) {
+        try { placeholderMap.current[id].remove(); } catch {}
+        delete placeholderMap.current[id];
+      }
+    }
+
+    // placeholder 생성 / 재연결 / 위치 교정
+    let changed = false;
+    for (const [id, blockEl] of needPlaceholder) {
+      let ph = placeholderMap.current[id];
+      if (!ph || !ph.isConnected) {
+        ph = document.createElement('div');
+        ph.setAttribute('contenteditable', 'false');
+        ph.setAttribute('data-annotation-ui', '');
+        ph.setAttribute('data-ann-host', id);
+        placeholderMap.current[id] = ph;
+        changed = true;
+      }
+      if (blockEl.nextSibling !== ph) {
+        blockEl.after(ph);
+        changed = true;
+      }
+    }
+    if (changed) setTick(t => t + 1);
+  }, [blocks]);
+
+  // Cleanup on unmount
+  useEffect(() => () => {
+    for (const ph of Object.values(placeholderMap.current)) {
+      try { ph.remove(); } catch {}
+    }
+  }, []);
+
+  const annotated = blocks.filter(b => b.annotations?.some(a => a.note?.trim()));
+  if (!annotated.length) return null;
+
+  return annotated.map(b => {
+    const ph = placeholderMap.current[b.id];
+    if (!ph?.isConnected) return null;
+
+    const callbacks = {
+      onUpdate: (annId, note) => onAnnotationsChange(b.id,
+        b.annotations.map(a => a.id === annId ? { ...a, note, updatedAt: now() } : a)
+      ),
+      onDelete: (annId) => onAnnotationsChange(b.id,
+        b.annotations.filter(a => a.id !== annId)
+      ),
+    };
+
+    return createPortal(
+      <div data-annotation-ui>
+        <BlockAnnotations annotations={b.annotations} {...callbacks} />
+      </div>,
+      ph,
+      `ann-${b.id}`
+    );
+  });
+}
+
 // ─── ScriptEditor (main) ──────────────────────────────────────────────────────
 export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboardUp, isMobile, onScrollRefReady, focusMode, setFocusMode }) {
   const { state, dispatch } = useApp();
@@ -2256,6 +2340,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   const [charPickerNoSel, setCharPickerNoSel] = useState(null); // { top, left } — 선택안함 표시
   const [nextTypePicker, setNextTypePicker] = useState(null); // { blockId, top, left, onSelect } — 다음 형식 선택
   const [charSuggestState, setCharSuggestState] = useState(null); // { blockId, blockEl, charName }
+  const [annPopover, setAnnPopover] = useState(null); // null | { blockId, selectedText, position: {x,y} }
   const [suggestEnabled, setSuggestEnabled] = useState(() => localStorage.getItem(CHAR_SUGGEST_KEY) !== 'off');
   const suppressCharPickerOpenUntilRef = useRef(0);
   const [pasteToast, setPasteToast] = useState(null);
@@ -2410,6 +2495,32 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     });
   }, [flashChangedBlock, dispatch, activeEpisodeId]);
 
+  // ── Annotation handlers ───────────────────────────────────────────────────
+  const handleAnnotationsChange = useCallback((blockId, nextAnnotations) => {
+    setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, annotations: nextAnnotations } : b));
+  }, []);
+
+  const handleAnnotationMouseUp = useCallback((e) => {
+    if (e.target.closest('[data-annotation-ui]')) return;
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed) return;
+    const selectedText = sel.toString().trim();
+    if (!selectedText) return;
+    const range = sel.getRangeAt(0);
+    const surface = document.querySelector('[data-editor-surface]');
+    if (!surface) return;
+    const anchor = range.commonAncestorContainer;
+    const blockEl = (anchor.nodeType === 1 ? anchor : anchor.parentElement)
+      ?.closest('[data-block-id]');
+    if (!blockEl || !surface.contains(blockEl)) return;
+    const rect = range.getBoundingClientRect();
+    setAnnPopover({
+      blockId: blockEl.dataset.blockId,
+      selectedText,
+      position: { x: rect.left, y: rect.bottom + 6 },
+    });
+  }, []);
+
   // anchor 인덱스부터 모두 제거하고 최종 상태 1개 push.
   // 슬래시 감정 태그 같이 "한 작가 액션 = 1 undo 단위"로 묶어야 할 때 사용.
   // anchor 자체도 제거 → undo 1회로 슬래시 직전 안정 snap으로 복귀.
@@ -2482,17 +2593,20 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     const raw = epBlocks.length > 0
       ? epBlocks
       : [{ id: genId(), episodeId: activeEpisodeId, projectId: activeProjectId,
-           type: 'action', content: '', label: '', createdAt: now(), updatedAt: now() }];
+           type: 'action', content: '', label: '', createdAt: now(), updatedAt: now(),
+           annotations: [] }];
     // scene_number 블록 content가 비어있으면 씬 structured 필드에서 재파생
+    // annotations 필드가 없는 구 블록에 [] 로 마이그레이션
     const loaded = raw.map(b => {
-      if (b.type === 'scene_number' && b.sceneId && !b.content) {
-        const scene = scenes.find(s => s.id === b.sceneId);
+      const withAnnotations = b.annotations != null ? b : { ...b, annotations: [] };
+      if (withAnnotations.type === 'scene_number' && withAnnotations.sceneId && !withAnnotations.content) {
+        const scene = scenes.find(s => s.id === withAnnotations.sceneId);
         if (scene) {
           const derived = resolveSceneLabel({ ...scene, label: '' });
-          if (derived) return { ...b, content: derived };
+          if (derived) return { ...withAnnotations, content: derived };
         }
       }
-      return b;
+      return withAnnotations;
     });
     setBlocks(loaded);
     lastSavedBlocks.current = JSON.stringify(loaded);
@@ -3699,6 +3813,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
           id: genId(), episodeId: activeEpisodeId, projectId: activeProjectId,
           type: 'action', content: '', label: '',
           sceneId: prev.sceneId || genId(), createdAt: now(), updatedAt: now(),
+          annotations: [],
         });
       }
       newBlocks.push(...parsed);
@@ -3994,6 +4109,9 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
         className="flex-1 min-h-0 overflow-y-auto relative"
         style={{ overflowX: 'hidden' }}
         onClick={(e) => {
+          // React portal events bubble through the React tree even when the DOM target is outside
+          // this container (e.g. AnnotationPopover portaled to document.body). Skip in that case.
+          if (!editorScrollRef.current?.contains(e.target)) return;
           const inSurface = !!e.target.closest('[data-editor-surface]');
           if (inSurface) {
             // User clicked inside the editor — apply pending block type if any
@@ -4022,8 +4140,10 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
         }}
       >
         <div
+          onMouseUp={handleAnnotationMouseUp}
           style={focusMode ? {
             // 집중 모드: 고정 용지폭 + CSS zoom (layout 자동 반영, 렉 없음)
+            position: 'relative',
             width: PAPER_PX,
             marginLeft: 'auto',
             marginRight: 'auto',
@@ -4036,6 +4156,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
             paddingRight: '3rem',
             zoom: appliedZoom,
           } : {
+            position: 'relative',
             maxWidth: '42rem',
             marginLeft: 'auto',
             marginRight: 'auto',
@@ -4075,6 +4196,27 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
             onNextTypePick={({ blockId, currentType, top, left }) => setNextTypePicker({ blockId, currentType, top, left, mode: 'create' })}
             onCloseSceneRef={() => { if (sceneRefPickerRef.current) setSceneRefPicker(null); }}
           />
+          <AnnotationLayer blocks={blocks} onAnnotationsChange={handleAnnotationsChange} />
+          {annPopover && (
+            <div data-annotation-ui className="annotation-popover">
+              <AnnotationPopover
+                selectedText={annPopover.selectedText}
+                position={annPopover.position}
+                onSave={(note) => {
+                  const block = blocks.find(b => b.id === annPopover.blockId);
+                  if (!block) return;
+                  const ann = createAnnotation(
+                    { selectedText: annPopover.selectedText, note },
+                    block.annotations ?? []
+                  );
+                  handleAnnotationsChange(annPopover.blockId, [...(block.annotations ?? []), ann]);
+                  setAnnPopover(null);
+                  window.getSelection()?.removeAllRanges();
+                }}
+                onClose={() => { setAnnPopover(null); window.getSelection()?.removeAllRanges(); }}
+              />
+            </div>
+          )}
           <div className="h-48" />
         </div>
 

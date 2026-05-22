@@ -102,6 +102,9 @@ function makeStyles(preset, metrics) {
     paren:       { fontSize: fs - 1, color: '#444' },
     transition:  { textAlign: 'right', marginVertical: 4 },
     blank:       { marginBottom: fs * lh },
+    // ── annotations
+    annotationWrap: { borderTopWidth: 0.5, borderTopColor: '#cccccc', paddingTop: 2, marginTop: 2, marginBottom: 4 },
+    annotationNote: { fontSize: Math.max(fs - 2, 7), color: '#555555', lineHeight: 1.3 },
   });
 }
 
@@ -154,6 +157,16 @@ function htmlToPdfChildren(html) {
   if (segments.length === 0) return '';
   // 단일 segment도 <Text>[] 반환 — parent는 항상 <Text> 자식만 가짐
   return segments;
+}
+
+// ─── Annotation → PDF element ────────────────────────────────────────────────
+function AnnotationEl({ ann, S }) {
+  const marker = ann.markerId ? `${ann.markerId} ` : '';
+  return (
+    <View style={S.annotationWrap}>
+      <Text style={S.annotationNote}>{marker}{ann.note}</Text>
+    </View>
+  );
 }
 
 // ─── Token → PDF element ──────────────────────────────────────────────────────
@@ -244,14 +257,20 @@ function SectionPage({ tokens, S, watermarkText }) {
   return (
     <Page size="A4" style={S.page}>
       <WatermarkPdf text={watermarkText} />
-      {blockTokens.map((token, i) => (
-        <TokenEl
-          key={i}
-          token={token}
-          text={token.rawHtml ?? token.blockText ?? token.text}
-          S={S}
-        />
-      ))}
+      {blockTokens.flatMap((token, i) => {
+        const els = [
+          <TokenEl
+            key={`b${i}`}
+            token={token}
+            text={token.rawHtml ?? token.blockText ?? token.text}
+            S={S}
+          />,
+        ];
+        (token.annotations || []).forEach((ann, j) => {
+          els.push(<AnnotationEl key={`a${i}_${j}`} ann={ann} S={S} />);
+        });
+        return els;
+      })}
       <Text style={S.pageNum} fixed render={({ pageNumber }) => `- ${pageNumber} -`} />
     </Page>
   );

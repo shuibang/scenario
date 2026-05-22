@@ -20,6 +20,21 @@ function esc(str) {
     .replace(/\n/g, '<br>');
 }
 
+// ─── Annotation wrapper ───────────────────────────────────────────────────────
+// annotations 배열을 받아 블록 HTML 아래에 주석 단락들을 덧붙여 반환.
+// position 값과 무관하게 단일 below 방식으로 렌더링.
+function renderBlockWithAnnotations(blockHtml, annotations) {
+  if (!annotations?.length) return blockHtml;
+  const anns = annotations.filter(a => a.note?.trim());
+  if (!anns.length) return blockHtml;
+
+  const annHtml = anns.map(a =>
+    `<div class="annotation-below"><span class="annotation-marker">${esc(a.markerId || '*')}</span> ${esc(a.note)}</div>`
+  ).join('');
+
+  return `${blockHtml}${annHtml}`;
+}
+
 // ─── Section renderers ────────────────────────────────────────────────────────
 
 function renderCover(section, margins) {
@@ -80,30 +95,38 @@ function renderEpisode(section, dialogueGap, isFirst) {
     const richContent = (block.content || '').replace(/\n/g, '<br>');
     const plainContent = esc(block.content || '');
     const alignStyle = block.alignment ? ` style="text-align:${block.alignment}"` : '';
+    let blockHtml;
     switch (block.type) {
       case 'scene_number': {
         const label = esc(block.label || '');
         const full  = [label, plainContent].filter(Boolean).join(' ');
-        return `<div class="scene-number">${full}</div>`;
+        blockHtml = `<div class="scene-number">${full}</div>`;
+        break;
       }
       case 'action':
-        return `<div class="action"${alignStyle}>${richContent}</div>`;
+        blockHtml = `<div class="action"${alignStyle}>${richContent}</div>`;
+        break;
       case 'dialogue': {
         const charName = esc(block.charName || '');
-        return `<div class="dialogue">
+        blockHtml = `<div class="dialogue">
           <span class="char-col" style="width:${dialogueGap}">${charName}</span>
           <span class="speech-col"${alignStyle}>${richContent}</span>
         </div>`;
+        break;
       }
       case 'parenthetical':
-        return `<div class="parenthetical" style="margin-left:${dialogueGap}">${richContent}</div>`;
+        blockHtml = `<div class="parenthetical" style="margin-left:${dialogueGap}">${richContent}</div>`;
+        break;
       case 'transition':
-        return `<div class="transition">${plainContent}</div>`;
+        blockHtml = `<div class="transition">${plainContent}</div>`;
+        break;
       case 'scene_ref':
-        return `<div class="scene-ref">${plainContent}</div>`;
+        blockHtml = `<div class="scene-ref">${plainContent}</div>`;
+        break;
       default:
-        return plainContent ? `<div class="body-text">${plainContent}</div>` : '';
+        blockHtml = plainContent ? `<div class="body-text">${plainContent}</div>` : '';
     }
+    return renderBlockWithAnnotations(blockHtml, block.annotations);
   }).filter(Boolean).join('\n');
 
   return `<div class="${breakClass.trim() || 'block'}">
@@ -283,6 +306,10 @@ body {
 .char-entry-name { font-weight: 700; font-size: ${fontSize + 1}pt; }
 .char-entry-meta { color: #555; font-size: ${fontSize - 1}pt; }
 .char-entry-desc { margin-top: 2pt; text-align: justify; white-space: pre-wrap; }
+
+/* ── Annotations ─────────────────────────────────── */
+.annotation-below { font-size: 0.8em; color: #444; margin-top: 4px; padding-top: 4px; border-top: 1px solid #ccc; }
+.annotation-marker { font-weight: bold; }
 </style>
 </head>
 <body>

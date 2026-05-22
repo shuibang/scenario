@@ -15,6 +15,7 @@ import {
   convertMillimetersToTwip,
   Footer, PageNumber,
   SectionType, LineRuleType, NumberFormat,
+  BorderStyle,
 } from 'docx';
 import { buildPrintModel } from './PrintModel';
 import { resolveFont } from './FontRegistry';
@@ -247,6 +248,35 @@ function parenPara(text, dp) {
   });
 }
 
+// ─── Annotation paragraphs (position 무관, 블록 아래 단일 방식) ──────────────
+function annotationParas(annotations, dp) {
+  const anns = (annotations || []).filter(a => a.note?.trim());
+  if (!anns.length) return [];
+  const annotSizeHalfPt = Math.max(Math.round((dp.fontSize - 2) * 2), 14); // min 7pt
+  return anns.map(a => {
+    const marker = a.markerId ? `${a.markerId} ` : '* ';
+    return new Paragraph({
+      children: [
+        new TextRun({
+          text: `${marker}${a.note}`,
+          font: dp.fontSpec,
+          size: annotSizeHalfPt,
+          color: '666666',
+        }),
+      ],
+      spacing: {
+        before: 40,
+        after: 0,
+        line: Math.round((dp.fontSize - 2) * 1.4 * 20),
+        lineRule: LineRuleType.EXACT,
+      },
+      border: {
+        top: { style: BorderStyle.SINGLE, size: 4, color: 'CCCCCC', space: 4 },
+      },
+    });
+  });
+}
+
 // ─── Page number footer ───────────────────────────────────────────────────────
 // PageNumber is an enum object (not a class). Page numbers go inside TextRun.children
 // where the string constant PageNumber.CURRENT is handled by the Run constructor.
@@ -380,6 +410,7 @@ function buildDocxSections(printModel, dp, { hancom = false } = {}) {
           default:
             paras.push(para(block.content || '', dp));
         }
+        paras.push(...annotationParas(block.annotations, dp));
         prevBlock = block;
       }
     }

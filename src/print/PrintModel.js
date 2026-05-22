@@ -83,14 +83,15 @@ function normalizeBlock(block, characters) {
     content = content.slice(charName.length).trimStart();
   }
   return {
-    id:         block.id,
-    type:       block.type,
-    label:      stripLiteralTags(block.label || ''),
+    id:          block.id,
+    type:        block.type,
+    label:       stripLiteralTags(block.label || ''),
     content,
     charName,
-    alignment:  block.alignment || undefined,
-    sceneId:    block.sceneId,
-    refSceneId: block.refSceneId || '',
+    alignment:   block.alignment || undefined,
+    sceneId:     block.sceneId,
+    refSceneId:  block.refSceneId || '',
+    annotations: (block.annotations || []).filter(a => a.note?.trim()),
   };
 }
 
