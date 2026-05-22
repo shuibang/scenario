@@ -925,10 +925,6 @@ export function AppProvider({ children }) {
         }
       }
 
-      // 로컬 drama_saved_at과 Drive savedAt이 반드시 같은 시각을 쓰도록 한 번만 생성
-      const savedAt = forcedSavedAtRef.current || new Date().toISOString();
-      // drama_saved_at 쓰기는 Drive 쓰기 결과에 따라 지연 처리 (옵션 A) — try 스코프 밖에서 참조
-      let shouldUpdateSavedAt = false;
       try {
         await Promise.all([
           setAll(DB_KEYS.projects,      state.projects),
@@ -946,8 +942,6 @@ export function AppProvider({ children }) {
         if (localStorage.getItem('drama_auth_user')) {
           setItem(DB_KEYS.stylePresets, state.stylePreset);
         }
-        // drama_saved_at 쓰기는 try 블록 밖 Drive 결과에 따라 처리 — 여기서는 flag 캡처만
-        shouldUpdateSavedAt = !skipSavedAtRef.current;
         skipSavedAtRef.current = false;
         forcedSavedAtRef.current = null;
         lastSavedSizesRef.current = currentSizes;
@@ -958,107 +952,7 @@ export function AppProvider({ children }) {
         forcedSavedAtRef.current = null;
         return;
       }
-      // Drive 자동저장 (토큰 유효할 때만)
-      // INIT/LOAD_FROM_DRIVE 직후 한 사이클은 건너뜀 — Drive 데이터를 덮어쓰는 레이스컨디션 방지
-      const skipDrive = skipDriveSaveRef.current;
       skipDriveSaveRef.current = false;
-      // skipDrive (INIT/LOAD_FROM_DRIVE 직후 한 사이클): drama_saved_at 즉시 동기화.
-      // 토큰 만료/비로그인은 Drive 호출 안 하므로 drama_saved_at도 갱신 보류 →
-      // 토큰 복구 후 다음 사이클의 PATCH 발사 직전에 갱신. 그래야 재로그인 시 충돌 모달 안 뜸.
-      if (shouldUpdateSavedAt && skipDrive) {
-        try { localStorage.setItem('drama_saved_at', savedAt); } catch {}
-      }
-      // 충돌 해결 적용 등 명시적 통제 업로드 중에는 persist 자동저장(Drive)을 건너뜀 —
-      // syncWorkspaceToDrive가 이미 같은 데이터를 올리므로 중복 업로드/요청 폭증 방지.
-      // IDB 자동저장은 위에서 이미 수행됨 (정책: IDB는 항상).
-      if (isTokenValid() && !skipDrive && !isPersistSaveSuppressed()) {
-        // PATCH 발사 직전 갱신 — .then() 미도달 윈도우(unload/OAuth redirect)에서
-        // 옛 시각으로 동결되어 Drive와 어긋나는 케이스 차단.
-        // 의미: "마지막 업로드 시도 시각" — 실패 시 다음 사이클 성공으로 자연 회복.
-        if (shouldUpdateSavedAt) {
-          try { localStorage.setItem('drama_saved_at', savedAt); } catch {}
-        }
-        saveToDrive({
-          projects:       state.projects,
-          episodes:       state.episodes,
-          characters:     state.characters,
-          scenes:         state.scenes,
-          scriptBlocks:   state.scriptBlocks,
-          coverDocs:      state.coverDocs,
-          synopsisDocs:   state.synopsisDocs,
-          resources:      state.resources,
-          workTimeLogs:   state.workTimeLogs,
-          checklistItems: state.checklistItems,
-          trash:          state.trash || EMPTY_TRASH,
-          stylePreset:    state.stylePreset,
-          deviceId:       getDeviceId(),
-          savedAt,
-        })
-          .catch(e => {
-            // DRIVE_AUTH_REQUIRED: isTokenValid() 로컬 감지 — 서버 호출 전 정상 흐름, 무해하게 스킵
-            if (e.message === 'DRIVE_AUTH_REQUIRED') return;
-            const { kind } = describeDriveError(e);
-            if (kind === 'auth' || kind === 'perm') {
-              // 실제 인증/권한 오류 → 토큰 무효화해서 다음 사이클 자동저장 시도 방지
-              clearAccessToken();
-              console.warn('[Drive] 자동저장 인증/권한 오류 — 재로그인 필요:', e.message);
-            } else if (kind === 'quota') {
-              // 토큰은 유효 — clearAccessToken 하면 불필요한 재로그인 유발
-              // 사용자 알림은 수동저장/백업 시도 시 UI 레이어에서 처리됨
-              console.warn('[Drive] 자동저장 실패: 드라이브 용량 부족 (수동 저장 시 안내됨)');
-            } else if (kind === 'rate') {
-              console.warn('[Drive] 자동저장 레이트 리밋 — 다음 사이클에서 재시도');
-            } else {
-              console.warn('[Drive] 자동저장 실패:', e);
-            }
-          });
-
-        // Phase 1.2 — 신 형식(대본별 파일 + 인덱스) 병행 저장.
-        // 변경된 대본만 저장 (옵션 B): fingerprint 비교로 매 사이클 N+2 폭발을 막아
-        // Drive API rate limit(503 transientError) 회피.
-        // 구 형식이 source of truth이므로 실패해도 silent + console.warn만.
-        const deviceId = getDeviceId();
-        const projectsMeta = state.projects.map(p => ({
-          id: p.id,
-          title: p.title,
-          updatedAt: p.updatedAt,
-          savedAt,
-        }));
-        const changedProjects = state.projects.filter(p => {
-          const fp = projectFingerprint(state, p.id);
-          return lastProjFingerprintRef.current[p.id] !== fp;
-        });
-        const indexFp = projectsMeta.map(m => `${m.id}:${m.updatedAt}`).join(',');
-        const indexChanged = lastProjFingerprintRef.current.__index !== indexFp;
-
-        const v2Tasks = [];
-        if (indexChanged) {
-          v2Tasks.push({ kind: 'index', run: () => saveProjectsIndex({ projects: projectsMeta, savedAt, deviceId }) });
-        }
-        for (const p of changedProjects) {
-          v2Tasks.push({
-            kind: 'project',
-            id: p.id,
-            run: () => saveProjectToDrive(p.id, serializeProject(state, p.id, { drive: { savedAt, deviceId } })),
-          });
-        }
-        if (v2Tasks.length > 0) {
-          Promise.all(v2Tasks.map(t => t.run())).then(() => {
-            for (const p of changedProjects) {
-              lastProjFingerprintRef.current[p.id] = projectFingerprint(state, p.id);
-            }
-            if (indexChanged) lastProjFingerprintRef.current.__index = indexFp;
-            // 삭제된 대본의 fingerprint 정리 (메모리 누수 방지)
-            const validIds = new Set(state.projects.map(p => p.id));
-            for (const k of Object.keys(lastProjFingerprintRef.current)) {
-              if (k !== '__index' && !validIds.has(k)) delete lastProjFingerprintRef.current[k];
-            }
-          }).catch(e => {
-            if (e?.message === 'DRIVE_AUTH_REQUIRED') return;
-            console.warn('[Drive] 대본별 신 형식 저장 실패 (구 형식 정상):', e?.message || e);
-          });
-        }
-      }
     }, 300);
   }, [
     state.initialized,

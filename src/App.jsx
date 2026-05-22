@@ -78,7 +78,6 @@ import OpenProjectModal  from './components/Modals/OpenProjectModal';
 import SaveAsModal       from './components/Modals/SaveAsModal';
 import ShareLinkModal    from './components/Modals/ShareLinkModal';
 import ProjectInfoModal  from './components/Modals/ProjectInfoModal';
-import WordCountModal    from './components/Modals/WordCountModal';
 import NewProjectModal   from './components/Modals/NewProjectModal';
 import ImportDocxModal       from './components/Modals/ImportDocxModal';
 import ImportHwpxModal       from './components/Modals/ImportHwpxModal';
@@ -887,6 +886,7 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
   const { valid: driveTokenValid, settled: driveAuthSettled } = useDriveAuthState();
   // 끊김 배지 클릭 시 중복 호출 방지
   const [reconnecting, setReconnecting]  = useState(false);
+  const [driveSaveInfo, setDriveSaveInfo] = useState({ status: 'idle', time: null });
   const latestStateRef = useRef(state);
 
   useEffect(() => {
@@ -1140,31 +1140,65 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
           {driveStatus === 'reauth' && (
             <span style={{ fontSize: 11, color: '#f6ad55', cursor: 'pointer' }} onClick={() => guardedSignInWithGoogle()}>재연결 필요</span>
           )}
-          {/* Drive 연결 인디케이터 — driveStatus가 transient(syncing/synced/error/reauth) 아닐 때만 노출.
-              valid → 회색 Cloud. !valid && settled → 끊김 배지. !valid && !settled → 표시 보류
-              (부팅 직후 토큰 도착 전 잠깐 끊김 깜빡 방지). */}
+          {/* Drive 수동저장 상태 + 버튼 (초기 동기화 끝난 후) */}
           {authUser && driveStatus === 'none' && (
-            driveTokenValid
-              ? <span title="Drive 연결됨" style={{ display: 'inline-flex', alignItems: 'center', color: 'var(--c-text6)' }}>
-                  <Cloud size={13} strokeWidth={1.75} />
-                </span>
-              : driveAuthSettled
-                  ? <button
-                      type="button"
-                      onClick={handleDriveReconnect}
-                      disabled={reconnecting}
-                      title="Drive 연결이 끊겼어요. 클릭해서 재연결하세요"
-                      style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 4,
-                        background: 'transparent', border: 'none', padding: '2px 4px',
-                        borderRadius: 4, cursor: reconnecting ? 'wait' : 'pointer',
-                        color: '#f59e0b', fontSize: 11, letterSpacing: '-0.01em',
-                      }}
-                    >
-                      <CloudOff size={13} strokeWidth={2} />
-                      <span>{reconnecting ? '재연결 중…' : 'Drive 끊김'}</span>
-                    </button>
-                  : null
+            driveTokenValid ? (
+              <>
+                {driveSaveInfo.status === 'saving' && (
+                  <span style={{ fontSize: 11, color: 'var(--c-text5)' }}>Drive에 저장 중...</span>
+                )}
+                {driveSaveInfo.status === 'saved' && driveSaveInfo.time && (
+                  <span style={{ fontSize: 11, color: 'var(--c-text5)' }}>
+                    {'Drive에 저장됨 '}
+                    {driveSaveInfo.time.getHours().toString().padStart(2, '0')}:{driveSaveInfo.time.getMinutes().toString().padStart(2, '0')}
+                  </span>
+                )}
+                {driveSaveInfo.status === 'error' && (
+                  <span
+                    style={{ fontSize: 11, color: '#f87171', cursor: 'pointer' }}
+                    onClick={handleSave}
+                    title="클릭해서 다시 시도"
+                  >Drive 저장 실패 — 다시 시도</span>
+                )}
+                {driveSaveInfo.status === 'idle' && (
+                  <span title="Drive 연결됨" style={{ display: 'inline-flex', alignItems: 'center', color: 'var(--c-text6)' }}>
+                    <Cloud size={13} strokeWidth={1.75} />
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={driveSaveInfo.status === 'saving'}
+                  title="Drive에 저장 (Ctrl+S)"
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 3,
+                    background: 'transparent', border: '1px solid var(--c-border3)',
+                    padding: '2px 7px', borderRadius: 4,
+                    cursor: driveSaveInfo.status === 'saving' ? 'wait' : 'pointer',
+                    color: 'var(--c-text4)', fontSize: 11,
+                  }}
+                >
+                  <Cloud size={11} strokeWidth={1.75} />
+                  <span>Drive 저장</span>
+                </button>
+              </>
+            ) : driveAuthSettled ? (
+              <button
+                type="button"
+                onClick={handleDriveReconnect}
+                disabled={reconnecting}
+                title="Drive 연결이 끊겼어요. 클릭해서 재연결하세요"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                  background: 'transparent', border: 'none', padding: '2px 4px',
+                  borderRadius: 4, cursor: reconnecting ? 'wait' : 'pointer',
+                  color: '#f59e0b', fontSize: 11, letterSpacing: '-0.01em',
+                }}
+              >
+                <CloudOff size={13} strokeWidth={2} />
+                <span>{reconnecting ? '재연결 중…' : 'Drive 미연결'}</span>
+              </button>
+            ) : null
           )}
           <RealtimeClock />
           {activeProjectId && <WorkTimer key={activeProjectId} projectId={activeProjectId} documentId={state.activeEpisodeId || state.activeDoc} saveRef={timerSaveRef} />}
@@ -1785,15 +1819,6 @@ function Shell({ authUser, setAuthUser }) {
       const s = autoSnapStateRef.current;
       if (!s?.initialized || !s.projects?.length) return;
       try {
-        if (!isTokenValid()) {
-          const token = await refreshDriveToken();
-          if (!token) {
-            setSaveToastMsg('구글 드라이브 재연결이 필요해요');
-            setSaveToast(true);
-            setTimeout(() => setSaveToast(false), 3500);
-            return;
-          }
-        }
         await saveSnapshot({
           projects:       s.projects,
           episodes:       s.episodes,
@@ -1836,9 +1861,12 @@ function Shell({ authUser, setAuthUser }) {
     const latestState = latestStateRef.current;
     const snap = buildWorkspacePayload(latestState);
 
+    setDriveSaveInfo({ status: 'saving', time: null });
+
     try {
       if (!isTokenValid()) await refreshDriveToken();
       if (!isTokenValid()) {
+        setDriveSaveInfo({ status: 'idle', time: null });
         promptDriveReauthForSave();
         return;
       }
@@ -1852,12 +1880,10 @@ function Shell({ authUser, setAuthUser }) {
 
       try {
         await saveSnapshot(snap, '\uC218\uB3D9\uC800\uC7A5', 'manual');
-        clearTimeout(saveToastTimer.current);
-        setSaveToastMsg('Drive\uC5D0 \uC800\uC7A5\uB418\uC5C8\uC2B5\uB2C8\uB2E4');
-        setSaveToast(true);
-        saveToastTimer.current = setTimeout(() => setSaveToast(false), 2200);
+        setDriveSaveInfo({ status: 'saved', time: new Date() });
       } catch (snapshotError) {
         const { userMsg, kind } = describeDriveError(snapshotError);
+        setDriveSaveInfo({ status: 'saved', time: new Date() });
         clearTimeout(saveToastTimer.current);
         setSaveToastMsg(`Drive \uC800\uC7A5\uC740 \uC644\uB8CC\uB410\uC9C0\uB9CC \uC2A4\uB0C5\uC0F7 \uC800\uC7A5\uC740 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4. ${userMsg}`);
         setSaveToast(true);
@@ -1866,6 +1892,7 @@ function Shell({ authUser, setAuthUser }) {
       }
     } catch (error) {
       const { userMsg, kind } = describeDriveError(error);
+      setDriveSaveInfo({ status: 'error', time: null });
       clearTimeout(saveToastTimer.current);
       setSaveToastMsg(`Drive \uC800\uC7A5 \uC2E4\uD328: ${userMsg}`);
       setSaveToast(true);
@@ -1903,7 +1930,6 @@ function Shell({ authUser, setAuthUser }) {
   const [shareLinkOpen,   setShareLinkOpen]   = useState(false);
   const [projectInfoOpen, setProjectInfoOpen] = useState(false);
   const [findPanelMode,   setFindPanelMode]   = useState(null); // null | 'find' | 'replace'
-  const [wordCountOpen,   setWordCountOpen]   = useState(false);
   const [importDocxOpen,       setImportDocxOpen]       = useState(false);
   const [importHwpxOpen,       setImportHwpxOpen]       = useState(false);
   const [styleSettingsOpen,    setStyleSettingsOpen]    = useState(false);
@@ -2066,7 +2092,6 @@ function Shell({ authUser, setAuthUser }) {
 
     // ── 도구 ──
     if (action === 'tools:settings')  { setAppSettingsOpen(true); return; }
-    if (action === 'tools:wordcount') { setWordCountOpen(true); return; }
 
     // ── 도움말 ──
     if (action === 'help:manual')  { window.open('/help.html', '_blank', 'noopener,noreferrer'); return; }
@@ -2206,7 +2231,6 @@ function Shell({ authUser, setAuthUser }) {
         open={shareLinkOpen}
         onClose={() => setShareLinkOpen(false)}
       />
-      <WordCountModal  open={wordCountOpen}  onClose={() => setWordCountOpen(false)} />
       <ImportDocxModal    open={importDocxOpen}    onClose={() => setImportDocxOpen(false)} />
       <ImportHwpxModal    open={importHwpxOpen}    onClose={() => setImportHwpxOpen(false)} />
       <StyleSettingsModal open={styleSettingsOpen} onClose={() => setStyleSettingsOpen(false)} />
