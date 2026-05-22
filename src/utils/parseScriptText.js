@@ -56,6 +56,7 @@ export function parseScriptText(text, { episodeId, projectId, characters = [] })
   const makeBase = (sceneId) => ({
     id: genId(), episodeId, projectId,
     label: '', sceneId: sceneId || genId(), createdAt: now(), updatedAt: now(),
+    annotations: [],
   });
 
   let currentSceneId = genId();

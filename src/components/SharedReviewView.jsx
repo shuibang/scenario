@@ -8,7 +8,7 @@ import { guardedSignInWithGoogle } from '../utils/guardedSignIn';
 import { setAccessToken, saveDirectorScript } from '../store/googleDrive';
 import { buildFeedbackViewerState } from '../utils/feedbackVersions';
 import { reportError } from '../utils/errorTracker';
-import { KakaoAdBanner } from './AdBanner';
+import { KakaoAdBannerBase as KakaoAdBanner } from './AdBanner';
 import WatermarkOverlay from './WatermarkOverlay';
 import BadgeChip from './BadgeChip';
 

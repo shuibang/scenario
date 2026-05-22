@@ -104,7 +104,6 @@ export const menuConfig = [
     altKey: 't',
     items: [
       { id: 'spellcheck', label: '맞춤법 검사', action: 'tools:spellcheck', disabled: true, disabledLabel: '준비 중' },
-      { id: 'wordcount',  label: '글자수 세기', action: 'tools:wordcount' },
       'separator',
       { id: 'settings',   label: '환경 설정…',  action: 'tools:settings' },
     ],

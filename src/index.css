@@ -487,6 +487,10 @@ textarea {
 
   /* Page number footer — -n- at 15mm from bottom */
   @page { @bottom-center { content: "- " counter(page) " -"; font-size: 10pt; } }
+
+  /* 에디터 주석 UI 레이어 — 인쇄본은 PrintModel이 별도 생성하므로 화면 레이어 숨김 */
+  .annotation-popover,
+  .annotation-layer { display: none !important; }
 }
 
 

@@ -15,20 +15,15 @@ function ensureKakaoScript() {
   document.head.appendChild(s);
 }
 
-/**
- * 카카오 애드핏 광고 단위 렌더러.
- * unitId/width/height는 호출부에서 명시 (단위마다 사이즈 고정).
- * 같은 unitId를 같은 페이지에 중복 표시하지 말 것 (정책 위반 → 노출 안 됨).
- */
-export function KakaoAdBanner({ unitId, width, height, mobileHide = false, style = {}, className = '' }) {
-  const { state } = useApp();
-
+// AppProvider 없이도 사용 가능한 순수 렌더 컴포넌트. isPro を prop で受け取る.
+// SharedReviewView 처럼 AppProvider 바깥에서 렌더되는 경우에 사용.
+export function KakaoAdBannerBase({ unitId, width, height, mobileHide = false, style = {}, className = '', isPro = false }) {
   useEffect(() => {
-    if (IS_DEV || state.isPro) return;
+    if (IS_DEV || isPro) return;
     ensureKakaoScript();
-  }, [state.isPro]);
+  }, [isPro]);
 
-  if (state.isPro) return null;
+  if (isPro) return null;
 
   const visibilityClass = mobileHide ? 'hidden md:block' : 'block';
   const boxStyle = { ...style, minHeight: height, maxHeight: height, boxSizing: 'border-box' };
@@ -58,6 +53,12 @@ export function KakaoAdBanner({ unitId, width, height, mobileHide = false, style
       />
     </div>
   );
+}
+
+// AppProvider 내부에서만 사용. useApp()으로 isPro를 읽어 KakaoAdBannerBase에 전달.
+export function KakaoAdBanner(props) {
+  const { state } = useApp();
+  return <KakaoAdBannerBase {...props} isPro={state.isPro} />;
 }
 
 // 동일 슬롯·동일 6시간 윈도우 안에서는 fetch를 한 번만 하도록 모듈 캐시.

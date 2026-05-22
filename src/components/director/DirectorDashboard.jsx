@@ -1935,7 +1935,9 @@ function SendButton({ scriptRow, viewing }) {
 
       const commentPayload = buildFeedbackCommentPayload(notesData || [], viewing.appState);
       if (commentPayload.length === 0) {
-        throw new Error('보낼 피드백 메모가 없습니다.');
+        setToast('메모를 먼저 작성해주세요. 내용이 없으면 전송 링크를 만들 수 없어요.');
+        setTimeout(() => setToast(''), 4000);
+        return;
       }
 
       const submitResult = await submitFeedbackSession(

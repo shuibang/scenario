@@ -36,7 +36,7 @@ export function computeBadgeStats(workTimeLogs = [], projects = [], scriptBlocks
     }
   }
 
-  // 누적 글자수 — 공백 제외 (WordCountModal 의 'noSpace' 와 동일 정의)
+  // 누적 글자수 — 공백 제외 (하단 StatusBar 글자수의 공백 제외 정의와 동일)
   let totalChars = 0;
   for (const b of scriptBlocks) {
     const raw = (b?.content || '').replace(TAG_RE, '');
