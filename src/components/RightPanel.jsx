@@ -451,6 +451,7 @@ export default function RightPanel({ onScrollToScene }) {
   const [activeSceneId, setActiveSceneId] = useState(null);
   const [tagFilter, setTagFilter] = useState('');
   const [mainTab, setMainTab] = useState('context'); // 'context' | 'checklist'
+  const [contestOpen, setContestOpen] = useState(() => localStorage.getItem('drama_contest_open') !== '0');
 
   // E8: activeDoc/episode 변경 시 문맥 탭으로 리셋
   useEffect(() => { setMainTab('context'); }, [activeDoc, activeEpisodeId]);
@@ -681,7 +682,33 @@ export default function RightPanel({ onScrollToScene }) {
             초안 {episodeScenes.filter(s => s.status === 'draft').length}
           </div>
         )}
-        {activeProjectId && <DocMemo projectId={activeProjectId} docKey={`script_${activeEpisodeId}`} />}
+        {activeProjectId && (
+          <div style={{
+            borderTop: '1px solid var(--c-border)',
+            flexShrink: 0,
+            ...(contestOpen ? { height: 260, display: 'flex', flexDirection: 'column', overflow: 'hidden' } : {}),
+          }}>
+            <button
+              onClick={() => {
+                const next = !contestOpen;
+                setContestOpen(next);
+                localStorage.setItem('drama_contest_open', next ? '1' : '0');
+              }}
+              style={{
+                width: '100%', background: 'none', border: 'none',
+                borderBottom: contestOpen ? '1px solid var(--c-border2)' : 'none',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '5px 10px', cursor: 'pointer',
+                color: 'var(--c-text6)', fontSize: 10,
+                WebkitTapHighlightColor: 'transparent', flexShrink: 0,
+              }}
+            >
+              <span style={{ fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' }}>공모전</span>
+              <span style={{ fontSize: 9 }}>{contestOpen ? '▾' : '▴'}</span>
+            </button>
+            {contestOpen && <ContestBoard compact />}
+          </div>
+        )}
       </>
     );
   }
