@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { useApp } from '../../store/AppContext';
 import MobileScriptTab from './MobileScriptTab';
 import MobileMemoTab, { MobileChecklistPanel } from './MobileMemoTab';
@@ -98,6 +98,37 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, on
   const { activeDoc } = state;
   const newContestsCount = useNewContestsCount({ fetchOnMount: true });
 
+  // ── 공모/체크 분할 드래그
+  const [splitPct, setSplitPct] = useState(() => {
+    const saved = localStorage.getItem('drama_memo_split');
+    const n = saved ? parseInt(saved, 10) : 50;
+    return isNaN(n) ? 50 : Math.min(80, Math.max(20, n));
+  });
+  const splitContainerRef = useRef(null);
+  const isDraggingRef = useRef(false);
+
+  const onDividerPointerDown = useCallback((e) => {
+    e.preventDefault();
+    const container = splitContainerRef.current;
+    if (!container) return;
+    isDraggingRef.current = true;
+    const onMove = (ev) => {
+      if (!isDraggingRef.current) return;
+      const rect = container.getBoundingClientRect();
+      const x = (ev.clientX ?? ev.touches?.[0]?.clientX) - rect.left;
+      const pct = Math.round(Math.min(80, Math.max(20, (x / rect.width) * 100)));
+      setSplitPct(pct);
+      localStorage.setItem('drama_memo_split', String(pct));
+    };
+    const onUp = () => {
+      isDraggingRef.current = false;
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }, []);
+
   return (
     <div
       data-mobile-bottom-panel
@@ -171,16 +202,30 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, on
       {open && (
         <div data-bottom-panel style={{ position: 'relative', flex: 1, minHeight: 0, overflow: 'hidden' }}>
           {tab === 'memo' ? (
-            <>
-              {/* 좌: 공모전 보드 (구 자유메모 자리) */}
-              <div style={{ position: 'absolute', top: 0, left: 0, width: '50%', bottom: 0, borderRight: '1px solid var(--c-border)', overflow: 'hidden' }}>
+            <div ref={splitContainerRef} style={{ position: 'absolute', inset: 0, display: 'flex' }}>
+              {/* 좌: 공모전 보드 */}
+              <div style={{ width: `${splitPct}%`, overflow: 'hidden', flexShrink: 0 }}>
                 <ContestBoard compact />
               </div>
+              {/* 드래그 핸들 */}
+              <div
+                onPointerDown={onDividerPointerDown}
+                style={{
+                  width: 12, flexShrink: 0, cursor: 'col-resize',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: 'var(--c-panel)',
+                  borderLeft: '1px solid var(--c-border)',
+                  borderRight: '1px solid var(--c-border)',
+                  touchAction: 'none', userSelect: 'none', zIndex: 1,
+                }}
+              >
+                <span style={{ fontSize: 8, color: 'var(--c-text6)', lineHeight: 1 }}>⋮⋮</span>
+              </div>
               {/* 우: 체크리스트 */}
-              <div style={{ position: 'absolute', top: 0, right: 0, width: '50%', bottom: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}>
+              <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y', minWidth: 0 }}>
                 <MobileChecklistPanel />
               </div>
-            </>
+            </div>
           ) : (
             <>
               {/* 왼쪽 광고 */}

@@ -592,9 +592,8 @@ function WorkTimer({ projectId, documentId, onComplete, saveRef }) {
       clearTimeout(idleTimer.current);
     };
     window.addEventListener('blur', pause);
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) pause();
-    });
+    const onVisibility = () => { if (document.hidden) pause(); };
+    document.addEventListener('visibilitychange', onVisibility);
 
     tickTimer.current = setInterval(() => {
       if (activeRef.current) {
@@ -605,6 +604,7 @@ function WorkTimer({ projectId, documentId, onComplete, saveRef }) {
     return () => {
       events.forEach(e => window.removeEventListener(e, resetIdle));
       window.removeEventListener('blur', pause);
+      document.removeEventListener('visibilitychange', onVisibility);
       clearTimeout(idleTimer.current);
       clearInterval(tickTimer.current);
     };
@@ -817,15 +817,23 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
     if (!isAdminUser(authUser)) { setAdminUnread(0); return; }
     let cancelled = false;
     const tick = async () => {
+      if (document.hidden) return;
       const { total } = await fetchAdminUnreadCounts();
       if (!cancelled) setAdminUnread(total);
     };
     tick();
-    // 어드민 진입/탈출 시(hashchange)와 5분 간격으로 갱신
+    // 어드민 진입/탈출 시(hashchange)와 5분 간격으로 갱신. 탭 복귀 시에도 즉시 갱신.
     const onHash = () => tick();
+    const onVisible = () => { if (!document.hidden) tick(); };
     window.addEventListener('hashchange', onHash);
+    document.addEventListener('visibilitychange', onVisible);
     const id = setInterval(tick, 5 * 60 * 1000);
-    return () => { cancelled = true; window.removeEventListener('hashchange', onHash); clearInterval(id); };
+    return () => {
+      cancelled = true;
+      window.removeEventListener('hashchange', onHash);
+      document.removeEventListener('visibilitychange', onVisible);
+      clearInterval(id);
+    };
   }, [authUser]);
 
   // savedAt/activeProjectId 기준 라벨 계산. 마운트 시 (창 크기 변경 등) 빈 라벨로 잠깐 보였다가 채워지는 깜빡임 방지 위해 함수 추출 + 첫 useState에서 즉시 평가.
@@ -1400,6 +1408,7 @@ function Shell({ authUser, setAuthUser }) {
   const [ideaSheetOpen, setIdeaSheetOpen] = useState(false);
   const [promoteIdea, setPromoteIdea] = useState(null);   // 대본으로 승격 중인 아이디어
   const savedRightCollapsedRef = useRef(null);            // 시트 열기 직전 우측 패널 상태
+  const savedRightForFeedbackRef = useRef(null);          // 피드백 노트 진입 직전 우측 패널 상태
 
   // 시트 열림 ↔ 우측 패널 자동 닫음 / 복원
   useEffect(() => {
@@ -1446,6 +1455,24 @@ function Shell({ authUser, setAuthUser }) {
     if (activeDoc === 'treatment' || activeDoc === 'scenelist') {
       setRightCollapsed(false);
     }
+  }, [state.activeDoc]);
+
+  // 피드백 노트 열림 ↔ 우측 패널 자동 닫음 / 복원
+  useEffect(() => {
+    const isFeedback = state.activeDoc === 'director_notes';
+    if (isFeedback) {
+      if (savedRightForFeedbackRef.current === null) {
+        savedRightForFeedbackRef.current = rightCollapsed;
+        if (!rightCollapsed) setRightCollapsed(true);
+      }
+    } else {
+      if (savedRightForFeedbackRef.current !== null) {
+        const prev = savedRightForFeedbackRef.current;
+        savedRightForFeedbackRef.current = null;
+        if (rightCollapsed === true) setRightCollapsed(prev);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.activeDoc]);
 
   // ── Mobile bottom panel state
@@ -2664,7 +2691,9 @@ export default function App() {
             const returnHash = localStorage.getItem('drama_pending_return_hash');
             if (returnHash) {
               localStorage.removeItem('drama_pending_return_hash');
-              window.location.hash = returnHash;
+              if (/^#[A-Za-z0-9=_\-.]{0,200}$/.test(returnHash)) {
+                window.location.hash = returnHash;
+              }
             }
           } catch {}
         }

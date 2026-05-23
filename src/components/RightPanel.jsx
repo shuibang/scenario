@@ -593,9 +593,12 @@ export default function RightPanel({ onScrollToScene }) {
   } else if (isScriptView) {
     contextContent = <SceneOutlineContent />;
   } else {
-    // 대본/프로젝트 미선택 상태 — 빈 패널 대신 공모전 보드를 띄움
+    // 대본/프로젝트 미선택 상태 — 빈 패널 대신 광고 + 공모전 보드를 띄움
     contextContent = (
       <div className="flex-1 flex flex-col min-h-0">
+        <div style={{ padding: '8px' }}>
+          <AdBanner slot="empty-panel-top" mobileHide={false} height={120} style={{ width: '100%' }} />
+        </div>
         <ContestBoard />
       </div>
     );
