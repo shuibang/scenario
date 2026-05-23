@@ -44,7 +44,7 @@ function normalizeCategories(input) {
 const _listeners = new Set();
 let _activeCache = null;        // Array | null  (active 만)
 let _lastFetchedAt = 0;
-const STALE_MS = 60_000;        // 1분 캐시
+const STALE_MS = 300_000;       // 5분 캐시
 
 function notify() {
   for (const l of _listeners) { try { l(_activeCache); } catch {} }

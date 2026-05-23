@@ -3,6 +3,11 @@ import { useApp } from '../store/AppContext';
 
 const IS_DEV = import.meta.env.DEV;
 
+const AD_ALLOWED_HOSTS = ['link.coupang.com', 'coupa.ng', 'www.coupang.com'];
+function isSafeAdUrl(url) {
+  try { return AD_ALLOWED_HOSTS.includes(new URL(url).hostname); } catch { return false; }
+}
+
 // 카카오 애드핏 스크립트 로더 (페이지당 1회만 삽입)
 const KAKAO_SCRIPT_ID = 'kakao-adfit-loader';
 function ensureKakaoScript() {
@@ -180,7 +185,7 @@ export default function AdBanner({ slot, mobileHide = true, height = 56, style =
 
   return (
     <a
-      href={p.productUrl}
+      href={isSafeAdUrl(p.productUrl) ? p.productUrl : undefined}
       target="_blank"
       rel="noopener noreferrer sponsored nofollow"
       className={`${visibilityClass} shrink-0 overflow-hidden ${className}`}

@@ -1011,6 +1011,8 @@ function CharDropdown({ query, chars, onSelect }) {
 
 // ─── SceneRefDropdown ─────────────────────────────────────────────────────────
 function SceneRefDropdown({ query, scenes, onSelect, onClose }) {
+  const onCloseRef = useRef(onClose);
+  useLayoutEffect(() => { onCloseRef.current = onClose; }, [onClose]);
   const getDisplayText = (s) => s.content || resolveSceneLabel({ ...s, label: '' }) || s.label;
   const filtered = scenes.filter(s => {
     if (!query) return true;
@@ -1019,10 +1021,10 @@ function SceneRefDropdown({ query, scenes, onSelect, onClose }) {
   }).slice(0, 8);
 
   useEffect(() => {
-    const handler = (e) => { if (e.key === 'Escape') onClose(); };
+    const handler = (e) => { if (e.key === 'Escape') onCloseRef.current(); };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [onClose]);
+  }, []);
 
   return (
     <div

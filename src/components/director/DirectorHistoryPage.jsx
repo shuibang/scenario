@@ -56,7 +56,7 @@ export default function DirectorHistoryPage({ onBack, isGuest, D, onOpenScript }
       supabase.from('shared_scripts').select('id, title, imported_at, drive_file_id, watermark_text, sender_badge_emoji, sender_badge_label')
         .eq('director_id', uid)
         .order('imported_at', { ascending: false })
-        .then(({ data }) => { if (!cancelled) setScripts(data || []); });
+        .then(({ data, error }) => { if (!cancelled) setScripts(error ? [] : (data || [])); });
     });
     return () => { cancelled = true; };
   }, [isGuest]);

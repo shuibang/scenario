@@ -13,6 +13,11 @@ import { getStoredFeedbackDisplayName } from '../../utils/feedbackDisplayName';
 import { createFeedbackReplyLink, submitFeedbackSession } from '../../utils/reviewShare';
 import { buildFeedbackCommentPayload } from '../../utils/feedbackVersions';
 import { reportError } from '../../utils/errorTracker';
+
+const AD_ALLOWED_HOSTS = ['link.coupang.com', 'coupa.ng', 'www.coupang.com'];
+function isSafeAdUrl(url) {
+  try { return AD_ALLOWED_HOSTS.includes(new URL(url).hostname); } catch { return false; }
+}
 import ExcelJS from 'exceljs';
 
 /*
@@ -125,7 +130,7 @@ const DirectorAdBanner = memo(function DirectorAdBanner({ height = 20, slot = 'd
   const isCard = height >= 100;
   return (
     <a
-      href={p.productUrl}
+      href={isSafeAdUrl(p.productUrl) ? p.productUrl : undefined}
       target="_blank"
       rel="noopener noreferrer sponsored nofollow"
       title={p.productName}
@@ -370,7 +375,7 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
       .eq('director_id', session.user.id)
       .order('imported_at', { ascending: false })
       .then(({ data }) => setScripts(data || []));
-  }, [session]);
+  }, [session?.user?.id, isGuest]);
 
   useEffect(() => {
     if (!noteScript) { setNotes([]); return; }

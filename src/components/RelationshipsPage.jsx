@@ -468,6 +468,10 @@ export default function RelationshipsPage() {
     };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
   }, [positions]);
 
   const resetLayout = () => {

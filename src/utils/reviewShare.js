@@ -83,6 +83,7 @@ export async function loadReviewPayload(id) {
     .eq('id', id)
     .single();
   if (error) throw new Error(error.message);
+  if (!data) throw new Error('NOT_FOUND');
   if (data.expires_at && new Date(data.expires_at) < new Date()) {
     throw new Error('EXPIRED');
   }
@@ -301,7 +302,8 @@ export async function listFeedbackVersions(scriptId) {
     .select('id, script_id, version_name, version_order, drive_file_id, snapshot_content, created_at, updated_at')
     .eq('script_id', scriptId)
     .is('deleted_at', null)
-    .order('version_order', { ascending: false });
+    .order('version_order', { ascending: false })
+    .limit(50);
   if (error) throw new Error(error.message);
   return data || [];
 }
@@ -312,7 +314,8 @@ export async function listFeedbackSessions(versionId) {
     .from('feedback_sessions')
     .select('id, version_id, sender_display_name, submitted_at, is_read, read_at')
     .eq('version_id', versionId)
-    .order('submitted_at', { ascending: false });
+    .order('submitted_at', { ascending: false })
+    .limit(200);
   if (error) throw new Error(error.message);
   return data || [];
 }
@@ -324,7 +327,8 @@ export async function listFeedbackSessionsForVersions(versionIds) {
     .from('feedback_sessions')
     .select('id, version_id, sender_display_name, submitted_at, is_read, read_at')
     .in('version_id', versionIds)
-    .order('submitted_at', { ascending: false });
+    .order('submitted_at', { ascending: false })
+    .limit(500);
   if (error) throw new Error(error.message);
   return data || [];
 }
