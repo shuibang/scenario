@@ -13,7 +13,7 @@ export const supabase = (import.meta.env.VITE_SUPABASE_URL && import.meta.env.VI
   ? createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY)
   : null;
 
-const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file';
 
 /** Google 로그인 (Drive 권한 포함) — 현재 페이지로 리디렉트 */
 export async function signInWithGoogle() {

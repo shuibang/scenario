@@ -35,6 +35,10 @@ export function clearAccessToken() {
   // 다른 Google 계정으로 재로그인하면 이전 계정의 fileId가 무효 → 미리 캐시 비움.
   invalidateIndexIdCache();
   clearFileIdCache();
+  _backupFolderId = null;
+  _projectFolderIdCache.clear();
+  localStorage.removeItem(BACKUP_FOLDER_ID_KEY);
+  localStorage.removeItem(PROJECT_FOLDERS_KEY);
   emitAuthChange();
 }
 
@@ -345,27 +349,45 @@ export async function loadIdeasFromDrive() {
 const _pendingProjectSaves = {};
 let _pendingIndexSave = Promise.resolve();
 
-// ── Drive 수동 백업 (My Drive "대본작업실 백업" 폴더) ────────────────────────
+// ── Drive 수동 백업 (My Drive "대본작업실" 폴더) ─────────────────────────────
 // appDataFolder 스냅샷과 완전히 분리 — 사용자가 Drive에서 직접 볼 수 있는 파일
 
-const BACKUP_FOLDER_NAME = '대본작업실 백업';
-let _backupFolderId = null; // 세션 내 메모리 캐시
+const BACKUP_FOLDER_NAME = '대본작업실';
+const BACKUP_FOLDER_ID_KEY = 'drama_drive_root_folder_id';
+const PROJECT_FOLDERS_KEY  = 'drama_drive_project_folders';
+let _backupFolderId = null;
+const _projectFolderIdCache = new Map(); // safeProjectName → folderId (메모리)
 
-async function findOrCreateBackupFolder() {
+/** 대본명에서 Drive 폴더명으로 사용할 수 없는 문자를 _ 로 치환 */
+export function sanitizeFolderName(name) {
+  return String(name || '기타').replace(/[/\\:*?"<>|]/g, '_').trim() || '기타';
+}
+
+async function findBackupFolder() {
   if (_backupFolderId) return _backupFolderId;
+  // localStorage에 캐시된 폴더 ID를 먼저 확인 (페이지 새로고침 후에도 재탐색 없이 바로 사용)
+  const cached = localStorage.getItem(BACKUP_FOLDER_ID_KEY);
+  if (cached) { _backupFolderId = cached; return _backupFolderId; }
   return withAuthRetry(async () => {
     const q = encodeURIComponent(`name='${BACKUP_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
-    const res = await fetch(`${DRIVE_API}/files?q=${q}&fields=files(id)`, {
+    const res = await fetch(`${DRIVE_API}/files?q=${q}&fields=files(id)&corpora=user&spaces=drive`, {
       headers: { Authorization: `Bearer ${_accessToken}` },
     });
     if (!res.ok) await throwDriveError(res, 'Drive 폴더 검색 실패');
     const data = await res.json();
     if (data.files?.[0]?.id) {
       _backupFolderId = data.files[0].id;
-      return _backupFolderId;
+      localStorage.setItem(BACKUP_FOLDER_ID_KEY, _backupFolderId);
     }
-    // 폴더 없음 → 생성
-    const createRes = await fetch(`${DRIVE_API}/files`, {
+    return _backupFolderId ?? null;
+  });
+}
+
+async function findOrCreateBackupFolder() {
+  const existing = await findBackupFolder();
+  if (existing) return existing;
+  return withAuthRetry(async () => {
+    const createRes = await fetch(`${DRIVE_API}/files?fields=id`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${_accessToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: BACKUP_FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder' }),
@@ -373,30 +395,205 @@ async function findOrCreateBackupFolder() {
     if (!createRes.ok) await throwDriveError(createRes, 'Drive 폴더 생성 실패');
     const folder = await createRes.json();
     _backupFolderId = folder.id;
+    localStorage.setItem(BACKUP_FOLDER_ID_KEY, _backupFolderId);
     return _backupFolderId;
   });
 }
 
-/**
- * My Drive "대본작업실 백업" 폴더에 .djak 파일로 저장
- * @param {object} data     - 전체 workspace payload
- * @param {string} filename - '대본백업_YYYY-MM-DD_HH-MM.djak'
- */
-export async function saveDriveBackup(data, filename) {
-  if (!isTokenValid()) throw new Error('DRIVE_AUTH_REQUIRED');
-  const folderId = await findOrCreateBackupFolder();
-  const content  = JSON.stringify(data);
+function _loadProjectFolders() {
+  try { return JSON.parse(localStorage.getItem(PROJECT_FOLDERS_KEY) || '{}'); } catch { return {}; }
+}
+function _saveProjectFolder(safeProjectName, id) {
+  const map = _loadProjectFolders();
+  map[safeProjectName] = id;
+  localStorage.setItem(PROJECT_FOLDERS_KEY, JSON.stringify(map));
+}
+
+/** "대본작업실/{safeProjectName}/" 서브폴더를 찾거나 생성 */
+async function findOrCreateProjectFolder(safeProjectName) {
+  // 1. 메모리 캐시
+  const memCached = _projectFolderIdCache.get(safeProjectName);
+  if (memCached) return memCached;
+  // 2. localStorage 캐시 (페이지 새로고침 후에도 재탐색 없이 바로 사용)
+  const lsCached = _loadProjectFolders()[safeProjectName];
+  if (lsCached) { _projectFolderIdCache.set(safeProjectName, lsCached); return lsCached; }
+
+  const rootId = await findOrCreateBackupFolder();
   return withAuthRetry(async () => {
+    const q = encodeURIComponent(`name='${safeProjectName}' and '${rootId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+    const res = await fetch(`${DRIVE_API}/files?q=${q}&fields=files(id)`, {
+      headers: { Authorization: `Bearer ${_accessToken}` },
+    });
+    if (!res.ok) await throwDriveError(res, 'Drive 프로젝트 폴더 검색 실패');
+    const data = await res.json();
+    if (data.files?.[0]?.id) {
+      const id = data.files[0].id;
+      _projectFolderIdCache.set(safeProjectName, id);
+      _saveProjectFolder(safeProjectName, id);
+      return id;
+    }
+    const createRes = await fetch(`${DRIVE_API}/files?fields=id`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${_accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: safeProjectName, mimeType: 'application/vnd.google-apps.folder', parents: [rootId] }),
+    });
+    if (!createRes.ok) await throwDriveError(createRes, 'Drive 프로젝트 폴더 생성 실패');
+    const folder = await createRes.json();
+    _projectFolderIdCache.set(safeProjectName, folder.id);
+    _saveProjectFolder(safeProjectName, folder.id);
+    return folder.id;
+  });
+}
+
+/**
+ * My Drive "대본작업실/{프로젝트명}/" 폴더에 .djs 파일로 저장
+ * @param {object} projectData - serializeProject() 형식 (단일 대본)
+ * @param {string} filename    - '{프로젝트명}_YYYY-MM-DD_HH-MM.djs'
+ */
+const _DJS_README = '이 파일은 대본작업실(daejak.kr) 전용 파일입니다. 일반 텍스트 편집기로 열지 마세요. daejak.kr에 접속한 후 백업/복원 메뉴 또는 열기 → Google Drive 탭에서 불러올 수 있습니다.';
+
+export async function saveDriveBackup(projectData, filename) {
+  if (!isTokenValid()) throw new Error('DRIVE_AUTH_REQUIRED');
+  const safeProjectName = sanitizeFolderName(projectData?.project?.title);
+  const folderId = await findOrCreateProjectFolder(safeProjectName);
+  const content  = JSON.stringify({ _readme: _DJS_README, ...projectData });
+  const contentBlob = new Blob([content], { type: 'application/json' });
+
+  async function doPost() {
     const form = new FormData();
     form.append('metadata', new Blob([JSON.stringify({ name: filename, parents: [folderId] })], { type: 'application/json' }));
-    form.append('file',     new Blob([content], { type: 'application/json' }));
+    form.append('file', contentBlob);
     const res = await fetch(`${UPLOAD_API}/files?uploadType=multipart&fields=id`, {
-      method:  'POST',
-      headers: { Authorization: `Bearer ${_accessToken}` },
-      body:    form,
+      method: 'POST', headers: { Authorization: `Bearer ${_accessToken}` }, body: form,
     });
     if (!res.ok) await throwDriveError(res, 'Drive 백업 저장 실패');
-    return await res.json();
+    return res.json();
+  }
+
+  return withAuthRetry(async () => {
+    // 같은 이름의 파일이 이미 있으면 덮어쓰기(PATCH), 없으면 새로 생성(POST)
+    const q = encodeURIComponent(`name='${filename}' and '${folderId}' in parents and trashed=false`);
+    const searchRes = await fetch(`${DRIVE_API}/files?q=${q}&fields=files(id)`, {
+      headers: { Authorization: `Bearer ${_accessToken}` },
+    });
+    if (!searchRes.ok) await throwDriveError(searchRes, 'Drive 파일 검색 실패');
+    const { files } = await searchRes.json();
+    const existingId = files?.[0]?.id ?? null;
+
+    if (existingId) {
+      const form = new FormData();
+      form.append('metadata', new Blob([JSON.stringify({ name: filename })], { type: 'application/json' }));
+      form.append('file', contentBlob);
+      const res = await fetch(`${UPLOAD_API}/files/${existingId}?uploadType=multipart&fields=id`, {
+        method: 'PATCH', headers: { Authorization: `Bearer ${_accessToken}` }, body: form,
+      });
+      if (res.status === 404) return doPost(); // 외부에서 삭제됨 → 새로 생성
+      if (!res.ok) await throwDriveError(res, 'Drive 백업 저장 실패');
+      return res.json();
+    }
+
+    return doPost();
+  });
+}
+
+/**
+ * 현재 프로젝트의 Drive 백업 목록.
+ * @param {string} safeProjectName - sanitizeFolderName() 결과
+ * Drive 미연결이거나 폴더가 없으면 [] 반환.
+ */
+export async function listDriveBackups(safeProjectName) {
+  if (!isTokenValid() || !safeProjectName) return [];
+  try {
+    const rootId = await findBackupFolder();
+    if (!rootId) return [];
+    // 프로젝트 서브폴더 검색 (없으면 빈 배열)
+    const q = encodeURIComponent(`name='${safeProjectName}' and '${rootId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+    const folderRes = await fetch(`${DRIVE_API}/files?q=${q}&fields=files(id)`, {
+      headers: { Authorization: `Bearer ${_accessToken}` },
+    });
+    if (!folderRes.ok) return [];
+    const folderData = await folderRes.json();
+    const projectFolderId = folderData.files?.[0]?.id;
+    if (!projectFolderId) return [];
+    _projectFolderIdCache.set(safeProjectName, projectFolderId);
+    return await withAuthRetry(async () => {
+      const fq = encodeURIComponent(`'${projectFolderId}' in parents and name contains '.djs' and trashed=false`);
+      const res = await fetch(
+        `${DRIVE_API}/files?q=${fq}&fields=files(id,name,createdTime)&orderBy=createdTime desc`,
+        { headers: { Authorization: `Bearer ${_accessToken}` } },
+      );
+      if (!res.ok) await throwDriveError(res, 'Drive 백업 목록 조회 실패');
+      const data = await res.json();
+      return (data.files || []).map(f => ({
+        id:      f.id,
+        name:    f.name,
+        savedAt: f.createdTime,
+        source:  'drive',
+        type:    'drive_backup',
+        label:   f.name,
+        device:  null,
+      }));
+    });
+  } catch {
+    return [];
+  }
+}
+
+/** 전체 백업 폴더의 .djs 파일 목록 (OpenProjectModal Drive 탭용) */
+export async function listAllBackupFiles() {
+  if (!isTokenValid()) return [];
+  try {
+    const rootId = await findBackupFolder();
+    if (!rootId) return [];
+    return await withAuthRetry(async () => {
+      // 프로젝트 서브폴더 목록 조회
+      const foldersRes = await fetch(
+        `${DRIVE_API}/files?q=${encodeURIComponent(`'${rootId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`)}&fields=files(id,name)&pageSize=50`,
+        { headers: { Authorization: `Bearer ${_accessToken}` } },
+      );
+      if (!foldersRes.ok) return [];
+      const { files: folders = [] } = await foldersRes.json();
+
+      // 각 폴더에서 .djs 파일 병렬 조회
+      const results = await Promise.all(folders.map(async (folder) => {
+        const fq = encodeURIComponent(`'${folder.id}' in parents and name contains '.djs' and trashed=false`);
+        const res = await fetch(
+          `${DRIVE_API}/files?q=${fq}&fields=files(id,name,createdTime)&orderBy=createdTime desc&pageSize=20`,
+          { headers: { Authorization: `Bearer ${_accessToken}` } },
+        );
+        if (!res.ok) return [];
+        const { files = [] } = await res.json();
+        return files.map(f => ({ id: f.id, name: f.name, savedAt: f.createdTime, projectFolder: folder.name }));
+      }));
+
+      return results.flat().sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt));
+    });
+  } catch {
+    return [];
+  }
+}
+
+/** Drive 백업 파일 다운로드 후 JSON 파싱 */
+export async function loadDriveBackupData(fileId) {
+  return withAuthRetry(async () => {
+    const res = await fetch(`${DRIVE_API}/files/${fileId}?alt=media`, {
+      headers: { Authorization: `Bearer ${_accessToken}` },
+    });
+    if (!res.ok) await throwDriveError(res, 'Drive 백업 다운로드 실패');
+    // eslint-disable-next-line no-unused-vars
+    const { _readme, ...data } = await res.json();
+    return data;
+  });
+}
+
+/** Drive 백업 파일 삭제 */
+export async function deleteDriveBackup(fileId) {
+  return withAuthRetry(async () => {
+    const res = await fetch(`${DRIVE_API}/files/${fileId}`, {
+      method:  'DELETE',
+      headers: { Authorization: `Bearer ${_accessToken}` },
+    });
+    if (!res.ok && res.status !== 204) await throwDriveError(res, 'Drive 백업 삭제 실패');
   });
 }
 
@@ -528,191 +725,3 @@ export async function loadDirectorScript(fileId) {
   });
 }
 
-// ── Drive에서 불러오기 ──────────────────────────────────────────────────────
-export async function loadFromDrive() {
-  if (!isTokenValid()) throw new Error('DRIVE_AUTH_REQUIRED');
-
-  const file = await findFile();
-  if (!file) return null; // Drive에 저장된 데이터 없음
-
-  return withAuthRetry(async () => {
-    const res = await fetch(`${DRIVE_API}/files/${file.id}?alt=media`, {
-      headers: { Authorization: `Bearer ${_accessToken}` },
-    });
-    if (!res.ok) await throwDriveError(res, 'Drive 불러오기 실패');
-    return await res.json();
-  });
-}
-
-// ── 대본 단위 저장 (Phase 1 — Drive 대본별 동기화) ─────────────────────────
-// 기존 단일 drama_workspace.json은 backward-compat용으로 그대로 유지하고,
-// 새 동기화 흐름은 인덱스 + 대본별 파일 N개로 분리한다.
-//   drama_projects_index.json — 대본 메타 목록 (id/title/savedAt/...)
-//   drama_project_<projectId>.json — 한 대본의 모든 데이터 (projectSerializer)
-const PROJECTS_INDEX_FILE = 'drama_projects_index.json';
-const PROJECT_FILE_PREFIX = 'drama_project_';
-const PROJECTS_INDEX_FORMAT = 'djs-index';
-const PROJECTS_INDEX_VERSION = 1;
-
-function projectFileName(projectId) {
-  return `${PROJECT_FILE_PREFIX}${projectId}.json`;
-}
-
-/**
- * 대본 인덱스 저장 — 대본 목록 메타 + deviceId + 전체 savedAt
- * @param {object} args
- * @param {Array<{id, title, updatedAt, savedAt}>} args.projects - 대본 메타 배열
- * @param {string} [args.savedAt] - 인덱스 저장 시각 (미지정 시 현재)
- * @param {string} args.deviceId
- */
-export async function saveProjectsIndex({ projects, savedAt, deviceId }) {
-  const next = _pendingIndexSave.catch(() => {}).then(async () => {
-    if (!isTokenValid()) throw new Error('DRIVE_AUTH_REQUIRED');
-    const content = JSON.stringify({
-      format: PROJECTS_INDEX_FORMAT,
-      version: PROJECTS_INDEX_VERSION,
-      projects: projects || [],
-      savedAt: savedAt || new Date().toISOString(),
-      deviceId,
-    });
-    return withTransientRetry(() => upsertFile(PROJECTS_INDEX_FILE, content));
-  });
-  _pendingIndexSave = next.catch(() => {});
-  return next;
-}
-
-/**
- * 대본 인덱스 로드
- * @returns {object|null} { format, version, projects, savedAt, deviceId } | 신 형식 없으면 null
- */
-export async function loadProjectsIndex() {
-  if (!isTokenValid()) throw new Error('DRIVE_AUTH_REQUIRED');
-  return readFileByName(PROJECTS_INDEX_FILE);
-}
-
-/**
- * 한 대본을 Drive에 저장 — payload는 projectSerializer.serializeProject() 결과
- * @param {string} projectId
- * @param {object} payload - { format:'djs', version:1, project, episodes, ..., drive:{savedAt,deviceId} }
- */
-export async function saveProjectToDrive(projectId, payload) {
-  const prev = _pendingProjectSaves[projectId] || Promise.resolve();
-  const next = prev.catch(() => {}).then(async () => {
-    if (!isTokenValid()) throw new Error('DRIVE_AUTH_REQUIRED');
-    const content = JSON.stringify(payload);
-    return withTransientRetry(() => upsertFile(projectFileName(projectId), content));
-  });
-  _pendingProjectSaves[projectId] = next.catch(() => {});
-  return next;
-}
-
-/**
- * 한 대본을 Drive에서 로드
- * @returns {object|null} 대본 payload | 없으면 null
- */
-export async function loadProjectFromDrive(projectId) {
-  if (!isTokenValid()) throw new Error('DRIVE_AUTH_REQUIRED');
-  return readFileByName(projectFileName(projectId));
-}
-
-/**
- * 한 대본의 Drive 파일 삭제 (대본 영구 삭제 시 호출)
- * 파일이 없으면 조용히 무시.
- */
-export async function deleteProjectFromDrive(projectId) {
-  if (!isTokenValid()) return;
-  return deleteFileByName(projectFileName(projectId));
-}
-
-/**
- * Drive에서 모든 대본 로드 — 신 형식 우선, 없거나 누락 시 구 형식 fallback.
- *
- * 신 형식 사용 조건: 인덱스 존재 AND 인덱스의 모든 대본 파일이 정상 로드됨.
- * 하나라도 누락되면 구 형식(drama_workspace.json)으로 fallback (안전 정책).
- *
- * 반환 포맷은 LOAD_FROM_DRIVE reducer가 받는 형태와 동일 (구 형식과 호환).
- *
- * @returns {object|null} 통합 state 또는 null (Drive에 데이터 전혀 없음)
- */
-export async function loadAllProjectsFromDrive() {
-  if (!isTokenValid()) throw new Error('DRIVE_AUTH_REQUIRED');
-
-  // 1) 신 형식 시도
-  try {
-    const index = await loadProjectsIndex();
-    if (index?.projects?.length) {
-      const payloads = await Promise.all(
-        index.projects.map(meta => loadProjectFromDrive(meta.id).catch(() => null))
-      );
-      const missingMeta = index.projects
-        .map((meta, i) => ({ meta, payload: payloads[i] }))
-        .filter(x => !x.payload)
-        .map(x => ({ id: x.meta.id, title: x.meta.title }));
-      if (missingMeta.length === 0) {
-        // 동적 import — 순환 의존 회피
-        const { combineProjectsToState } = await import('../utils/projectSerializer');
-        return combineProjectsToState(payloads, { index });
-      }
-      // 어떤 대본 파일이 missing인지 명시 — Drive에서 직접 찾아 처리하거나 재업로드 가능.
-      console.warn('[Drive] 신 형식 대본 일부 누락 → 구 형식 fallback', {
-        total: index.projects.length,
-        missing: missingMeta.length,
-        missingProjects: missingMeta,
-      });
-    }
-  } catch (e) {
-    if (e?.message === 'DRIVE_AUTH_REQUIRED') throw e;
-    console.warn('[Drive] 신 형식 로드 실패 → 구 형식 fallback:', e?.message || e);
-  }
-
-  // 2) 구 형식 fallback
-  const legacy = await loadFromDrive();
-  if (!legacy) return null;
-
-  // Phase 1.4 — 백그라운드 마이그레이션. fire-and-forget.
-  // 한 번이라도 성공하면 다음부터 신 형식 사용 → fallback 미발생 → 자연 종료.
-  // 실패해도 다음 fallback 진입 시 재시도. 데이터 손실 위험 없음 (구 형식 그대로 보존).
-  migrateLegacyToProjectFiles(legacy).catch(e => {
-    console.warn('[Drive] 구→신 마이그레이션 실패 (다음 진입 시 재시도):', e?.message || e);
-  });
-
-  return legacy;
-}
-
-/**
- * 구 단일 파일(drama_workspace.json) → 신 형식(인덱스 + 대본별 파일) 변환.
- * Phase 1.4 — loadAllProjectsFromDrive의 구 형식 fallback 시 백그라운드 호출.
- *
- * 구 형식 파일은 삭제하지 않음 — backward-compat (Phase 4.3에서 폐기).
- */
-async function migrateLegacyToProjectFiles(legacy) {
-  if (!legacy?.projects?.length) return;
-  if (!isTokenValid()) return;
-
-  // 동적 import — 순환 의존 회피
-  const { serializeProject } = await import('../utils/projectSerializer');
-  const { getDeviceId } = await import('../utils/deviceId');
-
-  const deviceId = legacy.deviceId || getDeviceId();
-  const savedAt = legacy.savedAt || new Date().toISOString();
-
-  const projectsMeta = [];
-  await Promise.all(legacy.projects.map(async (project) => {
-    // legacy 자체가 state와 같은 평탄한 형태이므로 그대로 직렬화에 전달
-    const payload = serializeProject(legacy, project.id, {
-      drive: { savedAt, deviceId },
-    });
-    if (!payload) return;
-    await saveProjectToDrive(project.id, payload);
-    projectsMeta.push({
-      id: project.id,
-      title: project.title,
-      updatedAt: project.updatedAt,
-      savedAt,
-    });
-  }));
-
-  if (projectsMeta.length > 0) {
-    await saveProjectsIndex({ projects: projectsMeta, savedAt, deviceId });
-  }
-}

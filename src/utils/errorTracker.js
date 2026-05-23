@@ -30,8 +30,6 @@ const IGNORE_PATTERNS = [
   /Failed to fetch.*googletagmanager/i,       // 광고 차단기
   /Failed to fetch.*doubleclick/i,
   /Failed to fetch.*adsbygoogle/i,
-  /ChunkLoadError/i,                          // 배포 직후 캐시된 청크 — 새로고침으로 해결
-  /Loading chunk \d+ failed/i,
 ];
 
 let sessionId = null;
@@ -80,11 +78,14 @@ function shouldIgnore(message) {
 async function send(payload) {
   if (!supabase) return;
   try {
-    await supabase.from('client_errors').insert(payload);
+    // supabase-js v2는 네트워크 오류만 throw하고 API 오류는 { error }로 반환함
+    const { error } = await supabase.from('client_errors').insert(payload);
+    if (error && typeof console !== 'undefined' && console.warn) {
+      console.warn('[errorTracker] insert rejected:', error.message, error.code);
+    }
   } catch (e) {
-    // 어떤 경우에도 insert 실패가 새 에러를 발생시키지 않도록 무시.
     if (typeof console !== 'undefined' && console.debug) {
-      console.debug('[errorTracker] insert failed', e);
+      console.debug('[errorTracker] insert failed (network):', e);
     }
   }
 }

@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { Undo2, Redo2, Sun, Moon, User, Clapperboard, ExternalLink, ChevronLeft, ChevronRight, Strikethrough, AlignLeft, AlignCenter, AlignRight, AlignJustify, Cloud, CloudOff } from 'lucide-react';
+import { Undo2, Redo2, Sun, Moon, User, Clapperboard, ExternalLink, ChevronLeft, ChevronRight, Strikethrough, AlignLeft, AlignCenter, AlignRight, AlignJustify } from 'lucide-react';
 import { logShareSchema } from './utils/urlSchemas';
 import { getTimelineColor } from './utils/color';
 import { loadLogPayload, isShortReviewId as isUUID } from './utils/reviewShare';
@@ -7,9 +7,8 @@ import { AppProvider, useApp, mergeWorkLog, reducer as appReducer } from './stor
 import { getSceneFormat, rebuildSceneContent } from './utils/sceneFormat';
 import { FONTS, FONT_STATUS, checkFontsAvailability, getFontPdfStatus, getFontByCssFamily, getFontPdfTooltip } from './print/FontRegistry';
 import { getItem, setItem, getAll, setAll, DB_KEYS, clearDramaStorage, isPublicPcMode, genId, now } from './store/db';
-import { setAccessToken, clearAccessToken, loadAllProjectsFromDrive, isTokenValid, saveSnapshot, saveProjectToDrive, deleteProjectFromDrive, saveProjectsIndex, saveToDrive } from './store/googleDrive';
+import { setAccessToken, clearAccessToken, isTokenValid, saveSnapshot, saveDriveBackup, sanitizeFolderName } from './store/googleDrive';
 import { serializeProject } from './utils/projectSerializer';
-import { buildProjectConflicts } from './utils/projectConflict';
 import { supabase, signInWithGoogle, supabaseSignOut, extractUserData, refreshDriveToken } from './store/supabaseClient';
 import LeftPanel from './components/LeftPanel';
 import RightPanel from './components/RightPanel';
@@ -64,18 +63,14 @@ import PublicPcBadge from './components/PublicPcBadge';
 import { getLayoutMetrics } from './print/LineTokenizer';
 import { createFeedbackVersionShare } from './utils/reviewShare';
 import { buildFeedbackSnapshot } from './utils/feedbackVersions';
-import SyncConflictModal from './components/SyncConflictModal';
 import SizeGuardModal from './components/SizeGuardModal';
 import { usePageTracking } from './hooks/usePageTracking';
 import { useDriveAuthState } from './hooks/useDriveAuthState';
-import { shouldRunInitialSync, markInitialSyncDone, resetInitialSyncGate, suppressPersistSave, releasePersistSave } from './store/driveSyncGate';
 import { guardedSignInWithGoogle } from './utils/guardedSignIn';
 import { describeDriveError } from './utils/driveError';
-import { getDeviceId } from './utils/deviceId';
 import Menubar from './components/Menubar/Menubar';
 import useKeyboardShortcuts from './hooks/useKeyboardShortcuts';
 import OpenProjectModal  from './components/Modals/OpenProjectModal';
-import SaveAsModal       from './components/Modals/SaveAsModal';
 import ShareLinkModal    from './components/Modals/ShareLinkModal';
 import ProjectInfoModal  from './components/Modals/ProjectInfoModal';
 import NewProjectModal   from './components/Modals/NewProjectModal';
@@ -732,9 +727,6 @@ function LoginModal({ onClose }) {
   );
 }
 
-// ─── Drive 동기화 중복 방지 ────────────────────────────────────────────────────
-let _driveSyncing = false;
-
 // ─── DropdownMenu ─────────────────────────────────────────────────────────────
 function DropdownMenu({ label, items, disabled }) {
   const [open, setOpen] = useState(false);
@@ -805,8 +797,8 @@ function DropdownMenu({ label, items, disabled }) {
 }
 
 // ─── MenuBar ──────────────────────────────────────────────────────────────────
-function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, authUser, setAuthUser, onSyncConflict, onMenuAction, recentProjects, menuCheckedItems, isMobile = false }) {
-  const { state, dispatch, loadFromDriveData } = useApp();
+function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, authUser, setAuthUser, onMenuAction, recentProjects, menuCheckedItems, isMobile = false }) {
+  const { state, dispatch } = useApp();
   const { saveStatus, saveErrorMsg, activeProjectId, stylePreset, undoStack, redoStack, savedAt } = state;
   const canUndo = undoStack?.length > 0 || !!activeProjectId;
   const [scriptCanRedo, setScriptCanRedo] = useState(false);
@@ -882,116 +874,12 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
   }, [stylePreset?.fontFamily, fontAvailability]);
 
   const [loginOpen, setLoginOpen]        = useState(false);
-  const [driveStatus, setDriveStatus]    = useState('none');
-  const { valid: driveTokenValid, settled: driveAuthSettled } = useDriveAuthState();
-  // 끊김 배지 클릭 시 중복 호출 방지
-  const [reconnecting, setReconnecting]  = useState(false);
-  const [driveSaveInfo, setDriveSaveInfo] = useState({ status: 'idle', time: null });
+  const { valid: driveTokenValid } = useDriveAuthState();
   const latestStateRef = useRef(state);
 
   useEffect(() => {
     latestStateRef.current = state;
   }, [state]);
-
-  const runDriveSync = useCallback(async () => {
-    if (_driveSyncing || !isTokenValid()) return 'skipped';
-    _driveSyncing = true;
-    setDriveStatus('syncing');
-    try {
-      const driveData = await loadAllProjectsFromDrive();
-      const localSavedAt = localStorage.getItem('drama_saved_at') || null;
-      // IndexedDB 기반 로컬 데이터 유무 판정 — localStorage('drama_projects')만 보던 예전 로직은
-      //   IndexedDB 마이그레이션 이후 항상 false로 떨어져 Drive가 로컬을 덮어쓰는 문제가 있었음.
-      let localProjects = [];
-      try {
-        const p = await getAll(DB_KEYS.projects);
-        if (Array.isArray(p)) localProjects = p;
-      } catch {}
-      const hasLocalData = localProjects.length > 0;
-      const driveHasData = (driveData?.projects?.length ?? 0) > 0;
-
-      if (!driveData?.savedAt || !driveHasData) {
-        setDriveStatus('synced');
-        return 'synced';
-      } else if (!hasLocalData) {
-        loadFromDriveData(driveData);
-        setDriveStatus('synced');
-        return 'synced';
-      } else {
-        // 대본별 충돌만 계산해서, 같은 계정 안에서도 실제 내용이 다른 경우에만 모달을 띄운다.
-        const localState = latestStateRef.current;
-        const conflicts = buildProjectConflicts(localState, driveData);
-        if (conflicts.length === 0) {
-          setDriveStatus('synced');
-          return 'synced';
-        } else {
-          // "나중에"로 닫은 세션은 재출현 안 함
-          let dismissedThisSession = false;
-          try { dismissedThisSession = sessionStorage.getItem('sync-conflict-dismissed') === '1'; } catch {}
-          if (dismissedThisSession) {
-            setDriveStatus('synced');
-            _driveSyncing = false;
-            return 'dismissed';
-          }
-          onSyncConflict?.({
-            localSavedAt,
-            driveData,
-            localProjectCount: localState?.projects?.length ?? localProjects.length,
-            conflicts,
-          });
-          setDriveStatus('none');
-          _driveSyncing = false;
-          return 'conflict';
-        }
-      }
-      setTimeout(() => setDriveStatus('none'), 3000);
-      return 'synced';
-    } catch (e) {
-      if (e.message?.includes('401') || e.message?.includes('DRIVE_AUTH_REQUIRED')) {
-        const newToken = await refreshDriveToken();
-        if (newToken) { _driveSyncing = false; return runDriveSync(); }
-        // 갱신 실패(만료·거부, provider_token 동일) → 무한 재귀 대신 재연결 유도.
-        setDriveStatus('reauth');
-        console.warn('[Drive] 토큰 갱신 실패 — 재연결 필요');
-        return 'reauth';
-      }
-      if (e.message?.includes('403')) setDriveStatus('reauth');
-      else setDriveStatus('error');
-      console.warn('[Drive] 불러오기 실패:', e);
-      return e.message?.includes('403') ? 'reauth' : 'error';
-    } finally {
-      _driveSyncing = false;
-    }
-  }, [loadFromDriveData, onSyncConflict]);
-
-  // 같은 마운트에서 sync가 이미 시작됐는지 — driveStatus가 'syncing' → 'none'으로
-  // 돌아오는 동안 effect가 중복 발사되어 runDriveSync가 여러 번 호출되는 것을 차단.
-  // markInitialSyncDone은 비동기 결과가 도착해야 호출되므로 그 전에 발사 가능.
-  const initialSyncStartedRef = useRef(false);
-
-  useEffect(() => {
-    if (!authUser || !driveAuthSettled || !driveTokenValid || driveStatus !== 'none') return;
-    // 같은 사용자에 대해 한 번 sync 완료했으면 리마운트(창 크기 변경 등)에서는 스킵.
-    if (!shouldRunInitialSync(authUser.email)) return;
-    if (initialSyncStartedRef.current) return;
-    initialSyncStartedRef.current = true;
-    let cancelled = false;
-    (async () => {
-      const result = await runDriveSync();
-      // sync 자체가 끝났으면(성공/충돌/무시) 게이트 기록 — 언마운트(cancelled)와 무관.
-      // 과거 버그: 창 크기 변경으로 MenuBar 가 unmount 되면 cancelled=true 라
-      // markInitialSyncDone 을 못 불러 게이트가 안 찍히고, 다음 mount 에서 또 sync →
-      // 창 크기 바꿀 때마다 Drive 조회 반복. markInitialSyncDone 은 모듈 변수만 건드려
-      // unmounted 후 호출도 안전하므로 cancelled 와 무관하게 기록한다.
-      if (result === 'synced' || result === 'dismissed' || result === 'conflict') {
-        markInitialSyncDone(authUser.email);
-      } else if (!cancelled) {
-        // transient 실패(skipped/error/reauth)는 다음 기회에 재시도되어야 함
-        initialSyncStartedRef.current = false;
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [authUser, driveAuthSettled, driveTokenValid, driveStatus, runDriveSync]);
 
   // 아이디어 노트 — Drive 토큰이 valid 해지는 시점(앱 로드 / 수동저장 → 재연결)마다
   // 1회 pull. pull 끝나면 ideasStore 가 누적된 unsynced 변경 자동 push.
@@ -1010,18 +898,6 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
     })();
     return () => { cancelled = true; };
   }, [authUser, driveTokenValid]);
-
-  const handleDriveReconnect = useCallback(async () => {
-    if (reconnecting) return;
-    setReconnecting(true);
-    try {
-      const t = await refreshDriveToken();
-      if (t) { setDriveStatus('none'); runDriveSync(); }
-      else guardedSignInWithGoogle();
-    } finally {
-      setReconnecting(false);
-    }
-  }, [reconnecting, runDriveSync]);
 
   const commitTitle = () => {
     if (activeProject && titleDraft.trim()) {
@@ -1132,78 +1008,9 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
           {saveStatus === 'saving' && <span style={{ fontSize: 11, color: 'var(--c-text5)', letterSpacing: '-0.01em' }}>저장 중…</span>}
           {saveStatus === 'saved' && savedLabel && <span style={{ fontSize: 11, color: 'var(--c-text5)', letterSpacing: '-0.01em' }}>{savedLabel}</span>}
           {saveStatus === 'error' && <span style={{ fontSize: 11, color: 'var(--c-error)' }} title={saveErrorMsg}>저장 실패</span>}
-          {driveStatus === 'syncing' && <span style={{ fontSize: 11, color: 'var(--c-text5)' }}>동기화 중…</span>}
-          {driveStatus === 'synced'  && <span style={{ fontSize: 11, color: 'var(--c-success)' }}>Drive ✓</span>}
-          {driveStatus === 'error'   && (
-            <span style={{ fontSize: 11, color: '#f87171', cursor: 'pointer' }} onClick={handleDriveReconnect}>Drive 오류</span>
-          )}
-          {driveStatus === 'reauth' && (
-            <span style={{ fontSize: 11, color: '#f6ad55', cursor: 'pointer' }} onClick={() => guardedSignInWithGoogle()}>재연결 필요</span>
-          )}
-          {/* Drive 수동저장 상태 + 버튼 (초기 동기화 끝난 후) */}
-          {authUser && driveStatus === 'none' && (
-            driveTokenValid ? (
-              <>
-                {driveSaveInfo.status === 'saving' && (
-                  <span style={{ fontSize: 11, color: 'var(--c-text5)' }}>Drive에 저장 중...</span>
-                )}
-                {driveSaveInfo.status === 'saved' && driveSaveInfo.time && (
-                  <span style={{ fontSize: 11, color: 'var(--c-text5)' }}>
-                    {'Drive에 저장됨 '}
-                    {driveSaveInfo.time.getHours().toString().padStart(2, '0')}:{driveSaveInfo.time.getMinutes().toString().padStart(2, '0')}
-                  </span>
-                )}
-                {driveSaveInfo.status === 'error' && (
-                  <span
-                    style={{ fontSize: 11, color: '#f87171', cursor: 'pointer' }}
-                    onClick={handleSave}
-                    title="클릭해서 다시 시도"
-                  >Drive 저장 실패 — 다시 시도</span>
-                )}
-                {driveSaveInfo.status === 'idle' && (
-                  <span title="Drive 연결됨" style={{ display: 'inline-flex', alignItems: 'center', color: 'var(--c-text6)' }}>
-                    <Cloud size={13} strokeWidth={1.75} />
-                  </span>
-                )}
-                <button
-                  type="button"
-                  onClick={handleSave}
-                  disabled={driveSaveInfo.status === 'saving'}
-                  title="Drive에 저장 (Ctrl+S)"
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 3,
-                    background: 'transparent', border: '1px solid var(--c-border3)',
-                    padding: '2px 7px', borderRadius: 4,
-                    cursor: driveSaveInfo.status === 'saving' ? 'wait' : 'pointer',
-                    color: 'var(--c-text4)', fontSize: 11,
-                  }}
-                >
-                  <Cloud size={11} strokeWidth={1.75} />
-                  <span>Drive 저장</span>
-                </button>
-              </>
-            ) : driveAuthSettled ? (
-              <button
-                type="button"
-                onClick={handleDriveReconnect}
-                disabled={reconnecting}
-                title="Drive 연결이 끊겼어요. 클릭해서 재연결하세요"
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 4,
-                  background: 'transparent', border: 'none', padding: '2px 4px',
-                  borderRadius: 4, cursor: reconnecting ? 'wait' : 'pointer',
-                  color: '#f59e0b', fontSize: 11, letterSpacing: '-0.01em',
-                }}
-              >
-                <CloudOff size={13} strokeWidth={2} />
-                <span>{reconnecting ? '재연결 중…' : 'Drive 미연결'}</span>
-              </button>
-            ) : null
-          )}
           <RealtimeClock />
           {activeProjectId && <WorkTimer key={activeProjectId} projectId={activeProjectId} documentId={state.activeEpisodeId || state.activeDoc} saveRef={timerSaveRef} />}
           <PublicPcBadge onClick={() => onMenuAction?.('tools:settings')} />
-
 
           <div style={{ width: 1, height: 16, background: 'var(--c-border3)', flexShrink: 0 }} />
 
@@ -1503,6 +1310,48 @@ function CollapseButton({ side, collapsed, onToggle }) {
 
 // ─── Mobile components are imported from src/components/mobile/ ─────────────
 
+function DriveSaveNameDialog({ isDark, defaultValue, onConfirm, onCancel }) {
+  const [name, setName] = useState(defaultValue);
+  const inputRef = useRef(null);
+  useEffect(() => { requestAnimationFrame(() => { inputRef.current?.focus(); inputRef.current?.select(); }); }, []);
+  const confirm = () => { const t = name.trim(); if (t) onConfirm(t); };
+  const bg = isDark ? '#1a2236' : '#fff';
+  const text = isDark ? '#e8eaf6' : '#111';
+  const sub = isDark ? '#9ca3af' : '#6b7280';
+  const inputBg = isDark ? '#0f1623' : '#f5f7fa';
+  const border = isDark ? '#2d3a50' : '#d1d5db';
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, zIndex: 10001, background: 'rgba(0,0,0,0.52)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}
+    >
+      <div
+        style={{ background: bg, color: text, borderRadius: 16, padding: '28px 32px 24px', width: 380, maxWidth: 'calc(100vw - 40px)', boxShadow: '0 12px 40px rgba(0,0,0,0.4)' }}
+        onKeyDown={(e) => { if (e.key === 'Escape') onCancel(); else if (e.key === 'Enter') confirm(); }}
+      >
+        <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 20 }}>☁ Drive에 저장</div>
+        <div style={{ fontSize: 13, color: sub, marginBottom: 8 }}>파일 이름</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <input
+            ref={inputRef}
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            style={{ flex: 1, background: inputBg, border: `1px solid ${border}`, borderRadius: 8, padding: '10px 14px', fontSize: 14, color: text, outline: 'none', fontFamily: 'inherit' }}
+            spellCheck={false}
+          />
+          <span style={{ fontSize: 13, color: sub, userSelect: 'none', flexShrink: 0 }}>.djs</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 24 }}>
+          <button onClick={onCancel} style={{ padding: '9px 20px', borderRadius: 8, fontSize: 14, fontWeight: 600, background: 'transparent', border: `1px solid ${border}`, color: sub, cursor: 'pointer' }}>취소</button>
+          <button onClick={confirm} disabled={!name.trim()} style={{ padding: '9px 20px', borderRadius: 8, fontSize: 14, fontWeight: 600, background: name.trim() ? '#2563eb' : (isDark ? '#1e2a3a' : '#e5e7eb'), color: name.trim() ? '#fff' : sub, border: 'none', cursor: name.trim() ? 'pointer' : 'default', transition: 'background 0.15s' }}>저장</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const getDriveFilenameKey = (projectId) => `drama_drive_filename_${projectId}`;
 
 // ─── Shell ────────────────────────────────────────────────────────────────────
 function Shell({ authUser, setAuthUser }) {
@@ -1514,11 +1363,7 @@ function Shell({ authUser, setAuthUser }) {
   });
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false);
   const [snapshotOpen, setSnapshotOpen]         = useState(false);
-  const { state, dispatch, loadFromDriveData, getChangedProjectIds, markProjectsSynced } = useApp();
-
-  // Drive 동기화 충돌 — { localSavedAt, driveData } | null
-  const [syncConflict, setSyncConflict] = useState(null);
-  const [syncConflictBusy, setSyncConflictBusy] = useState(null);
+  const { state, dispatch } = useApp();
 
   // Panel widths with localStorage persistence
   const [panelWidths, setPanelWidths] = useState(() => loadPanelWidths());
@@ -1701,21 +1546,6 @@ function Shell({ authUser, setAuthUser }) {
     latestStateRef.current = state;
   }, [state]);
 
-  const buildWorkspacePayload = useCallback((sourceState) => ({
-    projects:       sourceState.projects,
-    episodes:       sourceState.episodes,
-    characters:     sourceState.characters,
-    scenes:         sourceState.scenes,
-    scriptBlocks:   sourceState.scriptBlocks,
-    coverDocs:      sourceState.coverDocs,
-    synopsisDocs:   sourceState.synopsisDocs,
-    resources:      sourceState.resources,
-    workTimeLogs:   sourceState.workTimeLogs,
-    checklistItems: sourceState.checklistItems,
-    trash:          sourceState.trash,
-    stylePreset:    sourceState.stylePreset,
-  }), []);
-
   const waitForEditorFlush = useCallback(() => new Promise(resolve => {
     if (typeof window === 'undefined' || typeof window.requestAnimationFrame !== 'function') {
       setTimeout(resolve, 32);
@@ -1724,50 +1554,15 @@ function Shell({ authUser, setAuthUser }) {
     window.requestAnimationFrame(() => window.requestAnimationFrame(resolve));
   }), []);
 
-  const syncWorkspaceToDrive = useCallback(async (
-    sourceState,
-    { savedAt = new Date().toISOString(), projectIds = null, deleteProjectIds = [] } = {},
-  ) => {
-    const payload = buildWorkspacePayload(sourceState);
-    const deviceId = getDeviceId();
-    const projects = Array.isArray(sourceState.projects) ? sourceState.projects : [];
-    const existingProjectIds = new Set(projects.map(project => project.id));
-    const targetProjectIds = Array.isArray(projectIds)
-      ? Array.from(new Set(projectIds)).filter(projectId => existingProjectIds.has(projectId))
-      : projects.map(project => project.id);
-    const targetProjects = targetProjectIds
-      .map(projectId => projects.find(project => project.id === projectId))
-      .filter(Boolean);
-    const driveDeleteIds = Array.from(new Set(deleteProjectIds)).filter(Boolean);
-    const projectsMeta = projects.map(p => ({
-      id: p.id,
-      title: p.title,
-      updatedAt: p.updatedAt,
-      savedAt,
-    }));
-
-    if (targetProjects.length > 0) {
-      await Promise.all(
-        targetProjects.map(project =>
-          saveProjectToDrive(
-            project.id,
-            serializeProject(sourceState, project.id, { drive: { savedAt, deviceId } })
-          )
-        )
-      );
-    }
-    await Promise.all([
-      saveProjectsIndex({ projects: projectsMeta, savedAt, deviceId }),
-      saveToDrive({ ...payload, deviceId, savedAt }),
-      ...driveDeleteIds.map(projectId => deleteProjectFromDrive(projectId)),
-    ]);
-    try { localStorage.setItem('drama_saved_at', savedAt); } catch {}
-    return { savedAt, payload };
-  }, [buildWorkspacePayload]);
-
   const [saveToast, setSaveToast] = useState(false);
   const [saveToastMsg, setSaveToastMsg] = useState('저장되었습니다');
   const saveToastTimer = useRef(null);
+  const [driveSaveDialog, setDriveSaveDialog] = useState({ open: false, defaultName: '' });
+  const driveSaveResolveRef = useRef(null);
+  const promptDriveSaveName = useCallback((defaultName) => new Promise((resolve) => {
+    driveSaveResolveRef.current = resolve;
+    setDriveSaveDialog({ open: true, defaultName });
+  }), []);
 
   // ── 새 버전 감지 폴링
   const [newVersionReady, setNewVersionReady] = useState(false);
@@ -1817,22 +1612,10 @@ function Shell({ authUser, setAuthUser }) {
     const AUTO_INTERVAL = 10 * 60 * 1000;
     const timer = setInterval(async () => {
       const s = autoSnapStateRef.current;
-      if (!s?.initialized || !s.projects?.length) return;
+      if (!s?.initialized || !s.activeProjectId) return;
       try {
-        await saveSnapshot({
-          projects:       s.projects,
-          episodes:       s.episodes,
-          characters:     s.characters,
-          scenes:         s.scenes,
-          scriptBlocks:   s.scriptBlocks,
-          coverDocs:      s.coverDocs,
-          synopsisDocs:   s.synopsisDocs,
-          resources:      s.resources,
-          workTimeLogs:   s.workTimeLogs,
-          checklistItems: s.checklistItems,
-          trash:          s.trash,
-          stylePreset:    s.stylePreset,
-        }, '자동저장', 'auto');
+        const snap = serializeProject(s, s.activeProjectId);
+        if (snap) await saveSnapshot(snap, '자동저장', 'auto');
       } catch {}
     }, AUTO_INTERVAL);
     return () => clearInterval(timer);
@@ -1854,66 +1637,192 @@ function Shell({ authUser, setAuthUser }) {
     guardedSignInWithGoogle();
   }, [authUser]);
 
-  const handleSave = useCallback(async () => {
+  const handleSaveToDrive = useCallback(async () => {
     window.dispatchEvent(new Event('script:requestSave'));
     await waitForEditorFlush();
 
     const latestState = latestStateRef.current;
-    const snap = buildWorkspacePayload(latestState);
+    const projectSnap = latestState.activeProjectId
+      ? serializeProject(latestState, latestState.activeProjectId) : null;
+    if (!projectSnap) return;
 
-    setDriveSaveInfo({ status: 'saving', time: null });
+    try { await saveSnapshot(projectSnap, '수동저장', 'manual'); } catch {}
+
+    const projectId = latestState.activeProjectId;
+    let filename = localStorage.getItem(getDriveFilenameKey(projectId));
+
+    if (!filename) {
+      // 첫 저장 — 파일명 선택 후 기억
+      const safeTitle = sanitizeFolderName(projectSnap.project?.title || '대본');
+      const chosen = await promptDriveSaveName(safeTitle);
+      if (!chosen) return;
+      filename = chosen.endsWith('.djs') ? chosen : `${chosen}.djs`;
+      localStorage.setItem(getDriveFilenameKey(projectId), filename);
+    }
+
+    clearTimeout(saveToastTimer.current);
+    setSaveToastMsg('☁ 저장 중…');
+    setSaveToast(true);
 
     try {
       if (!isTokenValid()) await refreshDriveToken();
-      if (!isTokenValid()) {
-        setDriveSaveInfo({ status: 'idle', time: null });
-        promptDriveReauthForSave();
-        return;
-      }
+      if (!isTokenValid()) { setSaveToast(false); promptDriveReauthForSave(); return; }
 
-      // 변경된 대본만 PUT — persist effect와 같은 fingerprint ref 공유.
-      // 대본 N개 매번 PUT(=느림) 대신 바뀐 K개만. K=0이어도 인덱스/구 형식/스냅샷은
-      // syncWorkspaceToDrive 안에서 그대로 처리되므로 안전.
-      const changedProjectIds = getChangedProjectIds(latestState);
-      await syncWorkspaceToDrive(latestState, { projectIds: changedProjectIds });
-      markProjectsSynced(latestState, changedProjectIds);
+      await saveDriveBackup(projectSnap, filename);
 
-      try {
-        await saveSnapshot(snap, '\uC218\uB3D9\uC800\uC7A5', 'manual');
-        setDriveSaveInfo({ status: 'saved', time: new Date() });
-      } catch (snapshotError) {
-        const { userMsg, kind } = describeDriveError(snapshotError);
-        setDriveSaveInfo({ status: 'saved', time: new Date() });
-        clearTimeout(saveToastTimer.current);
-        setSaveToastMsg(`Drive \uC800\uC7A5\uC740 \uC644\uB8CC\uB410\uC9C0\uB9CC \uC2A4\uB0C5\uC0F7 \uC800\uC7A5\uC740 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4. ${userMsg}`);
-        setSaveToast(true);
-        saveToastTimer.current = setTimeout(() => setSaveToast(false), 3800);
-        if (kind === 'auth') promptDriveReauthForSave();
-      }
-    } catch (error) {
-      const { userMsg, kind } = describeDriveError(error);
-      setDriveSaveInfo({ status: 'error', time: null });
       clearTimeout(saveToastTimer.current);
-      setSaveToastMsg(`Drive \uC800\uC7A5 \uC2E4\uD328: ${userMsg}`);
-      setSaveToast(true);
+      setSaveToastMsg('☁ 저장됨');
+      saveToastTimer.current = setTimeout(() => setSaveToast(false), 2500);
+    } catch (error) {
+      const { kind } = describeDriveError(error);
+      clearTimeout(saveToastTimer.current);
+      setSaveToastMsg('저장 실패 — 다시 시도');
       saveToastTimer.current = setTimeout(() => setSaveToast(false), 3500);
       if (kind === 'auth' || error?.message?.includes('401') || error?.message?.includes('DRIVE_AUTH_REQUIRED')) {
         promptDriveReauthForSave();
       }
     }
-  }, [buildWorkspacePayload, promptDriveReauthForSave, syncWorkspaceToDrive, waitForEditorFlush, getChangedProjectIds, markProjectsSynced]);
+  }, [waitForEditorFlush, promptDriveReauthForSave, promptDriveSaveName]);
 
-  // 전역 Ctrl+S 단축키 → 토스트 포함 저장
+  // Drive에 다른 이름으로 저장 (Ctrl+Shift+S) — 항상 파일명 dialog 표시
+  const handleSaveToLocalDrive = useCallback(async () => {
+    window.dispatchEvent(new Event('script:requestSave'));
+    await waitForEditorFlush();
+
+    const latestState = latestStateRef.current;
+    const projectSnap = latestState.activeProjectId
+      ? serializeProject(latestState, latestState.activeProjectId) : null;
+    if (!projectSnap) return;
+
+    try { await saveSnapshot(projectSnap, '수동저장', 'manual'); } catch {}
+
+    const projectId = latestState.activeProjectId;
+    const saved = localStorage.getItem(getDriveFilenameKey(projectId));
+    const defaultName = saved ? saved.replace(/\.djs$/, '') : sanitizeFolderName(projectSnap.project?.title || '대본');
+    const chosen = await promptDriveSaveName(defaultName);
+    if (!chosen) return;
+    const filename = chosen.endsWith('.djs') ? chosen : `${chosen}.djs`;
+    localStorage.setItem(getDriveFilenameKey(projectId), filename);
+
+    clearTimeout(saveToastTimer.current);
+    setSaveToastMsg('☁ 저장 중…');
+    setSaveToast(true);
+
+    try {
+      if (!isTokenValid()) await refreshDriveToken();
+      if (!isTokenValid()) { setSaveToast(false); promptDriveReauthForSave(); return; }
+
+      await saveDriveBackup(projectSnap, filename);
+
+      clearTimeout(saveToastTimer.current);
+      setSaveToastMsg('☁ 저장됨');
+      saveToastTimer.current = setTimeout(() => setSaveToast(false), 2500);
+    } catch (error) {
+      const { kind } = describeDriveError(error);
+      clearTimeout(saveToastTimer.current);
+      setSaveToastMsg('저장 실패 — 다시 시도');
+      saveToastTimer.current = setTimeout(() => setSaveToast(false), 3500);
+      if (kind === 'auth' || error?.message?.includes('401') || error?.message?.includes('DRIVE_AUTH_REQUIRED')) {
+        promptDriveReauthForSave();
+      }
+    }
+  }, [waitForEditorFlush, promptDriveReauthForSave, promptDriveSaveName]);
+
+  // 열기 모달 로컬 탭에서 개별 대본 → Drive 저장 (활성 대본이 아니어도 동작)
+  const handleSaveToDriveLocal = useCallback(async (project) => {
+    if (!project?.id) return;
+
+    if (!isTokenValid()) {
+      clearTimeout(saveToastTimer.current);
+      setSaveToastMsg('Drive에 연결 후 이용할 수 있어요');
+      setSaveToast(true);
+      saveToastTimer.current = setTimeout(() => setSaveToast(false), 3000);
+      return;
+    }
+
+    const latestState = latestStateRef.current;
+    const projectSnap = serializeProject(latestState, project.id);
+    if (!projectSnap) return;
+
+    const saved = localStorage.getItem(getDriveFilenameKey(project.id));
+    let filename = saved;
+    if (!filename) {
+      const safeTitle = sanitizeFolderName(project.title || '대본');
+      filename = `${safeTitle}.djs`;
+      localStorage.setItem(getDriveFilenameKey(project.id), filename);
+    }
+
+    clearTimeout(saveToastTimer.current);
+    setSaveToastMsg('☁ 저장 중…');
+    setSaveToast(true);
+
+    try {
+      if (!isTokenValid()) await refreshDriveToken();
+      if (!isTokenValid()) { setSaveToast(false); promptDriveReauthForSave(); return; }
+
+      await saveDriveBackup(projectSnap, filename);
+
+      clearTimeout(saveToastTimer.current);
+      setSaveToastMsg('☁ 저장됨');
+      saveToastTimer.current = setTimeout(() => setSaveToast(false), 2500);
+    } catch (error) {
+      const { kind } = describeDriveError(error);
+      clearTimeout(saveToastTimer.current);
+      setSaveToastMsg('저장 실패 — 다시 시도');
+      saveToastTimer.current = setTimeout(() => setSaveToast(false), 3500);
+      if (kind === 'auth' || error?.message?.includes('401') || error?.message?.includes('DRIVE_AUTH_REQUIRED')) {
+        promptDriveReauthForSave();
+      }
+    }
+  }, [promptDriveReauthForSave]);
+
+  const handleSaveToLocal = useCallback(async () => {
+    clearTimeout(saveToastTimer.current);
+    setSaveToastMsg('💾 파일 저장 창이 열립니다…');
+    setSaveToast(true);
+
+    window.dispatchEvent(new Event('script:requestSave'));
+    await waitForEditorFlush();
+
+    const latestState = latestStateRef.current;
+    const projectSnap = latestState.activeProjectId
+      ? serializeProject(latestState, latestState.activeProjectId) : null;
+    if (!projectSnap) { setSaveToast(false); return; }
+
+    try { await saveSnapshot(projectSnap, '수동저장', 'manual'); } catch {}
+
+    try {
+      const djs_readme = '이 파일은 대본작업실(daejak.kr) 전용 파일입니다. 일반 텍스트 편집기로 열지 마세요. daejak.kr에 접속한 후 파일 열기 메뉴에서 불러올 수 있습니다.';
+      const blob = new Blob([JSON.stringify({ _readme: djs_readme, ...projectSnap }, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${sanitizeFolderName(projectSnap.project?.title || '대본')}.djs`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      clearTimeout(saveToastTimer.current);
+      saveToastTimer.current = setTimeout(() => setSaveToast(false), 1500);
+    } catch {
+      clearTimeout(saveToastTimer.current);
+      setSaveToastMsg('저장 실패 — 다시 시도');
+      saveToastTimer.current = setTimeout(() => setSaveToast(false), 3500);
+    }
+  }, [waitForEditorFlush]);
+
+  // 전역 저장 단축키: Ctrl+S / Ctrl+Shift+S / Ctrl+Alt+S
   useEffect(() => {
     const onKey = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.code === 'KeyS' && !e.shiftKey) {
-        e.preventDefault();
-        handleSave();
-      }
+      if (!(e.ctrlKey || e.metaKey) || e.code !== 'KeyS') return;
+      e.preventDefault();
+      if (e.shiftKey)     handleSaveToLocalDrive(); // 다른 이름으로 Drive 저장
+      else if (e.altKey)  handleSaveToLocal();       // 내 컴퓨터에 저장
+      else                handleSaveToDrive();        // Drive 덮어쓰기
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handleSave]);
+  }, [handleSaveToDrive, handleSaveToLocalDrive, handleSaveToLocal]);
 
   const contextSceneId = state.scrollToSceneId;
   useEffect(() => {
@@ -1924,10 +1833,9 @@ function Shell({ authUser, setAuthUser }) {
   }, [contextSceneId, dispatch]);
 
   // ── 메뉴바 모달 상태 ────────────────────────────────────────────────────────
-  const [newProjectOpen,  setNewProjectOpen]  = useState(false);
-  const [openProjectOpen, setOpenProjectOpen] = useState(false);
-  const [saveAsOpen,      setSaveAsOpen]      = useState(false);
-  const [shareLinkOpen,   setShareLinkOpen]   = useState(false);
+  const [newProjectOpen,      setNewProjectOpen]      = useState(false);
+  const [openProjectOpen,     setOpenProjectOpen]     = useState(false);
+  const [shareLinkOpen,       setShareLinkOpen]       = useState(false);
   const [projectInfoOpen, setProjectInfoOpen] = useState(false);
   const [findPanelMode,   setFindPanelMode]   = useState(null); // null | 'find' | 'replace'
   const [importDocxOpen,       setImportDocxOpen]       = useState(false);
@@ -1992,8 +1900,9 @@ function Shell({ authUser, setAuthUser }) {
     // ── 파일 ──
     if (action === 'file:new') { setNewProjectOpen(true); return; }
     if (action === 'file:openList')    { setOpenProjectOpen(true); return; }
-    if (action === 'file:save')        { handleSave(); return; }
-    if (action === 'file:saveAs')      { setSaveAsOpen(true); return; }
+    if (action === 'file:saveToDrive')   { handleSaveToDrive(); return; }
+    if (action === 'file:saveToDriveAs') { handleSaveToLocalDrive(); return; }
+    if (action === 'file:saveToLocal')   { handleSaveToLocal(); return; }
     if (action === 'file:share')       { setShareLinkOpen(true); return; }
     if (action === 'file:projectInfo')  { setProjectInfoOpen(true); return; }
     if (action === 'file:projectMgmt')  { dispatch({ type: 'SET_ACTIVE_DOC', payload: 'projects' }); return; }
@@ -2117,13 +2026,12 @@ function Shell({ authUser, setAuthUser }) {
       return;
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [handleSave, dispatch, setFocusMode]);
+  }, [handleSaveToDrive, handleSaveToLocalDrive, dispatch, setFocusMode]);
 
   // 메뉴바 전용 신규 단축키 (기존 Ctrl+S/Z/Y/B/I/U 는 각자 핸들러에서 처리)
   useKeyboardShortcuts({
     'ctrl+alt+n': () => handleMenuAction('file:new'),
     'ctrl+o':     () => setOpenProjectOpen(true),
-    'ctrl+alt+s': () => setSaveAsOpen(true),
     'ctrl+alt+l': () => setShareLinkOpen(true),
     'ctrl+alt+1': () => handleMenuAction('view:toggleExplorer'),
     'ctrl+alt+2': () => handleMenuAction('view:splitView'),
@@ -2136,11 +2044,10 @@ function Shell({ authUser, setAuthUser }) {
       isDark={isDark}
       onToggleTheme={toggleTheme}
       onPrintPreview={() => { setExportDefaultFormat('pdf'); window.dispatchEvent(new CustomEvent('editor:flush')); setPrintPreviewOpen(true); }}
-      onSave={handleSave}
+      onSave={handleSaveToDrive}
       onSnapshot={() => setSnapshotOpen(true)}
       authUser={authUser}
       setAuthUser={setAuthUser}
-      onSyncConflict={setSyncConflict}
       onMenuAction={handleMenuAction}
       recentProjects={recentProjects}
       menuCheckedItems={menuCheckedItems}
@@ -2207,25 +2114,7 @@ function Shell({ authUser, setAuthUser }) {
             dispatch({ type: 'ADD_IMPORTED_PROJECT_COPY', payload: imported });
           }
         }}
-      />
-      <SaveAsModal
-        open={saveAsOpen}
-        onClose={() => setSaveAsOpen(false)}
-        projectTitle={activeProject?.title}
-        onExport={(filename) => {
-          if (!activeProject?.id) throw new Error('내보낼 대본이 선택되지 않았습니다.');
-          const payload = serializeProject(latestStateRef.current, activeProject.id);
-          if (!payload) throw new Error('대본 데이터를 찾을 수 없습니다.');
-          const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `${filename}.djs`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          setTimeout(() => URL.revokeObjectURL(url), 1000);
-        }}
+        onSaveToDriveLocal={handleSaveToDriveLocal}
       />
       <ShareLinkModal
         open={shareLinkOpen}
@@ -2256,203 +2145,39 @@ function Shell({ authUser, setAuthUser }) {
 
       {printPreviewOpen && <PrintPreviewModal onClose={() => setPrintPreviewOpen(false)} defaultFormat={exportDefaultFormat} />}
       <SizeGuardModal />
-      {syncConflict && (
-        <SyncConflictModal
-          localSavedAt={syncConflict.localSavedAt}
-          driveData={syncConflict.driveData}
-          localProjectCount={syncConflict.localProjectCount ?? state.projects?.length ?? 0}
-          conflicts={syncConflict.conflicts}
-          busy={syncConflictBusy}
-          busyMessage={syncConflictBusy}
-          onKeepLocal={async () => {
-            // 로컬 유지 → Drive에 현재 데이터 업로드.
-            // 반드시 Drive 쓰기가 끝난 뒤에 localStorage.drama_saved_at 을 갱신해야
-            // 중간 새로고침 시 local=T2 / drive=옛값 이 되어 모달이 다시 뜨는 레이스를 피함.
-            if (syncConflictBusy) return;
-            setSyncConflictBusy('이전 Drive 데이터를 스냅샷에 보존 중…');
-            try {
-              const preserve = syncConflict?.driveData;
-              // 1) 기존 Drive 내용을 스냅샷으로 먼저 보존 (실수로 눌러도 복원 가능)
-              if (preserve && (preserve.projects?.length ?? 0) > 0) {
-                try {
-                  await saveSnapshot(preserve, '다른 기기 본 자동 보존', 'device_switch');
-                } catch (e) {
-                  console.warn('[Drive] 보존 스냅샷 저장 실패:', e);
-                }
-              }
-              // 2) 현재 로컬 상태를 Drive에 업로드
-              setSyncConflictBusy('Drive 업데이트 중…');
-              const savedAt = new Date().toISOString();
-              await syncWorkspaceToDrive(latestStateRef.current, { savedAt });
-              // 3) 성공 후에만 localStorage 갱신 → 다음 자동 sync에서 같은 저장본으로 본다
-              try { localStorage.setItem('drama_saved_at', savedAt); } catch {}
-              try { sessionStorage.removeItem('sync-conflict-dismissed'); } catch {}
-              setSyncConflict(null);
-            } catch (e) {
-              console.warn('[Drive] 기기 유지 실패:', e);
-              const { userMsg, kind } = describeDriveError(e);
-              clearTimeout(saveToastTimer.current);
-              setSaveToastMsg(userMsg);
-              setSaveToast(true);
-              saveToastTimer.current = setTimeout(() => setSaveToast(false), 3500);
-              if (kind === 'auth') promptDriveReauthForSave();
-            } finally {
-              setSyncConflictBusy(null);
-            }
-          }}
-          onLoadDrive={async () => {
-            if (syncConflictBusy) return;
-            setSyncConflictBusy('현재 기기 데이터를 스냅샷에 보존 중…');
-            try {
-              const { saveSnapshot } = await import('./store/googleDrive');
-              const localSnap = {
-                projects:       state.projects,
-                episodes:       state.episodes,
-                characters:     state.characters,
-                scenes:         state.scenes,
-                scriptBlocks:   state.scriptBlocks,
-                coverDocs:      state.coverDocs,
-                synopsisDocs:   state.synopsisDocs,
-                resources:      state.resources,
-                workTimeLogs:   state.workTimeLogs,
-                checklistItems: state.checklistItems,
-                trash:          state.trash,
-                stylePreset:    state.stylePreset,
-              };
-              if ((localSnap.projects?.length ?? 0) > 0) {
-                await saveSnapshot(localSnap, '다른 기기 불러오기 직전 자동 보존', 'device_switch');
-              }
-              loadFromDriveData(syncConflict.driveData);
-              try { sessionStorage.removeItem('sync-conflict-dismissed'); } catch {}
-              setSyncConflict(null);
-            } catch (e) {
-              console.warn('[Drive] 불러오기 직전 로컬 보존 실패:', e);
-              const { userMsg, kind } = describeDriveError(e);
-              clearTimeout(saveToastTimer.current);
-              setSaveToastMsg(`현재 데이터를 백업하지 못해 불러오기를 중단했습니다. ${userMsg}`);
-              setSaveToast(true);
-              saveToastTimer.current = setTimeout(() => setSaveToast(false), 3500);
-              if (kind === 'auth') promptDriveReauthForSave();
-            } finally {
-              setSyncConflictBusy(null);
-            }
-          }}
-          onApply={async (decisions) => {
-            // Phase 2.2b — 대본별 결정 적용. decisions: { [projectId]: 'local' | 'drive' }
-            if (syncConflictBusy) return;
-            const conflicts = syncConflict?.conflicts || [];
-            const driveData = syncConflict?.driveData;
-            if (!Array.isArray(conflicts) || conflicts.length === 0) return;
-            // 명시적 통제 업로드 동안 debounce persist effect의 중복 Drive 저장 억제.
-            suppressPersistSave();
-            window.dispatchEvent(new Event('script:requestSave'));
-            await waitForEditorFlush();
-            const baseState = latestStateRef.current;
-            setSyncConflictBusy('이 기기 데이터를 스냅샷에 보존 중…');
-            try {
-              // 1) 안전 스냅샷 — 이 기기 데이터만 보존 (실수 복구용).
-              //    Drive 데이터는 방금 Drive에서 읽어온 것이라 이미 Drive에 존재 → 재업로드 스냅샷 제거.
-              try {
-                const localSnap = {
-                  projects:       baseState.projects,
-                  episodes:       baseState.episodes,
-                  characters:     baseState.characters,
-                  scenes:         baseState.scenes,
-                  scriptBlocks:   baseState.scriptBlocks,
-                  coverDocs:      baseState.coverDocs,
-                  synopsisDocs:   baseState.synopsisDocs,
-                  resources:      baseState.resources,
-                  workTimeLogs:   baseState.workTimeLogs,
-                  checklistItems: baseState.checklistItems,
-                  trash:          baseState.trash,
-                  stylePreset:    baseState.stylePreset,
-                };
-                if ((localSnap.projects?.length ?? 0) > 0) {
-                  await saveSnapshot(localSnap, '충돌 해결 직전 이 기기 자동 보존', 'device_switch');
-                }
-              } catch (e) {
-                console.warn('[Drive] 충돌 해결 스냅샷 저장 실패 (계속):', e);
-              }
-
-              setSyncConflictBusy('적용 중…');
-
-              // 2) 결정별 dispatch — REPLACE_PROJECT_DATA / MOVE_PROJECT_TO_TRASH
-              let resolvedState = baseState;
-              for (const c of conflicts) {
-                const dec = decisions[c.projectId];
-                if (dec === 'drive' && (c.kind === 'conflict' || c.kind === 'driveOnly')) {
-                  // Drive 데이터로 교체/추가 — driveData에서 그 대본만 추출
-                  const payload = serializeProject(driveData, c.projectId);
-                  if (payload) {
-                    dispatch({ type: 'REPLACE_PROJECT_DATA', payload });
-                    resolvedState = appReducer(resolvedState, { type: 'REPLACE_PROJECT_DATA', payload });
-                  } else {
-                    console.warn('[Sync] driveData에서 대본 추출 실패', c.projectId);
-                  }
-                } else if (dec === 'drive' && c.kind === 'localOnly') {
-                  // 이 기기에서 휴지통으로 — 복구 가능
-                  dispatch({ type: 'MOVE_PROJECT_TO_TRASH', id: c.projectId });
-                  resolvedState = appReducer(resolvedState, { type: 'MOVE_PROJECT_TO_TRASH', id: c.projectId });
-                }
-                // 'local' 결정의 conflict/localOnly는 state 변화 없음 — persist effect가 Drive 갱신 처리
-              }
-
-              // 3) driveOnly + 'local' (Drive 파일 무시·삭제) — state 변화 없으므로 명시적 처리
-              const uploadProjectIds = conflicts
-                .filter(c => decisions[c.projectId] === 'local' && c.kind !== 'driveOnly')
-                .map(c => c.projectId);
-              const deleteProjectIds = conflicts
-                .filter(c => c.kind === 'driveOnly' && decisions[c.projectId] === 'local')
-                .map(c => c.projectId);
-              await syncWorkspaceToDrive(resolvedState, {
-                savedAt: new Date().toISOString(),
-                projectIds: uploadProjectIds,
-                deleteProjectIds,
-              });
-
-              // 명시적 sync로 이미 올렸으므로 fingerprint를 적용 후 상태로 갱신 —
-              // 억제 해제 후 persist effect가 같은 대본을 다시 PUT하지 않도록.
-              markProjectsSynced(resolvedState, resolvedState.projects.map(p => p.id));
-
-              // 4) 정리 — drama_saved_at은 다음 persist 사이클이 갱신
-              try { sessionStorage.removeItem('sync-conflict-dismissed'); } catch {}
-              setSyncConflict(null);
-            } catch (e) {
-              console.warn('[Sync] 충돌 해결 실패:', e);
-              const { userMsg, kind } = describeDriveError(e);
-              clearTimeout(saveToastTimer.current);
-              setSaveToastMsg(`충돌 해결 중 오류: ${userMsg}`);
-              setSaveToast(true);
-              saveToastTimer.current = setTimeout(() => setSaveToast(false), 3500);
-              if (kind === 'auth') promptDriveReauthForSave();
-            } finally {
-              // 억제 해제 — 실패 시엔 fingerprint 미갱신 상태라 다음 persist가 자동 재시도.
-              releasePersistSave();
-              setSyncConflictBusy(null);
-            }
-          }}
-          onDismiss={syncConflictBusy ? undefined : () => {
-            try { sessionStorage.setItem('sync-conflict-dismissed', '1'); } catch {}
-            setSyncConflict(null);
-          }}
-        />
-      )}
       {!isMobile && <OnboardingTour />}
       {snapshotOpen && <SnapshotPanel onClose={() => setSnapshotOpen(false)} />}
-      {saveToast && (
-        <div style={{
-          position: 'fixed', bottom: '32px', left: '50%', transform: 'translateX(-50%)',
-          background: /Drive\uC5D0 \uC800\uC7A5\uB418\uC5C8\uC2B5\uB2C8\uB2E4|\uC800\uC7A5\uB418\uC5C8\uC2B5\uB2C8\uB2E4/.test(saveToastMsg) ? 'var(--c-accent)' : '#b7791f',
-          color: '#fff',
-          padding: '8px 20px', borderRadius: '8px',
-          fontSize: '13px', zIndex: 9999,
-          boxShadow: '0 2px 12px rgba(0,0,0,0.2)',
-          pointerEvents: 'none',
-          maxWidth: 360, textAlign: 'center',
-        }}>
-          {saveToastMsg}
-        </div>
+      {driveSaveDialog.open && (
+        <DriveSaveNameDialog
+          isDark={isDark}
+          defaultValue={driveSaveDialog.defaultName}
+          onConfirm={(name) => { setDriveSaveDialog(d => ({ ...d, open: false })); driveSaveResolveRef.current?.(name); }}
+          onCancel={() => { setDriveSaveDialog(d => ({ ...d, open: false })); driveSaveResolveRef.current?.(null); }}
+        />
       )}
+      {saveToast && (() => {
+        const isSaving  = saveToastMsg.includes('\uC800\uC7A5 \uC911');
+        const isSuccess = saveToastMsg.includes('\uC800\uC7A5\uB428');
+        const isFail    = saveToastMsg.includes('\uC2E4\uD328') || saveToastMsg.includes('\uC624\uB958');
+        const bg = isSaving ? '#1e3a5f' : isSuccess ? '#166534' : isFail ? '#991b1b' : '#92400e';
+        const icon = isSaving ? '\u2026' : isSuccess ? '\u2713' : isFail ? '\u2715' : '\u2139';
+        return (
+          <div style={{
+            position: 'fixed', top: 24, left: '50%', transform: 'translateX(-50%)',
+            zIndex: 9999, background: bg, color: '#fff',
+            borderRadius: 14, padding: '14px 28px',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.45)',
+            display: 'flex', alignItems: 'center', gap: 12,
+            minWidth: 220, maxWidth: 400,
+            pointerEvents: 'none',
+            animation: 'savePopupIn 0.18s ease-out',
+          }}>
+            <style>{`@keyframes savePopupIn{from{opacity:0;transform:translateX(-50%) translateY(-10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}`}</style>
+            <span style={{ fontSize: 20, lineHeight: 1, flexShrink: 0 }}>{icon}</span>
+            <span style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.5, letterSpacing: '-0.01em' }}>{saveToastMsg}</span>
+          </div>
+        );
+      })()}
       {newVersionReady && !updatingVersion && (
         <div style={{
           position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 10000,
@@ -2518,14 +2243,13 @@ function Shell({ authUser, setAuthUser }) {
       >
         <div style={{ display: focusMode ? 'none' : 'contents' }}>
           <MobileMenuBar
-            onSave={handleSave}
+            onSave={handleSaveToDrive}
             onPrintPreview={() => { setExportDefaultFormat('pdf'); window.dispatchEvent(new CustomEvent('editor:flush')); setPrintPreviewOpen(true); }}
             onSnapshot={() => setSnapshotOpen(true)}
             WorkTimer={WorkTimer}
             authUser={authUser}
             onLogout={() => setAuthUser(null)}
             onMenuAction={handleMenuAction}
-            onSyncConflict={setSyncConflict}
             recentProjects={recentProjects}
             checkedItems={menuCheckedItems}
           />
@@ -2948,7 +2672,6 @@ export default function App() {
       } else if (event === 'SIGNED_OUT') {
         try { localStorage.removeItem('drama_auth_user'); } catch {}
         clearAccessToken();
-        resetInitialSyncGate();
         clearShareStatsCache();
         setAuthUser(null);
       }

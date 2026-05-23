@@ -1,14 +1,12 @@
 import React, { createContext, useContext, useReducer, useEffect, useRef, useCallback } from 'react';
 import { getAll, setAll, getItem, setItem, DB_KEYS, genId, now, migrateFromLocalStorage } from './db';
-import { isTokenValid, saveToDrive, clearAccessToken, saveProjectsIndex, saveProjectToDrive } from './googleDrive';
+import { clearAccessToken } from './googleDrive';
 import { serializeProject, mergeImportedProject } from '../utils/projectSerializer';
 import { computeSizeGuard } from './sizeGuard';
 import { sharePayloadSchema } from '../utils/urlSchemas';
 import { parsePath, syncUrl } from '../utils/urlSync';
 import { describeDriveError } from '../utils/driveError';
 import { detectScriptBlockDuplicates, dedupScriptBlocks } from '../utils/dedupBlocks';
-import { getDeviceId } from '../utils/deviceId';
-import { isPersistSaveSuppressed } from './driveSyncGate';
 
 // 복원 가능한 activeDoc 값 whitelist — localStorage에 주입된 예상 밖의 값 차단
 const ALLOWED_ACTIVE_DOCS = new Set([
@@ -48,34 +46,6 @@ export function mergeWorkLog(logs, entry) {
 // ─── Project fingerprint — Phase 1.2 변경 감지 ──────────────────────────────
 // 대본 단위로 cascading 데이터의 (길이 + 마지막 updatedAt)을 단일 문자열로 만들어
 // 마지막 저장 시점과 비교. 변경 안 된 대본은 신 형식 Drive 저장을 건너뛴다.
-function projectFingerprint(state, projectId) {
-  const p = state.projects.find(pr => pr.id === projectId);
-  if (!p) return null;
-  const sig = (arr) => {
-    let len = 0, maxTs = 0;
-    for (const it of arr) {
-      if (it?.projectId === projectId) {
-        len++;
-        const ts = new Date(it.updatedAt || 0).getTime();
-        if (ts > maxTs) maxTs = ts;
-      }
-    }
-    return `${len}:${maxTs}`;
-  };
-  return [
-    p.updatedAt,
-    sig(state.episodes),
-    sig(state.characters),
-    sig(state.scenes),
-    sig(state.scriptBlocks),
-    sig(state.coverDocs),
-    sig(state.synopsisDocs),
-    sig(state.resources),
-    sig(state.workTimeLogs),
-    sig(state.checklistItems),
-  ].join('|');
-}
-
 // ─── Default style preset ────────────────────────────────────────────────────
 export const DEFAULT_STYLE_PRESET = {
   dialogueGap: '7em',
@@ -748,21 +718,10 @@ export function AppProvider({ children }) {
   const persistTimer = useRef(null);
   // 시스템 로드(INIT/LOAD_FROM_DRIVE) 중엔 drama_saved_at을 갱신하지 않기 위한 플래그
   const skipSavedAtRef = useRef(false);
-  // INIT/LOAD_FROM_DRIVE 직후 Drive 자동저장을 건너뛰기 위한 플래그
-  // (페이지 로드 시 데스크톱 데이터가 Drive를 덮어써서 모바일 데이터를 잃는 레이스컨디션 방지)
-  const skipDriveSaveRef = useRef(false);
   const forcedSavedAtRef = useRef(null);
-  // Size-guard refs — 저장 직전 데이터 급감 감지용
-  // lastSavedSizesRef: 직전 성공 저장 시점의 { scriptBlocks, scenes } 개수 (null=첫 저장)
-  // guardAcceptOnceRef: 사용자가 모달에서 "저장" 눌렀을 때 한 사이클만 가드 스킵
-  // guardDismissedSizesRef: 사용자가 "취소" 누른 시점의 사이즈 — 이 값이 유지되는 동안 저장 보류
   const lastSavedSizesRef = useRef(null);
   const guardAcceptOnceRef = useRef(false);
   const guardDismissedSizesRef = useRef(null);
-  // Phase 1.2 변경 감지: 대본별 fingerprint(cascading 데이터 길이 + max updatedAt).
-  // 매 사이클마다 모든 대본을 신 형식으로 저장하면 503 rate limit hit 빈번 → 변경된 대본만 저장.
-  // __index 키는 인덱스 파일의 마지막 저장 fingerprint.
-  const lastProjFingerprintRef = useRef({});
 
   useEffect(() => {
     (async () => {
@@ -776,7 +735,6 @@ export function AppProvider({ children }) {
         // eslint-disable-next-line no-unused-vars
         const migratedEpisodes = rawEpisodes.map(({ subtitle, ...ep }) => ep);
         skipSavedAtRef.current  = true; // INIT은 사용자 편집이 아님 → savedAt 갱신 건너뜀
-        skipDriveSaveRef.current = true; // INIT 직후 Drive 덮어쓰기 방지
         const [characters, scenes, scriptBlocks, coverDocs, synopsisDocs, resources, workTimeLogs, checklistItems, trashRaw] =
           await Promise.all([
             getAll(DB_KEYS.characters),
@@ -952,7 +910,6 @@ export function AppProvider({ children }) {
         forcedSavedAtRef.current = null;
         return;
       }
-      skipDriveSaveRef.current = false;
     }, 300);
   }, [
     state.initialized,
@@ -984,66 +941,21 @@ export function AppProvider({ children }) {
     } catch {}
   }, [state.initialized, state.activeDoc, state.activeProjectId, state.activeEpisodeId]);
 
-  // Drive/스냅샷에서 불러올 때 사용
-  // 주의: skipDriveSaveRef를 쓰지 않는다 — 복원 후 편집이 없으면 Drive에는 여전히 옛 버전이 남아
-  //       다음 새로고침에서 그 옛 버전이 복원된 상태를 덮어쓰는 사고가 발생했다.
-  //       복원 직후에도 자동저장이 돌아 Drive에 복원 상태를 반영하도록 한다.
-  // useCallback 필수: 소비자(MenuBar 등)의 useCallback이 이 함수를 deps에 두면 매 렌더마다 새 참조가
-  //   되어 effect 무한 재발사 → conflict 모달 끝없이 트리거되는 사고 발생.
-  const loadFromDriveData = useCallback((drivePayload, options = {}) => {
-    const { syncBackToDrive = false } = options;
-
+  const loadFromDriveData = useCallback((drivePayload) => {
     skipSavedAtRef.current = true;
-    skipDriveSaveRef.current = !syncBackToDrive;
-
-    if (syncBackToDrive) {
-      const nextSavedAt = new Date().toISOString();
-      forcedSavedAtRef.current = nextSavedAt;
-      try { localStorage.setItem('drama_saved_at', nextSavedAt); } catch {}
-    } else {
-      forcedSavedAtRef.current = null;
-      if (drivePayload.savedAt) {
-        try { localStorage.setItem('drama_saved_at', drivePayload.savedAt); } catch {}
-      }
+    forcedSavedAtRef.current = null;
+    if (drivePayload.savedAt) {
+      try { localStorage.setItem('drama_saved_at', drivePayload.savedAt); } catch {}
     }
-
     dispatch({ type: 'LOAD_FROM_DRIVE', payload: drivePayload });
   }, []);
 
-  // Size-guard user responses — SizeGuardModal에서 호출
   const acceptSizeGuard = () => {
-    // 다음 persist 사이클에서 가드 스킵하고 그대로 저장
     guardAcceptOnceRef.current = true;
     dispatch({ type: 'CLEAR_GUARD_PENDING' });
   };
-  // 수동 저장(handleSave) 등에서 변경된 대본만 PUT하기 위해 fingerprint ref 공유.
-  // 자동저장(persist effect)이 사용하는 동일한 ref이므로 어느 쪽이 먼저 PUT해도
-  // 다른 쪽이 다시 같은 대본을 PUT하지 않음.
-  const getChangedProjectIds = useCallback((targetState) => {
-    if (!targetState?.projects) return [];
-    return targetState.projects
-      .filter(p => projectFingerprint(targetState, p.id) !== lastProjFingerprintRef.current[p.id])
-      .map(p => p.id);
-  }, []);
-
-  // PUT 성공 후 호출 — 다음 사이클에서 같은 대본을 또 PUT하지 않도록 ref 갱신.
-  // 인덱스 fingerprint도 함께 갱신 (대본 추가/삭제/제목 변경 시 인덱스도 변하기 때문).
-  const markProjectsSynced = useCallback((targetState, projectIds) => {
-    if (!targetState?.projects || !Array.isArray(projectIds)) return;
-    const ids = new Set(projectIds);
-    for (const p of targetState.projects) {
-      if (ids.has(p.id)) {
-        lastProjFingerprintRef.current[p.id] = projectFingerprint(targetState, p.id);
-      }
-    }
-    const indexFp = targetState.projects
-      .map(m => `${m.id}:${m.updatedAt}`)
-      .join(',');
-    lastProjFingerprintRef.current.__index = indexFp;
-  }, []);
 
   const cancelSizeGuard = () => {
-    // 현재 크기를 취소 baseline으로 기억 — 사용자가 다시 편집하기 전까지 저장 보류
     guardDismissedSizesRef.current = {
       scriptBlocks: state.scriptBlocks.length,
       scenes: state.scenes.length,
@@ -1052,7 +964,7 @@ export function AppProvider({ children }) {
   };
 
   return (
-    <AppContext.Provider value={{ state, dispatch, loadFromDriveData, acceptSizeGuard, cancelSizeGuard, getChangedProjectIds, markProjectsSynced, genId, now }}>
+    <AppContext.Provider value={{ state, dispatch, loadFromDriveData, acceptSizeGuard, cancelSizeGuard, genId, now }}>
       {children}
     </AppContext.Provider>
   );

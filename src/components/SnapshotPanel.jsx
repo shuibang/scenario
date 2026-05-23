@@ -7,7 +7,7 @@
  * 복원 흐름:
  *   1) 현재 상태를 "복원 전 자동저장" 스냅샷으로 저장
  *   2) 선택한 스냅샷 데이터 로드
- *   3) loadFromDriveData()로 앱 상태 교체
+ *   3) REPLACE_PROJECT_DATA dispatch로 대본 교체
  */
 import React, { useEffect, useState, useCallback } from 'react';
 import { useApp } from '../store/AppContext';
@@ -16,14 +16,16 @@ import {
   saveSnapshot,
   loadSnapshotData,
   deleteSnapshot,
-  isTokenValid,
-  saveDriveBackup,
+  listDriveBackups,
+  loadDriveBackupData,
+  deleteDriveBackup,
+  sanitizeFolderName,
 } from '../store/googleDrive';
-import { guardedSignInWithGoogle } from '../utils/guardedSignIn';
+import { serializeProject } from '../utils/projectSerializer';
 import { formatSnapshotMetaLine } from '../utils/snapshotMeta';
 import { reportError } from '../utils/errorTracker';
 
-// ── 날짜 포맷 ────────────────────────────────────────────────────────────────
+// ── 날짜 포맷 ─────────────────────────────────────────────────────────────────
 function fmtDate(iso) {
   if (!iso) return '알 수 없음';
   const d = new Date(iso);
@@ -32,11 +34,6 @@ function fmtDate(iso) {
   return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-function makeDriveBackupFilename() {
-  const d = new Date();
-  const pad = n => String(n).padStart(2, '0');
-  return `대본백업_${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}.djak`;
-}
 
 // ── 기기 뱃지 색 ─────────────────────────────────────────────────────────────
 function DeviceBadge({ label }) {
@@ -60,6 +57,7 @@ const TYPE_STYLE = {
   backup:        { bg: 'rgba(183,148,246,0.15)', color: '#b794f4', text: '백업'     },
   restore:       { bg: 'rgba(160,174,192,0.15)', color: '#a0aec0', text: '복원 전'  },
   device_switch: { bg: 'rgba(99,179,237,0.15)',  color: '#63b3ed', text: '기기 전환' },
+  drive_backup:  { bg: 'rgba(99,179,237,0.15)',  color: '#63b3ed', text: 'Drive 백업' },
 };
 function TypeBadge({ type, label }) {
   const s = TYPE_STYLE[type] ?? TYPE_STYLE.manual;
@@ -69,6 +67,21 @@ function TypeBadge({ type, label }) {
       background: s.bg, color: s.color, whiteSpace: 'nowrap',
     }}>
       {s.text}{label && label !== s.text ? ` — ${label}` : ''}
+    </span>
+  );
+}
+
+// ── 출처 배지 ────────────────────────────────────────────────────────────────
+function SourceBadge({ source }) {
+  const isDrive = source === 'drive';
+  return (
+    <span style={{
+      fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4,
+      background: isDrive ? 'rgba(99,179,237,0.15)' : 'rgba(160,174,192,0.12)',
+      color:      isDrive ? '#63b3ed'               : '#a0aec0',
+      whiteSpace: 'nowrap',
+    }}>
+      {isDrive ? 'Drive' : '브라우저'}
     </span>
   );
 }
@@ -125,7 +138,9 @@ function ConfirmDialog({ snap, onConfirm, onCancel, loading }) {
 
 // ── 메인 ─────────────────────────────────────────────────────────────────────
 export default function SnapshotPanel({ onClose }) {
-  const { state, loadFromDriveData } = useApp();
+  const { state, dispatch } = useApp();
+  const activeProject = state.projects?.find(p => p.id === state.activeProjectId) ?? null;
+  const safeProjectName = activeProject ? sanitizeFolderName(activeProject.title) : null;
   const [snapshots, setSnapshots]     = useState([]);
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState(null);
@@ -133,7 +148,6 @@ export default function SnapshotPanel({ onClose }) {
   const [restoring, setRestoring]     = useState(false);
   const [deleting, setDeleting]       = useState(null);
   const [backing, setBacking]         = useState(false);
-  const [driveBacking, setDriveBacking] = useState(false);
   const [toast, setToast]             = useState(null);
 
   const showToast = (msg) => {
@@ -141,49 +155,47 @@ export default function SnapshotPanel({ onClose }) {
     setTimeout(() => setToast(null), 2500);
   };
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
+  const refresh = useCallback(async ({ silent = false, projectFolderName = safeProjectName } = {}) => {
+    if (!silent) setLoading(true);
     setError(null);
     try {
-      const list = await loadSnapshots();
-      setSnapshots(list);
+      const [idbList, driveList] = await Promise.all([
+        loadSnapshots(),
+        listDriveBackups(projectFolderName),
+      ]);
+      const merged = [
+        ...idbList.map(s => ({ ...s, source: 'idb' })),
+        ...driveList,
+      ].sort((a, b) => b.savedAt.localeCompare(a.savedAt));
+      setSnapshots(merged);
     } catch {
-      setError('스냅샷 목록을 불러오지 못했습니다.');
+      if (!silent) setError('스냅샷 목록을 불러오지 못했습니다.');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
-  }, []);
+  }, [safeProjectName]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  const currentPayload = () => ({
-    projects:       state.projects,
-    episodes:       state.episodes,
-    characters:     state.characters,
-    scenes:         state.scenes,
-    scriptBlocks:   state.scriptBlocks,
-    coverDocs:      state.coverDocs,
-    synopsisDocs:   state.synopsisDocs,
-    resources:      state.resources,
-    workTimeLogs:   state.workTimeLogs,
-    checklistItems: state.checklistItems,
-    trash:          state.trash,
-    stylePreset:    state.stylePreset,
-  });
+  const currentProjectPayload = () =>
+    state.activeProjectId ? serializeProject(state, state.activeProjectId) : null;
 
   const handleRestore = async () => {
     if (!confirm) return;
     setRestoring(true);
     try {
-      // 1) 현재 상태 백업
-      await saveSnapshot(currentPayload(), '복원 전 자동저장', 'restore');
+      // 1) 현재 프로젝트 상태 사전 백업
+      const pre = currentProjectPayload();
+      if (pre) await saveSnapshot(pre, '복원 전 자동저장', 'restore');
 
-      // 2) 선택 스냅샷 로드
-      const data = await loadSnapshotData(confirm.id);
+      // 2) 선택 스냅샷 로드 (출처별 분기)
+      const data = confirm.source === 'drive'
+        ? await loadDriveBackupData(confirm.id)
+        : await loadSnapshotData(confirm.id);
       if (!data) throw new Error('스냅샷 데이터를 찾을 수 없습니다.');
 
-      // 3) 앱 상태 교체
-      loadFromDriveData(data, { syncBackToDrive: true });
+      // 3) 대본 단위 교체 (전체 워크스페이스 덮어쓰기 없음)
+      dispatch({ type: 'REPLACE_PROJECT_DATA', payload: data });
       showToast('복원 완료');
       setConfirm(null);
       onClose();
@@ -197,11 +209,13 @@ export default function SnapshotPanel({ onClose }) {
   };
 
   const handleBackup = async () => {
+    const payload = currentProjectPayload();
+    if (!payload) { showToast('대본을 먼저 선택해주세요'); return; }
     setBacking(true);
     setError(null);
     try {
-      await saveSnapshot(currentPayload(), '백업', 'backup');
-      await refresh();
+      await saveSnapshot(payload, '백업', 'backup');
+      await refresh({ silent: true });
       showToast('백업 완료');
     } catch {
       setError('백업 중 오류가 발생했습니다.');
@@ -210,32 +224,14 @@ export default function SnapshotPanel({ onClose }) {
     }
   };
 
-  const handleDriveBackup = async () => {
-    if (!isTokenValid()) {
-      guardedSignInWithGoogle();
-      return;
-    }
-    setDriveBacking(true);
-    setError(null);
-    try {
-      const filename = makeDriveBackupFilename();
-      await saveDriveBackup(currentPayload(), filename);
-      showToast('Drive에 백업 완료');
-    } catch (e) {
-      if (e?.message === 'DRIVE_AUTH_REQUIRED') {
-        guardedSignInWithGoogle();
-      } else {
-        showToast('Drive 백업 실패 — 다시 시도');
-      }
-    } finally {
-      setDriveBacking(false);
-    }
-  };
-
   const handleDelete = async (snap) => {
     setDeleting(snap.id);
     try {
-      await deleteSnapshot(snap.id);
+      if (snap.source === 'drive') {
+        await deleteDriveBackup(snap.id);
+      } else {
+        await deleteSnapshot(snap.id);
+      }
       setSnapshots(prev => prev.filter(s => s.id !== snap.id));
       showToast('삭제 완료');
     } catch {
@@ -284,13 +280,13 @@ export default function SnapshotPanel({ onClose }) {
           >×</button>
         </div>
 
-        {/* 백업 버튼 2개 */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+        {/* 백업 버튼 */}
+        <div style={{ marginBottom: 14 }}>
           <button
             onClick={handleBackup}
             disabled={backing}
             style={{
-              flex: 1, padding: '9px 0', borderRadius: 8,
+              width: '100%', padding: '9px 0', borderRadius: 8,
               background: backing ? 'transparent' : 'rgba(183,148,246,0.2)',
               border: '1px solid rgba(183,148,246,0.4)',
               color: '#b794f4', fontSize: 13, fontWeight: 700,
@@ -298,19 +294,6 @@ export default function SnapshotPanel({ onClose }) {
             }}
           >
             {backing ? '백업 중…' : '지금 백업하기'}
-          </button>
-          <button
-            onClick={handleDriveBackup}
-            disabled={driveBacking}
-            style={{
-              flex: 1, padding: '9px 0', borderRadius: 8,
-              background: driveBacking ? 'transparent' : 'rgba(99,179,237,0.15)',
-              border: '1px solid rgba(99,179,237,0.35)',
-              color: '#63b3ed', fontSize: 13, fontWeight: 700,
-              cursor: driveBacking ? 'not-allowed' : 'pointer',
-            }}
-          >
-            {driveBacking ? 'Drive 저장 중…' : 'Drive에 백업'}
           </button>
         </div>
 
@@ -331,7 +314,7 @@ export default function SnapshotPanel({ onClose }) {
           <div style={{ fontSize: 11, color: '#795548', lineHeight: 1.6 }}>
             자동 백업은 <b>이 브라우저에만</b> 저장됩니다.<br />
             브라우저 캐시를 삭제하거나 다른 기기에서는 복원할 수 없어요.<br />
-            중요한 대본은 <b>Drive에 백업</b>으로 별도 저장하세요.
+            중요한 대본은 Ctrl+S → Drive 저장으로 별도 보관하세요.
           </div>
         </div>
 
@@ -368,12 +351,16 @@ export default function SnapshotPanel({ onClose }) {
                 {/* 정보 */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
-                    <TypeBadge type={snap.type} label={snap.label} />
-                    <DeviceBadge label={snap.device} />
+                    {snap.source !== 'drive' && <TypeBadge type={snap.type} label={snap.label} />}
+                    {snap.source !== 'drive' && snap.device && <DeviceBadge label={snap.device} />}
+                    <SourceBadge source={snap.source} />
                     {i === 0 && <span style={{ fontSize: 10, color: 'var(--c-accent)' }}>최신</span>}
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--c-text3)' }}>{fmtDate(snap.savedAt)}</div>
-                  <div style={{ fontSize: 11, color: 'var(--c-text6)' }}>{formatSnapshotMetaLine(snap)}</div>
+                  {snap.source === 'drive'
+                    ? <div style={{ fontSize: 11, color: 'var(--c-text6)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{snap.name}</div>
+                    : <div style={{ fontSize: 11, color: 'var(--c-text6)' }}>{formatSnapshotMetaLine(snap)}</div>
+                  }
                 </div>
 
                 {/* 액션 */}

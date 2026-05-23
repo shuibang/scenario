@@ -1,17 +1,14 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Clapperboard, ExternalLink, Cloud, CloudOff } from 'lucide-react';
+import { Clapperboard, ExternalLink } from 'lucide-react';
 import { useApp } from '../../store/AppContext';
 import { FONTS, getFontPdfTooltip } from '../../print/FontRegistry';
 import AdBanner from '../AdBanner';
 import { mobileTbtnStyle } from '../../styles/tokens';
 import { applyInlineFormat } from '../../utils/textFormat';
-import { clearAccessToken, loadAllProjectsFromDrive, isTokenValid } from '../../store/googleDrive';
+import { clearAccessToken, isTokenValid } from '../../store/googleDrive';
 import { isPublicPcMode, getAll, DB_KEYS, clearDramaStorage } from '../../store/db';
 import { supabaseSignOut, refreshDriveToken } from '../../store/supabaseClient';
 import { guardedSignInWithGoogle } from '../../utils/guardedSignIn';
-import { useDriveAuthState } from '../../hooks/useDriveAuthState';
-import { shouldRunInitialSync, markInitialSyncDone } from '../../store/driveSyncGate';
-import { buildProjectConflicts } from '../../utils/projectConflict';
 import Menubar from '../Menubar/Menubar';
 import PublicPcBadge from '../PublicPcBadge';
 import { isAdminUser, getAdminHash } from '../../utils/adminAuth';
@@ -19,16 +16,11 @@ import { fetchAdminUnreadCounts } from '../../utils/adminBadge';
 import { useBadges } from '../../utils/badges';
 import BadgeChip from '../BadgeChip';
 
-export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, WorkTimer, authUser, onLogout, onMenuAction, onSyncConflict, recentProjects = [], checkedItems = {} }) {
-  const { state, dispatch, loadFromDriveData } = useApp();
+export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, WorkTimer, authUser, onLogout, onMenuAction, recentProjects = [], checkedItems = {} }) {
+  const { state, dispatch } = useApp();
   const { activeProjectId, stylePreset } = state;
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
-  const [driveStatus, setDriveStatus] = useState('none');
-  const { valid: driveTokenValid, settled: driveAuthSettled } = useDriveAuthState();
-  const [reconnecting, setReconnecting] = useState(false);
-  const syncingRef = useRef(false);
-  const latestStateRef = useRef(state);
 
   // 사용자 대표 뱃지 — 햄버거 안 사용자 이름 옆
   const { featured: userBadge } = useBadges();
@@ -49,116 +41,12 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
     return () => { cancelled = true; window.removeEventListener('hashchange', onHash); clearInterval(id); };
   }, [authUser]);
 
-  useEffect(() => {
-    latestStateRef.current = state;
-  }, [state]);
   const timerSaveRef = useRef(null); // WorkTimer의 autoSave 연결
 
   // Drive 동기화 — 데스크톱과 동일한 충돌 판정 기준.
   // 이전에는 "모바일은 자동 적용, 충돌 UI 없음" 설계였으나,
   // 여러 기기 간 동기화 시 모바일 데이터가 경고 없이 덮어써지는 사고가 있어
   // 양쪽에 의미 있는 데이터가 있고 타임스탬프가 다르면 충돌 모달을 띄우도록 통일.
-  const runDriveSync = useCallback(async () => {
-    if (syncingRef.current || !isTokenValid()) return 'skipped';
-    syncingRef.current = true;
-    setDriveStatus('syncing');
-    try {
-      const driveData = await loadAllProjectsFromDrive();
-      const localSavedAt = localStorage.getItem('drama_saved_at') || null;
-      let localProjects = [];
-      try {
-        const p = await getAll(DB_KEYS.projects);
-        if (Array.isArray(p)) localProjects = p;
-      } catch {}
-      const hasLocalData = localProjects.length > 0;
-      const driveHasData = (driveData?.projects?.length ?? 0) > 0;
-
-      if (!driveData?.savedAt || !driveHasData) {
-        setDriveStatus('synced');
-        return 'synced';
-      } else if (!hasLocalData) {
-        loadFromDriveData(driveData);
-        setDriveStatus('synced');
-        return 'synced';
-      } else {
-        // 대본별 충돌만 계산해서 실제 내용이 다를 때만 모달을 띄운다.
-        const localState = latestStateRef.current;
-        const conflicts = buildProjectConflicts(localState, driveData);
-        if (conflicts.length === 0) {
-          setDriveStatus('synced');
-          return 'synced';
-        } else {
-          let dismissedThisSession = false;
-          try { dismissedThisSession = sessionStorage.getItem('sync-conflict-dismissed') === '1'; } catch {}
-          if (dismissedThisSession) {
-            setDriveStatus('synced');
-            syncingRef.current = false;
-            return 'dismissed';
-          }
-          onSyncConflict?.({
-            localSavedAt,
-            driveData,
-            localProjectCount: localState?.projects?.length ?? localProjects.length,
-            conflicts,
-          });
-          setDriveStatus('none');
-          syncingRef.current = false;
-          return 'conflict';
-        }
-      }
-      setTimeout(() => setDriveStatus('none'), 3000);
-      return 'synced';
-    } catch (e) {
-      if (e.message?.includes('401') || e.message?.includes('DRIVE_AUTH_REQUIRED')) {
-        const newToken = await refreshDriveToken();
-        if (newToken) { syncingRef.current = false; return runDriveSync(); }
-      }
-      if (e.message?.includes('403')) {
-        setDriveStatus('reauth');
-      } else {
-        setDriveStatus('error');
-      }
-      console.warn('[Drive] 불러오기 실패:', e);
-      return e.message?.includes('403') ? 'reauth' : 'error';
-    } finally {
-      syncingRef.current = false;
-    }
-  }, [loadFromDriveData, onSyncConflict]);
-
-  // 같은 마운트에서 sync 중복 발사 차단 — driveStatus가 'syncing' → 'none' 되돌아오는
-  // 동안 effect 재발사로 runDriveSync가 여러 번 호출되는 것을 막음.
-  const initialSyncStartedRef = useRef(false);
-
-  // 로그인 후 토큰 유효하면 Drive 동기화 — 같은 사용자에 대해 1회만 (창 크기 변경 리마운트 가드).
-  useEffect(() => {
-    if (!authUser || !driveAuthSettled || !driveTokenValid || driveStatus !== 'none') return;
-    if (!shouldRunInitialSync(authUser.email)) return;
-    if (initialSyncStartedRef.current) return;
-    initialSyncStartedRef.current = true;
-    let cancelled = false;
-    (async () => {
-      const result = await runDriveSync();
-      if (cancelled) return;
-      if (result === 'synced' || result === 'dismissed' || result === 'conflict') {
-        markInitialSyncDone(authUser.email);
-      } else {
-        initialSyncStartedRef.current = false;
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [authUser, driveAuthSettled, driveTokenValid, driveStatus, runDriveSync]);
-
-  const handleDriveReconnect = useCallback(async () => {
-    if (reconnecting) return;
-    setReconnecting(true);
-    try {
-      const t = await refreshDriveToken();
-      if (t) { setDriveStatus('none'); runDriveSync(); }
-      else guardedSignInWithGoogle();
-    } finally {
-      setReconnecting(false);
-    }
-  }, [reconnecting, runDriveSync]);
 
   // Close dropdown when tapping outside + prevent body scroll
   useEffect(() => {
@@ -199,7 +87,6 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
       window.location.reload();
       return;
     }
-    setDriveStatus('none');
     onLogout?.();
     setMenuOpen(false);
   };
@@ -245,32 +132,9 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
                         {userBadge && <BadgeChip badge={userBadge} size={16} tooltip="label" />}
                         <span>{authUser.name}</span>
                       </div>
-                      <div style={{ fontSize: 10, color: 'var(--c-text5)' }}>
-                        {driveStatus === 'syncing' && '☁ 동기화 중…'}
-                        {driveStatus === 'synced'  && '☁ Drive 연동됨'}
-                        {driveStatus === 'error'   && '☁ 연동 실패'}
-                        {driveStatus === 'reauth'  && '☁ 구글 드라이브 재연결 필요'}
-                        {(driveStatus === 'none' || !driveStatus) && authUser.email}
-                      </div>
+                      <div style={{ fontSize: 10, color: 'var(--c-text5)' }}>{authUser.email}</div>
                     </div>
                   </div>
-                  {driveStatus === 'error' && (
-                    <button
-                      style={{ ...dropItemStyle, padding: '4px 0', fontSize: 11, color: '#f87171' }}
-                      onClick={async () => {
-                        setDriveStatus('none');
-                        const newToken = await refreshDriveToken();
-                        if (newToken) runDriveSync();
-                        else guardedSignInWithGoogle();
-                      }}
-                    >재연결 시도</button>
-                  )}
-                  {driveStatus === 'reauth' && (
-                    <button
-                      style={{ ...dropItemStyle, padding: '4px 0', fontSize: 11, color: '#f6ad55' }}
-                      onClick={() => guardedSignInWithGoogle()}
-                    >구글 드라이브 재연결이 필요해요 (탭해서 재로그인)</button>
-                  )}
                   <button
                     onClick={handleLogout}
                     style={{ fontSize: 11, color: 'var(--c-text6)', background: 'none', border: '1px solid var(--c-border3)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', alignSelf: 'flex-start' }}
@@ -431,42 +295,6 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
           <ExternalLink size={10} strokeWidth={2} style={{ flexShrink: 0, opacity: 0.6 }} />
         </a>
 
-        {/* 오른쪽 spacer + Drive 인디케이터 + timer */}
-        <div style={{ flex: 1 }} />
-        {/* Drive 연결 인디케이터 — 연결됨 상태에도 작은 아이콘으로 노출(상태 확인용).
-            settled 가드: 부팅 직후 토큰 도착 전 잠깐 깜빡임 방지. */}
-        {authUser && driveAuthSettled && (
-          driveTokenValid ? (
-            <span
-              title="Drive 연결됨"
-              style={{
-                display: 'inline-flex', alignItems: 'center',
-                padding: '4px 4px', flexShrink: 0,
-                color: 'var(--c-text6)',
-              }}
-            >
-              <Cloud size={13} strokeWidth={1.75} />
-            </span>
-          ) : (
-            <button
-              type="button"
-              onClick={handleDriveReconnect}
-              disabled={reconnecting}
-              title="Drive 연결이 끊겼어요. 탭해서 재연결하세요"
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 3,
-                background: 'transparent', border: 'none',
-                padding: '4px 4px', borderRadius: 4, flexShrink: 0,
-                color: '#f59e0b', fontSize: 11,
-                cursor: reconnecting ? 'wait' : 'pointer',
-                WebkitTapHighlightColor: 'transparent',
-              }}
-            >
-              <CloudOff size={13} strokeWidth={2} />
-              <span>{reconnecting ? '재연결…' : '끊김'}</span>
-            </button>
-          )
-        )}
         <PublicPcBadge compact onClick={() => onMenuAction?.('tools:settings')} />
         <div data-tour-id="mobile-timer" style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
           {activeProjectId && WorkTimer && (

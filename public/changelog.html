@@ -263,7 +263,7 @@
 
   <div class="timeline">
 
-    <!-- v41 (2026-05-22) — 백업 시스템 IDB 전환 + Drive 파일 백업 -->
+    <!-- v41 (2026-05-22) — 백업 시스템 IDB 전환 + Drive 파일 저장 수동화 -->
     <div class="cl-entry">
       <div class="cl-dot"></div>
       <div class="cl-card">
@@ -271,7 +271,7 @@
           <summary>
             <div class="cl-meta">
               <div class="cl-date">2026-05-22</div>
-              <div class="cl-title">💾 백업 시스템 전면 개편 · ✍️ 본문 주석 · ☁ Drive 저장 수동 전환</div>
+              <div class="cl-title">💾 백업 시스템 전면 개편 · ✍️ 본문 주석 · ☁ Drive / 내 컴퓨터 저장 분리</div>
             </div>
             <span class="new-badge">최신</span>
             <span class="arrow">▶</span>
@@ -282,8 +282,6 @@
               <ul>
                 <li>자동백업(10분)·수동백업·스냅샷이 <strong>브라우저 로컬(IndexedDB)</strong>에 저장됩니다 — 구글 드라이브 로그인 없이 즉시 동작</li>
                 <li>최대 30개 보관. 초과 시 오래된 것부터 자동 삭제</li>
-                <li>백업/복원 패널에 <strong>"Drive에 백업"</strong> 버튼 추가 — 내 구글 드라이브 <em>"대본작업실 백업"</em> 폴더에 <code>.djak</code> 파일로 영구 보관</li>
-                <li>Drive 미연결 상태에서 "Drive에 백업" 클릭 시 즉시 로그인 창 안내</li>
                 <li>백업 패널에 브라우저 저장 한계 안내문 추가 (다른 기기·캐시 삭제 시 복원 불가)</li>
               </ul>
             </div>
@@ -296,10 +294,10 @@
               </ul>
             </div>
             <div class="cl-section">
-              <div class="cl-section-head">☁ Drive 저장 수동 전환</div>
+              <div class="cl-section-head">☁ Drive / 내 컴퓨터 저장 분리</div>
               <ul>
-                <li>상태 변경마다 자동으로 Drive에 저장되던 방식을 <strong>Ctrl+S 또는 "Drive 저장" 버튼</strong>으로만 저장하도록 변경</li>
-                <li>헤더에 Drive 저장 상태 상시 표시: <em>저장 중… / 저장됨 HH:MM / 저장 실패(클릭 재시도)</em></li>
+                <li>파일 메뉴 → <strong>Drive에 저장 (Ctrl+S)</strong> — 내 구글 드라이브 <em>"대본작업실"</em> 폴더에 <code>.djs</code> 파일로 저장</li>
+                <li>파일 메뉴 → <strong>내 컴퓨터에 저장 (Ctrl+Shift+S)</strong> — <code>.djs</code> 파일로 직접 다운로드</li>
                 <li>로컬(IndexedDB) 자동저장은 변경 없이 그대로 유지 — 작성 내용은 언제나 브라우저에 자동 보존</li>
               </ul>
             </div>

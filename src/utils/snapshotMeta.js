@@ -14,7 +14,9 @@ function stripHtml(value) {
 }
 
 export function computeSnapshotMeta(payload, jsonStr) {
-  const projectCount = Array.isArray(payload?.projects) ? payload.projects.length : 0;
+  const projectCount = Array.isArray(payload?.projects)
+    ? payload.projects.length
+    : (payload?.project ? 1 : 0);
 
   const blocks = Array.isArray(payload?.scriptBlocks) ? payload.scriptBlocks : [];
   let sceneCount = 0;
