@@ -874,30 +874,11 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
   }, [stylePreset?.fontFamily, fontAvailability]);
 
   const [loginOpen, setLoginOpen]        = useState(false);
-  const { valid: driveTokenValid } = useDriveAuthState();
   const latestStateRef = useRef(state);
 
   useEffect(() => {
     latestStateRef.current = state;
   }, [state]);
-
-  // 아이디어 노트 — Drive 토큰이 valid 해지는 시점(앱 로드 / 수동저장 → 재연결)마다
-  // 1회 pull. pull 끝나면 ideasStore 가 누적된 unsynced 변경 자동 push.
-  useEffect(() => {
-    if (!authUser || !driveTokenValid) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const { pullIdeasFromDrive } = await import('./store/ideasStore');
-        const res = await pullIdeasFromDrive();
-        if (cancelled) return;
-        if (res?.ok && (res.added > 0 || res.updated > 0)) {
-          console.log('[ideas] Drive 머지 완료:', res);
-        }
-      } catch {}
-    })();
-    return () => { cancelled = true; };
-  }, [authUser, driveTokenValid]);
 
   const commitTitle = () => {
     if (activeProject && titleDraft.trim()) {
@@ -1396,6 +1377,24 @@ function Shell({ authUser, setAuthUser }) {
   // ── Tablet panel collapse state
   const [leftCollapsed,  setLeftCollapsed]  = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
+
+  // ── 아이디어 노트 Drive pull — 모바일 포함 모든 레이아웃에서 실행
+  const { valid: driveTokenValid } = useDriveAuthState();
+  useEffect(() => {
+    if (!authUser || !driveTokenValid) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { pullIdeasFromDrive } = await import('./store/ideasStore');
+        const res = await pullIdeasFromDrive();
+        if (cancelled) return;
+        if (res?.ok && (res.added > 0 || res.updated > 0)) {
+          console.log('[ideas] Drive 머지 완료:', res);
+        }
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [authUser, driveTokenValid]);
 
   // ── 아이디어 노트 시트
   const [ideaSheetOpen, setIdeaSheetOpen] = useState(false);
