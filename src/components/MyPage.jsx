@@ -1011,6 +1011,99 @@ function AnnounceCard({ item, autoOpen }) {
   );
 }
 
+// ─── NewsletterSubscribe ──────────────────────────────────────────────────────
+function NewsletterSubscribe() {
+  const { user } = useApp();
+  const [email, setEmail]     = useState('');
+  const [status, setStatus]   = useState('idle'); // idle | loading | subscribed | error
+  const [message, setMessage] = useState('');
+
+  // 로그인 사용자: 구독 여부 조회
+  useEffect(() => {
+    if (!user?.email || !supabase) return;
+    setEmail(user.email);
+    supabase
+      .from('email_subscribers')
+      .select('id, unsubscribed_at')
+      .eq('user_id', user.id)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (!error && data && !data.unsubscribed_at) setStatus('subscribed');
+      });
+  }, [user]);
+
+  async function handleSubscribe(e) {
+    e.preventDefault();
+    if (!email.trim() || !supabase) return;
+    setStatus('loading');
+    const row = { email: email.trim(), ...(user?.id ? { user_id: user.id } : {}) };
+    const { error } = await supabase.from('email_subscribers').upsert(row, {
+      onConflict: 'email',
+      ignoreDuplicates: false,
+    });
+    if (error) { setStatus('error'); setMessage('오류가 발생했습니다. 다시 시도해주세요.'); return; }
+    setStatus('subscribed');
+  }
+
+  async function handleUnsubscribe() {
+    if (!user?.id || !supabase) return;
+    setStatus('loading');
+    const { error } = await supabase
+      .from('email_subscribers')
+      .update({ unsubscribed_at: new Date().toISOString() })
+      .eq('user_id', user.id);
+    if (error) { setStatus('error'); setMessage('오류가 발생했습니다.'); return; }
+    setStatus('idle');
+    setMessage('');
+  }
+
+  return (
+    <div style={{
+      marginTop: 8, padding: '16px 18px', borderRadius: 10,
+      background: 'var(--c-card)', border: '1px solid var(--c-border)',
+    }}>
+      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-text2)', marginBottom: 6 }}>
+        📬 이메일로 업데이트 받기
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--c-text5)', marginBottom: 12, lineHeight: 1.5 }}>
+        새 기능·공지가 있을 때 주간 이메일로 알려드려요.
+      </div>
+
+      {status === 'subscribed' ? (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <span style={{ fontSize: 12, color: 'var(--c-accent2)' }}>✓ 구독 중 ({email})</span>
+          {user && (
+            <button onClick={handleUnsubscribe} style={{
+              fontSize: 11, color: 'var(--c-text5)', background: 'none',
+              border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0,
+            }}>수신거부</button>
+          )}
+        </div>
+      ) : (
+        <form onSubmit={handleSubscribe} style={{ display: 'flex', gap: 8 }}>
+          <input
+            type="email" required value={email} onChange={e => setEmail(e.target.value)}
+            placeholder="이메일 주소"
+            style={{
+              flex: 1, fontSize: 12, padding: '7px 10px', borderRadius: 6,
+              border: '1px solid var(--c-border2)', background: 'var(--c-input)',
+              color: 'var(--c-text)', outline: 'none',
+            }}
+          />
+          <button type="submit" disabled={status === 'loading'} style={{
+            fontSize: 12, fontWeight: 600, padding: '7px 14px', borderRadius: 6,
+            background: 'var(--c-accent)', color: '#fff', border: 'none',
+            cursor: status === 'loading' ? 'default' : 'pointer', opacity: status === 'loading' ? 0.6 : 1,
+          }}>
+            {status === 'loading' ? '...' : '구독'}
+          </button>
+        </form>
+      )}
+      {message && <div style={{ fontSize: 11, color: 'var(--c-danger)', marginTop: 6 }}>{message}</div>}
+    </div>
+  );
+}
+
 // ─── NoticesTab ───────────────────────────────────────────────────────────────
 // 업데이트 내역은 도움말 → '업데이트 내역' 메뉴(/changelog.html 새 탭)로 분리.
 // 모달은 공지(ANNOUNCEMENTS)만 표시.
@@ -1037,6 +1130,7 @@ export function NoticesTab() {
           <div className="text-xs leading-relaxed" style={{ color: 'var(--c-text3)' }}>{n.content}</div>
         </div>
       ))}
+      <NewsletterSubscribe />
     </div>
   );
 }
