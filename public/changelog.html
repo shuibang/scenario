@@ -263,17 +263,68 @@
 
   <div class="timeline">
 
-    <!-- v41 (2026-05-22) — 백업 시스템 IDB 전환 + Drive 파일 저장 수동화 -->
+    <!-- v42~44 (2026-05-25) — Dropbox 저장 추가 + 저장 안정화 + PDF 출력 수정 -->
     <div class="cl-entry">
       <div class="cl-dot"></div>
       <div class="cl-card">
         <details open>
           <summary>
             <div class="cl-meta">
+              <div class="cl-date">2026-05-25</div>
+              <div class="cl-title">📦 Dropbox 저장 추가 · 🔧 저장 안정화 · 🖨 PDF 출력 안정화</div>
+            </div>
+            <span class="new-badge">최신</span>
+            <span class="arrow">▶</span>
+          </summary>
+          <div class="cl-body">
+            <div class="cl-section">
+              <div class="cl-section-head">Dropbox 저장 (신규)</div>
+              <ul>
+                <li>파일 저장 위치에 <strong>Dropbox</strong>가 새로 추가됐어요</li>
+                <li>Google Drive와 별개로 Dropbox에도 현재 대본을 <code>.djs</code> 파일로 저장할 수 있어요</li>
+                <li>Dropbox에는 <strong>/대본작업실/작품명.djs</strong> 형태로 저장돼요</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">클라우드 저장소 선택</div>
+              <ul>
+                <li>설정에서 <strong>Google Drive / Dropbox</strong> 중 기본 클라우드 저장소를 선택할 수 있어요</li>
+                <li>파일 메뉴와 모바일 메뉴에 현재 연결 상태와 저장 대상이 함께 보여요 — 어디로 저장되는지 더 분명해졌어요</li>
+                <li><code>Ctrl+S</code>는 선택된 클라우드 저장소로 저장되고, 로컬 저장은 기존처럼 따로 사용할 수 있어요</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">연결 · 저장 안정화</div>
+              <ul>
+                <li>Dropbox 승인 뒤 앱으로 돌아왔는데도 계속 미연결로 남던 문제를 고쳤어요</li>
+                <li>Dropbox 저장 전에 <strong>/대본작업실</strong> 폴더를 먼저 확인하고, 없으면 자동으로 만들어요</li>
+                <li>한글 폴더명·파일명 업로드 처리를 다듬어 저장 실패가 줄었어요</li>
+                <li>막연하게 "저장 실패"만 뜨지 않고, 원인에 가까운 안내가 보이도록 바꿨어요</li>
+                <li>Google Drive 재연결이 필요한 경우에도 더 정확한 안내 문구가 나와요</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">PDF 출력</div>
+              <ul>
+                <li>일부 환경에서 PDF가 아예 생성되지 않던 문제를 수정했어요</li>
+                <li>트리트먼트 등 특정 출력에서만 나타나던 PDF 오류가 해소됐어요</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- v41 (2026-05-22) — 백업 시스템 IDB 전환 + Drive 파일 저장 수동화 -->
+    <div class="cl-entry">
+      <div class="cl-dot"></div>
+      <div class="cl-card">
+        <details>
+          <summary>
+            <div class="cl-meta">
               <div class="cl-date">2026-05-22</div>
               <div class="cl-title">💾 백업 시스템 전면 개편 · ✍️ 본문 주석 · ☁ Drive / 내 컴퓨터 저장 분리</div>
             </div>
-            <span class="new-badge">최신</span>
             <span class="arrow">▶</span>
           </summary>
           <div class="cl-body">

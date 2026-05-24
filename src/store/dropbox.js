@@ -421,3 +421,42 @@ export async function loadIdeasFromDropbox() {
     return null;
   }
 }
+
+/** OpenProjectModal Dropbox 탭용 — 대본작업실 폴더의 .djs 파일 목록 반환 */
+export async function listDropboxBackupFiles() {
+  if (!isDropboxTokenValid()) return [];
+  try {
+    const token = getDropboxAccessToken();
+    return await withDropboxAuthRetry(async () => {
+      const res = await fetch(`${RPC_API}/list_folder`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: BACKUP_ROOT, recursive: false }),
+      });
+      // 409 = path_not_found → 폴더 없음 (아직 한 번도 저장 안 함)
+      if (res.status === 409) return [];
+      if (!res.ok) await throwDropboxError(res, 'Dropbox 목록 조회 실패');
+      const { entries = [] } = await res.json();
+      return entries
+        .filter(e => e['.tag'] === 'file' && e.name.endsWith('.djs'))
+        .map(e => ({
+          id:            e.path_lower,
+          name:          e.name,
+          savedAt:       e.server_modified,
+          projectFolder: e.name.replace(/\.djs$/, ''),
+        }))
+        .sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt));
+    });
+  } catch {
+    return [];
+  }
+}
+
+/** Dropbox 경로(id)에서 .djs 파일 다운로드 후 JSON 반환 */
+export async function loadDropboxBackupData(path) {
+  if (!isDropboxTokenValid()) throw new Error('DROPBOX_AUTH_REQUIRED');
+  const data = await withDropboxAuthRetry(() => doDownload(path));
+  if (!data) throw new Error('파일을 찾을 수 없습니다.');
+  const { _readme, ...rest } = data;
+  return rest;
+}

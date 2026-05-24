@@ -1999,10 +1999,10 @@ function Shell({ authUser, setAuthUser }) {
       checkable: true,
       shortcut: dropboxTokenValid ? '연결됨' : '미연결',
     },
-    'separator',
-    dropboxTokenValid
-      ? { id: 'dropbox-disconnect', label: 'Dropbox 연결 해제', action: 'file:dropboxDisconnect' }
-      : { id: 'dropbox-connect',    label: 'Dropbox 연결…',     action: 'file:dropboxConnect' },
+    ...(dropboxTokenValid ? [
+      'separator',
+      { id: 'dropbox-disconnect', label: 'Dropbox 연결 해제', action: 'file:dropboxDisconnect' },
+    ] : []),
   ], [driveTokenValid, dropboxTokenValid]);
 
   // 최근 프로젝트 (최신순 5개)

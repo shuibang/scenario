@@ -33,7 +33,6 @@ export function clearAccessToken() {
   _accessToken = null;
   _tokenExpiry = 0;
   // 다른 Google 계정으로 재로그인하면 이전 계정의 fileId가 무효 → 미리 캐시 비움.
-  invalidateIndexIdCache();
   clearFileIdCache();
   _backupFolderId = null;
   _projectFolderIdCache.clear();
