@@ -2343,6 +2343,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   const [nextTypePicker, setNextTypePicker] = useState(null); // { blockId, top, left, onSelect } — 다음 형식 선택
   const [charSuggestState, setCharSuggestState] = useState(null); // { blockId, blockEl, charName }
   const [annPopover, setAnnPopover] = useState(null); // null | { blockId, selectedText, position: {x,y} }
+  const [annMiniBar, setAnnMiniBar] = useState(null); // null | { blockId, selectedText, position: {x,y} } — 선택 시 작은 툴바
   const [suggestEnabled, setSuggestEnabled] = useState(() => localStorage.getItem(CHAR_SUGGEST_KEY) !== 'off');
   const suppressCharPickerOpenUntilRef = useRef(0);
   const [pasteToast, setPasteToast] = useState(null);
@@ -2516,7 +2517,8 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
       ?.closest('[data-block-id]');
     if (!blockEl || !surface.contains(blockEl)) return;
     const rect = range.getBoundingClientRect();
-    setAnnPopover({
+    // 즉시 주석 폼 대신 미니 툴바 표시 — 복사와 주석 달기를 분리
+    setAnnMiniBar({
       blockId: blockEl.dataset.blockId,
       selectedText,
       position: { x: rect.left, y: rect.bottom + 6 },
@@ -2588,6 +2590,11 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
         dispatch({ type: 'SET_BLOCKS', episodeId: prevEpId, payload: prevBlocks });
         dispatch({ type: 'SET_SAVE_STATUS', payload: 'saved' });
       }
+      // 이전 화 스크롤 위치 저장
+      const prevScroll = editorScrollRef.current?.scrollTop;
+      if (prevScroll != null) {
+        try { localStorage.setItem(`drama_scroll_ep_${prevEpId}`, prevScroll); } catch {}
+      }
     }
     prevEpisodeIdRef.current = activeEpisodeId;
 
@@ -2612,9 +2619,20 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     });
     setBlocks(loaded);
     lastSavedBlocks.current = JSON.stringify(loaded);
-    // 회차 진입 시 마지막 블록 끝에 커서 자동 포커스
+    // 회차 진입 시: 저장된 스크롤 위치가 있으면 복원, 없으면 마지막 블록으로
+    const epId = activeEpisodeId;
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => surfaceApiRef.current?.focusEnd());
+      requestAnimationFrame(() => {
+        let restored = false;
+        try {
+          const saved = localStorage.getItem(`drama_scroll_ep_${epId}`);
+          if (saved != null && editorScrollRef.current) {
+            editorScrollRef.current.scrollTop = parseInt(saved, 10) || 0;
+            restored = true;
+          }
+        } catch {}
+        if (!restored) surfaceApiRef.current?.focusEnd();
+      });
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeEpisodeId, initialized]);
@@ -2795,10 +2813,25 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   useEffect(() => {
     return () => {
       const epId = activeEpisodeIdRef.current;
-      const currentBlocks = blocksRef.current;
-      if (!epId || !currentBlocks.length) return;
+      if (!epId) return;
+
+      // 스크롤 위치 저장 (페이지 재진입 시 복원용)
+      const scrollTop = editorScrollRef.current?.scrollTop;
+      if (scrollTop != null) {
+        try { localStorage.setItem(`drama_scroll_ep_${epId}`, scrollTop); } catch {}
+      }
+
+      // IME 조합 중 이탈 대비: DOM에서 직접 최신 blocks 추출 (ref보다 신선)
+      let currentBlocks = null;
+      try {
+        surfaceApiRef.current?.blurSurface?.(); // IME 강제 commit
+        currentBlocks = surfaceApiRef.current?.parseToBlocks?.() ?? null;
+      } catch {}
+      if (!currentBlocks?.length) currentBlocks = blocksRef.current;
+      if (!currentBlocks?.length) return;
+
       const serialized = JSON.stringify(currentBlocks);
-      // 변경 없으면 dispatch 스킵 — editor:flush 핸들러(line 2467)와 동일 패턴.
+      // 변경 없으면 dispatch 스킵 — editor:flush 핸들러와 동일 패턴.
       // 창 크기 변동 등으로 unmount될 때 SET_BLOCKS가 새 reference 만들어 자동저장 effect를 깨우는 것을 방지.
       if (serialized === lastSavedBlocks.current) return;
       clearTimeout(saveTimer.current);
@@ -4199,6 +4232,47 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
             onCloseSceneRef={() => { if (sceneRefPickerRef.current) setSceneRefPicker(null); }}
           />
           <AnnotationLayer blocks={blocks} onAnnotationsChange={handleAnnotationsChange} />
+          {annMiniBar && createPortal(
+            <>
+              <div
+                style={{ position: 'fixed', inset: 0, zIndex: 299 }}
+                onMouseDown={e => { e.preventDefault(); setAnnMiniBar(null); window.getSelection()?.removeAllRanges(); }}
+              />
+              <div
+                data-annotation-ui
+                style={{
+                  position: 'fixed',
+                  top: Math.min(annMiniBar.position.y, (window.visualViewport?.height ?? window.innerHeight) - 48),
+                  left: Math.max(0, Math.min(annMiniBar.position.x, (window.visualViewport?.width ?? window.innerWidth) - 100)),
+                  zIndex: 300,
+                  display: 'flex',
+                  gap: 0,
+                  background: 'var(--c-panel)',
+                  border: '1px solid var(--c-border)',
+                  borderRadius: 6,
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                  overflow: 'hidden',
+                }}
+                onMouseDown={e => e.stopPropagation()}
+              >
+                <button
+                  title="주석 추가"
+                  onClick={() => {
+                    setAnnPopover(annMiniBar);
+                    setAnnMiniBar(null);
+                  }}
+                  style={{
+                    fontSize: 12, padding: '5px 10px', border: 'none', cursor: 'pointer',
+                    background: 'transparent', color: 'var(--c-text2)',
+                    display: 'flex', alignItems: 'center', gap: 4,
+                  }}
+                >
+                  <span style={{ fontSize: 13 }}>✏</span> 주석
+                </button>
+              </div>
+            </>,
+            document.body
+          )}
           {annPopover && (
             <div data-annotation-ui className="annotation-popover">
               <AnnotationPopover
