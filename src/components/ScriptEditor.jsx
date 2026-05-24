@@ -2106,18 +2106,35 @@ const EditorSurface = forwardRef(function EditorSurface({
       return;
     }
 
-    // ── Backspace at start of block: merge with previous
+    // ── Backspace at start of block: merge with previous (or delete first block)
     if (e.key === 'Backspace' && sel.isCollapsed) {
       const offset = caretOff(range, blockEl);
-      if (offset === 0) {
+      // dialogue는 ce-char-badge 텍스트 길이만큼 offset이 밀려 있어
+      // blockEl 기준 offset === 0이 아닌 경우도 "블록 시작"으로 처리해야 함.
+      const speechEl = type === 'dialogue'
+        ? (blockEl.querySelector('.ce-speech') || blockEl)
+        : null;
+      const atBlockStart = offset === 0 || (speechEl !== null && caretOff(range, speechEl) === 0);
+
+      if (atBlockStart) {
         e.preventDefault();
         const prev = prevBlockEl(el, blockEl);
-        if (!prev) return;
+        if (!prev) {
+          // 첫 블록: 뒤에 블록이 있으면 현재 블록 전체 삭제
+          const allBlocks = [...el.querySelectorAll('[data-block-id]')];
+          if (allBlocks.length <= 1) return;
+          const nextBlock = nextBlockEl(el, blockEl);
+          blockEl.remove();
+          if (nextBlock) setCaret(nextBlock, 0);
+          suppressNextInputRef.current = true;
+          doParse();
+          return;
+        }
         const prevIsRich = prev.dataset.blockType === 'action' || prev.dataset.blockType === 'dialogue';
         const curIsRich  = type === 'action' || type === 'dialogue';
         if (prevIsRich || curIsRich) {
           const prevSpeech = prev.querySelector('.ce-speech') || prev;
-          const curSpeech  = blockEl.querySelector('.ce-speech') || blockEl;
+          const curSpeech  = speechEl || blockEl;
           const prevHtml = blockHtml(prevSpeech);
           const curHtml  = blockHtml(curSpeech);
           const caretPos = stripHtml(prevHtml).length;
