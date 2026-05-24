@@ -1377,15 +1377,10 @@ const EditorSurface = forwardRef(function EditorSurface({
     if (!el) return;
     syncMeta(initialBlocks);
     el.innerHTML = blocksToHtml(initialBlocks);
-    // 회차 진입 시 마지막 블록 끝에 caret — 작가는 마지막 작업 위치에서 이어쓰는 게 자연스러움.
-    // 첫 블록으로 보내면 표지 등 다른 페이지 갔다 돌아올 때 "첫줄에 잡힘" 회귀 발생.
-    // scrollIntoView center: 빈/짧은 대본에선 입력줄이 화면 중간에, 긴 대본에선 마지막 블록이 중간에.
+    // caret만 마지막 블록 끝으로 — 스크롤 위치는 ScriptEditor가 editorScrollRef로 처리
     const all = [...el.querySelectorAll('[data-block-id]')];
     const last = all[all.length - 1];
-    if (last) {
-      setCaret(last, blockText(last).length);
-      last.scrollIntoView({ block: 'center' });
-    }
+    if (last) setCaret(last, blockText(last).length);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [episodeId]);
 
@@ -1409,13 +1404,10 @@ const EditorSurface = forwardRef(function EditorSurface({
     const firstBlockId = initialBlocks[0]?.id;
     if (firstBlockId && firstDomId !== firstBlockId) {
       el.innerHTML = blocksToHtml(initialBlocks);
-      // full rebuild 후에도 마지막 블록 끝으로 — 회차 진입/외부 주입 모두 작가가 이어쓰기 원함.
+      // caret만 마지막 블록 끝으로 — 스크롤은 ScriptEditor가 처리
       const all = [...el.querySelectorAll('[data-block-id]')];
       const last = all[all.length - 1];
-      if (last) {
-        setCaret(last, blockText(last).length);
-        last.scrollIntoView({ block: 'center' });
-      }
+      if (last) setCaret(last, blockText(last).length);
       return;
     }
 
