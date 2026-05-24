@@ -11,6 +11,7 @@ import { sanitizeFolderName } from './googleDrive';
 const APP_KEY      = import.meta.env.VITE_DROPBOX_APP_KEY;
 const TOKEN_URL    = 'https://api.dropboxapi.com/oauth2/token';
 const CONTENT_API  = 'https://content.dropboxapi.com/2/files';
+const RPC_API      = 'https://api.dropboxapi.com/2/files';
 const FILE_PATH    = '/drama_workspace.json';
 const IDEAS_PATH   = '/daejak_ideas.json';
 const BACKUP_ROOT  = '/대본작업실';
@@ -134,18 +135,25 @@ function getDropboxAccessToken() {
 
 // ── 에러 헬퍼 ────────────────────────────────────────────────────────────────
 // err.dropboxStatus / dropboxTag / dropboxMessage 필드를 붙여 상위에서 세분화 가능.
-async function throwDropboxError(res, fallbackLabel) {
-  let tag   = null;
-  let dbmsg = null;
+async function readDropboxErrorInfo(res) {
+  let body = null;
   try {
-    const body = await res.json();
-    tag   = body?.error?.['.tag'] ?? null;
-    dbmsg = body?.error_summary ?? body?.error?.reason?.['.tag'] ?? null;
+    body = await res.clone().json();
   } catch {}
+  const rootTag = body?.error?.['.tag'] ?? null;
+  const nestedTag = body?.error?.path?.['.tag'] ?? body?.error?.reason?.['.tag'] ?? null;
+  const message = body?.error_summary ?? body?.error?.reason?.['.tag'] ?? nestedTag ?? rootTag ?? null;
+  return { rootTag, nestedTag, message };
+}
+
+async function throwDropboxError(res, fallbackLabel) {
+  const { rootTag, nestedTag, message } = await readDropboxErrorInfo(res);
+  const tag = nestedTag || rootTag;
   const err = new Error(`${fallbackLabel}: ${res.status}${tag ? ` ${tag}` : ''}`);
   err.dropboxStatus  = res.status;
   err.dropboxTag     = tag;
-  err.dropboxMessage = dbmsg;
+  err.dropboxRootTag = rootTag;
+  err.dropboxMessage = message;
   throw err;
 }
 
@@ -290,13 +298,14 @@ export async function refreshDropboxToken() {
 // ── 내부 파일 API ────────────────────────────────────────────────────────────
 async function doUpload(path, content) {
   const token = getDropboxAccessToken();
-  const arg   = JSON.stringify({ path, mode: 'overwrite', autorename: false, mute: true });
-  const res   = await fetch(`${CONTENT_API}/upload`, {
+  const params = new URLSearchParams({
+    arg: JSON.stringify({ path, mode: 'overwrite', autorename: false, mute: true }),
+  });
+  const res   = await fetch(`${CONTENT_API}/upload?${params.toString()}`, {
     method:  'POST',
     headers: {
-      Authorization:    `Bearer ${token}`,
-      'Content-Type':   'application/octet-stream',
-      'Dropbox-API-Arg': arg,
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/octet-stream',
     },
     body: content,
   });
@@ -304,15 +313,34 @@ async function doUpload(path, content) {
   return res.json();
 }
 
+async function ensureDropboxFolder(path) {
+  const token = getDropboxAccessToken();
+  const res = await fetch(`${RPC_API}/create_folder_v2`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ path, autorename: false }),
+  });
+  if (res.ok) return;
+
+  if (res.status === 409) {
+    const { rootTag, nestedTag } = await readDropboxErrorInfo(res);
+    if ((rootTag === 'path' && nestedTag === 'conflict') || rootTag === 'conflict') return;
+  }
+
+  await throwDropboxError(res, 'Dropbox 폴더 생성 실패');
+}
+
 async function doDownload(path) {
   const token = getDropboxAccessToken();
-  const arg   = JSON.stringify({ path });
-  const res   = await fetch(`${CONTENT_API}/download`, {
+  const params = new URLSearchParams({
+    arg: JSON.stringify({ path }),
+  });
+  const res   = await fetch(`${CONTENT_API}/download?${params.toString()}`, {
     method:  'POST',
-    headers: {
-      Authorization:    `Bearer ${token}`,
-      'Dropbox-API-Arg': arg,
-    },
+    headers: { Authorization: `Bearer ${token}` },
   });
   // 409 = path_not_found → 파일 없음 (정상 null 반환, throwDropboxError 호출 안 함)
   if (res.status === 409) return null;
@@ -348,6 +376,7 @@ async function _doSaveDropboxBackup(projectData) {
   if (!isDropboxTokenValid()) throw new Error('DROPBOX_AUTH_REQUIRED');
   const path = getDropboxBackupPath(projectData);
   const content = JSON.stringify({ _readme: DJS_README, ...projectData });
+  await withDropboxAuthRetry(() => ensureDropboxFolder(BACKUP_ROOT));
   return withDropboxAuthRetry(() => doUpload(path, content));
 }
 

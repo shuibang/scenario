@@ -53,6 +53,14 @@ export function describeDropboxError(err) {
   }
 
   // 경로 오류 (파일 없음 포함) — 호출자가 null 처리해야 하므로 일반적으론 여기까지 안 옴
+  if (status === 409 && tag === 'not_found') {
+    return { userMsg: '드롭박스 저장 폴더를 찾지 못했어요. 다시 시도해 주세요.', kind: 'unknown' };
+  }
+
+  if (status === 409 && tag === 'conflict') {
+    return { userMsg: '드롭박스에 같은 이름의 항목이 이미 있어요.', kind: 'unknown' };
+  }
+
   if (status === 409) {
     return { userMsg: '드롭박스 파일을 찾을 수 없어요.', kind: 'unknown' };
   }

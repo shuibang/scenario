@@ -1776,9 +1776,10 @@ function Shell({ authUser, setAuthUser }) {
       setSaveToastMsg('☁ Dropbox 저장됨');
       saveToastTimer.current = setTimeout(() => setSaveToast(false), 2500);
     } catch (error) {
-      const { kind } = describeDropboxError(error);
+      console.error('[Dropbox] backup save failed:', error);
+      const { kind, userMsg } = describeDropboxError(error);
       clearTimeout(saveToastTimer.current);
-      setSaveToastMsg('저장 실패 — 다시 시도');
+      setSaveToastMsg(userMsg || '저장 실패 — 다시 시도');
       saveToastTimer.current = setTimeout(() => setSaveToast(false), 3500);
       if (kind === 'auth') connectDropbox();
     }
