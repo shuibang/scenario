@@ -148,6 +148,8 @@ export default function ShareLinkModal({ open, onClose }) {
       // 로그인 누락은 사용자 액션 결과(버그 아님) — 자동수집 보내지 않고 명확한 안내만.
       if (err?.message === 'Login is required.') {
         setError('로그인이 필요한 기능이에요. 먼저 로그인한 뒤 다시 시도해주세요.');
+      } else if (err?.message === 'Google Drive reconnect is required.') {
+        setError('Google Drive 재연결이 필요해요. 같은 구글 계정으로 다시 로그인한 뒤 검토 링크를 생성해주세요.');
       } else {
         reportError({ source: 'manual', message: err?.message || String(err), stack: err?.stack });
         setError('링크 생성에 실패했어요. 잠시 후 다시 시도해주세요.');

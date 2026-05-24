@@ -9,8 +9,15 @@
 import { createClient } from '@supabase/supabase-js';
 import { setAccessToken, setTokenRefresher, getAccessToken } from './googleDrive';
 
+// Dropbox 콜백 URL인 경우 Supabase가 ?code= 를 가로채지 않도록 detectSessionInUrl 비활성화.
+// createClient()는 모듈 로드 시 한 번만 실행되므로 모듈 최상단에서 URL을 확인해야 한다.
+const _isDropboxCallback = typeof window !== 'undefined'
+  && new URLSearchParams(window.location.search).get('state') === 'dropbox';
+
 export const supabase = (import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY)
-  ? createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY)
+  ? createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY,
+      _isDropboxCallback ? { auth: { detectSessionInUrl: false } } : {},
+    )
   : null;
 
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file';

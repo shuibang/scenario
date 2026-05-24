@@ -306,6 +306,12 @@ export async function saveToDrive(payload) {
   return next;
 }
 
+/** drama_workspace.json을 appDataFolder에서 읽어 JSON 반환. 없으면 null. */
+export async function loadFromDrive() {
+  if (!isTokenValid()) return null;
+  return readFileByName(FILE_NAME);
+}
+
 // ── 아이디어 노트 (단일 파일 동기화) ───────────────────────────────────────
 const IDEAS_FILE_NAME = 'daejak_ideas.json';
 let _pendingIdeasSave = Promise.resolve();

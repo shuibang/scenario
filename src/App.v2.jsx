@@ -12,7 +12,8 @@ import {
   getFontPdfTooltip,
 } from './print/FontRegistry';
 import { getItem, setItem, clearDramaStorage, isPublicPcMode, genId, now } from './store/db';
-import { setAccessToken, clearAccessToken, loadFromDrive } from './store/googleDrive';
+import { setAccessToken, clearAccessToken } from './store/googleDrive';
+import { loadFromStorage } from './store/storageProvider';
 import LeftPanel from './components/LeftPanel';
 import RightPanel from './components/RightPanel';
 import ScriptEditor from './components/ScriptEditor';
@@ -353,7 +354,7 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave }) {
     setAccessToken(tokenResponse.access_token, tokenResponse.expires_in);
     setDriveStatus('syncing');
     try {
-      const driveData = await loadFromDrive();
+      const driveData = await loadFromStorage();
       if (driveData?.savedAt) {
         const driveSavedAt = new Date(driveData.savedAt).getTime();
         const localSavedAt = new Date(localStorage.getItem('drama_saved_at') || 0).getTime();

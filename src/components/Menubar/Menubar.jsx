@@ -7,8 +7,8 @@ import MenubarMenu from './MenubarMenu';
  * @param {object[]} recentProjects - 최근 프로젝트 목록 (최대 5개)
  * @param {object}   checkedItems  - { [itemId]: boolean } 토글 상태
  */
-export default function Menubar({ onAction, recentProjects = [], checkedItems = {}, isMobile = false }) {
-  const dynamicData = { recentProjects: recentProjects.slice(0, 5) };
+export default function Menubar({ onAction, recentProjects = [], checkedItems = {}, isMobile = false, cloudSaveOptions = [] }) {
+  const dynamicData = { recentProjects: recentProjects.slice(0, 5), cloudSave: cloudSaveOptions };
 
   // Alt+[key] 접근성 단축키
   useEffect(() => {

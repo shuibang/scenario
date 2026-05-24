@@ -8,6 +8,10 @@ import { getSceneFormat, rebuildSceneContent } from './utils/sceneFormat';
 import { FONTS, FONT_STATUS, checkFontsAvailability, getFontPdfStatus, getFontByCssFamily, getFontPdfTooltip } from './print/FontRegistry';
 import { getItem, setItem, getAll, setAll, DB_KEYS, clearDramaStorage, isPublicPcMode, genId, now } from './store/db';
 import { setAccessToken, clearAccessToken, isTokenValid, saveSnapshot, saveDriveBackup, sanitizeFolderName } from './store/googleDrive';
+import { handleDropboxCallback, consumeInitialDropboxCode, isDropboxTokenValid, saveDropboxBackup, connectDropbox, clearDropboxToken } from './store/dropbox';
+import { getActiveProvider, setActiveProvider } from './store/storageProvider';
+import { useDropboxAuthState } from './hooks/useDropboxAuthState';
+import { describeDropboxError } from './utils/dropboxError';
 import { serializeProject } from './utils/projectSerializer';
 import { supabase, signInWithGoogle, supabaseSignOut, extractUserData, refreshDriveToken } from './store/supabaseClient';
 import LeftPanel from './components/LeftPanel';
@@ -797,7 +801,7 @@ function DropdownMenu({ label, items, disabled }) {
 }
 
 // ─── MenuBar ──────────────────────────────────────────────────────────────────
-function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, authUser, setAuthUser, onMenuAction, recentProjects, menuCheckedItems, isMobile = false }) {
+function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, authUser, setAuthUser, onMenuAction, recentProjects, menuCheckedItems, cloudSaveOptions = [], isMobile = false }) {
   const { state, dispatch } = useApp();
   const { saveStatus, saveErrorMsg, activeProjectId, stylePreset, undoStack, redoStack, savedAt } = state;
   const canUndo = undoStack?.length > 0 || !!activeProjectId;
@@ -1083,6 +1087,7 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
             onAction={onMenuAction}
             recentProjects={recentProjects}
             checkedItems={menuCheckedItems}
+            cloudSaveOptions={cloudSaveOptions}
           />
         </div>
         {!isMobile && (
@@ -1386,8 +1391,17 @@ function Shell({ authUser, setAuthUser }) {
   const [leftCollapsed,  setLeftCollapsed]  = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
 
-  // ── 아이디어 노트 Drive pull — 모바일 포함 모든 레이아웃에서 실행
+  // ── 클라우드 저장소 프로바이더 상태
   const { valid: driveTokenValid } = useDriveAuthState();
+  const { valid: dropboxTokenValid } = useDropboxAuthState();
+  const [activeProvider, setActiveProviderState] = useState(() => getActiveProvider());
+  useEffect(() => {
+    const handler = (e) => setActiveProviderState(e.detail?.provider || getActiveProvider());
+    window.addEventListener('storage:provider-changed', handler);
+    return () => window.removeEventListener('storage:provider-changed', handler);
+  }, []);
+
+  // ── 아이디어 노트 Drive pull — 모바일 포함 모든 레이아웃에서 실행
   useEffect(() => {
     if (!authUser || !driveTokenValid) return;
     let cancelled = false;
@@ -1583,6 +1597,27 @@ function Shell({ authUser, setAuthUser }) {
   const [saveToast, setSaveToast] = useState(false);
   const [saveToastMsg, setSaveToastMsg] = useState('저장되었습니다');
   const saveToastTimer = useRef(null);
+
+  // Dropbox OAuth 콜백 결과 수신 (App 컴포넌트에서 발행)
+  useEffect(() => {
+    const handler = (e) => {
+      clearTimeout(saveToastTimer.current);
+      if (e.detail?.ok) {
+        setSaveToastMsg('Dropbox 연결됨');
+      } else {
+        const { userMsg } = describeDropboxError({
+          message: e.detail?.message || 'UNKNOWN',
+          dropboxStatus: e.detail?.status,
+          dropboxTag: e.detail?.tag,
+        });
+        setSaveToastMsg(userMsg || 'Dropbox 연결에 실패했어요.');
+      }
+      setSaveToast(true);
+      saveToastTimer.current = setTimeout(() => setSaveToast(false), 5000);
+    };
+    window.addEventListener('dropbox:callback-result', handler);
+    return () => window.removeEventListener('dropbox:callback-result', handler);
+  }, []);
   const [driveSaveDialog, setDriveSaveDialog] = useState({ open: false, defaultName: '' });
   const driveSaveResolveRef = useRef(null);
   const promptDriveSaveName = useCallback((defaultName) => new Promise((resolve) => {
@@ -1709,6 +1744,51 @@ function Shell({ authUser, setAuthUser }) {
       }
     }
   }, [waitForEditorFlush, promptDriveReauthForSave, promptDriveSaveName]);
+
+  // Dropbox에 저장
+  const handleSaveToDropbox = useCallback(async () => {
+    window.dispatchEvent(new Event('script:requestSave'));
+    await waitForEditorFlush();
+
+    const latestState = latestStateRef.current;
+    const projectSnap = latestState.activeProjectId
+      ? serializeProject(latestState, latestState.activeProjectId) : null;
+    if (!projectSnap) return;
+
+    try { await saveSnapshot(projectSnap, '수동저장', 'manual'); } catch {}
+
+    if (!isDropboxTokenValid()) {
+      clearTimeout(saveToastTimer.current);
+      setSaveToastMsg('Dropbox 연결이 필요해요.');
+      setSaveToast(true);
+      saveToastTimer.current = setTimeout(() => setSaveToast(false), 3500);
+      connectDropbox();
+      return;
+    }
+
+    clearTimeout(saveToastTimer.current);
+    setSaveToastMsg('☁ 저장 중…');
+    setSaveToast(true);
+
+    try {
+      await saveDropboxBackup(projectSnap);
+      clearTimeout(saveToastTimer.current);
+      setSaveToastMsg('☁ Dropbox 저장됨');
+      saveToastTimer.current = setTimeout(() => setSaveToast(false), 2500);
+    } catch (error) {
+      const { kind } = describeDropboxError(error);
+      clearTimeout(saveToastTimer.current);
+      setSaveToastMsg('저장 실패 — 다시 시도');
+      saveToastTimer.current = setTimeout(() => setSaveToast(false), 3500);
+      if (kind === 'auth') connectDropbox();
+    }
+  }, [waitForEditorFlush]);
+
+  // 활성 프로바이더로 클라우드 저장
+  const handleSaveToCloud = useCallback(() => {
+    if (getActiveProvider() === 'dropbox') handleSaveToDropbox();
+    else handleSaveToDrive();
+  }, [handleSaveToDropbox, handleSaveToDrive]);
 
   // Drive에 다른 이름으로 저장 (Ctrl+Shift+S) — 항상 파일명 dialog 표시
   const handleSaveToLocalDrive = useCallback(async () => {
@@ -1844,11 +1924,11 @@ function Shell({ authUser, setAuthUser }) {
       e.preventDefault();
       if (e.shiftKey)     handleSaveToLocalDrive(); // 다른 이름으로 Drive 저장
       else if (e.altKey)  handleSaveToLocal();       // 내 컴퓨터에 저장
-      else                handleSaveToDrive();        // Drive 덮어쓰기
+      else                handleSaveToCloud();        // 활성 클라우드 프로바이더에 저장
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handleSaveToDrive, handleSaveToLocalDrive, handleSaveToLocal]);
+  }, [handleSaveToCloud, handleSaveToLocalDrive, handleSaveToLocal]);
 
   const contextSceneId = state.scrollToSceneId;
   useEffect(() => {
@@ -1897,8 +1977,32 @@ function Shell({ authUser, setAuthUser }) {
       [`fontsize-${fontSize}`]: true,
       [`lh-${lineHeightPct}`]:  true,
       [`dgap-${dgap}`]:         true,
+      'cloud-save-google':  activeProvider === 'google',
+      'cloud-save-dropbox': activeProvider === 'dropbox',
     };
-  }, [viewCheckedItems, activeProject?.stylePreset]);
+  }, [viewCheckedItems, activeProject?.stylePreset, activeProvider]);
+
+  // 클라우드 저장 서브메뉴 옵션 (파일메뉴 동적 삽입)
+  const cloudSaveOptions = useMemo(() => [
+    {
+      id: 'cloud-save-google',
+      label: 'Google Drive에 저장',
+      action: 'file:saveCloud:google',
+      checkable: true,
+      shortcut: driveTokenValid ? '연결됨' : '미연결',
+    },
+    {
+      id: 'cloud-save-dropbox',
+      label: 'Dropbox에 저장',
+      action: 'file:saveCloud:dropbox',
+      checkable: true,
+      shortcut: dropboxTokenValid ? '연결됨' : '미연결',
+    },
+    'separator',
+    dropboxTokenValid
+      ? { id: 'dropbox-disconnect', label: 'Dropbox 연결 해제', action: 'file:dropboxDisconnect' }
+      : { id: 'dropbox-connect',    label: 'Dropbox 연결…',     action: 'file:dropboxConnect' },
+  ], [driveTokenValid, dropboxTokenValid]);
 
   // 최근 프로젝트 (최신순 5개)
   const recentProjects = useMemo(
@@ -1928,6 +2032,17 @@ function Shell({ authUser, setAuthUser }) {
     if (action === 'file:openList')    { setOpenProjectOpen(true); return; }
     if (action === 'file:saveToDrive')   { handleSaveToDrive(); return; }
     if (action === 'file:saveToDriveAs') { handleSaveToLocalDrive(); return; }
+    if (action === 'file:saveCloud:google')  { setActiveProvider('google');  handleSaveToDrive();   return; }
+    if (action === 'file:saveCloud:dropbox') { setActiveProvider('dropbox'); handleSaveToDropbox(); return; }
+    if (action === 'file:dropboxConnect')    { connectDropbox(); return; }
+    if (action === 'file:dropboxDisconnect') {
+      clearDropboxToken();
+      clearTimeout(saveToastTimer.current);
+      setSaveToastMsg('Dropbox 연결이 해제되었습니다.');
+      setSaveToast(true);
+      saveToastTimer.current = setTimeout(() => setSaveToast(false), 2500);
+      return;
+    }
     if (action === 'file:saveToLocal')   { handleSaveToLocal(); return; }
     if (action === 'file:share')       { setShareLinkOpen(true); return; }
     if (action === 'file:projectInfo')  { setProjectInfoOpen(true); return; }
@@ -2052,7 +2167,7 @@ function Shell({ authUser, setAuthUser }) {
       return;
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [handleSaveToDrive, handleSaveToLocalDrive, dispatch, setFocusMode]);
+  }, [handleSaveToDrive, handleSaveToDropbox, handleSaveToLocalDrive, dispatch, setFocusMode]);
 
   // 메뉴바 전용 신규 단축키 (기존 Ctrl+S/Z/Y/B/I/U 는 각자 핸들러에서 처리)
   useKeyboardShortcuts({
@@ -2070,13 +2185,14 @@ function Shell({ authUser, setAuthUser }) {
       isDark={isDark}
       onToggleTheme={toggleTheme}
       onPrintPreview={() => { setExportDefaultFormat('pdf'); window.dispatchEvent(new CustomEvent('editor:flush')); setPrintPreviewOpen(true); }}
-      onSave={handleSaveToDrive}
+      onSave={handleSaveToCloud}
       onSnapshot={() => setSnapshotOpen(true)}
       authUser={authUser}
       setAuthUser={setAuthUser}
       onMenuAction={handleMenuAction}
       recentProjects={recentProjects}
       menuCheckedItems={menuCheckedItems}
+      cloudSaveOptions={cloudSaveOptions}
       isMobile={isMobile}
     />
   );
@@ -2269,7 +2385,7 @@ function Shell({ authUser, setAuthUser }) {
       >
         <div style={{ display: focusMode ? 'none' : 'contents' }}>
           <MobileMenuBar
-            onSave={handleSaveToDrive}
+            onSave={handleSaveToCloud}
             onPrintPreview={() => { setExportDefaultFormat('pdf'); window.dispatchEvent(new CustomEvent('editor:flush')); setPrintPreviewOpen(true); }}
             onSnapshot={() => setSnapshotOpen(true)}
             WorkTimer={WorkTimer}
@@ -2278,6 +2394,7 @@ function Shell({ authUser, setAuthUser }) {
             onMenuAction={handleMenuAction}
             recentProjects={recentProjects}
             checkedItems={menuCheckedItems}
+            cloudSaveOptions={cloudSaveOptions}
           />
           <UpdateBanner />
         </div>
@@ -2705,6 +2822,21 @@ export default function App() {
       }
     });
     return () => subscription.unsubscribe();
+  }, []);
+
+  // Dropbox OAuth PKCE 콜백 처리 — 모듈 로드 시점에 캡처한 코드를 사용
+  // (Supabase가 history.replaceState로 URL을 지우기 전에 dropbox.js가 먼저 캡처함)
+  useEffect(() => {
+    const code = consumeInitialDropboxCode();
+    if (!code) return;
+    handleDropboxCallback(code)
+      .then(() => {
+        window.dispatchEvent(new CustomEvent('dropbox:callback-result', { detail: { ok: true } }));
+      })
+      .catch(err => {
+        console.error('[Dropbox] 콜백 처리 실패:', err);
+        window.dispatchEvent(new CustomEvent('dropbox:callback-result', { detail: { ok: false, message: err.message, status: err.dropboxStatus, tag: err.dropboxTag } }));
+      });
   }, []);
 
   // 씬리스트 공유 링크 수신 → 로컬 저장 후 연출 작업실으로

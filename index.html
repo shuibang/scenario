@@ -7,6 +7,15 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <meta name="theme-color" content="#1B2A4E" />
+  <script>
+    (function () {
+      var params = new URLSearchParams(window.location.search);
+      var isDropboxCallback = params.get('state') === 'dropbox' && (params.has('code') || params.has('error'));
+      if (isDropboxCallback && location.pathname === '/') {
+        location.replace('/app' + location.search + location.hash);
+      }
+    })();
+  </script>
   <!-- 구 도메인 redirect — Vercel host 기반 308이 안 잡히는 deployment 구조 대비 클라이언트 폴백.
        paint 전에 동기 실행되어 깜빡임 최소화. -->
   <script>

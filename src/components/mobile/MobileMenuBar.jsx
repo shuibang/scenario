@@ -16,7 +16,7 @@ import { fetchAdminUnreadCounts } from '../../utils/adminBadge';
 import { useBadges } from '../../utils/badges';
 import BadgeChip from '../BadgeChip';
 
-export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, WorkTimer, authUser, onLogout, onMenuAction, recentProjects = [], checkedItems = {} }) {
+export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, WorkTimer, authUser, onLogout, onMenuAction, recentProjects = [], checkedItems = {}, cloudSaveOptions = [] }) {
   const { state, dispatch } = useApp();
   const { activeProjectId, stylePreset } = state;
   const [menuOpen, setMenuOpen] = useState(false);
@@ -310,7 +310,7 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
 
       {/* Row 2: 메뉴바 — 좌우 균등 배치 */}
       <div style={{ borderTop: '1px solid var(--c-border2)' }} className="mobile-menubar-row">
-        <Menubar onAction={onMenuAction} recentProjects={recentProjects} checkedItems={checkedItems} isMobile />
+        <Menubar onAction={onMenuAction} recentProjects={recentProjects} checkedItems={checkedItems} cloudSaveOptions={cloudSaveOptions} isMobile />
       </div>
 
       {/* Row 3: mobile toolbar */}

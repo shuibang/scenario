@@ -4,12 +4,8 @@
  * localStorage 'storage_provider' = 'google' | 'dropbox'
  * 기본값: 'google' (하위 호환)
  *
- * 현재 단계에서는 기존 Drive 호출 코드를 교체하지 않는다.
- * 이 모듈은 다음 단계의 UI 연결 및 점진적 마이그레이션을 위한 라우팅 레이어.
  */
-import { isTokenValid, saveToDrive }         from './googleDrive';
-// loadFromDrive는 아직 미구현 — null 반환 stub
-const loadFromDrive = async () => null;
+import { isTokenValid, saveToDrive, loadFromDrive } from './googleDrive';
 import { isDropboxTokenValid, saveToDropbox, loadFromDropbox } from './dropbox';
 
 const PROVIDER_KEY = 'storage_provider';

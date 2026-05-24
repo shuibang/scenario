@@ -173,8 +173,12 @@ export default function PrintPreviewModal({ onClose, defaultFormat }) {
       setShareMsg('링크 복사됨 (7일 후 만료)');
       setTimeout(() => setShareMsg(''), 3000);
     } catch (err) {
-      reportError({ source: 'manual', message: err?.message || String(err), stack: err?.stack });
-      setShareMsg('링크 생성에 실패했어요. 잠시 후 다시 시도해주세요.');
+      if (err?.message === 'Google Drive reconnect is required.') {
+        setShareMsg('Google Drive 재연결이 필요해요. 같은 구글 계정으로 다시 로그인한 뒤 링크 생성을 다시 시도해주세요.');
+      } else {
+        reportError({ source: 'manual', message: err?.message || String(err), stack: err?.stack });
+        setShareMsg('링크 생성에 실패했어요. 잠시 후 다시 시도해주세요.');
+      }
       setTimeout(() => setShareMsg(''), 5000);
     } finally {
       setSharing(false);
