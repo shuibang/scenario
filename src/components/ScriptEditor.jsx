@@ -2122,19 +2122,32 @@ const EditorSurface = forwardRef(function EditorSurface({
         || (speechEl !== null && speechEl !== blockEl && caretOff(range, speechEl) === 0);
 
       if (atBlockStart) {
-        e.preventDefault();
         const prev = prevBlockEl(el, blockEl);
         if (!prev) {
-          // 첫 블록: 뒤에 블록이 있으면 현재 블록 전체 삭제
-          const allBlocks = [...el.querySelectorAll('[data-block-id]')];
-          if (allBlocks.length <= 1) return;
-          const nextBlock = nextBlockEl(el, blockEl);
-          blockEl.remove();
-          if (nextBlock) setCaret(nextBlock, 0);
-          suppressNextInputRef.current = true;
-          doParse();
+          if (isContentEmpty) {
+            // 빈 첫 블록: 뒤에 블록이 있으면 삭제
+            const allBlocks = [...el.querySelectorAll('[data-block-id]')];
+            if (allBlocks.length <= 1) return;
+            e.preventDefault();
+            const nextBlock = nextBlockEl(el, blockEl);
+            blockEl.remove();
+            if (nextBlock) setCaret(nextBlock, 0);
+            suppressNextInputRef.current = true;
+            doParse();
+            return;
+          }
+          if (type === 'scene_number') {
+            // 내용 있는 씬번호 첫 블록: action 변환 (씬번호 라벨만 제거, 텍스트 유지)
+            e.preventDefault();
+            changeBlockTypeEl(blockEl, 'action');
+            setCaret(blockEl, 0);
+            doParse();
+            return;
+          }
+          // 내용 있는 기타 첫 블록: 아무것도 안 함
           return;
         }
+        e.preventDefault();
         const prevIsRich = prev.dataset.blockType === 'action' || prev.dataset.blockType === 'dialogue';
         const curIsRich  = type === 'action' || type === 'dialogue';
         if (prevIsRich || curIsRich) {
