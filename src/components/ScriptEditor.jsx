@@ -2114,7 +2114,12 @@ const EditorSurface = forwardRef(function EditorSurface({
       const speechEl = type === 'dialogue'
         ? (blockEl.querySelector('.ce-speech') || blockEl)
         : null;
-      const atBlockStart = offset === 0 || (speechEl !== null && caretOff(range, speechEl) === 0);
+      // 빈 대사 블록: ce-char-badge DOM 텍스트가 있어 caretOff가 0이 아닐 수 있음.
+      // speechEl(= .ce-speech 또는 blockEl)의 텍스트가 비어 있으면 항상 삭제/머지 처리.
+      const contentEl = speechEl || blockEl;
+      const isContentEmpty = blockText(contentEl) === '';
+      const atBlockStart = isContentEmpty || offset === 0
+        || (speechEl !== null && speechEl !== blockEl && caretOff(range, speechEl) === 0);
 
       if (atBlockStart) {
         e.preventDefault();
