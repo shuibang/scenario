@@ -482,7 +482,7 @@ export async function exportDocx(appState, selections, { onStep = () => {}, hanc
   let printModel, sections, blob;
   try {
     onStep('직렬화');
-    const preset  = appState.stylePreset;
+    const preset  = appState?.stylePreset || {};
     printModel    = buildPrintModel(appState, selections, preset);
 
     onStep('레이아웃');

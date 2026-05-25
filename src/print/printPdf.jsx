@@ -394,7 +394,7 @@ async function mergePdfBlobs(blobs) {
 export async function exportPdf(appState, selections, { onStep = () => {}, watermarkText = null } = {}) {
   ensureFontsRegistered();
 
-  const preset = appState.stylePreset;
+  const preset = appState?.stylePreset || {};
   // 폴백 발생 여부를 사전에 판정 (resolveFont를 미리 호출해 결과만 캐치).
   // 실제 임베드는 makeStyles → resolveFont에서 다시 호출되지만 부작용이 없으므로 OK.
   const resolved        = resolveFont(preset, 'pdf');
@@ -437,7 +437,7 @@ export async function exportPdf(appState, selections, { onStep = () => {}, water
 
 export async function getPdfBlob(appState, selections, { watermarkText = null } = {}) {
   ensureFontsRegistered();
-  const preset     = appState.stylePreset;
+  const preset     = appState?.stylePreset || {};
   const printModel = buildPrintModel(appState, selections, preset);
   const docs       = buildPdfGroups(printModel, watermarkText);
   const blobs      = await Promise.all(docs.map(doc => pdf(doc).toBlob()));
