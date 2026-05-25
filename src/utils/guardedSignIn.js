@@ -10,10 +10,10 @@
 import { signInWithGoogle } from '../store/supabaseClient';
 import { isWebView } from './webViewDetect';
 
-export function guardedSignInWithGoogle() {
+export async function guardedSignInWithGoogle() {
   if (isWebView()) {
     window.dispatchEvent(new CustomEvent('show-webview-modal'));
     return;
   }
-  signInWithGoogle();
+  await signInWithGoogle();
 }

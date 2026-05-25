@@ -11,7 +11,11 @@ export default function DirectorLogin({ onBack, onGuest }) {
     setLoading(true);
     // OAuth 복귀 후 #director로 돌아오도록 현재 hash 보존
     try { localStorage.setItem(RETURN_HASH_KEY, window.location.hash || '#director'); } catch {}
-    guardedSignInWithGoogle();
+    try {
+      await guardedSignInWithGoogle();
+    } catch {
+      setLoading(false);
+    }
   };
 
   return (

@@ -2851,7 +2851,12 @@ export default function App() {
         localStorage.setItem(key, JSON.stringify([data, ...existing]));
       }
     } catch {}
-    return <DirectorApp authUser={authUser} />;
+    return (
+      <>
+        <DirectorApp authUser={authUser} />
+        {webViewModal && <WebViewModal onClose={() => setWebViewModal(false)} />}
+      </>
+    );
   }
 
   // 어드민 — env에 박힌 hash 토큰 + 이메일 화이트리스트 모두 만족해야 함.
@@ -2869,7 +2874,12 @@ export default function App() {
   }
 
   // 연출 작업실 — 감독 전용 독립 페이지
-  if (window.location.hash === '#director')         return <DirectorApp authUser={authUser} />;
+  if (window.location.hash === '#director') return (
+    <>
+      <DirectorApp authUser={authUser} />
+      {webViewModal && <WebViewModal onClose={() => setWebViewModal(false)} />}
+    </>
+  );
 
   // 아이디어 노트 풀스크린 — 정리·검색용. 인증 불필요(로컬 데이터).
   if (window.location.hash === '#ideas') {
