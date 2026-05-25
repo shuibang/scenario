@@ -421,6 +421,13 @@ export default function SurveyPage() {
           q_phone:    answers.qPhone  || null,
         }]);
         if (error) throw error;
+
+        if (answers.q20Email?.trim()) {
+          await supabase.from('email_subscribers').upsert(
+            { email: answers.q20Email.trim() },
+            { onConflict: 'email', ignoreDuplicates: true }
+          );
+        }
       }
       localStorage.setItem('survey_submitted', '1');
       localStorage.setItem('survey_submitted_at', String(Date.now()));
