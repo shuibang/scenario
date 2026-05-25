@@ -338,6 +338,12 @@ export default function TreatmentPage() {
     return ep ? migrateItems(ep.summaryItems) : [];
   }, [episodes]);
 
+  // 보드뷰 카드 인라인 편집 저장
+  const saveItemTextForEp = useCallback((targetEpId, itemId, text) => {
+    const epItems = getLatestItemsForEp(targetEpId);
+    saveForEp(targetEpId, epItems.map(it => it.id === itemId ? { ...it, text } : it), true);
+  }, [getLatestItemsForEp, saveForEp]);
+
   // 보드뷰 "+" 버튼 → 지정 위치에 빈 항목 삽입
   const insertItemForEp = useCallback((targetEpId, insertIdx) => {
     const epItems = getLatestItemsForEp(targetEpId);
@@ -1103,6 +1109,7 @@ export default function TreatmentPage() {
             onDragEnd={handleDragEnd}
             isMobile={isMobile}
             onInsertItem={insertItemForEp}
+            onSaveItemText={saveItemTextForEp}
           />
         )}
 
