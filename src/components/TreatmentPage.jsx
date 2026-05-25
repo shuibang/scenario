@@ -120,9 +120,11 @@ export default function TreatmentPage() {
   }, []);
 
   // 드래그 reorder state (데스크톱 전용)
-  // dragInfo: dragstart에 저장 → dragover/drop 가드, dragend에 클리어
-  // overInfo: dragover indicator(2px accent borderTop) 위치 추적
-  // Phase B Commit 1: drop = 트리트먼트 순서만 변경 (경고 X). 대본 동기화는 "대본으로 가져오기" 시점에서 처리.
+  // dragInfoRef: handleDragOver/Drop에서 즉시 읽기 위한 ref
+  //   (보드뷰 props 체인에서 dragstart 직후 첫 dragover가 React 재렌더 전에 발화하면
+  //    stale closure로 dragInfo===null → e.preventDefault() 미호출 → drop 불허 버그 방지)
+  // dragInfo state: 시각 피드백(opacity, borderTop)용 렌더링에만 사용
+  const dragInfoRef = useRef(null);
   const [dragInfo, setDragInfo] = useState(null);       // { episodeId, fromIdx } | null
   const [overInfo, setOverInfo] = useState(null);       // { episodeId, idx } | null
 
@@ -914,35 +916,39 @@ export default function TreatmentPage() {
   };
 
   // ─── 드래그 reorder 핸들러 (데스크톱 전용, 같은 회차 안에서만) ──────────────
-  // dragInfo: dragstart에 저장 → over/drop 가드, dragend에 클리어
-  // overInfo: dragover indicator(borderTop 2px accent) 위치
+  // dragInfoRef로 즉시 읽기 — 보드뷰 props 체인에서 stale closure 방지
   // 다른 회차로의 drop은 무시 (Phase C 범위)
   const handleDragStart = useCallback((e, episodeId, fromIdx) => {
-    setDragInfo({ episodeId, fromIdx });
+    const info = { episodeId, fromIdx };
+    dragInfoRef.current = info;
+    setDragInfo(info);
     setOverInfo(null);
     try { e.dataTransfer.effectAllowed = 'move'; } catch {}
     try { e.dataTransfer.setData('text/plain', String(fromIdx)); } catch {}
   }, []);
 
   const handleDragOver = useCallback((e, episodeId, idx) => {
-    if (!dragInfo) return;                         // 외부 드래그 무시
-    if (dragInfo.episodeId !== episodeId) return;  // 다른 회차 무시
+    const di = dragInfoRef.current;
+    if (!di) return;                         // 외부 드래그 무시
+    if (di.episodeId !== episodeId) return;  // 다른 회차 무시
     e.preventDefault();
-    if (overInfo?.episodeId !== episodeId || overInfo?.idx !== idx) {
-      setOverInfo({ episodeId, idx });
-    }
-  }, [dragInfo, overInfo]);
+    setOverInfo(prev =>
+      prev?.episodeId === episodeId && prev?.idx === idx ? prev : { episodeId, idx }
+    );
+  }, []);
 
   const handleDragEnd = useCallback(() => {
+    dragInfoRef.current = null;
     setDragInfo(null);
     setOverInfo(null);
   }, []);
 
   const handleDrop = useCallback((e, episodeId, toIdx) => {
-    if (!dragInfo) return;
-    if (dragInfo.episodeId !== episodeId) return;
+    const di = dragInfoRef.current;
+    if (!di) return;
+    if (di.episodeId !== episodeId) return;
     e.preventDefault();
-    const fromIdx = dragInfo.fromIdx;
+    const fromIdx = di.fromIdx;
     if (fromIdx === toIdx) return;
 
     const epItems = getLatestItemsForEp(episodeId);
@@ -954,7 +960,7 @@ export default function TreatmentPage() {
     // 트리트먼트 순서만 즉시 변경 — 대본 동기화는 "대본으로 가져오기" 시점에서 처리
     saveForEp(episodeId, next, true);
     // dragInfo/overInfo 클리어는 handleDragEnd에서 일괄
-  }, [dragInfo, getLatestItemsForEp, saveForEp]);
+  }, [getLatestItemsForEp, saveForEp]);
 
   if (!activeProjectId) return null;
 
