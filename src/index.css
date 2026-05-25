@@ -392,6 +392,29 @@ textarea {
   display: none;
 }
 
+/* Hollywood style — editor-only, does not affect print */
+.dialogue-hollywood .ce-block[data-block-type="scene_number"]::before {
+  display: none; /* 씬번호("1.") 숨김 */
+}
+.dialogue-hollywood .ce-block[data-block-type="dialogue"] {
+  padding-left: 0;
+  text-align: center;
+  max-width: 55%;
+  margin-left: auto;
+  margin-right: auto;
+  position: static; /* absolute ::before 해제 */
+}
+.dialogue-hollywood .ce-block[data-block-type="dialogue"]::before {
+  position: static;
+  display: block;
+  width: auto;
+  text-align: center;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  margin-bottom: 0.15em;
+}
+
 /* Scene ref — 씬연결 블록 */
 .ce-block[data-block-type="scene_ref"] {
   color: var(--c-accent);

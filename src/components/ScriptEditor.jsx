@@ -2253,7 +2253,7 @@ const EditorSurface = forwardRef(function EditorSurface({
         '--scene-tab-width':  `${(stylePreset?.sceneHeaderTabWidth ?? 2) * 2}em`,
         caretColor: 'var(--c-accent)',
       }}
-      className={`ce-surface${stylePreset?.sceneHeaderLayout === 'tabbed' ? ' scene-header-tabbed' : ''}`}
+      className={`ce-surface${stylePreset?.sceneHeaderLayout === 'tabbed' ? ' scene-header-tabbed' : ''}${stylePreset?.dialogueLayout === 'hollywood' ? ' dialogue-hollywood' : ''}`}
       onCompositionStart={() => { composingRef.current = true; }}
       onCompositionEnd={() => { composingRef.current = false; doParse(); }}
       onInput={handleInput}

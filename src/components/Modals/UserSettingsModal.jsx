@@ -302,7 +302,10 @@ export function SceneHeaderTab() {
 export function BlockStyleTab() {
   const { state, dispatch } = useApp();
   const blockStyles = state.stylePreset?.blockStyles || {};
-  const dialogueGap = state.stylePreset?.dialogueGap || '7em';
+  const dialogueGap    = state.stylePreset?.dialogueGap    || '7em';
+  const dialogueLayout = state.stylePreset?.dialogueLayout ?? 'korean';
+  const setDialogueLayout = (val) =>
+    dispatch({ type: 'SET_STYLE_PRESET', payload: { dialogueLayout: val } });
 
   const acBs = blockStyles.action   || {};
   const cnBs = blockStyles.charName || {};
@@ -326,6 +329,11 @@ export function BlockStyleTab() {
     marginLeft: `${(dgBs.indent ?? 0) * 8}mm`,
   };
 
+  const layoutOpts = [
+    { value: 'korean',    label: '한국식', title: '인물명 왼쪽·대사 들여쓰기' },
+    { value: 'hollywood', label: '헐리웃', title: '인물명·대사 중앙정렬, 씬번호 숨김' },
+  ];
+
   return (
     <div>
       {/* 지문 */}
@@ -337,27 +345,46 @@ export function BlockStyleTab() {
 
       <Divider />
 
-      {/* 대사 */}
-      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--c-text4)', marginBottom: 6 }}>대사</div>
+      {/* 대사 레이아웃 */}
+      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--c-text4)', marginBottom: 6 }}>대사 레이아웃</div>
       <PreviewBox>
-        <span style={{ ...charPreviewStyle, marginLeft: `${(cnBs.indent ?? 0) * 8}mm` }}>인물명</span>
-        <span style={{ display: 'inline-block', width: dialogueGap }} />
-        <span style={diagPreviewStyle}>대사 스타일 예시</span>
+        {dialogueLayout === 'hollywood' ? (
+          <div style={{ textAlign: 'center', width: '55%', margin: '0 auto' }}>
+            <div style={{ ...charPreviewStyle, display: 'block', marginBottom: 2 }}>인물명</div>
+            <div style={diagPreviewStyle}>대사 스타일 예시</div>
+          </div>
+        ) : (
+          <span>
+            <span style={{ ...charPreviewStyle, marginLeft: `${(cnBs.indent ?? 0) * 8}mm` }}>인물명</span>
+            <span style={{ display: 'inline-block', width: dialogueGap }} />
+            <span style={diagPreviewStyle}>대사 스타일 예시</span>
+          </span>
+        )}
       </PreviewBox>
+      <Row label="형식">
+        {layoutOpts.map(opt => (
+          <Toggle key={opt.value} on={dialogueLayout === opt.value}
+            onClick={() => setDialogueLayout(opt.value)} title={opt.title}>
+            {opt.label}
+          </Toggle>
+        ))}
+      </Row>
       <BlockStyleRow label="인물명" blockKey="charName" />
       <BlockStyleRow label="대사"   blockKey="dialogue" showIndent={false} />
 
       <Divider />
 
-      {/* 인물·대사 여백 슬라이더 */}
-      <Row label="인물 여백">
-        <input type="range" min="1" max="14" step="0.5"
-          value={parseFloat(dialogueGap)}
-          onChange={e => dispatch({ type: 'SET_STYLE_PRESET', payload: { dialogueGap: `${e.target.value}em` } })}
-          style={{ width: 120, accentColor: 'var(--c-accent)', cursor: 'pointer' }}
-        />
-        <span style={{ fontSize: 11, color: 'var(--c-text4)', minWidth: '2.5rem' }}>{dialogueGap}</span>
-      </Row>
+      {/* 인물·대사 여백 슬라이더 (한국식에서만) */}
+      {dialogueLayout === 'korean' && (
+        <Row label="인물 여백">
+          <input type="range" min="1" max="14" step="0.5"
+            value={parseFloat(dialogueGap)}
+            onChange={e => dispatch({ type: 'SET_STYLE_PRESET', payload: { dialogueGap: `${e.target.value}em` } })}
+            style={{ width: 120, accentColor: 'var(--c-accent)', cursor: 'pointer' }}
+          />
+          <span style={{ fontSize: 11, color: 'var(--c-text4)', minWidth: '2.5rem' }}>{dialogueGap}</span>
+        </Row>
+      )}
 
       <Divider />
 
