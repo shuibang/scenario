@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { getChipInlineStyle } from '../utils/emotionColor';
 import { BUILTIN_GUIDES } from '../data/structureTags';
 
@@ -10,34 +10,47 @@ function structureTagColor(beat) {
 }
 
 // ─── TreatmentBoardCard ──────────────────────────────────────────────────────
-// Phase B: DnD 순서 변경 + 카드 하단 "+" 중간 삽입
-function TreatmentBoardCard({ item, seqNum, onClick, isDragging, isOver, isMobile, dragProps, onInsert }) {
+// 클릭 동작 없음. 데스크톱: HTML5 drag. 모바일: 롱프레스(350ms) 후 touch drag.
+function TreatmentBoardCard({
+  item, seqNum, epId, cardIdx,
+  isMobile,
+  isDragging, isOver,
+  isTouchDragging, isTouchOver,
+  dragProps, touchProps,
+  onInsert,
+}) {
   const [hovered, setHovered] = useState(false);
   const hasTags = (item.emotionTags?.length || item.structureTags?.length);
   const hasText = !!item.text?.trim();
   const isDraggable = !isMobile && !!dragProps;
+  const isHighlighted = isOver || isTouchOver;
 
-  // isOver(drop indicator)가 활성 중일 때 border width가 바뀌므로 padding 보정으로 레이아웃 이동 방지
-  const borderStyle = isOver
+  const borderStyle = isHighlighted
     ? { border: '2px solid var(--c-accent)', padding: '7px 9px' }
     : { border: `1px solid ${hovered ? 'var(--c-accent)' : 'var(--c-border)'}`, padding: '8px 10px' };
 
   return (
     <div
+      data-board-card=""
+      data-ep-id={epId}
+      data-card-idx={cardIdx}
       style={{ position: 'relative' }}
-      onMouseEnter={() => setHovered(true)}
+      onMouseEnter={() => { if (!isMobile) setHovered(true); }}
       onMouseLeave={() => setHovered(false)}
     >
       <div
         {...(isDraggable ? dragProps : {})}
-        onClick={() => { if (isDragging) return; onClick(); }}
-        title={isDraggable ? '드래그로 순서 변경 / 클릭하여 리스트 뷰로 이동' : '클릭하여 리스트 뷰로 이동'}
+        {...(isMobile && touchProps ? touchProps : {})}
         style={{
           background: 'var(--c-card)',
           borderRadius: 10,
-          cursor: isDraggable ? (isDragging ? 'grabbing' : 'grab') : 'pointer',
-          opacity: isDragging ? 0.4 : 1,
-          transition: 'border-color 0.15s, background 0.15s, opacity 0.15s',
+          cursor: isDraggable ? (isDragging ? 'grabbing' : 'grab') : 'default',
+          opacity: (isDragging || isTouchDragging) ? 0.4 : 1,
+          // 롱프레스 drag 중엔 elementFromPoint가 이 카드를 통과하도록
+          pointerEvents: isTouchDragging ? 'none' : 'auto',
+          transition: 'border-color 0.15s, opacity 0.15s',
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
           display: 'flex',
           flexDirection: 'column',
           gap: 6,
@@ -53,7 +66,7 @@ function TreatmentBoardCard({ item, seqNum, onClick, isDragging, isOver, isMobil
             lineHeight: 1.5,
             color: hasText ? 'var(--c-text3)' : 'var(--c-text6)',
             fontStyle: hasText ? 'normal' : 'italic',
-            // 시각화 전용 — 본문은 max 3줄 ellipsis로 그리드 정렬. 자세한 내용은 클릭 → 리스트 뷰.
+            // 시각화 전용 — 본문은 max 3줄 ellipsis로 그리드 정렬
             display: '-webkit-box',
             WebkitLineClamp: 3,
             WebkitBoxOrient: 'vertical',
@@ -96,8 +109,8 @@ function TreatmentBoardCard({ item, seqNum, onClick, isDragging, isOver, isMobil
         ) : null}
       </div>
 
-      {/* 카드 사이 중간 삽입 "+" — hover 시 카드 하단 중앙에 절대 위치 */}
-      {onInsert && hovered && !isDragging && (
+      {/* 카드 사이 중간 삽입 "+" — hover 시 카드 하단 중앙 절대 위치 */}
+      {onInsert && hovered && !isDragging && !isTouchDragging && (
         <button
           onClick={(e) => { e.stopPropagation(); onInsert(); }}
           title="아래에 새 항목 삽입"
@@ -128,23 +141,21 @@ function TreatmentBoardCard({ item, seqNum, onClick, isDragging, isOver, isMobil
 }
 
 // ─── TreatmentBoardView ──────────────────────────────────────────────────────
-// Phase B: DnD 순서 변경 + 중간 삽입
+// 데스크톱: HTML5 drag API (dragProps) — TreatmentPage에서 위임
+// 모바일:   롱프레스(350ms) touch drag — 자체 관리, onReorder 콜백으로 저장
 // groups: [{ ep, episodeNumber, isMissing, items }]
-//   - 단일 회차 모드: groups.length === 1, isMissing === false
-//   - 전체뷰 모드: groups.length === 회차 수
-// DnD 핸들러는 TreatmentPage에서 위임 (상태 이중화 없음).
-// isMobile === true 이면 draggable 비활성, "+" 버튼만 유효.
 export default function TreatmentBoardView({
   groups,
-  onCardClick,        // (epId, itemId) => void
   onCreateEpisode,    // (episodeNumber) => void
-  // DnD (TreatmentPage에서 위임)
-  dragInfo,           // { episodeId, fromIdx } | null
-  overInfo,           // { episodeId, idx } | null
-  onDragStart,        // (e, episodeId, fromIdx) => void
-  onDragOver,         // (e, episodeId, idx) => void
-  onDrop,             // (e, episodeId, toIdx) => void
-  onDragEnd,          // () => void
+  // 데스크톱 DnD (TreatmentPage에서 위임)
+  dragInfo,
+  overInfo,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
+  // 모바일 touch reorder 저장 콜백
+  onReorder,          // (epId, fromIdx, toIdx) => void
   isMobile,
   // 중간 삽입
   onInsertItem,       // (epId, insertIdx) => void
@@ -170,6 +181,84 @@ export default function TreatmentBoardView({
     : 'repeat(auto-fill, minmax(180px, 1fr))';
 
   const hasDnd = !!onDragStart && !isMobile;
+
+  // ─── 모바일 롱프레스 touch drag ─────────────────────────────────────────────
+  const [touchDragInfo, setTouchDragInfo] = useState(null);   // { epId, fromIdx }
+  const [touchOverInfo, setTouchOverInfo] = useState(null);   // { epId, toIdx }
+  const longPressTimerRef  = useRef(null);
+  const touchStartPosRef   = useRef(null);
+  const touchActiveDragRef = useRef(false); // 롱프레스 발화 여부
+
+  // 드래그 중 스크롤 방지 — passive:false 리스너는 useEffect로 등록
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const onTouchMove = (e) => {
+      if (touchActiveDragRef.current) e.preventDefault();
+    };
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    return () => el.removeEventListener('touchmove', onTouchMove);
+  }, []);
+
+  // cleanup on unmount
+  useEffect(() => () => clearTimeout(longPressTimerRef.current), []);
+
+  const handleTouchStart = useCallback((e, epId, fromIdx) => {
+    touchActiveDragRef.current = false;
+    touchStartPosRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = setTimeout(() => {
+      touchActiveDragRef.current = true;
+      navigator.vibrate?.(20);
+      setTouchDragInfo({ epId, fromIdx });
+      setTouchOverInfo(null);
+    }, 350);
+  }, []);
+
+  const handleTouchMove = useCallback((e, epId) => {
+    const touch = e.touches[0];
+    if (!touchActiveDragRef.current) {
+      // 롱프레스 대기 중 — 일정 거리 이동 시 타이머 취소 (스크롤 의도)
+      if (touchStartPosRef.current) {
+        const dx = touch.clientX - touchStartPosRef.current.x;
+        const dy = touch.clientY - touchStartPosRef.current.y;
+        if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+          clearTimeout(longPressTimerRef.current);
+        }
+      }
+      return;
+    }
+    // 드래그 중 — 손가락 아래 카드 탐색 (isTouchDragging 카드는 pointerEvents:none)
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    const cardEl = el?.closest('[data-board-card]');
+    if (!cardEl) return;
+    const toEpId = cardEl.getAttribute('data-ep-id');
+    const toIdx  = parseInt(cardEl.getAttribute('data-card-idx'), 10);
+    if (toEpId === epId && !isNaN(toIdx)) {
+      setTouchOverInfo(prev =>
+        prev?.epId === toEpId && prev?.toIdx === toIdx ? prev : { epId: toEpId, toIdx }
+      );
+    }
+  }, []);
+
+  const handleTouchEnd = useCallback((e, epId) => {
+    clearTimeout(longPressTimerRef.current);
+    if (touchActiveDragRef.current && touchDragInfo && touchOverInfo) {
+      const { fromIdx } = touchDragInfo;
+      const { toIdx }   = touchOverInfo;
+      if (toIdx !== fromIdx) onReorder?.(epId, fromIdx, toIdx);
+    }
+    touchActiveDragRef.current = false;
+    setTouchDragInfo(null);
+    setTouchOverInfo(null);
+  }, [touchDragInfo, touchOverInfo, onReorder]);
+
+  const handleTouchCancel = useCallback(() => {
+    clearTimeout(longPressTimerRef.current);
+    touchActiveDragRef.current = false;
+    setTouchDragInfo(null);
+    setTouchOverInfo(null);
+  }, []);
 
   return (
     <div ref={containerRef}>
@@ -221,9 +310,12 @@ export default function TreatmentBoardView({
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 12 }}>
                 {items.map((it, idx) => {
-                  const isDragging = hasDnd && dragInfo?.episodeId === ep.id && dragInfo?.fromIdx === idx;
-                  const isOver     = hasDnd && overInfo?.episodeId === ep.id && overInfo?.idx === idx;
-                  const dragProps  = hasDnd ? {
+                  const isDragging     = hasDnd && dragInfo?.episodeId === ep.id && dragInfo?.fromIdx === idx;
+                  const isOver         = hasDnd && overInfo?.episodeId === ep.id && overInfo?.idx === idx;
+                  const isTouchDragging = isMobile && touchDragInfo?.epId === ep.id && touchDragInfo?.fromIdx === idx;
+                  const isTouchOver    = isMobile && touchOverInfo?.epId === ep.id && touchOverInfo?.toIdx === idx;
+
+                  const dragProps = hasDnd ? {
                     draggable: true,
                     onDragStart: (e) => { e.stopPropagation(); onDragStart(e, ep.id, idx); },
                     onDragOver:  (e) => onDragOver(e, ep.id, idx),
@@ -231,16 +323,27 @@ export default function TreatmentBoardView({
                     onDragEnd:   onDragEnd,
                   } : null;
 
+                  const touchProps = isMobile ? {
+                    onTouchStart:  (e) => handleTouchStart(e, ep.id, idx),
+                    onTouchMove:   (e) => handleTouchMove(e, ep.id),
+                    onTouchEnd:    (e) => handleTouchEnd(e, ep.id),
+                    onTouchCancel: handleTouchCancel,
+                  } : null;
+
                   return (
                     <TreatmentBoardCard
                       key={it.id}
                       item={it}
                       seqNum={idx + 1}
+                      epId={ep.id}
+                      cardIdx={idx}
+                      isMobile={isMobile}
                       isDragging={isDragging}
                       isOver={isOver}
-                      isMobile={isMobile}
+                      isTouchDragging={isTouchDragging}
+                      isTouchOver={isTouchOver}
                       dragProps={dragProps}
-                      onClick={() => onCardClick(ep.id, it.id)}
+                      touchProps={touchProps}
                       onInsert={onInsertItem ? () => onInsertItem(ep.id, idx + 1) : null}
                     />
                   );

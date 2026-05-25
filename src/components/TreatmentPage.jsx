@@ -757,16 +757,14 @@ export default function TreatmentPage() {
     save(next, true);
   }, [items, save]);
 
-  // ─── 보드 카드 클릭 → 리스트 뷰로 전환 + 해당 항목 포커스 ─────────────────
-  // 단일 회차 보드: 같은 회차 리스트로
-  // 전체뷰 보드: 전체뷰 리스트로 (모든 textarea가 마운트되므로 ref로 직접 포커스)
-  const handleCardClick = useCallback((targetEpId, itemId) => {
-    if (selectedEpId !== 'all' && targetEpId && targetEpId !== epId) {
-      setSelectedEpId(targetEpId);
-    }
-    pendingFocus.current = { id: itemId, cursor: 0, scroll: true };
-    setViewMode('list');
-  }, [selectedEpId, epId]);
+  // 보드뷰 모바일 touch drag 콜백 — dragInfo 의존 없이 순수 배열 재정렬
+  const handleReorder = useCallback((episodeId, fromIdx, toIdx) => {
+    const epItems = getLatestItemsForEp(episodeId);
+    const next = [...epItems];
+    const [moved] = next.splice(fromIdx, 1);
+    next.splice(Math.min(toIdx, next.length), 0, moved);
+    saveForEp(episodeId, next, true);
+  }, [getLatestItemsForEp, saveForEp]);
 
   // ─── 대본으로 가져오기 (원본 유지, 화면 이동 없음, 단일 undo 단위) ─────────
   // performImport: 실제 import 처리 (mode 분기)
@@ -1095,8 +1093,8 @@ export default function TreatmentPage() {
                     ? [{ ep: episode, episodeNumber: episode.number, isMissing: false, items }]
                     : [])
             }
-            onCardClick={handleCardClick}
             onCreateEpisode={createEpisodeForNumber}
+            onReorder={handleReorder}
             dragInfo={dragInfo}
             overInfo={overInfo}
             onDragStart={handleDragStart}
