@@ -1307,6 +1307,7 @@ const EditorSurface = forwardRef(function EditorSurface({
   onNextTypePick,  // ({ blockId, top, left }) → 대사 블록에서 다음 형식 선택 팝업
   onCloseSceneRef, // () → 타이핑 시 씬연결 피커 자동 닫기
   blockStyles,
+  stylePreset,
 }, ref) {
   const surfaceRef = useRef(null);
   const metaRef = useRef({});
@@ -4242,6 +4243,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
             onSelectionChange={setActiveBlockType}
             dialogueGap={dialogueGap}
             blockStyles={stylePreset?.blockStyles}
+            stylePreset={stylePreset}
             fontFamily={editorFontFamily}
             fontSize={editorFontSize}
             lineHeight={editorLineHeight}
