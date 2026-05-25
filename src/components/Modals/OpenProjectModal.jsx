@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Modal, { ModalBtn } from './Modal';
 import { listAllBackupFiles, loadDriveBackupData, setAccessToken, isTokenValid } from '../../store/googleDrive';
-import { supabase, refreshDriveToken } from '../../store/supabaseClient';
+import { supabase, refreshDriveToken, signInWithGoogle } from '../../store/supabaseClient';
 import { isDropboxTokenValid, connectDropbox, listDropboxBackupFiles, loadDropboxBackupData } from '../../store/dropbox';
 import { isMultiEpisode, getTypeLabel } from '../../utils/projectTypes';
 import { deserializeProject } from '../../utils/projectSerializer';
@@ -41,6 +41,7 @@ export default function OpenProjectModal({ open, onClose, projects = [], activeP
 
   // Drive 탭
   const [driveState,  setDriveState]  = useState('idle'); // idle | loading | authed | unauthed | error
+  const [driveLoadKey, setDriveLoadKey] = useState(0); // 재시도 트리거
   const [driveFiles,  setDriveFiles]  = useState([]);
   const [driveSelected, setDriveSelected] = useState(null);
   const [driveBusy,   setDriveBusy]   = useState(false);
@@ -60,6 +61,7 @@ export default function OpenProjectModal({ open, onClose, projects = [], activeP
     setDriveSelected(null); setDropboxSelected(null);
     setDriveState('idle'); setDropboxState('idle');
     setDriveFiles([]); setDropboxFiles([]);
+    setDriveLoadKey(0);
 
     (async () => {
       const [googleUser, dropboxHistory] = await Promise.all([isGoogleUser(), Promise.resolve(hasDropboxHistory())]);
@@ -73,7 +75,7 @@ export default function OpenProjectModal({ open, onClose, projects = [], activeP
     })();
   }, [open]);
 
-  // Drive 탭 진입 시 파일 목록 로드
+  // Drive 탭 진입 시 파일 목록 로드 (driveLoadKey 변경 시에도 재실행)
   useEffect(() => {
     if (!open || tab !== TAB_DRIVE) return;
     (async () => {
@@ -99,7 +101,7 @@ export default function OpenProjectModal({ open, onClose, projects = [], activeP
         setDriveState('error');
       }
     })();
-  }, [open, tab]);
+  }, [open, tab, driveLoadKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Dropbox 탭 진입 시 파일 목록 로드
   useEffect(() => {
@@ -243,7 +245,16 @@ export default function OpenProjectModal({ open, onClose, projects = [], activeP
           <CloudUnauthed
             message="Google Drive 연결이 끊겼어요."
             sub="다시 연결하면 Drive에 저장된 파일을 여기서 바로 열 수 있어요."
-            onConnect={async () => { await refreshDriveToken(); setDriveState('idle'); setTab(TAB_DRIVE); }}
+            onConnect={async () => {
+              const newToken = await refreshDriveToken();
+              if (newToken) {
+                // 토큰 갱신 성공 → 파일 목록 재로드
+                setDriveLoadKey(k => k + 1);
+              } else {
+                // 갱신 불가 → 전체 Google OAuth 재인증
+                await signInWithGoogle();
+              }
+            }}
             connectLabel="다시 연결"
           />
         ) : driveState === 'error' ? <Empty style={{ color: 'var(--c-danger, #e53e3e)' }}>Drive 파일을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.</Empty>
