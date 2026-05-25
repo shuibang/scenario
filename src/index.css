@@ -321,17 +321,15 @@ textarea {
 
 /* Scene number: tabbed layout — editor-only display, does not affect print */
 .scene-header-tabbed .ce-block[data-block-type="scene_number"] {
-  padding-left: var(--scene-tab-width, 4em);
-  text-indent: calc(-1 * var(--scene-tab-width, 4em));
+  /* padding-left 없음: ::before가 content-left-edge에 위치 → text-decoration이 씬번호부터 연속 */
   tab-size: var(--scene-tab-width, 4em);
 }
 .scene-header-tabbed .ce-block[data-block-type="scene_number"]::before {
-  /* display: inline (not inline-block) — parent's text-decoration flows through ::before */
-  display: inline;
+  display: inline;       /* display:inline — 부모 text-decoration이 ::before까지 연속 적용 */
   min-width: 0;
   margin-left: 0;
   vertical-align: baseline;
-  /* tab character aligns to next tab stop (= scene-tab-width), creating the visual gap */
+  /* 탭 문자: tab-size 단위의 탭 스탑까지 확장 → 씬번호 뒤 고정폭 간격 */
   content: attr(data-label) "\09";
 }
 
