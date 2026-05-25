@@ -55,6 +55,26 @@ function Toggle({ on, onClick, children, title }) {
   );
 }
 
+function TabWidthBtn({ value, onChange }) {
+  const current = Math.max(1, Math.min(4, Math.round(Number(value) || 2)));
+  const next = current >= 4 ? 1 : current + 1;
+  return (
+    <button
+      onClick={() => onChange(next)}
+      title={`탭 간격 ${current * 2}em — 클릭 시 ${next * 2}em`}
+      style={{
+        height: 28, padding: '0 8px', fontSize: 12, borderRadius: 4, cursor: 'pointer',
+        border: '1px solid var(--c-accent)',
+        background: 'var(--c-accent)',
+        color: '#fff',
+        display: 'flex', alignItems: 'center', gap: 3, fontWeight: 700,
+      }}
+    >
+      <span style={{ fontSize: 11 }}>⇥ {current * 2}em</span>
+    </button>
+  );
+}
+
 function IndentBtn({ value, onChange }) {
   const current = Math.max(0, Math.min(3, Math.round(Number(value) || 0)));
   const next = (current + 1) % 4;
@@ -123,9 +143,12 @@ export function SceneHeaderTab() {
   const underline    = !!snBs.underline;
   const indent       = snBs.indent ?? 0;
 
-  const sceneHeaderLayout = state.stylePreset?.sceneHeaderLayout ?? 'inline';
-  const setSceneHeaderLayout = (val) =>
+  const sceneHeaderLayout   = state.stylePreset?.sceneHeaderLayout   ?? 'inline';
+  const sceneHeaderTabWidth = state.stylePreset?.sceneHeaderTabWidth ?? 2;
+  const setSceneHeaderLayout   = (val) =>
     dispatch({ type: 'SET_STYLE_PRESET', payload: { sceneHeaderLayout: val } });
+  const setSceneHeaderTabWidth = (val) =>
+    dispatch({ type: 'SET_STYLE_PRESET', payload: { sceneHeaderTabWidth: val } });
 
   const [scenePrefix,   setScenePrefixState]   = useState(() => getScenePrefix());
   const [sceneFormat,   setSceneFormatState]   = useState(() => getSceneFormat());
@@ -160,8 +183,8 @@ export function SceneHeaderTab() {
       {/* 씬 헤더 미리보기 */}
       <PreviewBox>
         {sceneHeaderLayout === 'tabbed' ? (
-          <span style={{ ...previewStyle, display: 'flex', alignItems: 'baseline' }}>
-            <span style={{ display: 'inline-block', minWidth: '4em', flexShrink: 0 }}>{prefixExample}</span>
+          <span style={{ ...previewStyle, display: 'block', paddingLeft: `${sceneHeaderTabWidth * 2}em`, textIndent: 0 }}>
+            <span style={{ display: 'inline-block', minWidth: `${sceneHeaderTabWidth * 2}em`, marginLeft: `-${sceneHeaderTabWidth * 2}em`, verticalAlign: 'top' }}>{prefixExample}</span>
             <span>{previewBody}</span>
           </span>
         ) : (
@@ -198,6 +221,9 @@ export function SceneHeaderTab() {
             title={opt.title}
           >{opt.label}</Toggle>
         ))}
+        {sceneHeaderLayout === 'tabbed' && (
+          <TabWidthBtn value={sceneHeaderTabWidth} onChange={setSceneHeaderTabWidth} />
+        )}
       </Row>
 
       <Divider />
@@ -319,7 +345,7 @@ export function BlockStyleTab() {
         <span style={diagPreviewStyle}>대사 스타일 예시</span>
       </PreviewBox>
       <BlockStyleRow label="인물명" blockKey="charName" />
-      <BlockStyleRow label="대사"   blockKey="dialogue" />
+      <BlockStyleRow label="대사"   blockKey="dialogue" showIndent={false} />
 
       <Divider />
 

@@ -2250,6 +2250,7 @@ const EditorSurface = forwardRef(function EditorSurface({
         '--dialogue-bold':    blockStyles?.dialogue?.bold ? 'bold' : 'normal',
         '--dialogue-italic':  blockStyles?.dialogue?.italic ? 'italic' : 'normal',
         '--dialogue-underline': blockStyles?.dialogue?.underline ? 'underline' : 'none',
+        '--scene-tab-width':  `${(stylePreset?.sceneHeaderTabWidth ?? 2) * 2}em`,
         caretColor: 'var(--c-accent)',
       }}
       className={`ce-surface${stylePreset?.sceneHeaderLayout === 'tabbed' ? ' scene-header-tabbed' : ''}`}

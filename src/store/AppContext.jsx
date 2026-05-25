@@ -69,6 +69,7 @@ export const DEFAULT_STYLE_PRESET = {
   },
   dialogueLayout: 'korean',        // 'korean' | 'hollywood'
   sceneHeaderLayout: 'inline',    // 'inline' | 'tabbed'
+  sceneHeaderTabWidth: 2,         // 탭 간격 단계 (1–4, em = value * 2)
   fontWeightRules: {
     sceneNumber: 'bold',
     characterName: 'bold',
