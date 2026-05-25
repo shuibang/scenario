@@ -543,6 +543,32 @@ function xmlSection(printModel, margins, blockStyles = {}) {
         }
         break;
       }
+      case 'treatment': {
+        const epLabel = `${sec.episodeNumber}회 트리트먼트${sec.episodeTitle ? ' — ' + sec.episodeTitle : ''}`;
+        head(epLabel);
+        sec.items.forEach((it, i) => normal(`${i + 1}. ${it.text || ''}`));
+        empty();
+        break;
+      }
+      case 'biography': {
+        head('인물이력서');
+        empty();
+        for (const c of sec.characters) {
+          head(c.name);
+          (c.traits || []).forEach(t => {
+            normal(`[${t.label || '특성'}]`);
+            if (t.content) t.content.split('\n').forEach(l => normal(`  ${l}`));
+          });
+          (c.items || []).forEach(it => {
+            const period  = it.period  ?? it.year  ?? '';
+            const content = it.content ?? it.event ?? '';
+            if (period)  normal(period);
+            if (content) content.split('\n').forEach(l => normal(`  ${l}`));
+          });
+          empty();
+        }
+        break;
+      }
     }
   }
 

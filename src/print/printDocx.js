@@ -427,6 +427,32 @@ function buildDocxSections(printModel, dp, { hancom = false } = {}) {
       });
     }
 
+    else if (section.type === 'treatment') {
+      const epLabel = `${section.episodeNumber}회 트리트먼트${section.episodeTitle ? ' — ' + section.episodeTitle : ''}`;
+      paras.push(para(epLabel, dp, { bold: true, center: true }));
+      paras.push(blankPara(dp));
+      section.items.forEach((it, i) => paras.push(para(`${i + 1}. ${it.text || ''}`, dp)));
+    }
+
+    else if (section.type === 'biography') {
+      paras.push(para('인물이력서', dp, { bold: true }));
+      paras.push(blankPara(dp));
+      section.characters.forEach(c => {
+        paras.push(para(c.name, dp, { bold: true }));
+        (c.traits || []).forEach(t => {
+          paras.push(para(`[${t.label || '특성'}]`, dp, { bold: true }));
+          if (t.content) t.content.split('\n').forEach(l => paras.push(para(`  ${l}`, dp)));
+        });
+        (c.items || []).forEach(it => {
+          const period  = it.period  ?? it.year  ?? '';
+          const content = it.content ?? it.event ?? '';
+          if (period)  paras.push(para(period, dp, { bold: true }));
+          if (content) content.split('\n').forEach(l => paras.push(para(`  ${l}`, dp)));
+        });
+        paras.push(blankPara(dp));
+      });
+    }
+
     const sectionDef = {
       properties: {
         type: SectionType.NEXT_PAGE,
