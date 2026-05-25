@@ -346,13 +346,22 @@ export default function TreatmentPage() {
     saveForEp(targetEpId, epItems.map(it => it.id === itemId ? { ...it, text } : it), true);
   }, [getLatestItemsForEp, saveForEp]);
 
+  // 보드뷰 카드 삭제
+  const removeItemForEp = useCallback((targetEpId, itemId) => {
+    const epItems = getLatestItemsForEp(targetEpId);
+    const next = epItems.filter(it => it.id !== itemId);
+    saveForEp(targetEpId, next, true);
+    if (targetEpId === epId) setItems(next);
+  }, [getLatestItemsForEp, saveForEp, epId]);
+
   // 보드뷰 "+" 버튼 → 지정 위치에 빈 항목 삽입
   const insertItemForEp = useCallback((targetEpId, insertIdx) => {
     const epItems = getLatestItemsForEp(targetEpId);
     const newItem = { id: genId(), text: '', order: insertIdx, emotionTags: [], structureTags: [] };
     const next = [...epItems.slice(0, insertIdx), newItem, ...epItems.slice(insertIdx)];
     saveForEp(targetEpId, next, true);
-  }, [getLatestItemsForEp, saveForEp]);
+    if (targetEpId === epId) setItems(next);
+  }, [getLatestItemsForEp, saveForEp, epId]);
 
   const addEmotionTagForEp = useCallback((targetEpId, itemId, tag) => {
     const latest = getLatestItemsForEp(targetEpId);
@@ -968,105 +977,89 @@ export default function TreatmentPage() {
 
   return (
     <div className="flex-1 min-h-0 flex flex-col" style={{ background: 'var(--c-bg)' }}>
-      {/* Header bar — 구조/씬리스트와 동일 스타일 */}
-      <div className="flex items-center gap-3 shrink-0" style={{ padding: '10px', borderBottom: '1px solid var(--c-border2)' }}>
-        <span className="text-sm font-medium" style={{ color: 'var(--c-text2)' }}>트리트먼트</span>
-        <div ref={helpRef} style={{ position: 'relative', display: 'inline-flex' }}>
-          <button onClick={() => setHelpOpen(v => !v)} title="도움말" style={{ width: 18, height: 18, borderRadius: '50%', border: '1px solid var(--c-border3)', background: helpOpen ? 'var(--c-active)' : 'transparent', color: 'var(--c-text5)', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, flexShrink: 0 }}>?</button>
-          {helpOpen && (
-            <div style={{ position: 'absolute', top: '24px', left: 0, zIndex: 200, background: 'var(--c-card)', border: '1px solid var(--c-border)', borderRadius: 8, padding: '10px 14px', width: 260, boxShadow: '0 4px 16px rgba(0,0,0,0.18)' }}>
-              <div className="text-xs font-semibold mb-2" style={{ color: 'var(--c-text3)' }}>트리트먼트 안내</div>
-              {[
-                '각 씬의 내용을 간략히 작성하세요.',
-                '전체회차에서는 여러 회차를 한 화면에서 정리할 수 있습니다.',
-                isSeries ? '회차 추가는 새 회차를 만드는 버튼이고, 각 회차 아래 내용 추가는 그 회차 안의 항목만 늘립니다.' : '개별 회차를 선택해 항목을 정리할 수 있습니다.',
-                '대본으로 가져오기는 개별 회차 선택 상태에서만 사용할 수 있습니다.',
-                '바깥 화면을 터치하거나 클릭하면 이 안내가 닫힙니다.',
-              ].map((t, i) => (
-                <div key={i} className="text-[11px] leading-relaxed" style={{ color: 'var(--c-text5)' }}>· {t}</div>
-              ))}
-            </div>
-          )}
-        </div>
-        <select
-          value={selectedEpId === 'all' ? 'all' : (epId || '')}
-          onChange={e => handleEpSelect(e.target.value)}
-          className="text-xs rounded outline-none px-2 py-1"
-          style={{ background: 'var(--c-input)', color: 'var(--c-text2)', border: '1px solid var(--c-border3)' }}
-        >
-          <option value="all">전체</option>
-          {projectEpisodes.map(ep => (
-            <option key={ep.id} value={ep.id}>{ep.number}회 {ep.title || ''}</option>
-          ))}
-          {missingNums.map(n => (
-            <option key={`__new__${n}`} value={`__new__${n}`}>자동생성 : {n}회</option>
-          ))}
-        </select>
-        {selectedEpId === 'all' && isSeries && (
-          <button
-            onClick={handleAddEpisodeInAllView}
-            className="px-2.5 py-1 rounded text-xs"
-            style={{
-              color: 'var(--c-text3)',
-              border: '1px solid var(--c-border3)',
-              background: 'transparent',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-              flexShrink: 0,
-            }}
-          >
-            + {nextEpisodeNumber}회차 추가
-          </button>
-        )}
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          {/* 뷰 모드 탭 (리스트/보드) */}
-          <div style={{ display: 'inline-flex', border: '1px solid var(--c-border3)', borderRadius: 4, overflow: 'hidden' }}>
-            <button
-              onClick={() => setViewMode('list')}
-              title="리스트 뷰"
-              style={{
-                padding: '3px 8px', fontSize: 11, lineHeight: 1.4,
-                background: viewMode === 'list' ? 'var(--c-active)' : 'transparent',
-                color: viewMode === 'list' ? 'var(--c-text2)' : 'var(--c-text5)',
-                border: 'none', cursor: 'pointer',
-              }}
-            >리스트</button>
-            <button
-              onClick={() => setViewMode('board')}
-              title="보드 뷰"
-              style={{
-                padding: '3px 8px', fontSize: 11, lineHeight: 1.4,
-                background: viewMode === 'board' ? 'var(--c-active)' : 'transparent',
-                color: viewMode === 'board' ? 'var(--c-text2)' : 'var(--c-text5)',
-                border: 'none', borderLeft: '1px solid var(--c-border3)', cursor: 'pointer',
-              }}
-            >보드</button>
+      {/* Header bar — 2행 레이아웃 (모바일 소제목 줄바꿈 방지) */}
+      <div className="shrink-0" style={{ padding: '8px 10px', borderBottom: '1px solid var(--c-border2)' }}>
+        {/* 1행: 소제목 + 배지 + 도움말 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+          <span className="text-sm font-medium" style={{ color: 'var(--c-text2)', whiteSpace: 'nowrap' }}>트리트먼트</span>
+          <span
+            title="편집 내용은 '대본으로 가져오기'를 눌러야 대본에 반영됩니다"
+            style={{ fontSize: 9, padding: '1px 5px', borderRadius: 4, border: '1px solid var(--c-border3)', color: 'var(--c-text5)', background: 'var(--c-tag)', fontWeight: 600, letterSpacing: '0.02em', flexShrink: 0 }}
+          >수동 반영</span>
+          <div ref={helpRef} style={{ position: 'relative', display: 'inline-flex' }}>
+            <button onClick={() => setHelpOpen(v => !v)} title="도움말" style={{ width: 18, height: 18, borderRadius: '50%', border: '1px solid var(--c-border3)', background: helpOpen ? 'var(--c-active)' : 'transparent', color: 'var(--c-text5)', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, flexShrink: 0 }}>?</button>
+            {helpOpen && (
+              <div style={{ position: 'absolute', top: '24px', left: 0, zIndex: 200, background: 'var(--c-card)', border: '1px solid var(--c-border)', borderRadius: 8, padding: '10px 14px', width: 260, boxShadow: '0 4px 16px rgba(0,0,0,0.18)' }}>
+                <div className="text-xs font-semibold mb-2" style={{ color: 'var(--c-text3)' }}>트리트먼트 안내</div>
+                {[
+                  '각 씬의 내용을 간략히 작성하세요.',
+                  '전체회차에서는 여러 회차를 한 화면에서 정리할 수 있습니다.',
+                  isSeries ? '회차 추가는 새 회차를 만드는 버튼이고, 각 회차 아래 내용 추가는 그 회차 안의 항목만 늘립니다.' : '개별 회차를 선택해 항목을 정리할 수 있습니다.',
+                  '대본으로 가져오기는 개별 회차 선택 상태에서만 사용할 수 있습니다.',
+                  '바깥 화면을 터치하거나 클릭하면 이 안내가 닫힙니다.',
+                ].map((t, i) => (
+                  <div key={i} className="text-[11px] leading-relaxed" style={{ color: 'var(--c-text5)' }}>· {t}</div>
+                ))}
+              </div>
+            )}
           </div>
-          {importMsg && <span className="text-xs" style={{ color: 'var(--c-accent2)' }}>{importMsg}</span>}
-          <button
-            disabled={!canImportToScript}
-            onClick={() => {
-              if (!canImportToScript) return;
-              const epSceneCount = scriptBlocks.filter(b => b.episodeId === epId && b.type === 'scene_number').length;
-              const filledCount = items.filter(it => it.text.trim()).length;
-              if (epSceneCount > 0 && epSceneCount > filledCount) {
-                setImportWarning(true);
-              } else {
-                setImporting(true);
-              }
-            }}
-            title={canImportToScript ? '현재 회차의 트리트먼트를 대본에 추가합니다.' : '대본으로 가져오기는 개별 회차에서만 사용할 수 있습니다.'}
-            style={{
-              padding: '3px 10px',
-              borderRadius: 4,
-              fontSize: 11,
-              background: 'transparent',
-              color: canImportToScript ? 'var(--c-text3)' : 'var(--c-text6)',
-              border: '1px solid var(--c-border3)',
-              cursor: canImportToScript ? 'pointer' : 'not-allowed',
-              opacity: canImportToScript ? 1 : 0.55,
-            }}
-          >대본으로 가져오기</button>
+        </div>
+        {/* 2행: 회차 선택 + 컨트롤 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <select
+            value={selectedEpId === 'all' ? 'all' : (epId || '')}
+            onChange={e => handleEpSelect(e.target.value)}
+            className="text-xs rounded outline-none px-2 py-1"
+            style={{ background: 'var(--c-input)', color: 'var(--c-text2)', border: '1px solid var(--c-border3)', flexShrink: 1, minWidth: 0 }}
+          >
+            <option value="all">전체</option>
+            {projectEpisodes.map(ep => (
+              <option key={ep.id} value={ep.id}>{ep.number}회 {ep.title || ''}</option>
+            ))}
+            {missingNums.map(n => (
+              <option key={`__new__${n}`} value={`__new__${n}`}>자동생성 : {n}회</option>
+            ))}
+          </select>
+          {selectedEpId === 'all' && isSeries && (
+            <button
+              onClick={handleAddEpisodeInAllView}
+              className="px-2.5 py-1 rounded text-xs"
+              style={{ color: 'var(--c-text3)', border: '1px solid var(--c-border3)', background: 'transparent', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}
+            >
+              + {nextEpisodeNumber}회차 추가
+            </button>
+          )}
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            {/* 뷰 모드 탭 (리스트/보드) */}
+            <div style={{ display: 'inline-flex', border: '1px solid var(--c-border3)', borderRadius: 4, overflow: 'hidden' }}>
+              <button
+                onClick={() => setViewMode('list')}
+                title="리스트 뷰"
+                style={{ padding: '3px 8px', fontSize: 11, lineHeight: 1.4, background: viewMode === 'list' ? 'var(--c-active)' : 'transparent', color: viewMode === 'list' ? 'var(--c-text2)' : 'var(--c-text5)', border: 'none', cursor: 'pointer' }}
+              >리스트</button>
+              <button
+                onClick={() => setViewMode('board')}
+                title="보드 뷰"
+                style={{ padding: '3px 8px', fontSize: 11, lineHeight: 1.4, background: viewMode === 'board' ? 'var(--c-active)' : 'transparent', color: viewMode === 'board' ? 'var(--c-text2)' : 'var(--c-text5)', border: 'none', borderLeft: '1px solid var(--c-border3)', cursor: 'pointer' }}
+              >보드</button>
+            </div>
+            {importMsg && <span className="text-xs" style={{ color: 'var(--c-accent2)' }}>{importMsg}</span>}
+            <button
+              disabled={!canImportToScript}
+              onClick={() => {
+                if (!canImportToScript) return;
+                const epSceneCount = scriptBlocks.filter(b => b.episodeId === epId && b.type === 'scene_number').length;
+                const filledCount = items.filter(it => it.text.trim()).length;
+                if (epSceneCount > 0 && epSceneCount > filledCount) {
+                  setImportWarning(true);
+                } else {
+                  setImporting(true);
+                }
+              }}
+              title={canImportToScript ? '현재 회차의 트리트먼트를 대본에 추가합니다.' : '대본으로 가져오기는 개별 회차에서만 사용할 수 있습니다.'}
+              style={{ padding: '3px 10px', borderRadius: 4, fontSize: 11, background: 'transparent', color: canImportToScript ? 'var(--c-text3)' : 'var(--c-text6)', border: '1px solid var(--c-border3)', cursor: canImportToScript ? 'pointer' : 'not-allowed', opacity: canImportToScript ? 1 : 0.55 }}
+            >대본으로 가져오기</button>
+          </div>
         </div>
       </div>
 
@@ -1116,6 +1109,7 @@ export default function TreatmentPage() {
             isMobile={isMobile}
             onInsertItem={insertItemForEp}
             onSaveItemText={saveItemTextForEp}
+            onDeleteItem={removeItemForEp}
           />
         )}
 

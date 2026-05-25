@@ -24,8 +24,8 @@ function TreatmentBoardCard({
   isDragging, isOver,
   isTouchDragging, isTouchOver,
   dragProps, touchProps,
-  onInsert,
   onSaveText,   // (newText: string) => void
+  onDelete,     // () => void
 }) {
   const [hovered,   setHovered]   = useState(false);
   const [editing,   setEditing]   = useState(false);
@@ -124,9 +124,17 @@ function TreatmentBoardCard({
           ...borderStyle,
         }}
       >
-        {/* 시퀀스 번호 */}
-        <div style={{ fontSize: 10, color: 'var(--c-accent2)', fontWeight: 600, flexShrink: 0 }}>
-          #{seqNum}
+        {/* 시퀀스 번호 + 삭제 버튼 */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: 10, color: 'var(--c-accent2)', fontWeight: 600 }}>#{seqNum}</span>
+          {onDelete && (hovered || isMobile) && !editing && (
+            <button
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              title="카드 삭제"
+              style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--c-text6)', fontSize: 13, lineHeight: 1, padding: '0 2px', flexShrink: 0 }}
+            >×</button>
+          )}
         </div>
 
         {/* 본문: 편집 중이면 textarea, 아니면 텍스트 표시 */}
@@ -216,33 +224,6 @@ function TreatmentBoardCard({
         ) : null}
       </div>
 
-      {/* 데스크톱 전용: hover 시 카드 하단 "+" 중간 삽입 버튼 */}
-      {!isMobile && onInsert && hovered && !isDragging && !editing && (
-        <button
-          onClick={(e) => { e.stopPropagation(); onInsert(); }}
-          title="아래에 새 항목 삽입"
-          style={{
-            position: 'absolute',
-            bottom: -10,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            zIndex: 10,
-            width: 20,
-            height: 20,
-            borderRadius: '50%',
-            background: 'var(--c-accent)',
-            color: '#fff',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: 14,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
-            lineHeight: 1,
-          }}
-        >+</button>
-      )}
     </div>
   );
 }
@@ -265,6 +246,8 @@ export default function TreatmentBoardView({
   onInsertItem,       // (epId, insertIdx) => void
   // 텍스트 저장
   onSaveItemText,     // (epId, itemId, text) => void
+  // 항목 삭제
+  onDeleteItem,       // (epId, itemId) => void
 }) {
   const containerRef = useRef(null);
   const [containerWidth, setContainerWidth] = useState(300);
@@ -379,7 +362,6 @@ export default function TreatmentBoardView({
   return (
     <div ref={containerRef}>
       {groups.map(({ ep, episodeNumber, isMissing, items }) => {
-        const isEmpty = !items.length || (items.length === 1 && !items[0].text?.trim());
         return (
           <div key={ep?.id || `missing-${episodeNumber}`} style={{ marginBottom: 24 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text3)', marginBottom: 6, paddingBottom: 4, borderBottom: '1px solid var(--c-border2)' }}>
@@ -400,77 +382,75 @@ export default function TreatmentBoardView({
                   style={{ color: 'var(--c-text3)', border: '1px solid var(--c-border3)', background: 'transparent', cursor: 'pointer', whiteSpace: 'nowrap' }}
                 >{episodeNumber}회차 추가</button>
               </div>
-            ) : isEmpty ? (
-              <div style={{
-                border: '1px dashed var(--c-border3)', borderRadius: 8,
-                padding: '20px 12px', background: 'var(--c-card)',
-                textAlign: 'center', fontSize: 11, color: 'var(--c-text5)',
-              }}>
-                항목이 없습니다.
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 12 }}>
+                {items.map((it, idx) => {
+                  const isDragging      = hasDnd && dragInfo?.episodeId === ep.id && dragInfo?.fromIdx === idx;
+                  const isOver          = hasDnd && overInfo?.episodeId === ep.id && overInfo?.idx === idx;
+                  const isTouchDragging = isMobile && touchDragInfo?.epId === ep.id && touchDragInfo?.fromIdx === idx;
+                  const isTouchOver     = isMobile && touchOverInfo?.epId === ep.id && touchOverInfo?.toIdx === idx;
+
+                  const dragProps = hasDnd ? {
+                    draggable: true,
+                    onDragStart: (e) => { e.stopPropagation(); onDragStart(e, ep.id, idx); },
+                    onDragOver:  (e) => onDragOver(e, ep.id, idx),
+                    onDrop:      (e) => onDrop(e, ep.id, idx),
+                    onDragEnd:   onDragEnd,
+                  } : null;
+
+                  const touchProps = isMobile ? {
+                    onTouchStart:  (e) => handleTouchStart(e, ep.id, idx),
+                    onTouchMove:   (e) => handleTouchMove(e, ep.id),
+                    onTouchEnd:    (e) => handleTouchEnd(e, ep.id),
+                    onTouchCancel: handleTouchCancel,
+                  } : null;
+
+                  return (
+                    <TreatmentBoardCard
+                      key={it.id}
+                      item={it}
+                      seqNum={idx + 1}
+                      epId={ep.id}
+                      cardIdx={idx}
+                      isMobile={isMobile}
+                      isDragging={isDragging}
+                      isOver={isOver}
+                      isTouchDragging={isTouchDragging}
+                      isTouchOver={isTouchOver}
+                      dragProps={dragProps}
+                      touchProps={touchProps}
+                      onSaveText={onSaveItemText ? (text) => onSaveItemText(ep.id, it.id, text) : null}
+                      onDelete={onDeleteItem ? () => onDeleteItem(ep.id, it.id) : null}
+                    />
+                  );
+                })}
+
+                {/* 항상 그리드 마지막 슬롯: 빈카드 추가 */}
                 {onInsertItem && (
                   <button
-                    onClick={() => onInsertItem(ep.id, 0)}
-                    style={{ marginLeft: 6, background: 'none', border: 'none', color: 'var(--c-accent)', cursor: 'pointer', fontSize: 11, padding: 0 }}
-                  >+ 추가</button>
+                    onClick={() => onInsertItem(ep.id, items.length)}
+                    title="빈 카드를 맨 끝에 추가"
+                    style={{
+                      background: 'transparent',
+                      border: '1px dashed var(--c-border3)',
+                      borderRadius: 10,
+                      color: 'var(--c-text6)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 4,
+                      minHeight: 80,
+                      padding: '12px 8px',
+                      fontSize: 11,
+                    }}
+                  >
+                    <span style={{ fontSize: 16, lineHeight: 1, color: 'var(--c-text5)' }}>+</span>
+                    <span>빈카드 추가</span>
+                  </button>
                 )}
               </div>
-            ) : (
-              <>
-                <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 12 }}>
-                  {items.map((it, idx) => {
-                    const isDragging      = hasDnd && dragInfo?.episodeId === ep.id && dragInfo?.fromIdx === idx;
-                    const isOver          = hasDnd && overInfo?.episodeId === ep.id && overInfo?.idx === idx;
-                    const isTouchDragging = isMobile && touchDragInfo?.epId === ep.id && touchDragInfo?.fromIdx === idx;
-                    const isTouchOver     = isMobile && touchOverInfo?.epId === ep.id && touchOverInfo?.toIdx === idx;
-
-                    const dragProps = hasDnd ? {
-                      draggable: true,
-                      onDragStart: (e) => { e.stopPropagation(); onDragStart(e, ep.id, idx); },
-                      onDragOver:  (e) => onDragOver(e, ep.id, idx),
-                      onDrop:      (e) => onDrop(e, ep.id, idx),
-                      onDragEnd:   onDragEnd,
-                    } : null;
-
-                    const touchProps = isMobile ? {
-                      onTouchStart:  (e) => handleTouchStart(e, ep.id, idx),
-                      onTouchMove:   (e) => handleTouchMove(e, ep.id),
-                      onTouchEnd:    (e) => handleTouchEnd(e, ep.id),
-                      onTouchCancel: handleTouchCancel,
-                    } : null;
-
-                    return (
-                      <TreatmentBoardCard
-                        key={it.id}
-                        item={it}
-                        seqNum={idx + 1}
-                        epId={ep.id}
-                        cardIdx={idx}
-                        isMobile={isMobile}
-                        isDragging={isDragging}
-                        isOver={isOver}
-                        isTouchDragging={isTouchDragging}
-                        isTouchOver={isTouchOver}
-                        dragProps={dragProps}
-                        touchProps={touchProps}
-                        onInsert={onInsertItem ? () => onInsertItem(ep.id, idx + 1) : null}
-                        onSaveText={onSaveItemText ? (text) => onSaveItemText(ep.id, it.id, text) : null}
-                      />
-                    );
-                  })}
-                </div>
-
-                {/* 모바일: 그리드 하단 항목 추가 버튼 */}
-                {isMobile && onInsertItem && (
-                  <button
-                    onClick={() => onInsertItem(ep.id, items.length)}
-                    style={{
-                      marginTop: 10, width: '100%', padding: '6px 0',
-                      background: 'transparent', border: '1px dashed var(--c-border3)',
-                      borderRadius: 8, color: 'var(--c-text5)', fontSize: 12, cursor: 'pointer',
-                    }}
-                  >+ 항목 추가</button>
-                )}
-              </>
             )}
           </div>
         );

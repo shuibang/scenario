@@ -1176,6 +1176,12 @@ export default function StructurePage() {
             <option key={ep.id} value={ep.id}>{ep.number}화 {ep.title || ''}</option>
           ))}
         </select>
+        {activeTab === '씬보드' && (
+          <span
+            title="씬 순서 변경 시 대본에 즉시 반영됩니다"
+            style={{ fontSize: 9, padding: '1px 5px', borderRadius: 4, border: '1px solid var(--c-border3)', color: 'var(--c-text5)', background: 'var(--c-tag)', fontWeight: 600, letterSpacing: '0.02em', flexShrink: 0 }}
+          >자동 반영</span>
+        )}
 
         <div style={{ flex: 1 }} />
 
