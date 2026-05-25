@@ -322,16 +322,14 @@ textarea {
 /* Scene number: tabbed layout — editor-only display, does not affect print */
 .scene-header-tabbed .ce-block[data-block-type="scene_number"] {
   padding-left: var(--scene-tab-width, 4em);
-  /* inline-block ::before breaks text-decoration continuity; use border-bottom for full-width underline */
-  text-decoration: none;
-  border-bottom-width: 1px;
-  border-bottom-style: var(--scene-border-bottom, none);
-  border-bottom-color: currentColor;
+  /* text-indent shifts first-line box left — keeps ::before inside the line box
+     so text-decoration spans scene number through to end of text continuously */
+  text-indent: calc(-1 * var(--scene-tab-width, 4em));
 }
 .scene-header-tabbed .ce-block[data-block-type="scene_number"]::before {
   display: inline-block;
   min-width: var(--scene-tab-width, 4em);
-  margin-left: calc(-1 * var(--scene-tab-width, 4em));
+  /* no margin-left: ::before starts at line start via text-indent above */
   vertical-align: top;
 }
 
