@@ -338,6 +338,14 @@ export default function TreatmentPage() {
     return ep ? migrateItems(ep.summaryItems) : [];
   }, [episodes]);
 
+  // 보드뷰 "+" 버튼 → 지정 위치에 빈 항목 삽입
+  const insertItemForEp = useCallback((targetEpId, insertIdx) => {
+    const epItems = getLatestItemsForEp(targetEpId);
+    const newItem = { id: genId(), text: '', order: insertIdx, emotionTags: [], structureTags: [] };
+    const next = [...epItems.slice(0, insertIdx), newItem, ...epItems.slice(insertIdx)];
+    saveForEp(targetEpId, next, true);
+  }, [getLatestItemsForEp, saveForEp]);
+
   const addEmotionTagForEp = useCallback((targetEpId, itemId, tag) => {
     const latest = getLatestItemsForEp(targetEpId);
     const newItems = latest.map(it => {
@@ -1077,7 +1085,7 @@ export default function TreatmentPage() {
       <div className="flex-1 overflow-y-auto">
       <div style={{ padding: '10px 10px 40px' }}>
 
-        {/* 보드 뷰 — 표시 + 카드 클릭으로 리스트 전환 (Phase A) */}
+        {/* 보드 뷰 — DnD 순서 변경 + 중간 삽입 (Phase B) */}
         {viewMode === 'board' && (
           <TreatmentBoardView
             groups={
@@ -1089,6 +1097,14 @@ export default function TreatmentPage() {
             }
             onCardClick={handleCardClick}
             onCreateEpisode={createEpisodeForNumber}
+            dragInfo={dragInfo}
+            overInfo={overInfo}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+            onDragEnd={handleDragEnd}
+            isMobile={isMobile}
+            onInsertItem={insertItemForEp}
           />
         )}
 
