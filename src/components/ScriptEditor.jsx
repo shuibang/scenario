@@ -1672,7 +1672,11 @@ const EditorSurface = forwardRef(function EditorSurface({
       return false;
     }
 
-    const blockEl = findBlockEl(selection.getRangeAt(0).startContainer, el);
+    let blockEl = findBlockEl(selection.getRangeAt(0).startContainer, el);
+    if (!blockEl) {
+      const allBlocks = [...el.querySelectorAll('[data-block-id]')];
+      blockEl = allBlocks[0] || null;
+    }
     if (!blockEl) {
       slashOffsetRef.current = null;
       onSlashClose?.();
@@ -1748,7 +1752,11 @@ const EditorSurface = forwardRef(function EditorSurface({
       const selN = window.getSelection();
       const elN = surfaceRef.current;
       if (selN?.rangeCount && elN) {
-        const bElN = findBlockEl(selN.getRangeAt(0).startContainer, elN);
+        let bElN = findBlockEl(selN.getRangeAt(0).startContainer, elN);
+        if (!bElN) {
+          const allBlocks = [...elN.querySelectorAll('[data-block-id]')];
+          bElN = allBlocks[0] || null;
+        }
         const tN = bElN?.dataset.blockType;
         if (bElN && tN && tN !== 'scene_number') {
           const txtElN = tN === 'dialogue' ? (bElN.querySelector('.ce-speech') || bElN) : bElN;
@@ -1806,7 +1814,11 @@ const EditorSurface = forwardRef(function EditorSurface({
     const el = surfaceRef.current;
     if (!sel?.rangeCount || !el) return;
     const range = sel.getRangeAt(0);
-    const blockEl = findBlockEl(range.startContainer, el);
+    let blockEl = findBlockEl(range.startContainer, el);
+    if (!blockEl) {
+      const allBlocks = [...el.querySelectorAll('[data-block-id]')];
+      blockEl = allBlocks[0] || null;
+    }
     if (!blockEl) return;
     const type = blockEl.dataset.blockType;
 
@@ -3671,6 +3683,9 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     if (!startEl) return null;
     const idx = all.indexOf(startEl);
     for (let i = idx; i >= 0; i--) {
+      if (all[i].dataset.blockType === 'scene_number') return all[i].dataset.sceneId || null;
+    }
+    for (let i = Math.max(idx, 0); i < all.length; i++) {
       if (all[i].dataset.blockType === 'scene_number') return all[i].dataset.sceneId || null;
     }
     return null;
