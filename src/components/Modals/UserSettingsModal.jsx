@@ -115,13 +115,17 @@ function BlockStyleRow({ label, blockKey, showIndent = true }) {
 
 // ─── Tab 1: 씬 헤더 스타일 ───────────────────────────────────────────────────
 export function SceneHeaderTab() {
-  const { state } = useApp();
+  const { state, dispatch } = useApp();
   const blockStyles  = state.stylePreset?.blockStyles || {};
   const snBs         = blockStyles.sceneNumber || {};
   const bold         = snBs.bold      !== false;
   const italic       = !!snBs.italic;
   const underline    = !!snBs.underline;
   const indent       = snBs.indent ?? 0;
+
+  const sceneHeaderLayout = state.stylePreset?.sceneHeaderLayout ?? 'inline';
+  const setSceneHeaderLayout = (val) =>
+    dispatch({ type: 'SET_STYLE_PRESET', payload: { sceneHeaderLayout: val } });
 
   const [scenePrefix,   setScenePrefixState]   = useState(() => getScenePrefix());
   const [sceneFormat,   setSceneFormatState]   = useState(() => getSceneFormat());
@@ -140,7 +144,8 @@ export function SceneHeaderTab() {
   };
 
   const prefixExample = SCENE_PREFIX_OPTIONS.find(o => o.value === scenePrefix)?.example ?? 'S#1.';
-  const previewText   = `${prefixExample} ${previewFormat(sceneFormat) || '거실 - 안방 (낮)'}`;
+  const previewBody   = previewFormat(sceneFormat) || '거실 - 안방 (낮)';
+  const previewText   = `${prefixExample} ${previewBody}`;
   const previewStyle  = {
     fontWeight: bold ? 700 : 400,
     fontStyle:  italic ? 'italic' : 'normal',
@@ -154,7 +159,14 @@ export function SceneHeaderTab() {
     <div>
       {/* 씬 헤더 미리보기 */}
       <PreviewBox>
-        <span style={previewStyle}>{previewText}</span>
+        {sceneHeaderLayout === 'tabbed' ? (
+          <span style={{ ...previewStyle, display: 'flex', alignItems: 'baseline' }}>
+            <span style={{ display: 'inline-block', minWidth: '4em', flexShrink: 0 }}>{prefixExample}</span>
+            <span>{previewBody}</span>
+          </span>
+        ) : (
+          <span style={previewStyle}>{previewText}</span>
+        )}
       </PreviewBox>
 
       {/* 씬번호 형식 */}
@@ -172,6 +184,21 @@ export function SceneHeaderTab() {
 
       {/* 씬헤더 서식 */}
       <BlockStyleRow label="씬헤더" blockKey="sceneNumber" />
+
+      {/* 씬헤더 레이아웃 */}
+      <Row label="레이아웃">
+        {[
+          { value: 'inline', label: '일반', title: '씬번호와 장소가 나란히 표시됩니다' },
+          { value: 'tabbed', label: '탭 간격', title: '씬번호 뒤에 고정 간격을 두고 장소가 시작됩니다' },
+        ].map(opt => (
+          <Toggle
+            key={opt.value}
+            on={sceneHeaderLayout === opt.value}
+            onClick={() => setSceneHeaderLayout(opt.value)}
+            title={opt.title}
+          >{opt.label}</Toggle>
+        ))}
+      </Row>
 
       <Divider />
 

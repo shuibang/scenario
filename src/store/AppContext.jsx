@@ -67,7 +67,8 @@ export const DEFAULT_STYLE_PRESET = {
     charName:    { bold: true,  italic: false, underline: false, indent: 0 },
     dialogue:    { bold: false, italic: false, underline: false, indent: 0 },
   },
-  dialogueLayout: 'korean',    // 'korean' | 'hollywood'
+  dialogueLayout: 'korean',        // 'korean' | 'hollywood'
+  sceneHeaderLayout: 'inline',    // 'inline' | 'tabbed'
   fontWeightRules: {
     sceneNumber: 'bold',
     characterName: 'bold',

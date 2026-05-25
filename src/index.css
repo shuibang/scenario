@@ -319,6 +319,12 @@ textarea {
   pointer-events: none;
 }
 
+/* Scene number: tabbed layout — editor-only display, does not affect print */
+.scene-header-tabbed .ce-block[data-block-type="scene_number"]::before {
+  display: inline-block;
+  min-width: 4em;
+}
+
 /* Scene number: show character tags to the right — editor-only, not printed */
 .ce-block[data-block-type="scene_number"][data-char-tags]::after {
   content: " " attr(data-char-tags);

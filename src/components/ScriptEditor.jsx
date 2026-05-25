@@ -2252,7 +2252,7 @@ const EditorSurface = forwardRef(function EditorSurface({
         '--dialogue-underline': blockStyles?.dialogue?.underline ? 'underline' : 'none',
         caretColor: 'var(--c-accent)',
       }}
-      className="ce-surface"
+      className={`ce-surface${stylePreset?.sceneHeaderLayout === 'tabbed' ? ' scene-header-tabbed' : ''}`}
       onCompositionStart={() => { composingRef.current = true; }}
       onCompositionEnd={() => { composingRef.current = false; doParse(); }}
       onInput={handleInput}
