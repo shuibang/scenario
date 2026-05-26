@@ -553,7 +553,8 @@ function blocksToHtml(blocks) {
       case 'scene_number': {
         const label = esc(b.label || '');
         const sceneId = esc(b.sceneId || '');
-        return `<div data-block-id="${id}" data-block-type="scene_number" data-label="${label}" data-scene-id="${sceneId}" class="ce-block ce-scene"${alignAttr}>${dc}</div>`;
+        const draftAttr = b.sceneDraft ? ' data-scene-draft="true"' : '';
+        return `<div data-block-id="${id}" data-block-type="scene_number" data-label="${label}" data-scene-id="${sceneId}"${draftAttr} class="ce-block ce-scene"${alignAttr}>${dc}</div>`;
       }
       case 'dialogue': {
         const cn = esc(b.characterName || b.charName || '');
@@ -663,6 +664,7 @@ function insertBlockAfterEl(surface, refEl, type, text, charMeta = {}, epId, pro
   if (type === 'scene_number') {
     div.dataset.label = '';
     div.dataset.sceneId = genId();
+    div.dataset.sceneDraft = 'true';
     div.innerHTML = text ? esc(text) : '<br>';
   } else if (type === 'dialogue') {
     div.dataset.charName = charMeta.charName || '';
@@ -693,10 +695,77 @@ function changeBlockTypeEl(blockEl, newType) {
   } else {
     blockEl.textContent = displayText;
   }
+  if (old === 'scene_number' && newType !== 'scene_number') {
+    delete blockEl.dataset.label;
+    delete blockEl.dataset.sceneId;
+    delete blockEl.dataset.sceneDraft;
+  }
   if (newType === 'scene_number') {
     if (!blockEl.dataset.label) blockEl.dataset.label = '';
     if (!blockEl.dataset.sceneId) blockEl.dataset.sceneId = genId();
+    if (old !== 'scene_number') blockEl.dataset.sceneDraft = 'true';
   }
+}
+
+function normalizeEmptySceneNumberBlocks(blocks = []) {
+  return blocks.map((block) => {
+    if (block?.type !== 'scene_number') return block;
+    const hasStructured = !!(block.location || block.specialSituation);
+    if (block.sceneDraft) return block;
+    if (hasStructured) return block;
+    const body = (block.content || '').replace(SCENE_PREFIX_STRIP_RE, '').trim();
+    if (body) return block;
+    const {
+      label,
+      sceneId,
+      sceneDraft,
+      location,
+      subLocation,
+      timeOfDay,
+      specialSituation,
+      ...rest
+    } = block;
+    return { ...rest, type: 'action', content: '' };
+  });
+}
+
+function normalizeEmptySceneNumberDom(surface) {
+  if (!surface) return null;
+  let normalizedEl = null;
+  [...surface.querySelectorAll('[data-block-type="scene_number"]')].forEach((blockEl) => {
+    if (blockEl.dataset.sceneDraft === 'true') return;
+    if (blockText(blockEl).trim()) return;
+    changeBlockTypeEl(blockEl, 'action');
+    setBlockText(blockEl, '');
+    normalizedEl = normalizedEl || blockEl;
+  });
+  return normalizedEl;
+}
+
+function syncSceneDraftDom(surface) {
+  if (!surface) return;
+  [...surface.querySelectorAll('[data-block-type="scene_number"][data-scene-draft="true"]')].forEach((blockEl) => {
+    if (blockText(blockEl).trim()) delete blockEl.dataset.sceneDraft;
+  });
+}
+
+function syncNormalizedBlockTypes(surface, parsedBlocks = [], normalizedBlocks = []) {
+  if (!surface) return null;
+  let activeNormalizedEl = null;
+  const sel = window.getSelection();
+  normalizedBlocks.forEach((block, idx) => {
+    const parsed = parsedBlocks[idx];
+    if (!parsed || !block || parsed.id !== block.id) return;
+    if (parsed.type === 'scene_number' && block.type !== 'scene_number') {
+      const div = surface.querySelector(`[data-block-id="${parsed.id}"]`);
+      if (!div) return;
+      const hasCaret = !!(sel?.rangeCount && div.contains(sel.getRangeAt(0).startContainer));
+      changeBlockTypeEl(div, block.type);
+      setBlockText(div, block.content || '');
+      if (hasCaret) activeNormalizedEl = div;
+    }
+  });
+  return activeNormalizedEl;
 }
 
 function parseSurface(surface, metaRef, epId, projId) {
@@ -715,7 +784,7 @@ function parseSurface(surface, metaRef, epId, projId) {
       id, type,
       episodeId: prev.episodeId || epId,
       projectId: prev.projectId || projId,
-      label: prev.label || div.dataset.label || '',
+      label: type === 'scene_number' ? (prev.label || div.dataset.label || '') : '',
       createdAt: prev.createdAt || now(),
       updatedAt: rawText !== prev.rawText ? now() : (prev.updatedAt || now()),
       rawText, // internal cache for change detection
@@ -728,7 +797,8 @@ function parseSurface(surface, metaRef, epId, projId) {
       const label = prev.label || div.dataset.label || '';
       const sceneId = div.dataset.sceneId || prev.sceneId || genId();
       const sceneFields = buildSceneNumberBlock({ prev, rawText, label, sceneId });
-      return { ...base, ...sceneFields };
+      const sceneDraft = (div.dataset.sceneDraft === 'true' || prev.sceneDraft === true) && rawText.trim() === '';
+      return { ...base, ...sceneFields, sceneDraft };
     }
     if (type === 'dialogue') {
       // sceneRefs 없는 dialogue는 HTML 서식 보존
@@ -1445,10 +1515,13 @@ const EditorSurface = forwardRef(function EditorSurface({
   const doParse = useCallback(() => {
     const el = surfaceRef.current;
     if (!el) return;
-    const blocks = parseSurface(el, metaRef, epIdRef.current, projIdRef.current);
+    const parsedBlocks = parseSurface(el, metaRef, epIdRef.current, projIdRef.current);
+    const blocks = normalizeEmptySceneNumberBlocks(parsedBlocks);
+    const normalizedActiveEl = syncNormalizedBlockTypes(el, parsedBlocks, blocks);
     syncMeta(blocks, false); // metaRef만 업데이트, DOM dot는 updateEmotionTag가 처리
     fromParseRef.current = true; // DOM이 최신 → useEffect([initialBlocks]) 루프 건너뜀
     onBlocksChange(blocks);
+    if (normalizedActiveEl) setCaret(normalizedActiveEl, blockText(normalizedActiveEl).length);
     // 현재 커서의 블록 타입을 선택 상태 콜백으로 전달
     const sel = window.getSelection();
     if (sel?.rangeCount) {
@@ -1468,7 +1541,9 @@ const EditorSurface = forwardRef(function EditorSurface({
       const el = surfaceRef.current;
       if (!el) return null;
       try {
-        return parseSurface(el, metaRef, epIdRef.current, projIdRef.current);
+        return normalizeEmptySceneNumberBlocks(
+          parseSurface(el, metaRef, epIdRef.current, projIdRef.current),
+        );
       } catch {
         return null;
       }
@@ -1559,13 +1634,16 @@ const EditorSurface = forwardRef(function EditorSurface({
     loadBlocks(blocks) {
       const el = surfaceRef.current;
       if (!el) return;
-      el.innerHTML = blocksToHtml(blocks);
-      const synced = parseSurface(el, metaRef, epIdRef.current, projIdRef.current);
+      const normalizedBlocks = normalizeEmptySceneNumberBlocks(blocks);
+      el.innerHTML = blocksToHtml(normalizedBlocks);
+      const synced = normalizeEmptySceneNumberBlocks(
+        parseSurface(el, metaRef, epIdRef.current, projIdRef.current),
+      );
       // parseSurface re-parses display text which may lose structured fields for some timeFmt values
       // (e.g. space-separated "주막 - 안 낮" cannot be reliably re-parsed). Restore from originals.
       // emotionTag도 input blocks에서 보존 — innerHTML이 dataset.emotionColor 안 박고
       // metaRef는 신규 블록에 대해 stale (가져오기/undo로 새 ID 들어올 때).
-      const origMap = new Map(blocks.map(b => [b.id, b]));
+      const origMap = new Map(normalizedBlocks.map(b => [b.id, b]));
       const preserved = synced.map(b => {
         const orig = origMap.get(b.id);
         if (!orig) return b;
@@ -1720,11 +1798,12 @@ const EditorSurface = forwardRef(function EditorSurface({
   }, [onSlashClose, onSlashInput]);
 
   // ── Input handler ─────────────────────────────────────────────────────────
-  const handleInput = useCallback(() => {
+  const handleInput = useCallback((e) => {
     if (composingRef.current) return;
     if (suppressNextInputRef.current) {
+      const inputType = e?.nativeEvent?.inputType || '';
       suppressNextInputRef.current = false;
-      return;
+      if (!inputType.startsWith('insert')) return;
     }
 
     // 씬연결 피커가 열려있으면 타이핑 시 자동 닫기
@@ -1742,6 +1821,20 @@ const EditorSurface = forwardRef(function EditorSurface({
             : bElPre;
           cleanupBr(target);
         }
+      }
+    }
+
+    syncSceneDraftDom(surfaceRef.current);
+
+    {
+      const normalizedSceneBlock = normalizeEmptySceneNumberDom(surfaceRef.current);
+      if (normalizedSceneBlock) {
+        slashOffsetRef.current = null;
+        onSlashClose?.();
+        onCharSuggest?.(null, null);
+        setCaret(normalizedSceneBlock, 0);
+        doParse();
+        return;
       }
     }
 
@@ -1821,6 +1914,18 @@ const EditorSurface = forwardRef(function EditorSurface({
     }
     if (!blockEl) return;
     const type = blockEl.dataset.blockType;
+
+    if (!ctrl && !e.altKey && (e.key === 'Backspace' || e.key === 'Delete') && type === 'scene_number') {
+      requestAnimationFrame(() => {
+        const normalizedSceneBlock = normalizeEmptySceneNumberDom(surfaceRef.current);
+        if (!normalizedSceneBlock) return;
+        slashOffsetRef.current = null;
+        onSlashClose?.();
+        onCharSuggest?.(null, null);
+        setCaret(normalizedSceneBlock, 0);
+        doParse();
+      });
+    }
 
     if (!ctrl && !e.altKey && !e.shiftKey && e.key === '.' && sel.isCollapsed && type !== 'scene_number') {
       const textEl = type === 'dialogue' ? (blockEl.querySelector('.ce-speech') || blockEl) : blockEl;
@@ -2647,7 +2752,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
            annotations: [] }];
     // scene_number 블록 content가 비어있으면 씬 structured 필드에서 재파생
     // annotations 필드가 없는 구 블록에 [] 로 마이그레이션
-    const loaded = raw.map(b => {
+    const loaded = normalizeEmptySceneNumberBlocks(raw.map(b => {
       const withAnnotations = b.annotations != null ? b : { ...b, annotations: [] };
       if (withAnnotations.type === 'scene_number' && withAnnotations.sceneId && !withAnnotations.content) {
         const scene = scenes.find(s => s.id === withAnnotations.sceneId);
@@ -2657,7 +2762,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
         }
       }
       return withAnnotations;
-    });
+    }));
     setBlocks(loaded);
     lastSavedBlocks.current = JSON.stringify(loaded);
     // 회차 진입 시: 저장된 스크롤 위치가 있으면 복원, 없으면 마지막 블록으로
@@ -2778,7 +2883,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     if (!pendingScriptReload || pendingScriptReload !== activeEpisodeId) return;
     const epBlocksRaw = scriptBlocks.filter(b => b.episodeId === activeEpisodeId);
     if (!epBlocksRaw.length) return;
-    const epBlocks = epBlocksRaw.map(b => {
+    const epBlocks = normalizeEmptySceneNumberBlocks(epBlocksRaw.map(b => {
       if (b.type === 'scene_number' && b.sceneId && !b.content) {
         const scene = scenes.find(s => s.id === b.sceneId);
         if (scene) {
@@ -2787,7 +2892,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
         }
       }
       return b;
-    });
+    }));
     const labelledBlocks = syncLabels(epBlocks);
     lastSavedBlocks.current = JSON.stringify(labelledBlocks);
     setBlocks(labelledBlocks);
