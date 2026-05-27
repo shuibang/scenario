@@ -263,17 +263,136 @@
 
   <div class="timeline">
 
-    <!-- v42~44 (2026-05-25) — Dropbox 저장 추가 + 저장 안정화 + PDF 출력 수정 -->
+    <!-- v47~49 (2026-05-27) — 에디터 저장 안정화 + 시놉시스 이탈 저장 버그 수정 -->
     <div class="cl-entry">
       <div class="cl-dot"></div>
       <div class="cl-card">
         <details open>
           <summary>
             <div class="cl-meta">
+              <div class="cl-date">2026-05-27</div>
+              <div class="cl-title">🔧 에디터 안정화 · 📝 시놉시스 저장 버그 수정</div>
+            </div>
+            <span class="new-badge">최신</span>
+            <span class="arrow">▶</span>
+          </summary>
+          <div class="cl-body">
+            <div class="cl-section">
+              <div class="cl-section-head">에디터</div>
+              <ul>
+                <li>빈 씬헤더를 입력할 때 불필요한 내용이 섞이는 정규화 버그를 수정했어요</li>
+                <li>씬을 삭제한 뒤 바로 아래 블록에 입력이 안 되던 문제를 고쳤어요</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">시놉시스</div>
+              <ul>
+                <li>시놉시스 편집 중 다른 페이지로 이동하면 마지막 내용이 저장되지 않던 버그를 수정했어요</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">파일 메뉴</div>
+              <ul>
+                <li>열기·최근 파일 메뉴에서 클라우드보다 로컬 저장 파일을 우선 표시하도록 순서를 조정했어요</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- v45~46 (2026-05-26) — 헐리웃 스타일 대사 + 씬헤더 밑줄 전폭 개선 -->
+    <div class="cl-entry">
+      <div class="cl-dot"></div>
+      <div class="cl-card">
+        <details>
+          <summary>
+            <div class="cl-meta">
+              <div class="cl-date">2026-05-26</div>
+              <div class="cl-title">🎬 헐리웃 스타일 대사 레이아웃 · 📐 씬헤더 밑줄 전폭 개선</div>
+            </div>
+            <span class="arrow">▶</span>
+          </summary>
+          <div class="cl-body">
+            <div class="cl-section">
+              <div class="cl-section-head">헐리웃 스타일 대사 레이아웃 (신규)</div>
+              <ul>
+                <li>에디터 스타일 설정에 <strong>헐리웃 스타일</strong>이 추가됐어요 (에디터 표시 전용, 출력 형식은 기존 유지)</li>
+                <li>대사 블록이 화면 중앙에 좁은 컬럼으로 배치돼 실제 대본 레이아웃에 더 가깝게 보여요</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">씬헤더 밑줄 전폭 연결</div>
+              <ul>
+                <li>탭 간격이 있는 씬헤더에서 밑줄이 씬번호까지 이어지지 않던 문제를 수정했어요</li>
+                <li><code>text-indent</code> 방식으로 재구현해 탭 문자 위치와 무관하게 항상 전폭으로 연결됩니다</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">에디터 안정화</div>
+              <ul>
+                <li>스타일 프리셋이 에디터 화면에 제대로 반영되지 않던 문제를 수정했어요</li>
+                <li>PDF·DOCX 출력 시 스타일 프리셋이 없는 상태에서 오류가 나던 문제를 안정화했어요</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- v45 (2026-05-25) — 트리트먼트 보드 개선 + 씬헤더 탭 간격 -->
+    <div class="cl-entry">
+      <div class="cl-dot"></div>
+      <div class="cl-card">
+        <details>
+          <summary>
+            <div class="cl-meta">
+              <div class="cl-date">2026-05-25</div>
+              <div class="cl-title">📋 트리트먼트 보드 개선 · 📐 씬헤더 탭 간격 · 🔗 Drive 재연결</div>
+            </div>
+            <span class="arrow">▶</span>
+          </summary>
+          <div class="cl-body">
+            <div class="cl-section">
+              <div class="cl-section-head">트리트먼트 보드 개선</div>
+              <ul>
+                <li>카드 목록 끝에 항상 <strong>[+ 빈카드 추가]</strong> 슬롯이 표시돼 자연스럽게 추가할 수 있어요</li>
+                <li>각 카드 우상단에 <strong>× 삭제 버튼</strong>이 생겼어요 (데스크톱: 호버 시 노출 / 모바일: 항상 노출)</li>
+                <li>카드 텍스트를 <strong>보드에서 바로 인라인 편집</strong>할 수 있어요 — 리스트 뷰로 이동하지 않아도 됩니다</li>
+                <li>드래그 앤 드롭으로 카드 순서를 바꾸고, 원하는 위치 사이에 삽입할 수 있어요</li>
+                <li>모바일에서 <strong>롱프레스</strong>로 drag를 시작할 수 있어요</li>
+                <li>트리트먼트 헤더에 <strong>[수동 반영]</strong>, 씬보드에 <strong>[자동 반영]</strong> 배지가 표시돼 차이가 명확해졌어요</li>
+                <li>모바일에서 소제목이 세로로 잘리던 문제를 수정했어요</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">씬헤더 탭 간격 레이아웃</div>
+              <ul>
+                <li>씬헤더 탭 간격을 단계별로 조절할 수 있어요 (에디터 표시 전용, 출력 형식 불변)</li>
+                <li>걸이형 들여쓰기 옵션이 추가됐어요</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">Google Drive</div>
+              <ul>
+                <li>열기 모달에서 Google Drive 재연결이 필요할 때 올바르게 재연결되지 않던 버그를 수정했어요</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- v42~44 (2026-05-25) — Dropbox 저장 추가 + 저장 안정화 + PDF 출력 수정 -->
+    <div class="cl-entry">
+      <div class="cl-dot"></div>
+      <div class="cl-card">
+        <details>
+          <summary>
+            <div class="cl-meta">
               <div class="cl-date">2026-05-25</div>
               <div class="cl-title">📦 Dropbox 저장 추가 · 🔧 저장 안정화 · 🖨 PDF 출력 안정화</div>
             </div>
-            <span class="new-badge">최신</span>
             <span class="arrow">▶</span>
           </summary>
           <div class="cl-body">
