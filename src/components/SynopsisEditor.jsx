@@ -175,16 +175,28 @@ export default function SynopsisEditor() {
   const [dirty, setDirty] = useState(false);
   const saveTimer = useRef(null);
 
+  // refs for unmount flush — state is stale inside cleanup
+  const sectionsRef = useRef(sections);
+  const dirtyRef = useRef(false);
+  const existingRef = useRef(existing);
+  const activeProjectIdRef = useRef(activeProjectId);
+
+  useEffect(() => { sectionsRef.current = sections; }, [sections]);
+  useEffect(() => { existingRef.current = existing; }, [existing]);
+  useEffect(() => { activeProjectIdRef.current = activeProjectId; }, [activeProjectId]);
+
   const projectChars = characters.filter(c => c.projectId === activeProjectId);
 
   useEffect(() => {
     setSections(migrateDoc(existing));
     setDirty(false);
+    dirtyRef.current = false;
   }, [activeProjectId, existing?.id]);
 
   const handleChange = (id, value) => {
     setSections(prev => ({ ...prev, [id]: value }));
     setDirty(true);
+    dirtyRef.current = true;
   };
 
   // Auto-save (1s debounce)
@@ -201,9 +213,27 @@ export default function SynopsisEditor() {
       };
       dispatch({ type: 'SET_SYNOPSIS', payload: doc });
       setDirty(false);
+      dirtyRef.current = false;
     }, 1000);
     return () => clearTimeout(saveTimer.current);
   }, [sections, dirty]);
+
+  // 언마운트 시 dirty이면 즉시 저장 — 디바운스 중 페이지 이탈로 저장 타이머가
+  // 취소되는 버그 차단. refs로 최신 값을 읽어 cleanup에서 안전하게 dispatch.
+  useEffect(() => {
+    return () => {
+      if (!dirtyRef.current || !activeProjectIdRef.current) return;
+      clearTimeout(saveTimer.current);
+      const doc = {
+        ...(existingRef.current || { id: genId(), createdAt: now() }),
+        projectId: activeProjectIdRef.current,
+        ...sectionsRef.current,
+        content: stripHtml(sectionsRef.current.story),
+        updatedAt: now(),
+      };
+      dispatch({ type: 'SET_SYNOPSIS', payload: doc });
+    };
+  }, []);
 
   const plainAll = Object.values(sections).map(stripHtml).join(' ');
 
