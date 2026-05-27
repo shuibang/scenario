@@ -65,10 +65,9 @@ export default function OpenProjectModal({ open, onClose, projects = [], activeP
 
     (async () => {
       const [googleUser, dropboxHistory] = await Promise.all([isGoogleUser(), Promise.resolve(hasDropboxHistory())]);
-      const newTabs = [];
+      const newTabs = [TAB_LOCAL];
       if (googleUser)     newTabs.push(TAB_DRIVE);
       if (dropboxHistory) newTabs.push(TAB_DROPBOX);
-      newTabs.push(TAB_LOCAL);
       newTabs.push(TAB_FILE);
       setTabs(newTabs);
       setTab(newTabs[0]);
@@ -94,9 +93,9 @@ export default function OpenProjectModal({ open, onClose, projects = [], activeP
 
         if (!isTokenValid()) { setDriveState('unauthed'); return; }
 
-        setDriveState('authed');
         const files = await listAllBackupFiles();
         setDriveFiles(files);
+        setDriveState('authed');
       } catch {
         setDriveState('error');
       }
@@ -111,9 +110,9 @@ export default function OpenProjectModal({ open, onClose, projects = [], activeP
       setImportError(null);
       try {
         if (!isDropboxTokenValid()) { setDropboxState('unauthed'); return; }
-        setDropboxState('authed');
         const files = await listDropboxBackupFiles();
         setDropboxFiles(files);
+        setDropboxState('authed');
       } catch {
         setDropboxState('error');
       }
@@ -193,7 +192,7 @@ export default function OpenProjectModal({ open, onClose, projects = [], activeP
   const filteredDropbox = dropboxFiles
     .filter(f => !query || (f.name || '').toLowerCase().includes(query.toLowerCase()));
 
-  const TAB_LABELS = { [TAB_DRIVE]: 'Google Drive', [TAB_DROPBOX]: 'Dropbox', [TAB_LOCAL]: '내 대본', [TAB_FILE]: '파일에서 열기' };
+  const TAB_LABELS = { [TAB_DRIVE]: 'Google Drive', [TAB_DROPBOX]: 'Dropbox', [TAB_LOCAL]: '내 컴퓨터', [TAB_FILE]: '파일에서 열기' };
 
   const footer = tab === TAB_FILE ? (
     <><ModalBtn variant="secondary" onClick={onClose}>취소</ModalBtn><ModalBtn variant="primary" onClick={handleFileOpen}>파일 선택…</ModalBtn></>
