@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import AnnotationPopover from './AnnotationPopover';
 import BlockAnnotations from './BlockAnnotations';
 import { createAnnotation } from '../../utils/annotationUtils';
@@ -15,6 +15,24 @@ import { now } from '../../store/db';
 export default function AnnotationManager({ blockId, annotations = [], onAnnotationsChange, children }) {
   const [popoverState, setPopoverState] = useState(null); // null | { selectedText, position }
   const containerRef = useRef(null);
+
+  // 메뉴 '삽입 > 주석' 이벤트: 현재 selection이 이 컨테이너 안에 있으면 팝오버 표시
+  useEffect(() => {
+    const handler = () => {
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed) return;
+      const selectedText = sel.toString().trim();
+      if (!selectedText) return;
+      const container = containerRef.current;
+      if (!container) return;
+      const range = sel.getRangeAt(0);
+      if (!container.contains(range.commonAncestorContainer)) return;
+      const rect = range.getBoundingClientRect();
+      setPopoverState({ selectedText, position: { x: rect.left, y: rect.bottom + 6 } });
+    };
+    window.addEventListener('script:insertComment', handler);
+    return () => window.removeEventListener('script:insertComment', handler);
+  }, []);
 
   // 텍스트 선택 이벤트: mouseup 시 selection 확인
   const handleMouseUp = useCallback((e) => {

@@ -283,11 +283,23 @@ export default function OpenProjectModal({ open, onClose, projects = [], activeP
       {/* 내 대본 탭 */}
       {tab === TAB_LOCAL && (
         <>
+          {/* 브라우저 저장 섹션 */}
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--c-text4)', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 6 }}>
+            브라우저 저장
+          </div>
           <div style={{ background: '#fff8e1', border: '1px solid #ffe082', borderRadius: 6, padding: '8px 12px', marginBottom: 10, fontSize: 11.5, color: '#7a6200', lineHeight: 1.65 }}>
             <span style={{ fontWeight: 600 }}>⚠ 이 대본들은 이 브라우저에만 저장되어 있어요.</span><br />
-            브라우저 캐시 삭제 시 사라질 수 있습니다. Drive에 저장하면 다른 기기에서도 열 수 있어요.
+            브라우저 캐시 삭제 시 사라질 수 있습니다. 파일로 저장해주세요.
           </div>
           <ProjectList items={filteredLocal} selected={selected} onSelect={setSelected} onOpen={() => { onSelect?.(selected); onClose(); }} onDriveSave={onSaveToDriveLocal} emptyMsg="저장된 대본이 없습니다." />
+
+          {/* 내 컴퓨터 파일 섹션 */}
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--c-text4)', letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 18, marginBottom: 6 }}>
+            내 컴퓨터 파일
+          </div>
+          <div style={{ background: 'var(--c-card)', border: '1px solid var(--c-border2)', borderRadius: 6, padding: '10px 14px', fontSize: 12, color: 'var(--c-text4)', lineHeight: 1.7 }}>
+            저장 경로를 설정하면 내 컴퓨터의 폴더에서 바로 열 수 있어요. (준비 중)
+          </div>
         </>
       )}
 

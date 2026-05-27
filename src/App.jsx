@@ -1714,7 +1714,9 @@ function Shell({ authUser, setAuthUser }) {
 
     if (!filename) {
       // 첫 저장 — 파일명 선택 후 기억
-      const safeTitle = sanitizeFolderName(projectSnap.project?.title || '대본');
+      const activeProject = latestState.projects?.find(p => p.id === projectId);
+      const verSuffix = activeProject?.version != null ? `_v${activeProject.version}` : '';
+      const safeTitle = sanitizeFolderName(projectSnap.project?.title || '대본') + verSuffix;
       const chosen = await promptDriveSaveName(safeTitle);
       if (!chosen) return;
       filename = chosen.endsWith('.djs') ? chosen : `${chosen}.djs`;
@@ -1904,7 +1906,9 @@ function Shell({ authUser, setAuthUser }) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${sanitizeFolderName(projectSnap.project?.title || '대본')}.djs`;
+      const saveProject = latestState.projects?.find(p => p.id === latestState.activeProjectId);
+      const saveVerSuffix = saveProject?.version != null ? `_v${saveProject.version}` : '';
+      a.download = `${sanitizeFolderName(projectSnap.project?.title || '대본')}${saveVerSuffix}.djs`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -1923,9 +1927,9 @@ function Shell({ authUser, setAuthUser }) {
     const onKey = (e) => {
       if (!(e.ctrlKey || e.metaKey) || e.code !== 'KeyS') return;
       e.preventDefault();
-      if (e.shiftKey)     handleSaveToLocalDrive(); // 다른 이름으로 Drive 저장
-      else if (e.altKey)  handleSaveToLocal();       // 내 컴퓨터에 저장
-      else                handleSaveToCloud();        // 활성 클라우드 프로바이더에 저장
+      if (e.shiftKey)     handleSaveToLocalDrive(); // 다른 이름으로 클라우드 저장
+      else if (e.altKey)  handleSaveToCloud();        // 클라우드 저장
+      else                handleSaveToLocal();         // 내 컴퓨터에 저장
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -2117,6 +2121,7 @@ function Shell({ authUser, setAuthUser }) {
     if (action === 'view:fullscreen') { if (document.fullscreenElement) document.exitFullscreen?.(); else document.documentElement.requestFullscreen?.(); return; }
 
     // ── 삽입 ──
+    if (action === 'insert:comment')   { window.dispatchEvent(new CustomEvent('script:insertComment')); return; }
     if (action === 'insert:charCheck') { window.dispatchEvent(new CustomEvent('script:charCheck'));    return; }
     if (action === 'insert:sceneRef')  { window.dispatchEvent(new CustomEvent('script:openSceneRef')); return; }
     if (action === 'insert:symbol')    { window.dispatchEvent(new CustomEvent('script:openSymbol'));   return; }
@@ -2217,7 +2222,7 @@ function Shell({ authUser, setAuthUser }) {
         onClose={() => { setNewProjectOpen(false); setPromoteIdea(null); }}
         initialTitle={buildProjectSeedFromIdea(promoteIdea).title}
         onCommit={({ title, projectType, totalEpisodes, createEpisodes, totalMins, climaxStart, climaxEnd }) => {
-          const p = { id: genId(), title, genre: '', status: 'draft', projectType, totalEpisodes, totalMins, climaxStart, climaxEnd, createdAt: now(), updatedAt: now() };
+          const p = { id: genId(), title, genre: '', status: 'draft', version: null, projectType, totalEpisodes, totalMins, climaxStart, climaxEnd, createdAt: now(), updatedAt: now() };
           dispatch({ type: 'ADD_PROJECT', payload: p });
           dispatch({ type: 'SET_ACTIVE_PROJECT', id: p.id });
           const count = Math.max(1, createEpisodes);
