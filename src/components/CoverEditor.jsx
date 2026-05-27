@@ -1,6 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../store/AppContext';
 import { genId, now } from '../store/db';
+import { PROJECT_TYPE_PRESETS, getTypeLabel } from '../utils/projectTypes';
+import { serializeProject } from '../utils/projectSerializer';
+
+const STATUS_OPTIONS = [
+  { value: 'draft',    label: '초고' },
+  { value: 'revision', label: '수정' },
+  { value: 'final',    label: '탈고' },
+];
+
+function safeName(title) {
+  return (title || '대본').replace(/[<>:"/\\|?*\x00-\x1f]/g, '').trim() || '대본';
+}
 
 // ─── Default fields (order-preserving array)
 const DEFAULT_FIELDS = [
@@ -8,7 +20,6 @@ const DEFAULT_FIELDS = [
   { id: 'subtitle',    label: '부제 / 형식',      type: 'input',    required: false },
   { id: 'writer',      label: '작가',             type: 'input',    required: false },
   { id: 'genre',       label: '장르',             type: 'input',    required: false },
-  { id: 'note',        label: '기타 메모',         type: 'textarea', required: false },
 ];
 
 function defaultValues() {
@@ -19,14 +30,31 @@ function defaultValues() {
 
 // ─── Migrate old flat doc → new fields format
 function migrateDoc(doc) {
-  if (!doc) return { values: defaultValues(), customFields: [] };
+  if (!doc) return { values: defaultValues(), customFields: [], noteMigrated: false };
+
+  // note 값 추출 (신/구 포맷 모두 지원)
+  const getNoteValue = (d) => {
+    if (d.fields) return d.fields.find(f => f.id === 'note')?.value || '';
+    return d.note || '';
+  };
+
+  const injectNoteMigration = (customFields, noteValue) => {
+    if (!noteValue) return { customFields, noteMigrated: false };
+    if (customFields.some(cf => cf.label === '기타 메모')) return { customFields, noteMigrated: false };
+    return {
+      customFields: [...customFields, { id: genId(), label: '기타 메모', value: noteValue }],
+      noteMigrated: true,
+    };
+  };
+
   if (doc.fields) {
-    // Already new format
     const values = defaultValues();
-    const customFields = doc.customFields || [];
     doc.fields.forEach(f => { if (f.id in values) values[f.id] = f.value || ''; });
-    return { values, customFields };
+    const noteValue = getNoteValue(doc);
+    const { customFields, noteMigrated } = injectNoteMigration(doc.customFields || [], noteValue);
+    return { values, customFields, noteMigrated };
   }
+
   // Old flat format
   const values = {
     title:       doc.title || '',
@@ -35,9 +63,10 @@ function migrateDoc(doc) {
     coWriter:    doc.coWriter || '',
     genre:       doc.genre || '',
     broadcaster: doc.broadcaster || '',
-    note:        doc.note || '',
   };
-  return { values, customFields: doc.customFields || [] };
+  const noteValue = getNoteValue(doc);
+  const { customFields, noteMigrated } = injectNoteMigration(doc.customFields || [], noteValue);
+  return { values, customFields, noteMigrated };
 }
 
 // ─── CoverPreview — used both in editor and for print/export
@@ -49,8 +78,7 @@ export function CoverPreview({ values, customFields }) {
 
   const titleField = allFields.find(f => f.id === 'title');
   const subtitleField = allFields.find(f => f.id === 'subtitle');
-  const rest = allFields.filter(f => f.id !== 'title' && f.id !== 'subtitle' && f.id !== 'note');
-  const noteField = allFields.find(f => f.id === 'note');
+  const rest = allFields.filter(f => f.id !== 'title' && f.id !== 'subtitle');
 
   // Dynamic title font size based on length
   const titleText = titleField?.value || '';
@@ -123,14 +151,6 @@ export function CoverPreview({ values, customFields }) {
         ))}
       </div>
 
-      {noteField?.value && (
-        <div
-          className="absolute bottom-4 italic text-center w-full"
-          style={{ fontSize: '11px', color: 'var(--c-text5)', padding: '0 10%' }}
-        >
-          {noteField.value}
-        </div>
-      )}
     </div>
   );
 }
@@ -144,10 +164,19 @@ export default function CoverEditor() {
   const [values, setValues] = useState(defaultValues());
   const [customFields, setCustomFields] = useState([]);
   const [dirty, setDirty] = useState(false);
-  const valuesRef = React.useRef(values);
-  const customFieldsRef = React.useRef(customFields);
+  const valuesRef = useRef(values);
+  const customFieldsRef = useRef(customFields);
   valuesRef.current = values;
   customFieldsRef.current = customFields;
+  const saveTimerRef = useRef(null);
+  const dirtyRef = useRef(false);
+  const existingRef = useRef(existing);
+  const activeProjectIdRef = useRef(activeProjectId);
+  const projectsRef = useRef(projects);
+  useEffect(() => { dirtyRef.current = dirty; }, [dirty]);
+  useEffect(() => { existingRef.current = existing; }, [existing]);
+  useEffect(() => { activeProjectIdRef.current = activeProjectId; }, [activeProjectId]);
+  useEffect(() => { projectsRef.current = projects; }, [projects]);
 
   // Load / migrate on project change
   useEffect(() => {
@@ -159,7 +188,8 @@ export default function CoverEditor() {
     }
     setValues(migrated.values);
     setCustomFields(migrated.customFields);
-    setDirty(false);
+    // note 마이그레이션이 발생했으면 dirty로 표시해 자동 저장으로 반영
+    setDirty(migrated.noteMigrated);
   }, [activeProjectId, existing?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setVal = (id, v) => {
@@ -212,12 +242,86 @@ export default function CoverEditor() {
     setDirty(false);
   }, [existing, activeProjectId, projects, dispatch]);
 
+  // 1초 debounce 자동 저장
+  useEffect(() => {
+    if (!dirty || !activeProjectId) return;
+    clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => handleSave(), 1000);
+    return () => clearTimeout(saveTimerRef.current);
+  }, [dirty, values, customFields]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // unmount 시 dirty이면 즉시 저장 (debounce 중 이탈 방지)
+  useEffect(() => {
+    return () => {
+      if (!dirtyRef.current || !activeProjectIdRef.current) return;
+      clearTimeout(saveTimerRef.current);
+      const v = valuesRef.current;
+      const cf = customFieldsRef.current;
+      const fields = DEFAULT_FIELDS.map(f => ({ id: f.id, label: f.label, value: v[f.id] || '' }));
+      const ex = existingRef.current;
+      const doc = {
+        ...(ex || { id: genId(), createdAt: now() }),
+        projectId: activeProjectIdRef.current,
+        title: v.title, subtitle: v.subtitle, writer: v.writer,
+        coWriter: v.coWriter, genre: v.genre, broadcaster: v.broadcaster,
+        note: v.note,
+        fields, customFields: cf,
+        updatedAt: now(),
+      };
+      dispatch({ type: 'SET_COVER', payload: doc });
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // 상단바 저장 버튼 이벤트 수신
   useEffect(() => {
     const onSave = () => handleSave();
     window.addEventListener('script:requestSave', onSave);
     return () => window.removeEventListener('script:requestSave', onSave);
   }, [handleSave]);
+
+  const project = projects.find(p => p.id === activeProjectId);
+  const [versionDialog, setVersionDialog] = useState(false);
+
+  const handleVersionBump = (save) => {
+    setVersionDialog(false);
+    const currentVersion = project?.version ?? 1;
+    if (save) {
+      // cover 먼저 sync
+      handleSave();
+      // 현재 state + 방금 save한 cover doc으로 snapshot 빌드
+      const v = valuesRef.current;
+      const cf = customFieldsRef.current;
+      const fields = DEFAULT_FIELDS.map(f => ({ id: f.id, label: f.label, value: v[f.id] || '' }));
+      const coverDoc = {
+        ...(existingRef.current || { id: genId(), createdAt: now() }),
+        projectId: activeProjectId,
+        title: v.title, subtitle: v.subtitle, writer: v.writer,
+        coWriter: v.coWriter, genre: v.genre, broadcaster: v.broadcaster,
+        note: v.note, fields, customFields: cf, updatedAt: now(),
+      };
+      const snapshotState = {
+        ...state,
+        coverDocs: [
+          ...state.coverDocs.filter(d => d.projectId !== activeProjectId),
+          coverDoc,
+        ],
+      };
+      const snap = serializeProject(snapshotState, activeProjectId);
+      if (snap) {
+        const filename = `${safeName(v.title || project?.title)}_v${currentVersion}.djs`;
+        const blob = new Blob(
+          [JSON.stringify({ _readme: '대본작업실(daejak.kr) 전용 파일입니다.', ...snap }, null, 2)],
+          { type: 'application/json' },
+        );
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = filename;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+    }
+    dispatch({ type: 'UPDATE_PROJECT', payload: { id: activeProjectId, version: currentVersion + 1 } });
+  };
 
   if (!activeProjectId) return null;
 
@@ -295,8 +399,174 @@ export default function CoverEditor() {
           </button>
         </div>
 
+        {/* ── 대본 정보 ── */}
+        <div style={{ marginTop: 28, borderTop: '1px solid var(--c-border2)', paddingTop: 18 }}>
+          <div style={{ marginBottom: 12, display: 'flex', alignItems: 'baseline', gap: 8 }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--c-text4)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>대본 정보</span>
+            <span style={{ fontSize: 11, color: 'var(--c-text5)' }}>표지에 표기되지 않습니다</span>
+          </div>
+
+          {/* 형식 */}
+          <div className="flex items-center gap-3" style={{ marginBottom: 10 }}>
+            <span className="text-xs shrink-0 text-center" style={{ width: '25%', color: 'var(--c-text5)' }}>형식</span>
+            <select
+              value={PROJECT_TYPE_PRESETS.some(t => t.id === project?.projectType) ? project.projectType : PROJECT_TYPE_PRESETS[0].id}
+              onChange={e => dispatch({ type: 'UPDATE_PROJECT', payload: { id: activeProjectId, projectType: e.target.value } })}
+              className="text-sm rounded outline-none t-input-field"
+              style={{ width: '75%', padding: '6px 10px' }}
+            >
+              {PROJECT_TYPE_PRESETS.map(t => (
+                <option key={t.id} value={t.id}>{t.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* 분량 */}
+          <div className="flex items-center gap-3" style={{ marginBottom: 10 }}>
+            <span className="text-xs shrink-0 text-center" style={{ width: '25%', color: 'var(--c-text5)' }}>분량</span>
+            <div className="flex items-center gap-2" style={{ width: '75%' }}>
+              <input
+                type="number"
+                min={1}
+                value={project?.totalMins ?? ''}
+                onChange={e => dispatch({ type: 'UPDATE_PROJECT', payload: { id: activeProjectId, totalMins: Number(e.target.value) } })}
+                className="text-sm rounded outline-none t-input-field"
+                style={{ width: 72, padding: '6px 10px' }}
+              />
+              <span className="text-xs" style={{ color: 'var(--c-text5)' }}>분</span>
+            </div>
+          </div>
+
+          {/* 상태 */}
+          <div className="flex items-center gap-3" style={{ marginBottom: 10 }}>
+            <span className="text-xs shrink-0 text-center" style={{ width: '25%', color: 'var(--c-text5)' }}>상태</span>
+            <div className="flex gap-1" style={{ width: '75%' }}>
+              {STATUS_OPTIONS.map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => dispatch({ type: 'UPDATE_PROJECT', payload: { id: activeProjectId, status: opt.value } })}
+                  style={{
+                    padding: '5px 12px', borderRadius: 6, fontSize: 12, fontWeight: 500,
+                    border: '1px solid var(--c-border2)', cursor: 'pointer',
+                    background: (project?.status || 'draft') === opt.value ? 'var(--c-accent)' : 'transparent',
+                    color: (project?.status || 'draft') === opt.value ? '#fff' : 'var(--c-text4)',
+                    transition: 'background 0.15s',
+                  }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 메모 */}
+          <div className="flex items-start gap-3" style={{ marginBottom: 10 }}>
+            <span className="text-xs shrink-0 text-center" style={{ width: '25%', color: 'var(--c-text5)', paddingTop: 8 }}>메모</span>
+            <textarea
+              value={project?.memo || ''}
+              onChange={e => dispatch({ type: 'UPDATE_PROJECT', payload: { id: activeProjectId, memo: e.target.value } })}
+              rows={3}
+              placeholder="메모"
+              className={`${inputCls} resize-none`}
+              style={{ width: '75%' }}
+            />
+          </div>
+
+          {/* 버전 — 수정 상태일 때만 표시 */}
+          {(project?.status || 'draft') === 'revision' && (
+          <div className="flex items-center gap-3" style={{ marginBottom: 10 }}>
+            <span className="text-xs shrink-0 text-center" style={{ width: '25%', color: 'var(--c-text5)' }}>버전</span>
+            <div className="flex items-center gap-2" style={{ width: '75%' }}>
+              {project?.version != null ? (
+                <>
+                  <span className="text-sm font-semibold" style={{ color: 'var(--c-accent)' }}>v{project.version}</span>
+                  <button
+                    onClick={() => setVersionDialog(true)}
+                    style={{
+                      padding: '4px 10px', borderRadius: 6, fontSize: 12,
+                      border: '1px solid var(--c-border2)', background: 'transparent',
+                      color: 'var(--c-text4)', cursor: 'pointer',
+                    }}
+                  >
+                    버전 올리기 →
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => dispatch({ type: 'UPDATE_PROJECT', payload: { id: activeProjectId, version: 1 } })}
+                  style={{
+                    padding: '4px 10px', borderRadius: 6, fontSize: 12,
+                    border: '1px dashed var(--c-border3)', background: 'transparent',
+                    color: 'var(--c-text4)', cursor: 'pointer',
+                  }}
+                >
+                  + 버전 관리 시작
+                </button>
+              )}
+            </div>
+          </div>
+          )}
+
+          {/* 생성일 / 수정일 */}
+          {project && (
+            <div className="flex gap-3 text-xs" style={{ color: 'var(--c-text5)', marginTop: 6 }}>
+              <span>생성 {new Date(project.createdAt).toLocaleDateString('ko-KR')}</span>
+              <span>·</span>
+              <span>수정 {new Date(project.updatedAt).toLocaleDateString('ko-KR')}</span>
+            </div>
+          )}
+        </div>
+
         <div className="h-8" />
       </div>
+
+      {/* 버전 올리기 확인 다이얼로그 */}
+      {versionDialog && project?.version != null && (
+        <div
+          style={{
+            position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50,
+          }}
+          onClick={() => setVersionDialog(false)}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'var(--c-card)', border: '1px solid var(--c-border2)',
+              borderRadius: 12, padding: '22px 24px', maxWidth: 300, width: '90%',
+            }}
+          >
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-text)', marginBottom: 8 }}>
+              버전 올리기
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--c-text4)', lineHeight: 1.7, marginBottom: 18 }}>
+              현재까지 작성한 내용을 <strong>v{project.version}</strong>으로 저장합니다.
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => handleVersionBump(false)}
+                style={{
+                  padding: '7px 16px', borderRadius: 7, fontSize: 13,
+                  border: '1px solid var(--c-border2)', background: 'transparent',
+                  color: 'var(--c-text4)', cursor: 'pointer',
+                }}
+              >
+                닫기
+              </button>
+              <button
+                onClick={() => handleVersionBump(true)}
+                style={{
+                  padding: '7px 16px', borderRadius: 7, fontSize: 13,
+                  background: 'var(--c-accent)', color: '#fff', border: 'none', cursor: 'pointer',
+                  fontWeight: 600,
+                }}
+              >
+                저장
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
