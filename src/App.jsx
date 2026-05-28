@@ -801,7 +801,7 @@ function DropdownMenu({ label, items, disabled }) {
 }
 
 // ─── MenuBar ──────────────────────────────────────────────────────────────────
-function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, authUser, setAuthUser, onMenuAction, recentProjects, menuCheckedItems, cloudSaveOptions = [], isMobile = false }) {
+function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, authUser, setAuthUser, onMenuAction, recentProjects, menuCheckedItems, cloudSaveOptions = [], isMobile = false, fileUnsaved = false, onFileSave }) {
   const { state, dispatch } = useApp();
   const { saveStatus, saveErrorMsg, activeProjectId, stylePreset, undoStack, redoStack, savedAt } = state;
   const canUndo = undoStack?.length > 0 || !!activeProjectId;
@@ -1001,6 +1001,15 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
           {saveStatus === 'saving' && <span style={{ fontSize: 11, color: 'var(--c-text5)', letterSpacing: '-0.01em' }}>저장 중…</span>}
           {saveStatus === 'saved' && savedLabel && <span style={{ fontSize: 11, color: 'var(--c-text5)', letterSpacing: '-0.01em' }}>{savedLabel}</span>}
           {saveStatus === 'error' && <span style={{ fontSize: 11, color: 'var(--c-error)' }} title={saveErrorMsg}>저장 실패</span>}
+          {fileUnsaved && activeProjectId && (
+            <button
+              onClick={onFileSave}
+              title="파일로 저장되지 않은 변경사항이 있습니다. 클릭하면 내 PC에 .djs 파일로 저장합니다."
+              style={{ fontSize: 11, fontWeight: 600, color: '#d97706', background: 'transparent', border: '1px solid #d97706', borderRadius: 4, padding: '1px 7px', cursor: 'pointer', letterSpacing: '-0.01em', lineHeight: '18px' }}
+            >
+              파일 저장 안됨
+            </button>
+          )}
           <RealtimeClock />
           {activeProjectId && <WorkTimer key={activeProjectId} projectId={activeProjectId} documentId={state.activeEpisodeId || state.activeDoc} saveRef={timerSaveRef} />}
           <PublicPcBadge onClick={() => onMenuAction?.('tools:settings')} />
@@ -1598,6 +1607,10 @@ function Shell({ authUser, setAuthUser }) {
   const [saveToastMsg, setSaveToastMsg] = useState('저장되었습니다');
   const saveToastTimer = useRef(null);
 
+  // ── 파일 미저장 상태 추적 ─────────────────────────────────────────────────
+  const [fileUnsaved, setFileUnsaved] = useState(false);
+  const fileUnsavedRef = useRef(false);
+
   // Dropbox OAuth 콜백 결과 수신 (App 컴포넌트에서 발행)
   useEffect(() => {
     const handler = (e) => {
@@ -1618,6 +1631,29 @@ function Shell({ authUser, setAuthUser }) {
     window.addEventListener('dropbox:callback-result', handler);
     return () => window.removeEventListener('dropbox:callback-result', handler);
   }, []);
+  // 프로젝트 전환 시 dirty 초기화 — 새 프로젝트는 깨끗한 상태에서 시작
+  useEffect(() => {
+    if (!state.activeProjectId) return;
+    fileUnsavedRef.current = false;
+    setFileUnsaved(false);
+  }, [state.activeProjectId]);
+
+  // 사용자가 contenteditable(에디터·시놉시스 등)에 직접 입력하면 dirty 마킹
+  // ─ state.scriptBlocks 감시 방식은 ScriptEditor의 800ms 디바운스 때문에 신뢰 불가
+  useEffect(() => {
+    const handleInput = (e) => {
+      if (!latestStateRef.current?.activeProjectId) return;
+      if (e.target?.contentEditable !== 'true') return;
+      if (!fileUnsavedRef.current) {
+        fileUnsavedRef.current = true;
+        setFileUnsaved(true);
+      }
+    };
+    document.addEventListener('input', handleInput, true);
+    return () => document.removeEventListener('input', handleInput, true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [driveSaveDialog, setDriveSaveDialog] = useState({ open: false, defaultName: '' });
   const driveSaveResolveRef = useRef(null);
   const promptDriveSaveName = useCallback((defaultName) => new Promise((resolve) => {
@@ -1733,6 +1769,8 @@ function Shell({ authUser, setAuthUser }) {
 
       await saveDriveBackup(projectSnap, filename);
 
+      fileUnsavedRef.current = false;
+      setFileUnsaved(false);
       clearTimeout(saveToastTimer.current);
       setSaveToastMsg('☁ 저장됨');
       saveToastTimer.current = setTimeout(() => setSaveToast(false), 2500);
@@ -1774,6 +1812,8 @@ function Shell({ authUser, setAuthUser }) {
 
     try {
       await saveDropboxBackup(projectSnap);
+      fileUnsavedRef.current = false;
+      setFileUnsaved(false);
       clearTimeout(saveToastTimer.current);
       setSaveToastMsg('☁ Dropbox 저장됨');
       saveToastTimer.current = setTimeout(() => setSaveToast(false), 2500);
@@ -1823,6 +1863,8 @@ function Shell({ authUser, setAuthUser }) {
 
       await saveDriveBackup(projectSnap, filename);
 
+      fileUnsavedRef.current = false;
+      setFileUnsaved(false);
       clearTimeout(saveToastTimer.current);
       setSaveToastMsg('☁ 저장됨');
       saveToastTimer.current = setTimeout(() => setSaveToast(false), 2500);
@@ -1913,6 +1955,8 @@ function Shell({ authUser, setAuthUser }) {
       a.click();
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 1000);
+      fileUnsavedRef.current = false;
+      setFileUnsaved(false);
       clearTimeout(saveToastTimer.current);
       saveToastTimer.current = setTimeout(() => setSaveToast(false), 1500);
     } catch {
@@ -1934,6 +1978,19 @@ function Shell({ authUser, setAuthUser }) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [handleSaveToCloud, handleSaveToLocalDrive, handleSaveToLocal]);
+
+  // 탭/창 닫기 시 파일 미저장 경고 (브라우저 기본 다이얼로그)
+  // Chrome: e.returnValue에 non-empty string 필요 (빈 문자열은 falsy 취급되어 무시됨)
+  useEffect(() => {
+    const onBeforeUnload = (e) => {
+      if (!fileUnsavedRef.current) return;
+      e.preventDefault();
+      e.returnValue = 'unsaved'; // non-empty — Chrome이 dialog를 표시하는 트리거
+      return 'unsaved';          // 구형 Firefox/Safari 대응
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, []);
 
   const contextSceneId = state.scrollToSceneId;
   useEffect(() => {
@@ -2200,6 +2257,8 @@ function Shell({ authUser, setAuthUser }) {
       menuCheckedItems={menuCheckedItems}
       cloudSaveOptions={cloudSaveOptions}
       isMobile={isMobile}
+      fileUnsaved={fileUnsaved}
+      onFileSave={handleSaveToLocal}
     />
   );
   const modals = (
@@ -2401,6 +2460,8 @@ function Shell({ authUser, setAuthUser }) {
             recentProjects={recentProjects}
             checkedItems={menuCheckedItems}
             cloudSaveOptions={cloudSaveOptions}
+            fileUnsaved={fileUnsaved}
+            onFileSave={handleSaveToLocal}
           />
           <UpdateBanner />
         </div>

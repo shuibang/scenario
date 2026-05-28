@@ -16,7 +16,7 @@ import { fetchAdminUnreadCounts } from '../../utils/adminBadge';
 import { useBadges } from '../../utils/badges';
 import BadgeChip from '../BadgeChip';
 
-export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, WorkTimer, authUser, onLogout, onMenuAction, recentProjects = [], checkedItems = {}, cloudSaveOptions = [] }) {
+export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, WorkTimer, authUser, onLogout, onMenuAction, recentProjects = [], checkedItems = {}, cloudSaveOptions = [], fileUnsaved = false, onFileSave }) {
   const { state, dispatch } = useApp();
   const { activeProjectId, stylePreset } = state;
   const [menuOpen, setMenuOpen] = useState(false);
@@ -296,6 +296,15 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
         </a>
 
         <PublicPcBadge compact onClick={() => onMenuAction?.('tools:settings')} />
+        {fileUnsaved && activeProjectId && (
+          <button
+            onClick={onFileSave}
+            title="파일로 저장되지 않은 변경사항 — 탭하면 내 기기에 저장"
+            style={{ fontSize: 10, fontWeight: 600, color: '#d97706', background: 'transparent', border: '1px solid #d97706', borderRadius: 4, padding: '1px 6px', cursor: 'pointer', flexShrink: 0, WebkitTapHighlightColor: 'transparent' }}
+          >
+            저장 안됨
+          </button>
+        )}
         <div data-tour-id="mobile-timer" style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
           {activeProjectId && WorkTimer && (
             <WorkTimer
