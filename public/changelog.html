@@ -263,17 +263,52 @@
 
   <div class="timeline">
 
-    <!-- v47~49 (2026-05-27) — 에디터 저장 안정화 + 시놉시스 이탈 저장 버그 수정 -->
+    <!-- v50~51 (2026-05-28) — 파일 미저장 경고 + 찾기 전체 대본 검색 -->
     <div class="cl-entry">
       <div class="cl-dot"></div>
       <div class="cl-card">
         <details open>
           <summary>
             <div class="cl-meta">
+              <div class="cl-date">2026-05-28</div>
+              <div class="cl-title">💾 파일 미저장 경고 · 🔍 찾기/바꾸기 전체 대본 검색</div>
+            </div>
+            <span class="new-badge">최신</span>
+            <span class="arrow">▶</span>
+          </summary>
+          <div class="cl-body">
+            <div class="cl-section">
+              <div class="cl-section-head">파일 저장</div>
+              <ul>
+                <li>편집 후 파일(.djs)로 저장하지 않은 상태면 메뉴바에 <b>파일 저장 안됨</b> 배지가 표시돼요. 클릭하면 바로 저장할 수 있어요</li>
+                <li>파일 저장 없이 탭·창을 닫으려 하면 브라우저 경고가 떠서 실수로 닫는 것을 막아줘요</li>
+                <li>Drive·Dropbox·내 PC 저장 성공 시 배지가 자동으로 사라져요</li>
+              </ul>
+            </div>
+            <div class="cl-section">
+              <div class="cl-section-head">찾기 / 바꾸기</div>
+              <ul>
+                <li><b>전체 대본</b> 옵션을 추가했어요. 여러 회차를 작성 중일 때 모든 회차에서 한 번에 검색하고 바꿀 수 있어요</li>
+                <li>전체 대본 검색 결과에는 <b>몇 화</b>인지 회차 레이블이 함께 표시돼요</li>
+                <li>다른 회차의 결과를 클릭하면 해당 회차로 자동 전환되면서 해당 위치로 이동해요</li>
+                <li>인물명 변경은 이미 전체 회차에 적용되고 있었고, 일반 찾기/바꾸기도 이제 동일하게 지원돼요</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- v47~49 (2026-05-27) — 에디터 저장 안정화 + 시놉시스 이탈 저장 버그 수정 -->
+    <div class="cl-entry">
+      <div class="cl-dot"></div>
+      <div class="cl-card">
+        <details>
+          <summary>
+            <div class="cl-meta">
               <div class="cl-date">2026-05-27</div>
               <div class="cl-title">🔧 에디터 안정화 · 📝 시놉시스 저장 버그 수정</div>
             </div>
-            <span class="new-badge">최신</span>
             <span class="arrow">▶</span>
           </summary>
           <div class="cl-body">
