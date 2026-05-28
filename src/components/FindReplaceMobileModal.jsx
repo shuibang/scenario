@@ -18,34 +18,59 @@ function getBlockLabel(type) {
   return type;
 }
 
-function scrollToBlock(blockId) {
-  const el = document.querySelector(`[data-block-id="${blockId}"]`);
-  if (!el) return;
-  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  el.classList.add('find-highlight');
-  setTimeout(() => el.classList.remove('find-highlight'), 1200);
+// 씬 레이블: 같은 회차 블록 내에서 해당 블록 직전의 scene_number
+function getSceneLabel(blockId, searchBlocks) {
+  const block = searchBlocks.find(b => b.id === blockId);
+  if (!block) return 'S#?';
+  const epBlocks = searchBlocks.filter(b => b.episodeId === block.episodeId);
+  const blockIdx = epBlocks.findIndex(b => b.id === blockId);
+  let lastScene = null;
+  for (const sb of epBlocks) {
+    if (sb.type !== 'scene_number') continue;
+    const sbIdx = epBlocks.findIndex(b => b.id === sb.id);
+    if (sbIdx <= blockIdx) lastScene = sb;
+    else break;
+  }
+  return lastScene?.label || lastScene?.content || 'S#?';
 }
 
 export default function FindReplaceMobileModal({ open, initialMode, onClose }) {
   const { state, dispatch } = useApp();
-  const { scriptBlocks, activeEpisodeId, activeProjectId } = state;
+  const { scriptBlocks, activeEpisodeId, activeProjectId, episodes } = state;
 
-  const episodeBlocks = activeEpisodeId
+  const currentEpisodeBlocks = activeEpisodeId
     ? scriptBlocks.filter(b => b.episodeId === activeEpisodeId)
     : activeProjectId
       ? scriptBlocks.filter(b => b.projectId === activeProjectId)
       : [];
 
+  const projectBlocks = activeProjectId
+    ? scriptBlocks.filter(b => b.projectId === activeProjectId)
+    : currentEpisodeBlocks;
+
   const [query,         setQuery]         = useState('');
   const [replaceText,   setReplaceText]   = useState('');
-  const [caseSensitive, setCaseSensitive] = useState(false);
+  const caseSensitive = false;
   const [scope,         setScope]         = useState('all');
+  const [episodeScope,  setEpisodeScope]  = useState('current'); // 'current' | 'all'
   const [matches,       setMatches]       = useState([]);
   const [currentIdx,    setCurrentIdx]    = useState(-1);
   const [replaceMode,   setReplaceMode]   = useState(initialMode === 'replace');
   const [replaceResult, setReplaceResult] = useState(null);
 
   const findInputRef = useRef(null);
+
+  const searchBlocks = episodeScope === 'all' ? projectBlocks : currentEpisodeBlocks;
+
+  // 현재 프로젝트 회차 목록
+  const projectEpisodes = (episodes || [])
+    .filter(e => e.projectId === activeProjectId)
+    .sort((a, b) => (a.number || 0) - (b.number || 0));
+
+  const getEpLabel = useCallback((episodeId) => {
+    const ep = projectEpisodes.find(e => e.id === episodeId);
+    return ep ? `${ep.number}화` : '';
+  }, [projectEpisodes]);
 
   useEffect(() => {
     if (open) {
@@ -64,12 +89,12 @@ export default function FindReplaceMobileModal({ open, initialMode, onClose }) {
     const timer = setTimeout(() => {
       if (!query.trim()) { setMatches([]); setCurrentIdx(-1); return; }
       const blockTypes = scope === 'all' ? null : [scope];
-      const results = findMatches(episodeBlocks, query, { caseSensitive, blockTypes, searchScope: 'content_only' });
+      const results = findMatches(searchBlocks, query, { caseSensitive, blockTypes, searchScope: 'content_only' });
       setMatches(results);
       setCurrentIdx(results.length > 0 ? 0 : -1);
     }, 150);
     return () => clearTimeout(timer);
-  }, [query, scope, caseSensitive, episodeBlocks]);
+  }, [query, scope, caseSensitive, searchBlocks]);
 
   const goNext = useCallback(() => {
     if (matches.length === 0) return;
@@ -81,57 +106,64 @@ export default function FindReplaceMobileModal({ open, initialMode, onClose }) {
     setCurrentIdx(i => (i - 1 + matches.length) % matches.length);
   }, [matches.length]);
 
+  // 블록으로 이동 — 다른 회차면 회차 전환 후 스크롤
+  const navigateToBlock = useCallback((blockId, closeModal = false) => {
+    const block = searchBlocks.find(b => b.id === blockId);
+    if (!block) return;
+
+    const doScroll = () => {
+      const el = document.querySelector(`[data-block-id="${blockId}"]`);
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('find-highlight');
+      setTimeout(() => el.classList.remove('find-highlight'), 1200);
+    };
+
+    if (closeModal) onClose?.();
+
+    if (block.episodeId && block.episodeId !== activeEpisodeId) {
+      dispatch({ type: 'SET_ACTIVE_EPISODE', id: block.episodeId });
+      setTimeout(doScroll, 350);
+    } else {
+      requestAnimationFrame(doScroll);
+    }
+  }, [searchBlocks, activeEpisodeId, dispatch, onClose]);
+
   const handleMatchTap = useCallback((blockId, idx) => {
     setCurrentIdx(idx);
-    onClose?.();
-    requestAnimationFrame(() => scrollToBlock(blockId));
-  }, [onClose]);
+    navigateToBlock(blockId, true);
+  }, [navigateToBlock]);
 
   const handleReplaceAll = useCallback(() => {
     if (!query.trim() || matches.length === 0) return;
+    const scopeLabel = episodeScope === 'all' ? '전체 대본' : '현재 회차';
     const ok = window.confirm(
-      `"${query}"를 "${replaceText}"로 ${matches.length}개 모두 바꿉니다. 계속하시겠습니까?`
+      `[${scopeLabel}] "${query}"를 "${replaceText}"로 ${matches.length}개 모두 바꿉니다. 계속하시겠습니까?`
     );
     if (!ok) return;
 
     const blockTypes = scope === 'all' ? null : [scope];
-    const updatedBlocks = replaceAllInBlocks(episodeBlocks, query, replaceText, {
+    const updatedBlocks = replaceAllInBlocks(searchBlocks, query, replaceText, {
       caseSensitive,
       blockTypes,
     });
 
-    const unchanged = updatedBlocks.every((b, i) => b === episodeBlocks[i]);
+    const unchanged = updatedBlocks.every((b, i) => b === searchBlocks[i]);
     if (unchanged) return;
 
-    if (activeEpisodeId) {
-      dispatch({ type: 'SET_BLOCKS', episodeId: activeEpisodeId, payload: updatedBlocks, _record: true });
-    } else {
-      const epIds = [...new Set(updatedBlocks.map(b => b.episodeId).filter(Boolean))];
-      epIds.forEach(epId => {
-        dispatch({
-          type: 'SET_BLOCKS',
-          episodeId: epId,
-          payload: updatedBlocks.filter(b => b.episodeId === epId),
-          _record: true,
-        });
-      });
-    }
+    const epIds = [...new Set(updatedBlocks.map(b => b.episodeId).filter(Boolean))];
+    epIds.forEach(epId => {
+      const payload  = updatedBlocks.filter(b => b.episodeId === epId);
+      const original = searchBlocks.filter(b => b.episodeId === epId);
+      if (payload.some((b, i) => b !== original[i])) {
+        dispatch({ type: 'SET_BLOCKS', episodeId: epId, payload, _record: true });
+      }
+    });
 
     setReplaceResult(`${matches.length}개를 바꿨습니다.`);
     setMatches([]);
     setCurrentIdx(-1);
-  }, [query, replaceText, matches, scope, caseSensitive, episodeBlocks, activeEpisodeId, dispatch]);
-
-  const sceneBlocks = episodeBlocks.filter(b => b.type === 'scene_number');
-  function getSceneLabel(blockIndex) {
-    let lastScene = null;
-    for (const sb of sceneBlocks) {
-      const sbIdx = episodeBlocks.findIndex(b => b.id === sb.id);
-      if (sbIdx <= blockIndex) lastScene = sb;
-      else break;
-    }
-    return lastScene?.label || lastScene?.content || 'S#?';
-  }
+  }, [query, replaceText, matches, scope, caseSensitive, searchBlocks, episodeScope, dispatch]);
 
   const statusText = !query.trim()
     ? '검색어를 입력하세요'
@@ -144,6 +176,12 @@ export default function FindReplaceMobileModal({ open, initialMode, onClose }) {
     border: '1px solid var(--c-border3)', borderRadius: 6,
     background: 'var(--c-input)', color: 'var(--c-text)',
     outline: 'none', boxSizing: 'border-box',
+  };
+
+  const pillBase = {
+    height: 28, padding: '0 10px', fontSize: 12, borderRadius: 14,
+    cursor: 'pointer', border: '1px solid var(--c-border3)',
+    fontWeight: 500, transition: 'all 0.12s',
   };
 
   return (
@@ -240,16 +278,27 @@ export default function FindReplaceMobileModal({ open, initialMode, onClose }) {
             )}
 
             {/* 옵션 행 */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--c-text3)', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={caseSensitive}
-                  onChange={e => setCaseSensitive(e.target.checked)}
-                  style={{ accentColor: 'var(--c-accent)', cursor: 'pointer', width: 14, height: 14 }}
-                />
-                대/소문자
-              </label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+              {/* 회차 범위 pills */}
+              <div style={{ display: 'flex', gap: 4 }}>
+                {[{ v: 'current', l: '현재 회차' }, { v: 'all', l: '전체 대본' }].map(({ v, l }) => (
+                  <button
+                    key={v}
+                    onClick={() => setEpisodeScope(v)}
+                    style={{
+                      ...pillBase,
+                      background: episodeScope === v ? 'var(--c-accent)' : 'var(--c-input)',
+                      color: episodeScope === v ? '#fff' : 'var(--c-text4)',
+                      borderColor: episodeScope === v ? 'var(--c-accent)' : 'var(--c-border3)',
+                    }}
+                  >
+                    {l}
+                  </button>
+                ))}
+              </div>
+
+
+              {/* 블록 유형 */}
               <select
                 value={scope}
                 onChange={e => setScope(e.target.value)}
@@ -329,7 +378,9 @@ export default function FindReplaceMobileModal({ open, initialMode, onClose }) {
               </div>
             )}
             {matches.map((m, i) => {
-              const sceneLabel = getSceneLabel(m.blockIndex);
+              const block = searchBlocks.find(b => b.id === m.blockId);
+              const sceneLabel = getSceneLabel(m.blockId, searchBlocks);
+              const epLabel = episodeScope === 'all' && block ? getEpLabel(block.episodeId) : null;
               const isActive = i === currentIdx;
               return (
                 <div
@@ -342,6 +393,7 @@ export default function FindReplaceMobileModal({ open, initialMode, onClose }) {
                   }}
                 >
                   <div style={{ fontSize: 10, color: 'var(--c-text5)', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    {epLabel && <span style={{ color: 'var(--c-accent)', marginRight: 4 }}>{epLabel}</span>}
                     {sceneLabel} · {getBlockLabel(m.blockType)}
                   </div>
                   <div style={{ fontSize: 13, color: 'var(--c-text)', lineHeight: 1.5 }}>
