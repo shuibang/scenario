@@ -1,6 +1,7 @@
 /**
- * src/data/announcements.js → Supabase newsletter_items 테이블 upsert
- *                           → public/newsletter-preview.html 생성
+ * src/data/announcements.js + public/changelog.html
+ *   → Supabase newsletter_items 테이블 upsert
+ *   → public/newsletter-preview.html 생성
  *
  * 실행: node scripts/syncAnnouncements.js
  * 환경변수 (루트 .env 또는 shell에서 직접 설정):
@@ -41,10 +42,38 @@ const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
 const DATA_FILE = pathToFileURL(path.resolve(ROOT, 'src/data/announcements.js')).href;
 const { announcements } = await import(DATA_FILE);
 
-// badge 필드 포함
-const rows = announcements.map(({ id, date, title, content, badge }) => ({
+// ── 공지사항 rows (badge 포함) ─────────────────────────────────────────────
+const announcementRows = announcements.map(({ id, date, title, content, badge }) => ({
   id, date, title, content, badge: badge ?? null,
 }));
+
+// ── changelog.html 파싱 → 업데이트 내역 rows (badge: null, 제목만) ──────────
+// 각 항목 앞의 주석(<!-- vXX~YY ... -->)을 ID 소스로 사용해 안정적인 PK 생성
+function parseChangelogRows() {
+  const html = readFileSync(path.resolve(ROOT, 'public/changelog.html'), 'utf8');
+  const rows = [];
+  // 주석 + cl-entry 안의 cl-date / cl-title 한 번에 캡처
+  const re = /<!--\s*(v[\d~]+)[^\n]*\n\s*<div class="cl-entry[\s\S]*?<div class="cl-date">([\d-]+)<\/div>\s*<div class="cl-title">([\s\S]*?)<\/div>/g;
+  let m;
+  while ((m = re.exec(html)) !== null) {
+    const version = m[1].replace(/~/g, '-');   // 'v50~51' → 'v50-51'
+    const date    = m[2].trim();
+    const title   = m[3].trim().replace(/\s+/g, ' ');
+    rows.push({
+      id:      `cl-${version}`,
+      date,
+      title,
+      content: '',   // 업데이트 내역은 제목만 표시 — 본문 불필요
+      badge:   null,
+    });
+  }
+  return rows;
+}
+
+const changelogRows = parseChangelogRows();
+console.log(`changelog 항목 파싱 — ${changelogRows.length}개`);
+
+const rows = [...announcementRows, ...changelogRows];
 
 const { error } = await supabase
   .from('newsletter_items')
@@ -55,7 +84,7 @@ if (error) {
   process.exit(1);
 }
 
-console.log(`newsletter_items upsert 완료 — ${rows.length}개 처리`);
+console.log(`newsletter_items upsert 완료 — 공지 ${announcementRows.length}개 + 업데이트 ${changelogRows.length}개`);
 
 // ─── 미리보기 HTML 생성 ────────────────────────────────────────────────────────
 const NOTICE_URL = 'https://daejak.kr/notice';

@@ -33,8 +33,9 @@ function contentToHtml(content: string) {
 }
 
 function buildEmailHtml(items: Item[], unsubToken: string) {
-  const notices = items.filter(i => i.badge);
-  const updates = items.filter(i => !i.badge);
+  // badge === '공지'인 항목만 전문 발송. '중요'·'긴급' 등 다른 badge는 제목만
+  const notices = items.filter(i => i.badge === '공지');
+  const updates = items.filter(i => i.badge !== '공지');
 
   const noticesHtml = notices.length === 0 ? '' : `
     <div style="margin-bottom:28px;">
