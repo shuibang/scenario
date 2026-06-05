@@ -94,6 +94,9 @@ export default defineConfig(({ command }) => {
         registerType: 'autoUpdate',
         includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
         devOptions: { enabled: true },
+        workbox: {
+          maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+        },
         manifest: {
           name: '대본 작업실',
           short_name: '작업실',
