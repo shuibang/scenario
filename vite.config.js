@@ -7,7 +7,7 @@ import { buildNoticesHtml } from './scripts/buildNoticesHtml.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const buildVersion = Date.now().toString();
-// import { VitePWA } from 'vite-plugin-pwa'  ← 정식 출시 때 활성화
+import { VitePWA } from 'vite-plugin-pwa'
 
 // src/data/announcements.js 단일 소스 → public/notice.html 자동 주입.
 // dev: 시작 시 1회 + announcements.js 변경 감지 → 재생성
@@ -90,7 +90,25 @@ export default defineConfig(({ command }) => {
       versionPlugin(buildVersion),
       noticesPlugin(),
       appHtmlAlias(),
-      // PWA는 베타 종료 후 활성화 예정
+      VitePWA({
+        registerType: 'autoUpdate',
+        includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
+        devOptions: { enabled: true },
+        manifest: {
+          name: '대본 작업실',
+          short_name: '작업실',
+          description: '쉽게 쓰는 무료 대본 편집기',
+          start_url: '/app',
+          display: 'standalone',
+          background_color: '#ffffff',
+          theme_color: '#1B2A4E',
+          lang: 'ko',
+          icons: [
+            { src: '/icons/icons192.png', sizes: '192x192', type: 'image/png' },
+            { src: '/icons/icons512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+          ],
+        },
+      }),
     ],
     define: {
       'import.meta.env.VITE_BUILD_VERSION': JSON.stringify(buildVersion),
