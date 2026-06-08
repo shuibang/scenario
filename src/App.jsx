@@ -51,7 +51,8 @@ import IdeasFullPage from './components/ideas/IdeasFullPage';
 import { applyIdeaSeed, buildProjectSeedFromIdea } from './store/promoteToProject';
 import { migrateDocMemosToIdeas, hasMigrated as hasDocMemoMigrated } from './utils/migrateChecklistToIdeas';
 import { fetchActiveContests as primeContestsCache } from './store/contestsApi';
-import AdBanner, { KakaoAdBanner } from './components/AdBanner';
+import AdBanner, { KakaoAdBanner, MobileBottomAd } from './components/AdBanner';
+import AdMobAppOpenAd from './components/AdMobAppOpenAd';
 // ─── v2: extracted mobile components ──────────────────────────────────────────
 import MobileMenuBar    from './components/mobile/MobileMenuBar';
 import MobileBottomPanel from './components/mobile/MobileBottomPanel';
@@ -2276,6 +2277,8 @@ function Shell({ authUser, setAuthUser }) {
   );
   const modals = (
     <>
+      {/* ── AdMob 앱 오프닝 광고 (TWA WebView 전용, 세션당 1회) ── */}
+      <AdMobAppOpenAd />
       {/* ── 아이디어 노트 시트 ── */}
       <IdeaSheet
         open={ideaSheetOpen}
@@ -2498,7 +2501,7 @@ function Shell({ authUser, setAuthUser }) {
               transition: 'height 0.2s ease, margin 0.2s ease',
             }}
           >
-            <KakaoAdBanner unitId="DAN-0Eobamy6SYfeIpxd" width={320} height={100} mobileHide={false} />
+            <MobileBottomAd />
           </div>
           <MobileBottomPanel
             open={mobileBottomOpen}
