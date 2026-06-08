@@ -9,7 +9,7 @@ import { useNewContestsCount } from '../../hooks/useNewContestsCount';
 // tab id 'memo' 는 기존 코드 호환을 위해 유지.
 // 좌측 자유메모 영역은 공모전 보드로 교체됐지만, 우측 체크리스트는 그대로.
 const TABS = [
-  { id: 'script',   icon: '📝', label: '대본' },
+  { id: 'script',   icon: '📝', label: '회차' },
   { id: 'data',     icon: '👤', label: '자료' },
   { id: 'plan',     icon: '🗂',  label: '설계' },
   { id: 'feedback', icon: '📋', label: '피드백' },
