@@ -1036,7 +1036,11 @@ function AnnounceCard({ item, autoOpen }) {
         }}>
           <div className="text-xs leading-relaxed"
             style={{ color: 'var(--c-text3)', whiteSpace: 'pre-wrap', paddingTop: 12 }}>
-            {item.content}
+            {item.content.split(/(https?:\/\/[^\s]+)/g).map((part, i) =>
+              /^https?:\/\//.test(part)
+                ? <a key={i} href={part} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--c-accent)', textDecoration: 'underline', wordBreak: 'break-all' }}>{part}</a>
+                : part
+            )}
           </div>
         </div>
       )}
