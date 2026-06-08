@@ -299,7 +299,7 @@ export default function MobileMenuBar({ onSave, onPrintPreview, onSnapshot, Work
         {fileUnsaved && activeProjectId && (
           <button
             onClick={onFileSave}
-            title="파일로 저장되지 않은 변경사항 — 탭하면 내 기기에 저장"
+            title="클라우드에 저장되지 않은 변경사항 — 탭하면 HWPX / DOCX 내보내기"
             style={{ fontSize: 10, fontWeight: 600, color: '#d97706', background: 'transparent', border: '1px solid #d97706', borderRadius: 4, padding: '1px 6px', cursor: 'pointer', flexShrink: 0, WebkitTapHighlightColor: 'transparent' }}
           >
             저장 안됨
