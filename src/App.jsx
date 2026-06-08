@@ -1005,7 +1005,7 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
           {fileUnsaved && activeProjectId && (
             <button
               onClick={onFileSave}
-              title="클라우드에 저장되지 않은 변경사항이 있습니다. 클릭하면 HWPX / DOCX로 내보냅니다."
+              title="파일로 저장되지 않은 변경사항이 있습니다. 클릭하면 내 PC에 .djs 파일로 저장합니다."
               style={{ fontSize: 11, fontWeight: 600, color: '#d97706', background: 'transparent', border: '1px solid #d97706', borderRadius: 4, padding: '1px 7px', cursor: 'pointer', letterSpacing: '-0.01em', lineHeight: '18px' }}
             >
               파일 저장 안됨
@@ -1929,11 +1929,44 @@ function Shell({ authUser, setAuthUser }) {
     }
   }, [promptDriveReauthForSave]);
 
-  const handleExportHwpx = useCallback(() => {
-    setExportDefaultFormat('hwpx');
-    window.dispatchEvent(new CustomEvent('editor:flush'));
-    setPrintPreviewOpen(true);
-  }, []);
+  const handleSaveToLocal = useCallback(async () => {
+    clearTimeout(saveToastTimer.current);
+    setSaveToastMsg('💾 파일 저장 중…');
+    setSaveToast(true);
+
+    window.dispatchEvent(new Event('script:requestSave'));
+    await waitForEditorFlush();
+
+    const latestState = latestStateRef.current;
+    const projectSnap = latestState.activeProjectId
+      ? serializeProject(latestState, latestState.activeProjectId) : null;
+    if (!projectSnap) { setSaveToast(false); return; }
+
+    try { await saveSnapshot(projectSnap, '수동저장', 'manual'); } catch {}
+
+    try {
+      const djs_readme = '이 파일은 대본작업실(daejak.kr) 전용 파일입니다. 일반 텍스트 편집기로 열지 마세요. daejak.kr에 접속한 후 파일 열기 메뉴에서 불러올 수 있습니다.';
+      const blob = new Blob([JSON.stringify({ _readme: djs_readme, ...projectSnap }, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const saveProject = latestState.projects?.find(p => p.id === latestState.activeProjectId);
+      const saveVerSuffix = saveProject?.version != null ? `_v${saveProject.version}` : '';
+      a.download = `${sanitizeFolderName(projectSnap.project?.title || '대본')}${saveVerSuffix}.djs`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      fileUnsavedRef.current = false;
+      setFileUnsaved(false);
+      clearTimeout(saveToastTimer.current);
+      saveToastTimer.current = setTimeout(() => setSaveToast(false), 1500);
+    } catch {
+      clearTimeout(saveToastTimer.current);
+      setSaveToastMsg('저장 실패 — 다시 시도');
+      saveToastTimer.current = setTimeout(() => setSaveToast(false), 3500);
+    }
+  }, [waitForEditorFlush]);
 
   // 전역 저장 단축키: Ctrl+S / Ctrl+Shift+S / Ctrl+Alt+S
   useEffect(() => {
@@ -1942,11 +1975,11 @@ function Shell({ authUser, setAuthUser }) {
       e.preventDefault();
       if (e.shiftKey)     handleSaveToLocalDrive(); // 다른 이름으로 클라우드 저장
       else if (e.altKey)  handleSaveToCloud();        // 클라우드 저장
-      else                handleExportHwpx();          // HWPX / DOCX 내보내기
+      else                handleSaveToLocal();         // 내 기기에 저장
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handleSaveToCloud, handleSaveToLocalDrive, handleExportHwpx]);
+  }, [handleSaveToCloud, handleSaveToLocalDrive, handleSaveToLocal]);
 
   // 탭/창 닫기 시 파일 미저장 경고 (브라우저 기본 다이얼로그)
   // Chrome: e.returnValue에 non-empty string 필요 (빈 문자열은 falsy 취급되어 무시됨)
@@ -2085,7 +2118,7 @@ function Shell({ authUser, setAuthUser }) {
       saveToastTimer.current = setTimeout(() => setSaveToast(false), 2500);
       return;
     }
-    if (action === 'file:saveToLocal')   { handleExportHwpx(); return; }
+    if (action === 'file:saveToLocal')   { handleSaveToLocal(); return; }
     if (action === 'file:share')       { setShareLinkOpen(true); return; }
     if (action === 'file:projectInfo')  { setProjectInfoOpen(true); return; }
     if (action === 'file:projectMgmt')  { dispatch({ type: 'SET_ACTIVE_DOC', payload: 'projects' }); return; }
@@ -2238,7 +2271,7 @@ function Shell({ authUser, setAuthUser }) {
       cloudSaveOptions={cloudSaveOptions}
       isMobile={isMobile}
       fileUnsaved={fileUnsaved}
-      onFileSave={handleExportHwpx}
+      onFileSave={handleSaveToLocal}
     />
   );
   const modals = (
@@ -2442,7 +2475,7 @@ function Shell({ authUser, setAuthUser }) {
             checkedItems={menuCheckedItems}
             cloudSaveOptions={cloudSaveOptions}
             fileUnsaved={fileUnsaved}
-            onFileSave={handleExportHwpx}
+            onFileSave={handleSaveToLocal}
           />
           <UpdateBanner />
         </div>

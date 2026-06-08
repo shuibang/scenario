@@ -9,23 +9,24 @@ export default function MenubarMenu({ menu, onAction, checkedItems = {}, dynamic
       .filter(item => !(isMobile && item !== 'separator' && item.mobileHide))
       .map(item => {
       if (item === 'separator') return item;
-      if (item.dynamic && dynamicData[item.dynamic]) {
+      const mobilized = (isMobile && item.mobileLabel) ? { ...item, label: item.mobileLabel } : item;
+      if (mobilized.dynamic && dynamicData[mobilized.dynamic]) {
         const dynItems = dynamicData[item.dynamic];
         // action 필드가 있는 pre-formed 아이템은 그대로 사용 (cloudSave 등).
         // 배열 내 separator(string)가 섞일 수 있으므로 객체 타입 체크 후 'action' 확인.
         const hasPreformed = dynItems.some(d => d !== null && typeof d === 'object' && 'action' in d);
         if (hasPreformed) {
-          return { ...item, submenu: dynItems };
+          return { ...mobilized, submenu: dynItems };
         }
         // recentProjects: { id, title } 형태에서 변환
         return {
-          ...item,
+          ...mobilized,
           submenu: dynItems.length > 0
             ? dynItems.map(p => ({ id: `recent-${p.id}`, label: p.title || '(제목 없음)', action: `file:openRecent:${p.id}` }))
             : [{ id: 'no-recent', label: '없음', disabled: true, action: '' }],
         };
       }
-      return item;
+      return mobilized;
     });
 
   const resolved = resolveItems(menu.items);
