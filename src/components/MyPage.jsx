@@ -4,6 +4,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { useApp } from '../store/AppContext';
 import QnATab from './QnATab';
 import BadgesPanel from './BadgesPanel';
+import DeleteAccountModal from './Modals/DeleteAccountModal';
 import { Document, Page, Text, View, StyleSheet, pdf, Font } from '@react-pdf/renderer';
 import { ensureFontsRegistered } from '../print/printPdf';
 import {
@@ -783,6 +784,7 @@ export function SettingsTab() {
   const [publicPc, setPublicPc] = useState(() => localStorage.getItem(PUBLIC_PC_KEY) === 'true');
   const [designTool, setDesignTool]       = useState(() => localStorage.getItem(DESIGN_TOOL_KEY) || 'treatment');
   const [scenelistSync, setScenelistSync] = useState(() => localStorage.getItem(SCENELIST_SYNC_KEY) || 'sync');
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
 
   const dupReport = useMemo(
     () => detectScriptBlockDuplicates(state.scriptBlocks),
@@ -964,6 +966,37 @@ export function SettingsTab() {
           <p>· 서비스 이용 중 발생하는 데이터 손실에 대해 개발자는 책임을 지지 않습니다. 주기적인 백업을 권장합니다.</p>
         </div>
       </div>
+
+      {/* 계정 관리 */}
+      <div
+        className="flex items-center justify-between rounded-lg"
+        style={{ background: 'var(--c-card)', border: '1px solid var(--c-border)', padding: '12px 16px' }}
+      >
+        <div className="flex-1">
+          <div className="text-sm font-medium mb-0.5" style={{ color: 'var(--c-text)' }}>계정 관리</div>
+          <div className="text-xs" style={{ color: 'var(--c-text5)' }}>
+            계정을 삭제하면 모든 데이터가 영구 제거됩니다.
+          </div>
+        </div>
+        <button
+          onClick={() => setDeleteAccountOpen(true)}
+          className="shrink-0 text-xs px-3 py-1.5 rounded"
+          style={{
+            background: 'transparent',
+            border: '1px solid #ef4444',
+            color: '#ef4444',
+            cursor: 'pointer',
+            fontWeight: 500,
+          }}
+        >
+          계정 삭제
+        </button>
+      </div>
+
+      <DeleteAccountModal
+        open={deleteAccountOpen}
+        onClose={() => setDeleteAccountOpen(false)}
+      />
     </div>
   );
 }

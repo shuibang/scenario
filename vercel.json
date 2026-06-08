@@ -17,7 +17,8 @@
     { "source": "/about.html",    "destination": "/about",     "permanent": true },
     { "source": "/contact.html",  "destination": "/contact",   "permanent": true },
     { "source": "/privacy.html",  "destination": "/privacy",   "permanent": true },
-    { "source": "/terms.html",    "destination": "/terms",     "permanent": true }
+    { "source": "/terms.html",    "destination": "/terms",     "permanent": true },
+    { "source": "/account-delete.html", "destination": "/account/delete", "permanent": true }
   ],
   "rewrites": [
     { "source": "/help",      "destination": "/help.html"     },
@@ -31,8 +32,9 @@
     { "source": "/contact",   "destination": "/contact.html"  },
     { "source": "/privacy",   "destination": "/privacy.html"  },
     { "source": "/terms",     "destination": "/terms.html"    },
-    { "source": "/app",       "destination": "/app.html"      },
-    { "source": "/app/(.*)",  "destination": "/app.html"      }
+    { "source": "/app",            "destination": "/app.html"          },
+    { "source": "/app/(.*)",       "destination": "/app.html"          },
+    { "source": "/account/delete", "destination": "/account-delete.html" }
   ],
   "headers": [
     {

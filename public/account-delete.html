@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>계정 삭제 — 대본 작업실</title>
+<meta name="description" content="대본 작업실 계정 및 모든 데이터를 영구 삭제합니다.">
+<meta name="robots" content="noindex, nofollow">
+<link rel="canonical" href="https://daejak.kr/account/delete">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:     #1a1a1a;
+    --border: #2e2e42;
+    --text:   #e0e0e0;
+    --text2:  #bbbbbb;
+    --text3:  #888888;
+    --accent: #8DA0BB;
+    --card:   #1e1e2e;
+    --red:    #ef4444;
+  }
+
+  body {
+    margin: 0;
+    font-family: 'Noto Sans KR', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 24px 16px;
+  }
+
+  .box {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 36px 40px;
+    max-width: 480px;
+    width: 100%;
+    text-align: center;
+  }
+
+  .icon { font-size: 40px; margin-bottom: 16px; }
+
+  h1 {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--red);
+    margin-bottom: 12px;
+  }
+
+  p {
+    font-size: 14px;
+    color: var(--text2);
+    line-height: 1.7;
+    margin-bottom: 8px;
+  }
+
+  .note {
+    font-size: 12px;
+    color: var(--text3);
+    line-height: 1.6;
+    margin: 16px 0 24px;
+    padding: 12px 16px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    text-align: left;
+  }
+
+  .note li { margin-left: 14px; margin-bottom: 4px; }
+
+  .btn-primary {
+    display: inline-block;
+    background: var(--red);
+    color: #fff;
+    text-decoration: none;
+    padding: 12px 28px;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    margin-bottom: 12px;
+    width: 100%;
+  }
+
+  .btn-secondary {
+    display: inline-block;
+    background: transparent;
+    color: var(--text3);
+    text-decoration: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 13px;
+    border: 1px solid var(--border);
+    width: 100%;
+  }
+
+  .step-info {
+    font-size: 12px;
+    color: var(--text3);
+    margin-top: 20px;
+  }
+</style>
+</head>
+<body>
+  <div class="box">
+    <div class="icon">⚠️</div>
+    <h1>계정 삭제</h1>
+    <p>대본 작업실 계정과 관련된 모든 데이터를 영구적으로 삭제합니다.</p>
+
+    <div class="note">
+      <p style="font-weight:600; margin-bottom:8px; color:#e0e0e0;">삭제 시 제거되는 항목:</p>
+      <ul>
+        <li>모든 대본 데이터 (클라우드 포함)</li>
+        <li>공유 검토 링크 및 피드백 기록</li>
+        <li>뱃지·통계·뉴스레터 구독 정보</li>
+        <li>Google Drive 동기화 권한</li>
+      </ul>
+    </div>
+
+    <button class="btn-primary" onclick="goToApp()">
+      앱에서 계정 삭제 진행하기
+    </button>
+    <a href="/" class="btn-secondary">취소 — 홈으로 돌아가기</a>
+
+    <p class="step-info">
+      계정 삭제는 로그인 후 앱 내에서 진행됩니다.<br>
+      마이페이지 → 설정 → 계정 관리에서도 접근할 수 있습니다.
+    </p>
+  </div>
+
+  <script>
+    function goToApp() {
+      window.location.href = '/app#account/delete';
+    }
+  </script>
+</body>
+</html>
