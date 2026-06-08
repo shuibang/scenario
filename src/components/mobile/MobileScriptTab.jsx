@@ -66,6 +66,11 @@ export default function MobileScriptTab({ onClose }) {
         onCancel={() => setDeleteTarget(null)}
       />
 
+      <div
+        className={`m-item sub${state.activeDoc === 'synopsis' ? ' active' : ''}`}
+        onClick={() => { dispatch({ type: 'SET_ACTIVE_DOC', payload: 'synopsis' }); onClose?.(); }}
+      >시놉시스</div>
+
       {epList.map(ep => {
         const isEpActive = activeEpisodeId === ep.id && state.activeDoc === 'script';
         const isEditing = editingEpId === ep.id;
