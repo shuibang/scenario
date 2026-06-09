@@ -13,7 +13,13 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+dev-dist
 *.local
+
+# Android TWA build artifacts
+.gradle
+build
+manifest-checksum.txt
 
 # Environment variables — never commit real values
 .env
