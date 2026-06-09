@@ -7,6 +7,19 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <meta name="theme-color" content="#1B2A4E" />
+  <!-- 설치된 PWA에서 랜딩 진입 시 /app으로 즉시 리다이렉트 (깜빡임 방지용 동기 스크립트) -->
+  <script>
+    (function() {
+      try {
+        if (
+          window.matchMedia('(display-mode: standalone)').matches ||
+          window.navigator.standalone === true
+        ) {
+          location.replace('/app');
+        }
+      } catch(e) {}
+    })();
+  </script>
   <script>
     (function () {
       var params = new URLSearchParams(window.location.search);
@@ -390,6 +403,15 @@
       transition: background 0.2s ease;
     }
     .btn-hero-secondary:hover { background: rgba(255, 255, 255, 0.04); }
+    .btn-hero-install {
+      padding: 13px 24px; border-radius: 10px; font-size: 15px; font-weight: 600;
+      background: transparent;
+      color: var(--accent); border: 1.5px solid var(--accent);
+      transition: background 0.2s ease, color 0.2s ease;
+      cursor: pointer; font-family: inherit;
+    }
+    .btn-hero-install:hover { background: var(--accent); color: #fff; }
+    .btn-hero-install:active { transform: translateY(1px); }
     @media (prefers-color-scheme: light) {
       .btn-hero-secondary:hover { background: rgba(27, 42, 78, 0.06); }
     }
@@ -735,6 +757,7 @@
       </p>
       <div class="hero-cta">
         <a href="/app"><button class="btn-hero-primary">지금 시작하기</button></a>
+        <button class="btn-hero-install pwa-install-trigger" style="display:none;">📲 앱으로 설치하기</button>
         <a href="#features"><button class="btn-hero-secondary">기능 둘러보기</button></a>
       </div>
       <div>
@@ -1014,6 +1037,7 @@
     <p>설치 없이, 로그인 없이, 브라우저에서 바로 시작할 수 있어요.</p>
     <div class="cta-btns">
       <a href="/app"><button class="btn-hero-primary">무료로 시작하기 →</button></a>
+      <button class="btn-hero-install pwa-install-trigger" style="display:none;">📲 앱으로 설치하기</button>
       <a href="/app"><button class="btn-hero-secondary">구글 로그인 (자동저장)</button></a>
     </div>
   </div>
@@ -1313,6 +1337,37 @@
 
     startOnVisible('demo-scene', runFormatDemo);
     startOnVisible('ref-new-scene', runRefDemo);
+
+    // ── PWA 설치 버튼 (beforeinstallprompt) ──────────────────────
+    (function() {
+      var deferredPrompt = null;
+      var btns = document.querySelectorAll('.pwa-install-trigger');
+
+      function showBtns() { btns.forEach(function(b) { b.style.display = ''; }); }
+      function hideBtns() { btns.forEach(function(b) { b.style.display = 'none'; }); }
+
+      window.addEventListener('beforeinstallprompt', function(e) {
+        e.preventDefault();
+        deferredPrompt = e;
+        showBtns();
+      });
+
+      btns.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          if (!deferredPrompt) return;
+          deferredPrompt.prompt();
+          deferredPrompt.userChoice.then(function(result) {
+            deferredPrompt = null;
+            if (result.outcome === 'accepted') hideBtns();
+          });
+        });
+      });
+
+      window.addEventListener('appinstalled', function() {
+        deferredPrompt = null;
+        hideBtns();
+      });
+    })();
   </script>
 <script defer src="/site-nav.js"></script>
 <script async src="/static-ads.js"></script>
