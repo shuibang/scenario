@@ -102,7 +102,7 @@ export default defineConfig(({ command }) => {
           short_name: '작업실',
           description: '쉽게 쓰는 무료 대본 편집기',
           start_url: '/app',
-          display: 'fullscreen',
+          display: 'standalone',
           background_color: '#ffffff',
           theme_color: '#1B2A4E',
           lang: 'ko',
