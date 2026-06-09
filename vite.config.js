@@ -103,6 +103,7 @@ export default defineConfig(({ command }) => {
           description: '쉽게 쓰는 무료 대본 편집기',
           start_url: '/app',
           display: 'standalone',
+          display_override: ['window-controls-overlay', 'standalone'],
           background_color: '#ffffff',
           theme_color: '#1B2A4E',
           lang: 'ko',

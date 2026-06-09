@@ -2521,7 +2521,7 @@ function Shell({ authUser, setAuthUser }) {
   // ── Tablet layout ──────────────────────────────────────────────────────────
   if (isTablet) {
     return (
-      <div className="w-screen flex flex-col overflow-hidden" style={{ background: 'var(--c-bg)', position: 'fixed', top: 0, right: 0, bottom: 0, left: 0 }}>
+      <div className="w-screen flex flex-col overflow-hidden" style={{ background: 'var(--c-bg)', position: 'fixed', top: 'env(titlebar-area-height, 0px)', right: 0, bottom: 0, left: 0 }}>
         <div style={{ display: focusMode ? 'none' : 'contents' }}>
           {menuBar}
           <UpdateBanner />
@@ -2599,7 +2599,7 @@ function Shell({ authUser, setAuthUser }) {
   return (
     <div
       className="w-screen flex flex-col overflow-hidden"
-      style={{ background: 'var(--c-bg)', position: 'fixed', top: 0, right: 0, bottom: 0, left: 0 }}
+      style={{ background: 'var(--c-bg)', position: 'fixed', top: 'env(titlebar-area-height, 0px)', right: 0, bottom: 0, left: 0 }}
     >
       <BadgeToast />
       <div style={{ display: (focusMode || !viewCheckedItems['toggle-topbar']) ? 'none' : 'contents' }}>
