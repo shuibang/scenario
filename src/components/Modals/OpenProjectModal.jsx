@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Modal, { ModalBtn } from './Modal';
 import { listAllBackupFiles, loadDriveBackupData, setAccessToken, isTokenValid } from '../../store/googleDrive';
 import { supabase, refreshDriveToken, signInWithGoogle } from '../../store/supabaseClient';
@@ -7,6 +7,14 @@ import { isMultiEpisode, getTypeLabel } from '../../utils/projectTypes';
 import { deserializeProject } from '../../utils/projectSerializer';
 import { KakaoAdBanner } from '../AdBanner';
 import { useIsMobile } from '../../hooks/useIsMobile';
+import {
+  isFsaSupported,
+  getLocalFolderHandle,
+  setLocalFolderHandle,
+  clearLocalFolderHandle,
+  verifyReadPermission,
+  listDjsFiles,
+} from '../../store/localFolderHandle';
 
 const TAB_DRIVE   = 'drive';
 const TAB_DROPBOX = 'dropbox';
@@ -52,6 +60,14 @@ export default function OpenProjectModal({ open, onClose, projects = [], activeP
   const [dropboxSelected, setDropboxSelected] = useState(null);
   const [dropboxBusy,  setDropboxBusy]  = useState(false);
 
+  // 로컬 폴더 탭 (내 컴퓨터)
+  // localFsState: 'idle' | 'loading' | 'nohandle' | 'noperm' | 'ready' | 'unsupported'
+  const [localFsState,    setLocalFsState]    = useState('idle');
+  const [localFsFiles,    setLocalFsFiles]    = useState([]);
+  const [localFsSelected, setLocalFsSelected] = useState(null); // { name, handle }
+  const [localFsBusy,     setLocalFsBusy]     = useState(false);
+  const localFsDirRef = useRef(null); // 현재 로드된 dirHandle
+
   const [importError, setImportError] = useState(null);
 
   // 모달 열릴 때마다 탭 목록 결정 + 상태 초기화
@@ -62,6 +78,8 @@ export default function OpenProjectModal({ open, onClose, projects = [], activeP
     setDriveState('idle'); setDropboxState('idle');
     setDriveFiles([]); setDropboxFiles([]);
     setDriveLoadKey(0);
+    setLocalFsState('idle'); setLocalFsFiles([]); setLocalFsSelected(null);
+    localFsDirRef.current = null;
 
     (async () => {
       const [googleUser, dropboxHistory] = await Promise.all([isGoogleUser(), Promise.resolve(hasDropboxHistory())]);
@@ -73,6 +91,27 @@ export default function OpenProjectModal({ open, onClose, projects = [], activeP
       setTab(newTabs[0]);
     })();
   }, [open]);
+
+  // 내 컴퓨터 탭 진입 시 폴더 핸들 확인 + 파일 목록 로드
+  useEffect(() => {
+    if (!open || tab !== TAB_LOCAL) return;
+    if (!isFsaSupported()) { setLocalFsState('unsupported'); return; }
+    (async () => {
+      setLocalFsState('loading');
+      const handle = await getLocalFolderHandle();
+      if (!handle) { setLocalFsState('nohandle'); return; }
+      const ok = await verifyReadPermission(handle);
+      if (!ok) { setLocalFsState('noperm'); return; }
+      localFsDirRef.current = handle;
+      try {
+        const files = await listDjsFiles(handle);
+        setLocalFsFiles(files);
+        setLocalFsState('ready');
+      } catch {
+        setLocalFsState('noperm');
+      }
+    })();
+  }, [open, tab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Drive 탭 진입 시 파일 목록 로드 (driveLoadKey 변경 시에도 재실행)
   useEffect(() => {
@@ -161,6 +200,53 @@ export default function OpenProjectModal({ open, onClose, projects = [], activeP
     }
   };
 
+  // 내 컴퓨터 — 폴더 선택
+  const handlePickFolder = async () => {
+    try {
+      const dirHandle = await window.showDirectoryPicker({ mode: 'read' });
+      await setLocalFolderHandle(dirHandle);
+      localFsDirRef.current = dirHandle;
+      setLocalFsState('loading');
+      setLocalFsSelected(null);
+      const files = await listDjsFiles(dirHandle);
+      setLocalFsFiles(files);
+      setLocalFsState('ready');
+    } catch (e) {
+      // 사용자가 취소하면 AbortError — 무시
+      if (e?.name !== 'AbortError') setImportError('폴더를 열 수 없습니다.');
+    }
+  };
+
+  // 내 컴퓨터 — 선택된 .djs 파일 열기
+  const handleLocalFsOpen = async () => {
+    if (!localFsSelected || localFsBusy) return;
+    setLocalFsBusy(true); setImportError(null);
+    try {
+      const file = await localFsSelected.handle.getFile();
+      const text = await file.text();
+      let imported;
+      try { imported = deserializeProject(JSON.parse(text)); }
+      catch (err) {
+        setImportError(err?.name === 'ZodError' ? '올바른 .djs 파일이 아닙니다.' : '파일을 읽을 수 없습니다.');
+        setLocalFsBusy(false); return;
+      }
+      onFileImport?.(imported, 'replace');
+      onClose();
+    } catch (err) {
+      setImportError('파일을 읽을 수 없습니다: ' + (err?.message || err));
+    } finally {
+      setLocalFsBusy(false);
+    }
+  };
+
+  // 내 컴퓨터 — 폴더 연결 해제
+  const handleClearFolder = async () => {
+    await clearLocalFolderHandle();
+    localFsDirRef.current = null;
+    setLocalFsFiles([]); setLocalFsSelected(null);
+    setLocalFsState('nohandle');
+  };
+
   // 파일에서 열기
   const handleFileOpen = () => {
     setImportError(null);
@@ -201,7 +287,12 @@ export default function OpenProjectModal({ open, onClose, projects = [], activeP
   ) : tab === TAB_DROPBOX ? (
     <><ModalBtn variant="secondary" onClick={onClose}>취소</ModalBtn><ModalBtn variant="primary" onClick={handleDropboxOpen} disabled={!dropboxSelected || dropboxBusy}>{dropboxBusy ? '불러오는 중…' : '열기'}</ModalBtn></>
   ) : (
-    <><ModalBtn variant="secondary" onClick={onClose}>취소</ModalBtn><ModalBtn variant="primary" onClick={() => { onSelect?.(selected); onClose(); }} disabled={selected === null}>열기</ModalBtn></>
+    // TAB_LOCAL: localFsSelected 우선, 없으면 IndexedDB selected
+    <><ModalBtn variant="secondary" onClick={onClose}>취소</ModalBtn>
+    <ModalBtn variant="primary"
+      onClick={() => { localFsSelected ? handleLocalFsOpen() : (onSelect?.(selected), onClose()); }}
+      disabled={(localFsSelected === null && selected === null) || localFsBusy}
+    >{localFsBusy ? '불러오는 중…' : '열기'}</ModalBtn></>
   );
 
   // 탭 목록 결정 전 로딩
@@ -216,7 +307,7 @@ export default function OpenProjectModal({ open, onClose, projects = [], activeP
       {/* 탭 */}
       <div style={{ display: 'flex', gap: 2, marginBottom: 14, borderBottom: '1px solid var(--c-border)' }}>
         {tabs.map(t => (
-          <button key={t} onClick={() => { setTab(t); setSelected(null); setDriveSelected(null); setDropboxSelected(null); setImportError(null); }}
+          <button key={t} onClick={() => { setTab(t); setSelected(null); setDriveSelected(null); setDropboxSelected(null); setLocalFsSelected(null); setImportError(null); }}
             style={{
               padding: '6px 14px', fontSize: 13,
               fontWeight: tab === t ? 600 : 400,
@@ -283,23 +374,112 @@ export default function OpenProjectModal({ open, onClose, projects = [], activeP
       {/* 내 대본 탭 */}
       {tab === TAB_LOCAL && (
         <>
-          {/* 브라우저 저장 섹션 */}
-          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--c-text4)', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 6 }}>
-            브라우저 저장
+          {/* ── 내 컴퓨터 파일 섹션 (상단·메인) ── */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--c-text4)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+              내 컴퓨터 파일
+            </div>
+            {localFsState === 'ready' && (
+              <button
+                onClick={handleClearFolder}
+                style={{ fontSize: 11, color: 'var(--c-text5)', background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px 4px', borderRadius: 4 }}
+                title="폴더 연결 해제"
+              >연결 해제</button>
+            )}
           </div>
-          <div style={{ background: '#fff8e1', border: '1px solid #ffe082', borderRadius: 6, padding: '8px 12px', marginBottom: 10, fontSize: 11.5, color: '#7a6200', lineHeight: 1.65 }}>
+
+          {localFsState === 'unsupported' && (
+            <div style={{ background: 'var(--c-card)', border: '1px solid var(--c-border2)', borderRadius: 6, padding: '10px 14px', fontSize: 12, color: 'var(--c-text4)', lineHeight: 1.7, marginBottom: 4 }}>
+              이 환경에서는 폴더 직접 접근이 지원되지 않습니다.<br />
+              아래 '파일에서 열기' 탭에서 .djs 파일을 직접 가져오세요.
+            </div>
+          )}
+
+          {localFsState === 'loading' && (
+            <Empty>폴더를 불러오는 중…</Empty>
+          )}
+
+          {localFsState === 'nohandle' && (
+            <div style={{ background: 'var(--c-card)', border: '1px solid var(--c-border2)', borderRadius: 6, padding: '14px 16px', marginBottom: 4, textAlign: 'center' }}>
+              <p style={{ fontSize: 12, color: 'var(--c-text4)', lineHeight: 1.7, marginBottom: 12 }}>
+                폴더를 지정하면 .djs 파일 목록을 바로 볼 수 있어요.<br />
+                한 번 설정하면 다음에도 자동으로 열립니다.
+              </p>
+              <button
+                onClick={handlePickFolder}
+                style={{ padding: '7px 18px', borderRadius: 6, border: '1px solid var(--c-accent)', background: 'var(--c-accent)', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+              >폴더 선택…</button>
+            </div>
+          )}
+
+          {localFsState === 'noperm' && (
+            <div style={{ background: 'var(--c-card)', border: '1px solid var(--c-border2)', borderRadius: 6, padding: '14px 16px', marginBottom: 4, textAlign: 'center' }}>
+              <p style={{ fontSize: 12, color: 'var(--c-text4)', marginBottom: 12 }}>
+                폴더 접근 권한이 필요합니다. 다시 시도하거나 폴더를 새로 선택하세요.
+              </p>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+                <button
+                  onClick={async () => {
+                    const handle = await getLocalFolderHandle();
+                    if (!handle) { setLocalFsState('nohandle'); return; }
+                    const ok = await verifyReadPermission(handle);
+                    if (!ok) return;
+                    localFsDirRef.current = handle;
+                    setLocalFsState('loading');
+                    const files = await listDjsFiles(handle);
+                    setLocalFsFiles(files);
+                    setLocalFsState('ready');
+                  }}
+                  style={{ padding: '6px 14px', borderRadius: 6, border: '1px solid var(--c-border3)', background: 'transparent', color: 'var(--c-text3)', fontSize: 13, cursor: 'pointer' }}
+                >권한 허용</button>
+                <button
+                  onClick={handlePickFolder}
+                  style={{ padding: '6px 14px', borderRadius: 6, border: '1px solid var(--c-accent)', background: 'var(--c-accent)', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+                >폴더 다시 선택</button>
+              </div>
+            </div>
+          )}
+
+          {localFsState === 'ready' && (
+            <>
+              <FolderFileList
+                items={localFsFiles.filter(f => !query || f.name.toLowerCase().includes(query.toLowerCase()))}
+                selected={localFsSelected}
+                onSelect={(f) => { setLocalFsSelected(f); setSelected(null); }}
+                onOpen={handleLocalFsOpen}
+              />
+              <div style={{ marginTop: 6, textAlign: 'right' }}>
+                <button
+                  onClick={handlePickFolder}
+                  style={{ fontSize: 11, color: 'var(--c-text5)', background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px 4px', borderRadius: 4 }}
+                >폴더 변경…</button>
+              </div>
+            </>
+          )}
+
+          {importError && localFsSelected && (
+            <p style={{ fontSize: 12, color: 'var(--c-danger, #e53e3e)', textAlign: 'center', margin: '6px 0 0' }}>{importError}</p>
+          )}
+
+          {/* ── 백업 데이터 섹션 (하단) ── */}
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--c-text4)', letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 20, marginBottom: 4 }}>
+            백업 데이터
+          </div>
+          <div style={{ background: 'var(--c-card)', border: '1px solid var(--c-border2)', borderRadius: 6, padding: '7px 12px', marginBottom: 8, fontSize: 11.5, color: 'var(--c-text4)', lineHeight: 1.65 }}>
+            브라우저에만 저장된 이전 데이터입니다. 파일로 내보내기를 권장합니다.
+          </div>
+          <div style={{ background: '#fff8e1', border: '1px solid #ffe082', borderRadius: 6, padding: '8px 12px', marginBottom: 8, fontSize: 11.5, color: '#7a6200', lineHeight: 1.65 }}>
             <span style={{ fontWeight: 600 }}>⚠ 이 대본들은 이 브라우저에만 저장되어 있어요.</span><br />
             브라우저 캐시 삭제 시 사라질 수 있습니다. 파일로 저장해주세요.
           </div>
-          <ProjectList items={filteredLocal} selected={selected} onSelect={setSelected} onOpen={() => { onSelect?.(selected); onClose(); }} onDriveSave={onSaveToDriveLocal} emptyMsg="저장된 대본이 없습니다." />
-
-          {/* 내 컴퓨터 파일 섹션 */}
-          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--c-text4)', letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 18, marginBottom: 6 }}>
-            내 컴퓨터 파일
-          </div>
-          <div style={{ background: 'var(--c-card)', border: '1px solid var(--c-border2)', borderRadius: 6, padding: '10px 14px', fontSize: 12, color: 'var(--c-text4)', lineHeight: 1.7 }}>
-            저장 경로를 설정하면 내 컴퓨터의 폴더에서 바로 열 수 있어요. (준비 중)
-          </div>
+          <ProjectList
+            items={filteredLocal}
+            selected={selected}
+            onSelect={(id) => { setSelected(id); setLocalFsSelected(null); }}
+            onOpen={() => { onSelect?.(selected); onClose(); }}
+            onDriveSave={onSaveToDriveLocal}
+            emptyMsg="저장된 대본이 없습니다."
+          />
         </>
       )}
 
@@ -356,6 +536,30 @@ function DriveFileList({ items, selected, onSelect, onOpen }) {
           >
             <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--c-text)', marginBottom: 2 }}>{f.projectFolder || f.name}</div>
             <div style={{ fontSize: 11, color: 'var(--c-text5)' }}>{f.name}{f.savedAt ? ` · ${fmtDate(f.savedAt)}` : ''}</div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function FolderFileList({ items, selected, onSelect, onOpen }) {
+  if (items.length === 0) return <Empty>폴더에 .djs 파일이 없어요.</Empty>;
+  const fmtDate = (ts) => ts ? new Date(ts).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, maxHeight: 200, overflowY: 'auto' }}>
+      {items.map(f => {
+        const isActive = selected?.name === f.name;
+        return (
+          <button key={f.name} onClick={() => onSelect(f)} onDoubleClick={onOpen}
+            style={{ display: 'flex', alignItems: 'center', width: '100%', textAlign: 'left', padding: '7px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', background: isActive ? 'var(--c-active)' : 'transparent', outline: isActive ? '1px solid var(--c-accent)' : '1px solid transparent', transition: 'background 0.1s' }}
+            onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--c-hover)'; }}
+            onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
+          >
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--c-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name.replace(/\.djs$/i, '')}</div>
+              <div style={{ fontSize: 11, color: 'var(--c-text5)', marginTop: 1 }}>{fmtDate(f.lastModified)}</div>
+            </div>
           </button>
         );
       })}
