@@ -4,6 +4,7 @@ import { supabaseSignOut, extractUserData, supabase } from '../../store/supabase
 import { guardedSignInWithGoogle } from '../../utils/guardedSignIn';
 import { setAccessToken, isTokenValid, loadDirectorScript, deleteFileById, updateDirectorWorkFile, loadDirectorWorkFile, getOrCreateDirectorFolder, createDirectorWorkFile } from '../../store/googleDrive';
 import DirectorScriptViewer from './DirectorScriptViewer';
+import HandwritingCanvas from './HandwritingCanvas';
 import DirectorHistoryPage from './DirectorHistoryPage';
 import DirectorErrorReportPage from './DirectorErrorReportPage';
 import DirectorMembershipPage from './DirectorMembershipPage';
@@ -1464,6 +1465,9 @@ function ProjectsPanel({ session, isGuest, isMobile = false, onScriptSelect = ()
   // 삭제 진행 중 재클릭 방지 (느린 네트워크에서 중복 요청 차단)
   const deletingIdsRef = useRef(new Set());
   const [removingOrphan, setRemovingOrphan] = useState(false);
+  const [handwritingMode, setHandwritingMode] = useState(false);
+  const [activeTool, setActiveTool] = useState('pen');
+  const viewerScrollRef = useRef(null);
 
   // Drive 토큰 유효성 사전 확인 (로그인은 됐지만 Drive 권한 만료 상태)
   const driveDisconnected = !isGuest && session && !session.provider_token && !isTokenValid();
@@ -1740,7 +1744,7 @@ function ProjectsPanel({ session, isGuest, isMobile = false, onScriptSelect = ()
         </div>
 
         {/* 본문 */}
-        <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+        <div ref={viewerScrollRef} style={{ flex: 1, minHeight: 0, overflow: 'auto', position: 'relative' }}>
           {!selected && (
             <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <div style={{ textAlign: 'center' }}>
@@ -1765,10 +1769,32 @@ function ProjectsPanel({ session, isGuest, isMobile = false, onScriptSelect = ()
             </div>
           )}
           {selected && !loading && viewing?.appState && (
-            <ViewerErrorBoundary key={selected.id}>
-              <DirectorScriptViewer appState={viewing.appState} selections={viewing.selections} sharedScriptId={selected.id} localOnly={!!selected._isLocal} watermarkText={selected.watermark_text || null} senderBadge={selected.sender_badge_emoji ? { emoji: selected.sender_badge_emoji, label: selected.sender_badge_label || '' } : null} />
-            </ViewerErrorBoundary>
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, padding: '6px 12px', borderBottom: `1px solid ${D.border}`, background: D.sidebar, position: 'relative', zIndex: 20 }}>
+                {handwritingMode && (
+                  <>
+                    {[['pen', '펜'], ['highlighter', '형광펜'], ['eraser', '지우개']].map(([tool, label]) => (
+                      <button key={tool} onClick={() => setActiveTool(tool)} style={{ padding: '4px 8px', fontSize: 12, borderRadius: 6, border: 'none', cursor: 'pointer', fontWeight: activeTool === tool ? 600 : 400, background: activeTool === tool ? 'var(--color-background-info)' : 'transparent', color: activeTool === tool ? 'var(--color-text-info)' : 'var(--color-text-secondary)' }}>
+                        {label}
+                      </button>
+                    ))}
+                  </>
+                )}
+                <button onClick={() => setHandwritingMode(prev => !prev)} style={{ padding: '4px 10px', fontSize: 12, borderRadius: 6, border: 'none', cursor: 'pointer', background: handwritingMode ? 'var(--color-background-info)' : 'transparent', color: handwritingMode ? 'var(--color-text-info)' : 'var(--color-text-secondary)' }}>
+                  ✏️ {handwritingMode ? '필기 중' : '필기'}
+                </button>
+              </div>
+              <ViewerErrorBoundary key={selected.id}>
+                <DirectorScriptViewer appState={viewing.appState} selections={viewing.selections} sharedScriptId={selected.id} localOnly={!!selected._isLocal} watermarkText={selected.watermark_text || null} senderBadge={selected.sender_badge_emoji ? { emoji: selected.sender_badge_emoji, label: selected.sender_badge_label || '' } : null} />
+              </ViewerErrorBoundary>
+            </>
           )}
+          <HandwritingCanvas
+            scriptLinkId={selected?.id}
+            isActive={handwritingMode}
+            containerRef={viewerScrollRef}
+            activeTool={activeTool}
+          />
         </div>
       </div>
       </div>{/* end row wrapper */}

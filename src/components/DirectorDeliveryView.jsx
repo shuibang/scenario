@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import DirectorScriptViewer from './director/DirectorScriptViewer';
+import HandwritingCanvas from './director/HandwritingCanvas';
 import { getBlockPosition, scrollToBlock } from '../utils/blockPosition';
 import { buildFeedbackNoteMeta } from '../utils/feedbackNoteMeta';
 import { loadFeedbackLinkBundle } from '../utils/reviewShare';
@@ -18,6 +19,9 @@ export default function DirectorDeliveryView() {
   const [bad, setBad] = useState(false);
   const [expired, setExpired] = useState(false);
   const [panelOpen, setPanelOpen] = useState(true);
+  const [handwritingMode, setHandwritingMode] = useState(false);
+  const [activeTool, setActiveTool] = useState('pen');
+  const scrollContainerRef = useRef(null);
 
   const deliveryId = window.location.hash.slice('#delivery='.length);
 
@@ -124,6 +128,20 @@ export default function DirectorDeliveryView() {
           {viewer.title} 피드백 링크
         </span>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, paddingRight: 8, borderRight: '1px solid #e0e0e0' }}>
+            {handwritingMode && (
+              <>
+                {[['pen', '펜'], ['highlighter', '형광펜'], ['eraser', '지우개']].map(([tool, label]) => (
+                  <button key={tool} onClick={() => setActiveTool(tool)} style={{ padding: '4px 8px', fontSize: 12, borderRadius: 6, border: 'none', cursor: 'pointer', fontWeight: activeTool === tool ? 600 : 400, background: activeTool === tool ? 'var(--color-background-info)' : 'transparent', color: activeTool === tool ? 'var(--color-text-info)' : 'var(--color-text-secondary)' }}>
+                    {label}
+                  </button>
+                ))}
+              </>
+            )}
+            <button onClick={() => setHandwritingMode(prev => !prev)} style={{ padding: '4px 10px', fontSize: 12, borderRadius: 6, border: 'none', cursor: 'pointer', background: handwritingMode ? 'var(--color-background-info)' : 'transparent', color: handwritingMode ? 'var(--color-text-info)' : 'var(--color-text-secondary)' }}>
+              ✏️ {handwritingMode ? '필기 중' : '필기'}
+            </button>
+          </div>
           <button
             onClick={openFeedbackNotes}
             style={{
@@ -143,13 +161,19 @@ export default function DirectorDeliveryView() {
       </header>
 
       <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
-        <div style={{ flex: 1, minWidth: 0, overflow: 'auto', background: '#d8d8d8' }}>
+        <div ref={scrollContainerRef} style={{ flex: 1, minWidth: 0, overflow: 'auto', background: '#d8d8d8', position: 'relative' }}>
           <DirectorScriptViewer
             appState={viewer.appState}
             selections={viewer.selections}
             readOnly={true}
             initialNotes={notesMap}
             highlightSessionId={bundle?.session?.id || null}
+          />
+          <HandwritingCanvas
+            scriptLinkId={deliveryId}
+            isActive={handwritingMode}
+            containerRef={scrollContainerRef}
+            activeTool={activeTool}
           />
         </div>
 

@@ -121,7 +121,6 @@ export default function DirectorNotesPage() {
   const [renameValue, setRenameValue] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [deleteVersionId, setDeleteVersionId] = useState('');
-
   useEffect(() => {
     if (!activeProjectId) {
       setVersions([]);
@@ -421,7 +420,8 @@ export default function DirectorNotesPage() {
             backdropFilter: 'blur(10px)',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflowX: 'auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0, position: 'relative' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflowX: 'auto', flex: 1, minWidth: 0 }}>
             {versions.map((version) => {
               const unreadCount = unreadCountByVersion.get(version.id) || 0;
               const active = version.id === selectedVersion?.id;
@@ -550,6 +550,7 @@ export default function DirectorNotesPage() {
                 </button>
               </>
             )}
+            </div>
           </div>
 
           {versionSessions.length > 0 && (
