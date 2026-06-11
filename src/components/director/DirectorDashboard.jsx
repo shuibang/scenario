@@ -210,7 +210,12 @@ async function saveWorkToDrive(scriptId, session) {
   const privateNotes = (() => { try { return JSON.parse(localStorage.getItem(`director_private_notes_${scriptId}`) || '{}'); } catch { return {}; } })();
   const storyboard   = (() => { try { return JSON.parse(localStorage.getItem(`director_storyboard_${scriptId}`) || '[]'); } catch { return []; } })();
   const sceneList    = (() => { try { return JSON.parse(localStorage.getItem(`director_scenelist_${scriptId}`) || 'null'); } catch { return null; } })();
-  const workData = { scriptId, privateNotes, storyboard, sceneList, handwriting: null, savedAt: new Date().toISOString() };
+  const isEmpty =
+    Object.keys(privateNotes).length === 0 &&
+    Array.isArray(storyboard) && storyboard.length === 0 &&
+    (sceneList == null || Object.keys(sceneList).length === 0);
+  if (isEmpty) throw new Error('EMPTY_DATA');
+  const workData = { _info: '이 파일은 대본 작업실 연출작업실 전용 파일입니다. 직접 편집하지 마세요. daejak.kr', scriptId, privateNotes, storyboard, sceneList, handwriting: null, savedAt: new Date().toISOString() };
 
   const { data: row } = await supabase
     .from('shared_scripts')
@@ -281,10 +286,17 @@ function WorkSyncButton({ session, scriptId }) {
       await saveWorkToDrive(scriptId, session);
       setSavedAt(new Date());
       setStatus('saved');
-      timerRef.current = setTimeout(() => setStatus('idle'), 3000);
+      setMessage('메모·씬리스트·스토리보드가 저장되었습니다');
+      timerRef.current = setTimeout(() => { setStatus('idle'); setMessage(''); }, 3000);
     } catch (e) {
       console.error('[WorkSyncButton]', e);
-      setStatus('error');
+      if (e?.message === 'EMPTY_DATA') {
+        setMessage('저장할 작업 내용이 없습니다');
+        setTimeout(() => setMessage(''), 2000);
+        setStatus('idle');
+      } else {
+        setStatus('error');
+      }
     }
   };
 
