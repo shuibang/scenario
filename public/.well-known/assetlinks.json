@@ -1,0 +1,10 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "kr.daejak.app",
+    "sha256_cert_fingerprints": [
+      "F3:5B:10:21:37:B0:C2:BC:35:B5:1A:AD:E6:DF:A0:F8:40:32:51:75:2E:DF:B3:5E:5A:25:40:18:38:67:33:CA"
+    ]
+  }
+}]

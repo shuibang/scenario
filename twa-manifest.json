@@ -17,11 +17,11 @@
   "maskableIconUrl": "https://daejak.kr/icons/icons512.png",
   "splashScreenFadeOutDuration": 300,
   "signingKey": {
-    "path": "/c/Users/jiusu/keystore/daejak.keystore",
+    "path": "C:\\dev\\star_sky\\daejak.keystore",
     "alias": "daejak"
   },
-  "appVersionName": "1",
-  "appVersionCode": 1,
+  "appVersionName": "2",
+  "appVersionCode": 2,
   "shortcuts": [],
   "generatorApp": "bubblewrap-cli",
   "webManifestUrl": "https://daejak.kr/manifest.webmanifest",
@@ -43,5 +43,5 @@
   "fileHandlers": [],
   "launchHandlerClientMode": "",
   "displayOverride": [],
-  "appVersion": "1"
+  "appVersion": "2"
 }
