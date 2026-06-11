@@ -86,6 +86,7 @@ export default function WatermarkOverlay({
         backgroundImage: `url("${dataUrl}")`,
         backgroundRepeat: 'repeat',
         zIndex: 50,
+        userSelect: 'none',
       }}
     />
   );

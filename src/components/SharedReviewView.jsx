@@ -164,7 +164,11 @@ export default function SharedReviewView() {
         title,
         drive_file_id: driveFileId,
         source_url: getSafeSourceUrl(),
-        watermark_text: watermarkText || null,
+        watermark_text: (watermarkText || '').trim()
+          || session?.user?.user_metadata?.full_name
+          || session?.user?.user_metadata?.name
+          || session?.user?.email?.split('@')[0]
+          || '연출',
         sender_badge_emoji: resource?.link?.sender_badge_emoji || null,
         sender_badge_label: resource?.link?.sender_badge_label || null,
       });

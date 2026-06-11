@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, createContext, useContext, Component, memo
 import { ChevronLeft, ChevronRight, Clapperboard, FileText, ExternalLink } from 'lucide-react';
 import { supabaseSignOut, extractUserData, supabase } from '../../store/supabaseClient';
 import { guardedSignInWithGoogle } from '../../utils/guardedSignIn';
-import { setAccessToken, isTokenValid, loadDirectorScript, deleteFileById } from '../../store/googleDrive';
+import { setAccessToken, isTokenValid, loadDirectorScript, deleteFileById, updateDirectorWorkFile, loadDirectorWorkFile, getOrCreateDirectorFolder, createDirectorWorkFile } from '../../store/googleDrive';
 import DirectorScriptViewer from './DirectorScriptViewer';
 import DirectorHistoryPage from './DirectorHistoryPage';
 import DirectorErrorReportPage from './DirectorErrorReportPage';
@@ -195,6 +195,133 @@ class ViewerErrorBoundary extends Component {
 function loginWithReturnHash() {
   try { localStorage.setItem(RETURN_HASH_KEY, window.location.hash); } catch {}
   guardedSignInWithGoogle();
+}
+
+// ─── Drive 작업파일 동기화 ────────────────────────────────────────────────────
+
+/**
+ * localStorage 데이터를 Drive에 저장.
+ * director_work_file_id 없으면 새 파일 생성 후 Supabase에 등록.
+ * 있으면 기존 파일 덮어쓰기.
+ * @returns {boolean} 성공 여부
+ */
+async function saveWorkToDrive(scriptId, session) {
+  if (!scriptId || !session?.user?.id || !supabase) return false;
+  const privateNotes = (() => { try { return JSON.parse(localStorage.getItem(`director_private_notes_${scriptId}`) || '{}'); } catch { return {}; } })();
+  const storyboard   = (() => { try { return JSON.parse(localStorage.getItem(`director_storyboard_${scriptId}`) || '[]'); } catch { return []; } })();
+  const sceneList    = (() => { try { return JSON.parse(localStorage.getItem(`director_scenelist_${scriptId}`) || 'null'); } catch { return null; } })();
+  const workData = { scriptId, privateNotes, storyboard, sceneList, handwriting: null, savedAt: new Date().toISOString() };
+
+  const { data: row } = await supabase
+    .from('shared_scripts')
+    .select('director_work_file_id, title')
+    .eq('id', scriptId)
+    .eq('director_id', session.user.id)
+    .single();
+
+  let fileId = row?.director_work_file_id || null;
+
+  if (fileId) {
+    await updateDirectorWorkFile(fileId, workData);
+  } else {
+    const folderId  = await getOrCreateDirectorFolder();
+    const safeTitle = (row?.title || scriptId).replace(/[/\\?%*:|"<>]/g, '_').slice(0, 40);
+    const fileName  = `연출작업_${safeTitle}_${scriptId.slice(0, 8)}.json`;
+    fileId = await createDirectorWorkFile(folderId, fileName, workData);
+    await supabase
+      .from('shared_scripts')
+      .update({ director_work_file_id: fileId })
+      .eq('id', scriptId)
+      .eq('director_id', session.user.id);
+  }
+  return true;
+}
+
+/**
+ * Drive에서 작업파일을 읽어 localStorage에 씀.
+ * director_work_file_id 없거나 Drive 오류면 조용히 return.
+ * @returns {boolean} Drive에서 실제로 로드됐으면 true
+ */
+async function loadWorkFromDrive(scriptId) {
+  if (!scriptId || !supabase) return false;
+  if (!isTokenValid()) return false;
+  const { data: row } = await supabase
+    .from('shared_scripts')
+    .select('director_work_file_id')
+    .eq('id', scriptId)
+    .single();
+  const fileId = row?.director_work_file_id;
+  if (!fileId) return false;
+  const saved = await loadDirectorWorkFile(fileId);
+  const work = saved?.data ?? saved;  // saveDirectorScript 래퍼 대응
+  if (!work) return false;
+  if (work.privateNotes != null) localStorage.setItem(`director_private_notes_${scriptId}`, JSON.stringify(work.privateNotes));
+  if (work.storyboard   != null) localStorage.setItem(`director_storyboard_${scriptId}`,   JSON.stringify(work.storyboard));
+  if (work.sceneList    != null) localStorage.setItem(`director_scenelist_${scriptId}`,     JSON.stringify(work.sceneList));
+  return true;
+}
+
+/** Drive 저장 버튼 (로그인 사용자 전용, 헤더에 표시) */
+function WorkSyncButton({ session, scriptId }) {
+  const D = useD();
+  const [status, setStatus] = useState('idle'); // 'idle' | 'saving' | 'saved' | 'error'
+  const [savedAt, setSavedAt] = useState(null);
+  const [message, setMessage] = useState('');
+  const timerRef = useRef(null);
+
+  const handleSave = async () => {
+    if (status === 'saving') return;
+    if (!scriptId) {
+      setMessage('저장할 대본을 먼저 선택해주세요');
+      setTimeout(() => setMessage(''), 2000);
+      return;
+    }
+    setStatus('saving');
+    try {
+      await saveWorkToDrive(scriptId, session);
+      setSavedAt(new Date());
+      setStatus('saved');
+      timerRef.current = setTimeout(() => setStatus('idle'), 3000);
+    } catch (e) {
+      console.error('[WorkSyncButton]', e);
+      setStatus('error');
+    }
+  };
+
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
+
+  const label =
+    status === 'saving' ? '저장 중…' :
+    status === 'saved'  ? `저장됨 ${savedAt ? savedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : ''}` :
+    status === 'error'  ? '저장 실패 — 재시도' :
+    'Drive에 저장';
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        onClick={handleSave}
+        disabled={status === 'saving'}
+        style={{
+          fontSize: 11, padding: '4px 10px', borderRadius: 4, border: `1px solid ${D.border}`,
+          background: status === 'error' ? '#fca5a5' : status === 'saved' ? '#bbf7d0' : D.card,
+          color: status === 'error' ? '#991b1b' : status === 'saved' ? '#166534' : D.text3,
+          cursor: status === 'saving' ? 'default' : 'pointer', whiteSpace: 'nowrap',
+        }}
+      >
+        {label}
+      </button>
+      {message && (
+        <div style={{
+          position: 'absolute', top: '100%', right: 0, marginTop: 4,
+          fontSize: 11, color: D.text3, whiteSpace: 'nowrap',
+          background: D.card, border: `1px solid ${D.border}`,
+          borderRadius: 4, padding: '3px 8px', zIndex: 10,
+        }}>
+          {message}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ─── 연출 작업실 전용 디자인 토큰 ─────────────────────────────────────────────
@@ -951,6 +1078,7 @@ export default function DirectorDashboard({ session, onBack, isGuest = false }) 
   const isMobile = windowWidth < 768;
   const isTablet = windowWidth >= 768 && windowWidth < 1280;
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [activeScriptId, setActiveScriptId] = useState(null);
   const [isDark, setIsDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
 
   useEffect(() => {
@@ -1062,6 +1190,7 @@ export default function DirectorDashboard({ session, onBack, isGuest = false }) 
           <ExternalLink size={10} strokeWidth={2} style={{ flexShrink: 0, opacity: 0.6 }} />
         </a>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
+          {!isGuest && session && <WorkSyncButton session={session} scriptId={activeScriptId} />}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {user?.avatar
               ? <img src={user.avatar} alt="" style={{ width: 28, height: 28, borderRadius: '50%', border: `2px solid ${D.border}` }} />
@@ -1117,10 +1246,10 @@ export default function DirectorDashboard({ session, onBack, isGuest = false }) 
         <CollapseButton side="right" collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(v => !v)} />
 
         <main style={{ flex: 1, display: 'flex', minHeight: 0, background: D.bg, overflow: 'hidden' }}>
-          {activeMenu === 'projects'   && <ProjectsPanel session={session} isGuest={isGuest} />}
-          {activeMenu === 'notes'      && <NotesPanel />}
-          {activeMenu === 'scenelist'  && <SceneListPanel />}
-          {activeMenu === 'storyboard' && <StoryboardPanel isGuest={isGuest} />}
+          {activeMenu === 'projects'   && <ProjectsPanel session={session} isGuest={isGuest} onScriptSelect={setActiveScriptId} />}
+          {activeMenu === 'notes'      && <NotesPanel onScriptSelect={setActiveScriptId} />}
+          {activeMenu === 'scenelist'  && <SceneListPanel onScriptSelect={setActiveScriptId} />}
+          {activeMenu === 'storyboard' && <StoryboardPanel isGuest={isGuest} onScriptSelect={setActiveScriptId} />}
         </main>
       </div>
     </div>
@@ -1309,7 +1438,7 @@ function DriveReconnectCard({ D, message }) {
   );
 }
 
-function ProjectsPanel({ session, isGuest, isMobile = false }) {
+function ProjectsPanel({ session, isGuest, isMobile = false, onScriptSelect = () => {} }) {
   const D = useD();
   const [scripts,       setScripts]       = useState(null);
   const [error,         setError]         = useState('');
@@ -1326,6 +1455,8 @@ function ProjectsPanel({ session, isGuest, isMobile = false }) {
 
   // Drive 토큰 유효성 사전 확인 (로그인은 됐지만 Drive 권한 만료 상태)
   const driveDisconnected = !isGuest && session && !session.provider_token && !isTokenValid();
+
+  useEffect(() => { onScriptSelect(selected?.id || null); }, [selected]);
 
   // 본인 import 만 (admin 계정의 admin SELECT 정책 우회 방지)
   useEffect(() => {
@@ -2160,7 +2291,7 @@ async function exportDirectorScenesXlsx(title, scenes, contentMap, sceneKeyFn) {
 const RECEIVED_SL_KEY = 'director_received_scenelists';
 
 // ─── 씬리스트 패널 ────────────────────────────────────────────────────────────
-function SceneListPanel({ isMobile = false, mobileSelected = null }) {
+function SceneListPanel({ isMobile = false, mobileSelected = null, onScriptSelect = () => {} }) {
   const D = useD();
   const [scripts,         setScripts]         = useState(null);
   const [localScripts,    setLocalScripts]    = useState(() => loadLocalScripts());
@@ -2193,6 +2324,8 @@ function SceneListPanel({ isMobile = false, mobileSelected = null }) {
     });
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => { onScriptSelect(selected?.id || null); }, [selected]);
 
   // 선택 시 씬 파싱 + 내용 로드
   useEffect(() => {
@@ -2471,7 +2604,7 @@ function SceneListPanel({ isMobile = false, mobileSelected = null }) {
 
 const NOTE_COLORS_PANEL = ['#fdf6e3', '#fef08a', '#86efac', '#93c5fd', '#f9a8d4'];
 
-function NotesPanel({ isMobile = false }) {
+function NotesPanel({ isMobile = false, onScriptSelect = () => {} }) {
   const D = useD();
   const [scripts,       setScripts]       = useState(null);
   const [localScripts,  setLocalScripts]  = useState(() => loadLocalScripts());
@@ -2511,6 +2644,22 @@ function NotesPanel({ isMobile = false }) {
       const map = JSON.parse(localStorage.getItem(key) || '{}');
       setNotes(Object.values(map).sort((a, b) => (a._localId || '').localeCompare(b._localId || '')));
     } catch { setNotes([]); }
+  }, [selected]);
+
+  // Drive 자동 로드
+  useEffect(() => {
+    onScriptSelect(selected?.id || null);
+    if (!selected) return;
+    let cancelled = false;
+    loadWorkFromDrive(selected.id).then((loaded) => {
+      if (!loaded || cancelled) return;
+      const key = `director_private_notes_${selected.id}`;
+      try {
+        const map = JSON.parse(localStorage.getItem(key) || '{}');
+        setNotes(Object.values(map).sort((a, b) => (a._localId || '').localeCompare(b._localId || '')));
+      } catch { /* ignore */ }
+    }).catch(() => { /* Drive 오류는 조용히 무시 */ });
+    return () => { cancelled = true; };
   }, [selected]);
 
   useEffect(() => {
@@ -3508,7 +3657,7 @@ function GuestGuide({ onLogin }) {
   );
 }
 
-function StoryboardPanel({ isGuest, isMobile = false, mobilePreSelected = null, mobilePrePanels = null, onMobilePanelsChange = null }) {
+function StoryboardPanel({ isGuest, isMobile = false, mobilePreSelected = null, mobilePrePanels = null, onMobilePanelsChange = null, onScriptSelect = () => {} }) {
   const D = useD();
   const [scripts,         setScripts]         = useState(null);
   const [localScripts,    setLocalScripts]    = useState(() => loadLocalScripts());
@@ -3527,6 +3676,8 @@ function StoryboardPanel({ isGuest, isMobile = false, mobilePreSelected = null, 
   const [subCollapsed,    setSubCollapsed]    = useState(false);  // 좌측 목록 패널 접힘
   const dragItem     = useRef(null);
   const dragOverItem = useRef(null);
+
+  useEffect(() => { onScriptSelect(selected?.id || null); }, [selected]);
 
   // 게스트: 데모 자동 선택
   useEffect(() => {

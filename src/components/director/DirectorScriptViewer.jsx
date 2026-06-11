@@ -73,9 +73,9 @@ function blockStyle(type) {
         margin: '28px 0 6px',
       };
     case 'action':
-      return { fontSize: 13, color: '#222', lineHeight: 1.8, margin: '4px 0' };
+      return { fontSize: 13, color: '#222', lineHeight: 1.8, margin: '4px 0', minHeight: '1.8em' };
     case 'dialogue':
-      return { fontSize: 13, color: '#111', lineHeight: 1.8, margin: '4px 0 4px 60px' };
+      return { fontSize: 13, color: '#111', lineHeight: 1.8, margin: '4px 0', paddingLeft: 'var(--dialogue-gap, 7em)', position: 'relative' };
     case 'character':
       return {
         fontSize: 13,
@@ -399,7 +399,7 @@ function BlockRow({
   };
 
   const text = stripHtml(block.content);
-  if (!text && block.type !== 'scene_number') return null;
+  if (!text && block.type !== 'scene_number' && block.type !== 'action') return null;
 
   const hasAnyNote = scriptNoteList.length > 0 || privateNoteList.length > 0;
   const noteBarColor =
@@ -433,13 +433,17 @@ function BlockRow({
         {block.type === 'dialogue' && block.charName && (
           <span
             style={{
-              display: 'block',
-              fontWeight: 600,
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              width: 'var(--dialogue-gap, 7em)',
+              fontWeight: 'var(--charname-bold, bold)',
               fontSize: 12,
               color: '#444',
-              marginLeft: -60,
-              marginBottom: 2,
               textTransform: 'uppercase',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
             }}
           >
             {block.charName}
@@ -511,6 +515,7 @@ function BlockRow({
 
 export default function DirectorScriptViewer({
   appState,
+  stylePreset = {},
   selections,
   sharedScriptId,
   readOnly = false,
@@ -520,6 +525,9 @@ export default function DirectorScriptViewer({
   watermarkText = null,
   senderBadge = null,
 }) {
+  const dialogueGap = stylePreset?.dialogueGap || appState?.stylePreset?.dialogueGap || '7em';
+  const blockStyles = stylePreset?.blockStyles || appState?.stylePreset?.blockStyles || {};
+
   const [scriptNotes, setScriptNotes] = useState(initialNotes || {});
   const [privateNotes, setPrivateNotes] = useState(() =>
     sharedScriptId ? loadPrivateNotes(sharedScriptId) : {}
@@ -837,7 +845,7 @@ export default function DirectorScriptViewer({
 
   return (
     <>
-      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', position: 'relative' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', position: 'relative', userSelect: 'none', WebkitUserSelect: 'none', '--dialogue-gap': dialogueGap, '--charname-bold': blockStyles?.charName?.bold !== false ? 'bold' : 'normal' }}>
         <WatermarkOverlay text={watermarkText} />
         {!readOnly && (
           <div

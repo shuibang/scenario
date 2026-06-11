@@ -1039,7 +1039,6 @@ function MenuBar({ isDark, onToggleTheme, onPrintPreview, onSave, onSnapshot, au
                   window.location.reload();
                   return;
                 }
-                setDriveStatus('none');
                 setAuthUser(null);
               }}
                 style={{ height: 24, padding: '0 8px', fontSize: 11, background: 'transparent', border: '1px solid var(--c-border3)', borderRadius: 4, color: 'var(--c-text5)', cursor: 'pointer' }}>

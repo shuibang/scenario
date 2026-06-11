@@ -607,10 +607,17 @@ export default function DirectorNotesPage() {
 
         <DirectorScriptViewer
           appState={viewer.appState}
+          stylePreset={viewer.appState?.stylePreset}
           selections={viewer.selections}
           readOnly={true}
           initialNotes={notesMap}
           highlightSessionId={activeSessionId}
+          watermarkText={
+            viewer.appState?.watermarkText
+            || viewer.senderBadge?.label
+            || viewer.senderDisplayName
+            || '연출'
+          }
         />
       </div>
 

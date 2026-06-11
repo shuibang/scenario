@@ -730,3 +730,114 @@ export async function loadDirectorScript(fileId) {
   });
 }
 
+// ── 연출 작업 폴더 ────────────────────────────────────────────────────────────
+
+const DIRECTOR_WORK_FOLDER_NAME = '대본 작업실 — 연출 작업'; // em dash
+const DIRECTOR_WORK_FOLDER_KEY  = 'drama_director_work_folder_id';
+let _directorWorkFolderId = null;
+
+/**
+ * "대본 작업실 — 연출 작업" 폴더를 조회하거나 없으면 내 드라이브 루트에 생성.
+ * @returns {string} Drive folder id
+ */
+export async function getOrCreateDirectorFolder() {
+  if (_directorWorkFolderId) return _directorWorkFolderId;
+  const cached = localStorage.getItem(DIRECTOR_WORK_FOLDER_KEY);
+  if (cached) { _directorWorkFolderId = cached; return _directorWorkFolderId; }
+  if (!isTokenValid()) throw new Error('DRIVE_AUTH_REQUIRED');
+  return withAuthRetry(async () => {
+    const q = encodeURIComponent(
+      `name='${DIRECTOR_WORK_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`
+    );
+    const searchRes = await fetch(`${DRIVE_API}/files?q=${q}&fields=files(id)&corpora=user&spaces=drive`, {
+      headers: { Authorization: `Bearer ${_accessToken}` },
+    });
+    if (!searchRes.ok) await throwDriveError(searchRes, 'Drive 연출 폴더 검색 실패');
+    const searchData = await searchRes.json();
+    if (searchData.files?.[0]?.id) {
+      _directorWorkFolderId = searchData.files[0].id;
+      localStorage.setItem(DIRECTOR_WORK_FOLDER_KEY, _directorWorkFolderId);
+      return _directorWorkFolderId;
+    }
+    const createRes = await fetch(`${DRIVE_API}/files?fields=id`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${_accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: DIRECTOR_WORK_FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder' }),
+    });
+    if (!createRes.ok) await throwDriveError(createRes, 'Drive 연출 폴더 생성 실패');
+    const folder = await createRes.json();
+    _directorWorkFolderId = folder.id;
+    localStorage.setItem(DIRECTOR_WORK_FOLDER_KEY, _directorWorkFolderId);
+    return _directorWorkFolderId;
+  });
+}
+
+/**
+ * 지정 폴더에 연출 작업 파일 신규 생성 (multipart POST)
+ * @param {string} folderId - 부모 폴더 Drive id
+ * @param {string} fileName - 파일명 (예: 연출작업_제목_abc12345.json)
+ * @param {object} data     - 저장할 JSON 객체
+ * @returns {string} 생성된 Drive file id
+ */
+export async function createDirectorWorkFile(folderId, fileName, data) {
+  if (!isTokenValid()) throw new Error('DRIVE_AUTH_REQUIRED');
+  const content = JSON.stringify(data);
+  return withAuthRetry(async () => {
+    const form = new FormData();
+    form.append('metadata', new Blob(
+      [JSON.stringify({ name: fileName, parents: [folderId] })],
+      { type: 'application/json' }
+    ));
+    form.append('file', new Blob([content], { type: 'application/json' }));
+    const res = await fetch(`${UPLOAD_API}/files?uploadType=multipart&fields=id`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${_accessToken}` },
+      body: form,
+    });
+    if (!res.ok) await throwDriveError(res, 'Drive 연출 작업파일 생성 실패');
+    const json = await res.json();
+    return json.id;
+  });
+}
+
+// ── 연출 작업 파일: 메모·스토리보드·씬리스트 통합 저장 ──────────────────────────
+
+/**
+ * 기존 Drive 파일을 작업 데이터로 덮어씀 (PATCH media)
+ * @param {string} fileId - Drive file id
+ * @param {object} data   - { scriptId, privateNotes, storyboard, sceneList, handwriting, savedAt }
+ * @returns {string} fileId
+ */
+export async function updateDirectorWorkFile(fileId, data) {
+  if (!fileId) return null;
+  if (!isTokenValid()) throw new Error('DRIVE_AUTH_REQUIRED');
+  const content = JSON.stringify(data);
+  return withAuthRetry(async () => {
+    const res = await fetch(`${UPLOAD_API}/files/${fileId}?uploadType=media`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${_accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: content,
+    });
+    if (!res.ok) await throwDriveError(res, 'Drive 작업파일 업데이트 실패');
+    return fileId;
+  });
+}
+
+/**
+ * Drive에서 연출 작업 파일 불러오기
+ * @param {string} fileId - Drive file id
+ * @returns {object} 저장된 JSON 객체 그대로
+ */
+export async function loadDirectorWorkFile(fileId) {
+  if (!isTokenValid()) throw new Error('DRIVE_AUTH_REQUIRED');
+  return withAuthRetry(async () => {
+    const res = await fetch(`${DRIVE_API}/files/${fileId}?alt=media`, {
+      headers: { Authorization: `Bearer ${_accessToken}` },
+    });
+    if (!res.ok) await throwDriveError(res, 'Drive 작업파일 불러오기 실패');
+    return await res.json();
+  });
+}
