@@ -1388,6 +1388,34 @@ function Shell({ authUser, setAuthUser }) {
   const isMobile = windowWidth < 768;
   const isTablet = windowWidth >= 768 && windowWidth < 1280;
 
+  // ── 화면(activeDoc) 변경 시 document.title 및 GA4 page_view 업데이트
+  useEffect(() => {
+    const DOC_TITLES = {
+      script: '대본 편집',
+      cover: '표지',
+      synopsis: '시놉시스',
+      characters: '인물',
+      resources: '참고 자료',
+      structure: '구조',
+      scenelist: '씬 리스트',
+      director_notes: '연출 노트',
+      treatment: '트리트먼트',
+      biography: '인물 약력',
+      relationships: '인물 관계도',
+      mypage: '마이페이지',
+      projects: '대본 관리',
+      trash: '휴지통',
+    };
+    const label = DOC_TITLES[state.activeDoc];
+    document.title = label ? `${label} | 대본 작업실` : '대본 작업실';
+    if (typeof window.gtag === 'function') {
+      window.gtag('event', 'page_view', {
+        page_path: `/app/${state.activeDoc || ''}`,
+        page_title: document.title,
+      });
+    }
+  }, [state.activeDoc]);
+
   // ── Dev: findReplace 브라우저 콘솔 테스트용 (개발 중에만 사용)
   useEffect(() => {
     if (import.meta.env.DEV) {
