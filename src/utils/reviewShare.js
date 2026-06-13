@@ -241,6 +241,20 @@ export async function submitFeedbackSession(linkId, senderDisplayName, comments)
   return data;
 }
 
+export async function submitHandwritingSession(linkId, senderDisplayName, handwritingPng, memoText, canvasSize) {
+  ensureSupabase();
+  const { data, error } = await supabase.rpc('submit_handwriting_session', {
+    p_link_id: linkId,
+    p_sender_display_name: senderDisplayName,
+    p_handwriting_png: handwritingPng || null,
+    p_memo_text: memoText || null,
+    p_canvas_width: canvasSize?.width || null,
+    p_canvas_height: canvasSize?.height || null,
+  });
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 export async function createFeedbackReplyLink({ versionId, sessionId }) {
   ensureSupabase();
   const session = await getRequiredSession();
@@ -325,7 +339,7 @@ export async function listFeedbackSessionsForVersions(versionIds) {
   if (!Array.isArray(versionIds) || versionIds.length === 0) return [];
   const { data, error } = await supabase
     .from('feedback_sessions')
-    .select('id, version_id, sender_display_name, submitted_at, is_read, read_at')
+    .select('id, version_id, sender_display_name, submitted_at, is_read, read_at, handwriting_png, memo_text, canvas_width, canvas_height')
     .in('version_id', versionIds)
     .order('submitted_at', { ascending: false })
     .limit(500);

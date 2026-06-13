@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import DirectorScriptViewer from './director/DirectorScriptViewer';
+import HandwritingCanvas from './director/HandwritingCanvas';
 import { getBlockPosition, scrollToBlock } from '../utils/blockPosition';
 import { buildFeedbackNoteMeta } from '../utils/feedbackNoteMeta';
 import { useApp } from '../store/AppContext';
@@ -121,6 +122,7 @@ export default function DirectorNotesPage() {
   const [renameValue, setRenameValue] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [deleteVersionId, setDeleteVersionId] = useState('');
+  const viewerScrollRef = useRef(null);
   useEffect(() => {
     if (!activeProjectId) {
       setVersions([]);
@@ -283,6 +285,11 @@ export default function DirectorNotesPage() {
   const unreadCountByVersion = useMemo(
     () => getUnreadCountByVersion(allSessions),
     [allSessions]
+  );
+
+  const activeSession = useMemo(
+    () => allSessions.find((s) => s.id === activeSessionId) || null,
+    [allSessions, activeSessionId]
   );
 
   const deleteTarget = useMemo(
@@ -554,7 +561,7 @@ export default function DirectorNotesPage() {
           </div>
 
           {versionSessions.length > 0 && (
-            <div style={{ display: 'flex', gap: 8, overflowX: 'auto' }}>
+            <div style={{ display: 'flex', gap: 8, overflowX: 'auto', alignItems: 'center' }}>
               {versionSessions.map((session) => {
                 const active = session.id === activeSessionId;
                 const meta =
@@ -606,20 +613,40 @@ export default function DirectorNotesPage() {
           )}
         </div>
 
-        <DirectorScriptViewer
-          appState={viewer.appState}
-          stylePreset={viewer.appState?.stylePreset}
-          selections={viewer.selections}
-          readOnly={true}
-          initialNotes={notesMap}
-          highlightSessionId={activeSessionId}
-          watermarkText={
-            viewer.appState?.watermarkText
-            || viewer.senderBadge?.label
-            || viewer.senderDisplayName
-            || '연출'
-          }
-        />
+        <div ref={viewerScrollRef} style={{
+          position: 'relative',
+          width: '100%',
+          maxWidth: 768,
+          margin: '0 auto',
+        }}>
+          <DirectorScriptViewer
+            appState={viewer.appState}
+            stylePreset={viewer.appState?.stylePreset}
+            selections={viewer.selections}
+            readOnly={true}
+            initialNotes={notesMap}
+            highlightSessionId={activeSessionId}
+            watermarkText={
+              viewer.appState?.watermarkText
+              || viewer.senderBadge?.label
+              || viewer.senderDisplayName
+              || '연출'
+            }
+          />
+          {activeSession?.handwriting_png && (
+            <HandwritingCanvas
+              scriptLinkId={`readonly_${activeSessionId}`}
+              isActive={false}
+              containerRef={viewerScrollRef}
+              activeTool="pen"
+              initialImageUrl={activeSession.handwriting_png}
+              initialSize={activeSession.canvas_width
+                ? { width: activeSession.canvas_width, height: activeSession.canvas_height }
+                : null}
+              opacity={0.6}
+            />
+          )}
+        </div>
       </div>
 
       <div
@@ -650,6 +677,14 @@ export default function DirectorNotesPage() {
 
         {panelOpen && (
           <div style={{ flex: 1, overflowY: 'auto', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {activeSession?.memo_text && (
+              <div style={{ padding: '8px 12px', borderBottom: '1px solid #e5e7eb' }}>
+                <div style={{ fontSize: 11, color: '#666', marginBottom: 4 }}>텍스트 메모</div>
+                <div style={{ fontSize: 13, lineHeight: 1.6, color: '#333', whiteSpace: 'pre-wrap' }}>
+                  {activeSession.memo_text}
+                </div>
+              </div>
+            )}
             {sortedComments.length === 0 && (
               <div style={{ textAlign: 'center', color: '#bbb', fontSize: 12, marginTop: 24 }}>
                 코멘트가 없습니다.

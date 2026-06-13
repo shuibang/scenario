@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import PreviewRenderer from '../print/PreviewRenderer';
 import { exportPdf } from '../print/printPdf';
 import { reviewLegacySchema } from '../utils/urlSchemas';
-import { loadSharedReviewResource, isShortReviewId } from '../utils/reviewShare';
+import { loadSharedReviewResource, isShortReviewId, submitHandwritingSession, createFeedbackReplyLink } from '../utils/reviewShare';
 import { supabase } from '../store/supabaseClient';
 import { guardedSignInWithGoogle } from '../utils/guardedSignIn';
 import { setAccessToken, saveDirectorScript } from '../store/googleDrive';
@@ -11,6 +11,8 @@ import { reportError } from '../utils/errorTracker';
 import { KakaoAdBannerBase as KakaoAdBanner } from './AdBanner';
 import WatermarkOverlay from './WatermarkOverlay';
 import BadgeChip from './BadgeChip';
+import DirectorScriptViewer from './director/DirectorScriptViewer';
+import HandwritingCanvas from './director/HandwritingCanvas';
 
 const RETURN_HASH_KEY = 'drama_pending_return_hash';
 
@@ -75,6 +77,12 @@ export default function SharedReviewView() {
   const [pdfExporting, setPdfExporting] = useState(false);
   const [pdfStep, setPdfStep] = useState('');
   const isMobile = useIsMobile();
+  const [handwritingMode,  setHandwritingMode]  = useState(false);
+  const [activeTool,       setActiveTool]       = useState('pen');
+  const [handwritingSent,  setHandwritingSent]  = useState(false);
+  const [memoText,         setMemoText]         = useState('');
+  const scrollContainerRef = useRef(null);
+  const hwCanvasRef        = useRef(null);
 
   // 100% 기준: 모바일이면 화면 가로 꽉 참, 그 외엔 태블릿(768px) 꽉 참
   // 줌 범위도 그에 맞춰 다르게 — 모바일은 50%~150%, 데스크톱/태블릿은 100%~200%
@@ -204,6 +212,39 @@ export default function SharedReviewView() {
     }
   }, [snapshotContent, watermarkText]);
 
+  const handleHandwritingReply = useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { loginWithReturnHash(); return; }
+
+    const saveResult = hwCanvasRef.current?.save?.() || null;
+    const dataUrl = saveResult?.dataUrl || saveResult || null;
+    const canvasSize = saveResult?.width
+      ? { width: saveResult.width, height: saveResult.height }
+      : null;
+    const senderDisplayName =
+      session.user?.user_metadata?.full_name ||
+      session.user?.user_metadata?.name ||
+      session.user?.email?.split('@')[0] ||
+      '연출';
+
+    try {
+      const submitResult = await submitHandwritingSession(
+        resource?.link?.id,
+        senderDisplayName,
+        dataUrl,
+        memoText.trim() || null,
+        canvasSize
+      );
+      await createFeedbackReplyLink({
+        versionId: submitResult?.version_id || resource?.version?.id,
+        sessionId: submitResult?.session_id,
+      });
+      setHandwritingSent(true);
+    } catch (err) {
+      alert('회신 중 문제가 발생했어요. 잠시 후 다시 시도해주세요.');
+    }
+  }, [resource, memoText]);
+
   if (expired) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: '#888', fontSize: 14 }}>
@@ -265,6 +306,32 @@ export default function SharedReviewView() {
                 <span style={{ fontSize: 12, color: '#27ae60', fontWeight: 500 }}>{importToast}</span>
               )}
               <button
+                onClick={() => setHandwritingMode(prev => !prev)}
+                style={{
+                  padding: '6px 12px', fontSize: 13, borderRadius: 8, border: 'none',
+                  cursor: 'pointer', whiteSpace: 'nowrap', minWidth: 'fit-content',
+                  background: handwritingMode ? '#E8F0FE' : '#F0EDE8',
+                  color: handwritingMode ? '#1a73e8' : '#666',
+                }}
+              >
+                ✏️ {handwritingMode ? '필기 모드' : '필기로 회신'}
+              </button>
+              {handwritingMode && (
+                <button
+                  onClick={handleHandwritingReply}
+                  disabled={handwritingSent}
+                  style={{
+                    padding: '6px 12px', fontSize: 13, borderRadius: 8,
+                    border: 'none', cursor: handwritingSent ? 'default' : 'pointer',
+                    whiteSpace: 'nowrap',
+                    background: '#E6F4EA',
+                    color: '#137333', fontWeight: 600,
+                  }}
+                >
+                  {handwritingSent ? '회신 완료 ✓' : '회신하기'}
+                </button>
+              )}
+              <button
                 onClick={handleImport}
                 disabled={importing}
                 style={{
@@ -323,35 +390,115 @@ export default function SharedReviewView() {
           )}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '6px 0', userSelect: 'none', flexWrap: 'wrap' }}>
-          <button onClick={zoomOut} style={zoomButtonStyle}>-</button>
-          <button onClick={zoomReset} style={{ ...zoomButtonStyle, minWidth: 48, fontSize: 11 }}>
-            {Math.round(zoom * 100)}%
-          </button>
-          <button onClick={zoomIn} style={zoomButtonStyle}>+</button>
-          <button
-            onClick={handlePdfDownload}
-            disabled={pdfExporting}
-            style={{
-              ...zoomButtonStyle,
-              background: '#8DA0BB',
-              color: '#fff',
-              border: 'none',
-              padding: '3px 12px',
-              fontSize: 12,
-              fontWeight: 600,
-              opacity: pdfExporting ? 0.6 : 1,
-              cursor: pdfExporting ? 'default' : 'pointer',
-            }}
-          >
-            {pdfExporting ? `${pdfStep || 'PDF'} 중...` : 'PDF 다운로드'}
-          </button>
-        </div>
+        {!handwritingMode && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '6px 0', userSelect: 'none', flexWrap: 'wrap' }}>
+            <button onClick={zoomOut} style={zoomButtonStyle}>-</button>
+            <button onClick={zoomReset} style={{ ...zoomButtonStyle, minWidth: 48, fontSize: 11 }}>
+              {Math.round(zoom * 100)}%
+            </button>
+            <button onClick={zoomIn} style={zoomButtonStyle}>+</button>
+            <button
+              onClick={handlePdfDownload}
+              disabled={pdfExporting}
+              style={{
+                ...zoomButtonStyle,
+                background: '#8DA0BB',
+                color: '#fff',
+                border: 'none',
+                padding: '3px 12px',
+                fontSize: 12,
+                fontWeight: 600,
+                opacity: pdfExporting ? 0.6 : 1,
+                cursor: pdfExporting ? 'default' : 'pointer',
+              }}
+            >
+              {pdfExporting ? `${pdfStep || 'PDF'} 중...` : 'PDF 다운로드'}
+            </button>
+          </div>
+        )}
 
         {/* 100% 기준 폭: 모바일이면 화면 가로, 그 외엔 태블릿(768)로 제한 */}
-        <div style={{ width: '100%', maxWidth: isMobile ? '100%' : 768, margin: '0 auto' }}>
-          <PreviewRenderer appState={appState} selections={selections} zoom={zoom} />
-        </div>
+        {handwritingMode && (
+          <div style={{ maxWidth: isMobile ? '100%' : 768, margin: '0 auto 8px' }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '6px 8px',
+              background: '#F0EDE8',
+              borderRadius: 8,
+            }}>
+              {[['pen', '펜'], ['highlighter', '형광펜'], ['eraser', '지우개']].map(([t, l]) => (
+                <button key={t} onClick={() => setActiveTool(t)}
+                  style={{
+                    fontSize: 12, padding: '3px 8px', borderRadius: 6,
+                    border: 'none', cursor: 'pointer',
+                    background: activeTool === t ? '#E8F0FE' : 'transparent',
+                    color: activeTool === t ? '#1a73e8' : '#666',
+                    fontWeight: activeTool === t ? 600 : 400,
+                  }}
+                >
+                  {l}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {isMobile && handwritingMode && (
+          <div style={{ maxWidth: '100%', margin: '0 auto 8px', padding: '0 8px' }}>
+            <textarea
+              value={memoText}
+              onChange={(e) => setMemoText(e.target.value)}
+              placeholder="텍스트 메모 (선택)"
+              style={{
+                width: '100%', minHeight: 80, padding: '8px',
+                fontSize: 13, borderRadius: 8, resize: 'vertical',
+                border: '1px solid #D0CCC4', fontFamily: 'inherit',
+                boxSizing: 'border-box', background: '#FAFAF8',
+              }}
+            />
+          </div>
+        )}
+        {handwritingMode ? (
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', maxWidth: 780, margin: '0 auto', width: '100%' }}>
+            <div
+              ref={scrollContainerRef}
+              style={{ position: 'relative', width: isMobile ? '100%' : 568, flexShrink: 0 }}
+            >
+              <DirectorScriptViewer
+                appState={appState}
+                selections={selections}
+                readOnly={true}
+                watermarkText={resource?.link?.watermark_text || null}
+              />
+              <HandwritingCanvas
+                ref={hwCanvasRef}
+                scriptLinkId={resource?.link?.id || 'review'}
+                isActive={true}
+                containerRef={scrollContainerRef}
+                activeTool={activeTool}
+              />
+            </div>
+            {!isMobile && (
+              <div style={{ width: 200, flexShrink: 0, position: 'sticky', top: 8, alignSelf: 'flex-start' }}>
+                <div style={{ fontSize: 11, color: '#666', marginBottom: 6 }}>텍스트 메모</div>
+                <textarea
+                  value={memoText}
+                  onChange={(e) => setMemoText(e.target.value)}
+                  placeholder="메모를 입력하세요"
+                  style={{
+                    width: '100%', minHeight: 200, padding: '8px',
+                    fontSize: 13, borderRadius: 8, resize: 'vertical',
+                    border: '1px solid #D0CCC4', fontFamily: 'inherit',
+                    boxSizing: 'border-box', background: '#FAFAF8',
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ width: '100%', maxWidth: isMobile ? '100%' : 768, margin: '0 auto' }}>
+            <PreviewRenderer appState={appState} selections={selections} zoom={zoom} />
+          </div>
+        )}
       </div>
 
       {/* 카카오 애드핏 — 검토링크 페이지 하단 고정 (PC 728×90 / 모바일 320×100) */}

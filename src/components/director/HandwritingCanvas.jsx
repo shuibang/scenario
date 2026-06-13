@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
 
 const TOOLS = {
   pen:         { color: '#000000', lineWidth: 2,  globalAlpha: 1.0, compositeOp: 'source-over' },
@@ -11,17 +11,29 @@ function getCanvasPos(e, canvas) {
   return { x: e.clientX - rect.left, y: e.clientY - rect.top };
 }
 
-export default function HandwritingCanvas({ scriptLinkId, isActive, containerRef, activeTool = 'pen' }) {
+const HandwritingCanvas = forwardRef(function HandwritingCanvas(
+  { scriptLinkId, isActive, containerRef, activeTool = 'pen', onSave, initialImageUrl = null, initialSize = null, opacity: externalOpacity },
+  ref
+) {
   const canvasRef          = useRef(null);
   const drawing            = useRef(false);
   const saveTimer          = useRef(null);
-  const lastPoint          = useRef(null);
+  const pointsRef          = useRef([]);   // 베지어 스무딩용 포인트 누적 (펜·형광펜 공용)
   const offscreenCanvasRef = useRef(null); // 형광펜 획 누적용 오프스크린
   const savedImageRef      = useRef(null); // 획 시작 전 메인 캔버스 스냅샷 (ImageData)
   const storageKey = scriptLinkId ? `director_handwriting_${scriptLinkId}` : null;
 
   // 캔버스를 스크롤 컨테이너 전체 크기에 맞춤, 리사이즈 전 내용 보존
+  // initialSize가 있으면 그 크기로 고정하고 containerRef는 무시
   const applySize = useCallback(() => {
+    if (initialSize) {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      if (canvas.width === initialSize.width && canvas.height === initialSize.height) return;
+      canvas.width  = initialSize.width;
+      canvas.height = initialSize.height;
+      return;
+    }
     const container = containerRef?.current;
     const canvas    = canvasRef.current;
     if (!container || !canvas) return;
@@ -48,7 +60,7 @@ export default function HandwritingCanvas({ scriptLinkId, isActive, containerRef
       img.onload = () => canvas.getContext('2d').drawImage(img, 0, 0);
       img.src = savedUrl;
     }
-  }, [containerRef]);
+  }, [containerRef, initialSize]);
 
   useEffect(() => {
     const container = containerRef?.current;
@@ -59,24 +71,42 @@ export default function HandwritingCanvas({ scriptLinkId, isActive, containerRef
     return () => observer.disconnect();
   }, [containerRef, applySize]);
 
-  // scriptLinkId가 바뀌면 캔버스 초기화 후 해당 버전 필기 불러오기
+  // scriptLinkId가 바뀌면 캔버스 초기화 후 필기 불러오기 (localStorage 우선, 없으면 initialImageUrl)
+  // initialSize가 있으면 크기를 먼저 고정 후 이미지 로드
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if (!storageKey) return;
-    const stored = localStorage.getItem(storageKey);
-    if (!stored) return;
+    if (!canvasRef.current) return;
+    if (initialSize) {
+      canvasRef.current.width  = initialSize.width;
+      canvasRef.current.height = initialSize.height;
+    }
+    const ctx = canvasRef.current.getContext('2d');
+    ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+    let src = null;
+    if (storageKey) {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) {
+        try { src = JSON.parse(raw).dataUrl; } catch { src = raw; }
+      }
+    }
+    src = src || initialImageUrl || null;
+    if (!src) return;
     const img = new Image();
-    img.onload = () => ctx.drawImage(img, 0, 0);
-    img.src = stored;
-  }, [scriptLinkId, storageKey]);
+    img.onload = () => ctx.drawImage(img, 0, 0,
+      canvasRef.current.width, canvasRef.current.height);
+    img.src = src;
+  }, [scriptLinkId, storageKey, initialImageUrl, initialSize]);
 
   const saveToStorage = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas || !storageKey) return;
-    try { localStorage.setItem(storageKey, canvas.toDataURL('image/png')); } catch { /* storage full */ }
+    try {
+      const payload = JSON.stringify({
+        dataUrl: canvas.toDataURL('image/png'),
+        width: canvas.width,
+        height: canvas.height,
+      });
+      localStorage.setItem(storageKey, payload);
+    } catch { /* storage full */ }
   }, [storageKey]);
 
   const debouncedSave = useCallback(() => {
@@ -108,20 +138,35 @@ export default function HandwritingCanvas({ scriptLinkId, isActive, containerRef
       offCtx.lineCap     = 'round';
       offCtx.lineJoin    = 'round';
       offCtx.globalAlpha = 1.0; // 오프스크린엔 불투명하게
-      offCtx.beginPath();
-      offCtx.moveTo(x, y);
-    } else {
-      const tool = TOOLS[activeTool] || TOOLS.pen;
+      pointsRef.current  = [{ x, y }];
+    } else if (activeTool === 'eraser') {
+      // 지우개: 기존 방식 유지 (스무딩 불필요)
+      const tool = TOOLS.eraser;
       ctx.globalCompositeOperation = tool.compositeOp;
-      ctx.strokeStyle  = tool.color;
-      ctx.lineWidth    = tool.lineWidth;
-      ctx.globalAlpha  = tool.globalAlpha;
-      ctx.lineCap      = 'round';
-      ctx.lineJoin     = 'round';
+      ctx.strokeStyle = tool.color;
+      ctx.lineWidth   = tool.lineWidth;
+      ctx.globalAlpha = tool.globalAlpha;
+      ctx.lineCap     = 'round';
+      ctx.lineJoin    = 'round';
       ctx.beginPath();
       ctx.moveTo(x, y);
+    } else {
+      // 펜: pressure 감지 + 획 시작 점 찍기
+      const pressure = e.pressure || 0.5;
+      const lw = 2 * (0.5 + pressure * 1.5);
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha  = 1.0;
+      ctx.strokeStyle  = TOOLS.pen.color;
+      ctx.fillStyle    = TOOLS.pen.color;
+      ctx.lineWidth    = lw;
+      ctx.lineCap      = 'round';
+      ctx.lineJoin     = 'round';
+      // 획 시작 끝점 처리 — 뭉툭한 마무리
+      ctx.beginPath();
+      ctx.arc(x, y, lw / 2, 0, Math.PI * 2);
+      ctx.fill();
+      pointsRef.current = [{ x, y }];
     }
-    lastPoint.current = { x, y };
   }, [isActive, activeTool]);
 
   const handlePointerMove = useCallback((e) => {
@@ -132,13 +177,32 @@ export default function HandwritingCanvas({ scriptLinkId, isActive, containerRef
 
     if (activeTool === 'highlighter') {
       const offscreen = offscreenCanvasRef.current;
-      if (!offscreen || !lastPoint.current) return;
-      // 오프스크린에 구간 드로우 (불투명, globalAlpha 누적 없음)
+      if (!offscreen) return;
       const offCtx = offscreen.getContext('2d');
-      offCtx.beginPath();
-      offCtx.moveTo(lastPoint.current.x, lastPoint.current.y);
-      offCtx.lineTo(x, y);
-      offCtx.stroke();
+
+      pointsRef.current.push({ x, y });
+      const pts = pointsRef.current;
+      if (pts.length < 2) return;
+
+      // 마지막 세 점으로 베지어 제어점 계산 (오프스크린에 동일 적용)
+      // pts === 2이면 직선 fallback으로 첫 획 끊김 방지
+      if (pts.length === 2) {
+        offCtx.beginPath();
+        offCtx.moveTo(pts[0].x, pts[0].y);
+        offCtx.lineTo(pts[1].x, pts[1].y);
+        offCtx.stroke();
+      } else {
+        const p0  = pts[pts.length - 3];
+        const p1  = pts[pts.length - 2];
+        const p2  = pts[pts.length - 1];
+        const cpX = (p0.x + p2.x) / 2;
+        const cpY = (p0.y + p2.y) / 2;
+        offCtx.beginPath();
+        offCtx.moveTo(p0.x, p0.y);
+        offCtx.quadraticCurveTo(p1.x, p1.y, cpX, cpY);
+        offCtx.stroke();
+      }
+
       // 메인 캔버스 = 스냅샷 + 오프스크린 × 0.4 (매 프레임 한 번만 합성)
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       if (savedImageRef.current) ctx.putImageData(savedImageRef.current, 0, 0);
@@ -147,34 +211,68 @@ export default function HandwritingCanvas({ scriptLinkId, isActive, containerRef
       ctx.globalCompositeOperation = 'source-over';
       ctx.drawImage(offscreen, 0, 0);
       ctx.restore();
-      lastPoint.current = { x, y };
     } else if (activeTool === 'eraser') {
       // 지우개: destination-out 누적 방식 유지
       ctx.lineTo(x, y);
       ctx.stroke();
     } else {
-      // 펜: 구간별 드로우
-      if (!lastPoint.current) return;
-      ctx.beginPath();
-      ctx.moveTo(lastPoint.current.x, lastPoint.current.y);
-      ctx.lineTo(x, y);
-      ctx.stroke();
-      lastPoint.current = { x, y };
+      // 펜: 베지어 스무딩 + pressure 감지
+      pointsRef.current.push({ x, y });
+      const pts = pointsRef.current;
+      if (pts.length < 2) return;
+
+      const pressure = e.pressure || 0.5;
+      ctx.lineWidth = 2 * (0.5 + pressure * 1.5);
+
+      // pts === 2이면 직선 fallback으로 첫 획 끊김 방지
+      if (pts.length === 2) {
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        ctx.lineTo(pts[1].x, pts[1].y);
+        ctx.stroke();
+      } else {
+        const p0  = pts[pts.length - 3];
+        const p1  = pts[pts.length - 2];
+        const p2  = pts[pts.length - 1];
+        const cpX = (p0.x + p2.x) / 2;
+        const cpY = (p0.y + p2.y) / 2;
+
+        ctx.beginPath();
+        ctx.moveTo(p0.x, p0.y);
+        ctx.quadraticCurveTo(p1.x, p1.y, cpX, cpY);
+        ctx.stroke();
+      }
     }
   }, [isActive, activeTool]);
 
   const handlePointerUp = useCallback(() => {
     if (!drawing.current) return;
     drawing.current = false;
-    lastPoint.current  = null;
+
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+
+    if (ctx && activeTool === 'pen') {
+      // 획 끝 처리 — 뭉툭한 마무리 (ctx.lineWidth는 마지막 Move에서 설정된 값 그대로)
+      const lastPt = pointsRef.current[pointsRef.current.length - 1];
+      if (lastPt) {
+        ctx.fillStyle = TOOLS.pen.color;
+        ctx.beginPath();
+        ctx.arc(lastPt.x, lastPt.y, ctx.lineWidth / 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    if (ctx) {
+      ctx.closePath();
+      ctx.globalAlpha = 1.0;
+      ctx.globalCompositeOperation = 'source-over';
+    }
+
+    pointsRef.current  = [];
     savedImageRef.current = null;
-    const ctx = canvasRef.current?.getContext('2d');
-    if (!ctx) return;
-    ctx.closePath();
-    ctx.globalAlpha = 1.0;
-    ctx.globalCompositeOperation = 'source-over';
     debouncedSave();
-  }, [debouncedSave]);
+  }, [activeTool, debouncedSave]);
 
   const handleClear = useCallback(() => {
     const canvas = canvasRef.current;
@@ -184,6 +282,16 @@ export default function HandwritingCanvas({ scriptLinkId, isActive, containerRef
       try { localStorage.removeItem(storageKey); } catch { /* ignore */ }
     }
   }, [storageKey]);
+
+  useImperativeHandle(ref, () => ({
+    save() {
+      const canvas = canvasRef.current;
+      if (!canvas) return null;
+      const dataUrl = canvas.toDataURL('image/png');
+      if (onSave) onSave(dataUrl);
+      return { dataUrl, width: canvas.width, height: canvas.height };
+    },
+  }), [onSave]);
 
   const cursorStyle = !isActive ? 'default' : activeTool === 'eraser' ? 'cell' : 'crosshair';
 
@@ -197,7 +305,7 @@ export default function HandwritingCanvas({ scriptLinkId, isActive, containerRef
           left: 0,
           zIndex: 10,
           pointerEvents: isActive ? 'auto' : 'none',
-          opacity: isActive ? 1 : 0.35,
+          opacity: isActive ? 1 : (externalOpacity != null ? externalOpacity : 0.35),
           touchAction: 'none',
           cursor: cursorStyle,
         }}
@@ -239,4 +347,6 @@ export default function HandwritingCanvas({ scriptLinkId, isActive, containerRef
       )}
     </>
   );
-}
+});
+
+export default HandwritingCanvas;

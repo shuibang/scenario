@@ -216,7 +216,12 @@ async function saveWorkToDrive(scriptId, session) {
     Array.isArray(storyboard) && storyboard.length === 0 &&
     (sceneList == null || Object.keys(sceneList).length === 0);
   if (isEmpty) throw new Error('EMPTY_DATA');
-  const workData = { _info: '이 파일은 대본 작업실 연출작업실 전용 파일입니다. 직접 편집하지 마세요. daejak.kr', scriptId, privateNotes, storyboard, sceneList, handwriting: null, savedAt: new Date().toISOString() };
+  const hwRaw = localStorage.getItem(`director_handwriting_${scriptId}`);
+  let hwDataUrl = null;
+  if (hwRaw) {
+    try { hwDataUrl = JSON.parse(hwRaw).dataUrl; } catch { hwDataUrl = hwRaw; }
+  }
+  const workData = { _info: '이 파일은 대본 작업실 연출작업실 전용 파일입니다. 직접 편집하지 마세요. daejak.kr', scriptId, privateNotes, storyboard, sceneList, handwriting: hwDataUrl, savedAt: new Date().toISOString() };
 
   const { data: row } = await supabase
     .from('shared_scripts')
@@ -3081,69 +3086,153 @@ function attachDirectorNotes(panels, scriptId) {
   } catch { return panels; }
 }
 
-// ─── DrawingCanvas (다크 테마) ────────────────────────────────────────────────
-function SbDrawingCanvas({ initialData, onSave }) {
+// ─── 이미지 슬롯 ───────────────────────────────────────────────────────────────
+
+function SbImageSlot({ drawingData, onChange, slotHeight = 120, panelId }) {
   const D = useD();
-  const canvasRef = useRef(null);
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [tool, setTool] = useState('pen');
-  const lastPos = useRef(null);
-  const BG = D.canvasBg, PEN = D.canvasPen;
+  const [mode, setMode] = useState('image'); // 'image' | 'draw'
+  const [showUrl, setShowUrl] = useState(false);
+  const [urlVal, setUrlVal] = useState('');
+  const [sbTool, setSbTool] = useState('pen');
+  const cameraRef = useRef(null);
+  const galleryRef = useRef(null);
+  const slotContainerRef = useRef(null);
+  const hwCanvasRef = useRef(null);
 
-  const fillBg = (ctx, canvas) => { ctx.fillStyle = BG; ctx.fillRect(0, 0, canvas.width, canvas.height); };
-
-  useEffect(() => {
-    const canvas = canvasRef.current, ctx = canvas.getContext('2d');
-    fillBg(ctx, canvas);
-    if (initialData) { const img = new Image(); img.onload = () => ctx.drawImage(img, 0, 0); img.src = initialData; }
-  }, [BG]);
-
-  const getPos = (e, canvas) => {
-    const rect = canvas.getBoundingClientRect();
-    const sx = canvas.width / rect.width, sy = canvas.height / rect.height;
-    const cx = e.touches ? e.touches[0].clientX : e.clientX;
-    const cy = e.touches ? e.touches[0].clientY : e.clientY;
-    return { x: (cx - rect.left) * sx, y: (cy - rect.top) * sy };
+  const handleFile = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => onChange(reader.result);
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
-  const startDraw = (e) => { e.preventDefault(); setIsDrawing(true); lastPos.current = getPos(e, canvasRef.current); };
-  const draw = (e) => {
-    e.preventDefault(); if (!isDrawing) return;
-    const canvas = canvasRef.current, ctx = canvas.getContext('2d');
-    const pos = getPos(e, canvas);
-    ctx.beginPath(); ctx.moveTo(lastPos.current.x, lastPos.current.y); ctx.lineTo(pos.x, pos.y);
-    ctx.strokeStyle = tool === 'eraser' ? BG : PEN;
-    ctx.lineWidth = tool === 'eraser' ? 12 : 1.5;
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke();
-    lastPos.current = pos;
-  };
-  const endDraw = () => { if (!isDrawing) return; setIsDrawing(false); onSave(canvasRef.current.toDataURL()); };
-  const clear = () => { const canvas = canvasRef.current, ctx = canvas.getContext('2d'); fillBg(ctx, canvas); onSave(canvas.toDataURL()); };
 
-  return (
-    <div style={{ position: 'relative' }}>
-      <canvas ref={canvasRef} width={320} height={180}
-        style={{ width: '100%', aspectRatio: '16/9', display: 'block', cursor: tool === 'eraser' ? 'cell' : 'crosshair', borderRadius: 2, touchAction: 'none' }}
-        onMouseDown={startDraw} onMouseMove={draw} onMouseUp={endDraw} onMouseLeave={endDraw}
-        onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={endDraw}
-      />
-      <div style={{ position: 'absolute', bottom: 6, right: 6, display: 'flex', gap: 4 }}>
-        {[['pen','✏️'],['eraser','🧹']].map(([t, icon]) => (
-          <button key={t} onClick={() => setTool(t)} title={t}
-            style={{ width: 26, height: 26, border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13,
-              background: tool === t ? D.accent : D.card, color: tool === t ? '#1a1a1a' : D.text3 }}>
-            {icon}
-          </button>
-        ))}
-        <button onClick={clear} title="초기화"
-          style={{ width: 26, height: 26, border: 'none', borderRadius: 4, cursor: 'pointer', background: 'rgba(224,92,92,0.2)', color: '#e05c5c', fontSize: 13 }}>✕</button>
+  // drawingData 있을 때: 탭/그리기 UI 없이 이미지+✕만 표시
+  if (drawingData) {
+    return (
+      <div style={{ position: 'relative', width: '100%', height: slotHeight }}>
+        <img src={drawingData} alt=""
+          style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', borderRadius: 4, background: D.panel }} />
+        <button onClick={() => onChange(null)}
+          style={{ position: 'absolute', top: 4, right: 4, width: 22, height: 22, border: 'none', borderRadius: 4,
+            background: 'rgba(0,0,0,0.55)', color: '#fff', cursor: 'pointer', fontSize: 12,
+            display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
       </div>
-      {/* 3×3 가이드 그리드 */}
-      <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', opacity: 0.12 }} viewBox="0 0 320 180">
-        <line x1="107" y1="0" x2="107" y2="180" stroke="#fff" strokeWidth="0.5" strokeDasharray="3,3"/>
-        <line x1="213" y1="0" x2="213" y2="180" stroke="#fff" strokeWidth="0.5" strokeDasharray="3,3"/>
-        <line x1="0" y1="60" x2="320" y2="60" stroke="#fff" strokeWidth="0.5" strokeDasharray="3,3"/>
-        <line x1="0" y1="120" x2="320" y2="120" stroke="#fff" strokeWidth="0.5" strokeDasharray="3,3"/>
-      </svg>
+    );
+  }
+
+  // drawingData 없을 때: 모드 탭 + 모드별 UI
+  return (
+    <div style={{ width: '100%', background: D.panel, border: `1px solid ${D.border}`, borderRadius: 6, overflow: 'hidden' }}>
+      {/* 모드 탭 */}
+      <div style={{ display: 'flex', borderBottom: '1px solid var(--color-border-tertiary)' }}>
+        <button onClick={() => setMode('image')}
+          style={{ flex: 1, padding: '6px 0', fontSize: 12, border: 'none',
+            background: 'none', cursor: 'pointer',
+            borderBottom: mode === 'image' ? '2px solid var(--color-text-primary)' : 'none',
+            color: mode === 'image' ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+            fontWeight: mode === 'image' ? 500 : 400 }}>
+          🖼 이미지
+        </button>
+        <button onClick={() => setMode('draw')}
+          style={{ flex: 1, padding: '6px 0', fontSize: 12, border: 'none',
+            background: 'none', cursor: 'pointer',
+            borderBottom: mode === 'draw' ? '2px solid var(--color-text-primary)' : 'none',
+            color: mode === 'draw' ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+            fontWeight: mode === 'draw' ? 500 : 400 }}>
+          ✏️ 그리기
+        </button>
+      </div>
+
+      {mode === 'image' ? (
+        /* ── 이미지 모드 ── */
+        <div style={{ height: slotHeight, display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          <input ref={cameraRef} type="file" accept="image/*" capture="environment"
+            style={{ display: 'none' }} onChange={handleFile} />
+          <input ref={galleryRef} type="file" accept="image/*"
+            style={{ display: 'none' }} onChange={handleFile} />
+          {!showUrl ? (
+            <div style={{ display: 'flex', gap: 16 }}>
+              {[['📷','카메라', () => cameraRef.current?.click()],
+                ['🖼','갤러리', () => galleryRef.current?.click()],
+                ['🔗','URL',    () => setShowUrl(true)]].map(([icon, label, fn]) => (
+                <button key={label} onClick={fn}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12,
+                    color: D.text3, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                  <span style={{ fontSize: 20 }}>{icon}</span>
+                  <span>{label}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div style={{ width: '100%', padding: '0 12px' }}>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <input
+                  autoFocus
+                  value={urlVal}
+                  onChange={e => setUrlVal(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && urlVal.trim()) { onChange(urlVal.trim()); setShowUrl(false); setUrlVal(''); }
+                    if (e.key === 'Escape') { setShowUrl(false); setUrlVal(''); }
+                  }}
+                  placeholder="이미지 URL 입력…"
+                  style={{ flex: 1, background: D.bg, border: `1px solid ${D.border}`, borderRadius: 4,
+                    color: D.text, padding: '4px 8px', fontSize: 12, outline: 'none', fontFamily: 'inherit' }}
+                />
+                <button onClick={() => { if (urlVal.trim()) onChange(urlVal.trim()); setShowUrl(false); setUrlVal(''); }}
+                  style={{ background: D.accent, border: 'none', borderRadius: 4, color: '#1a1a1a',
+                    cursor: 'pointer', fontSize: 12, padding: '0 10px', fontWeight: 600 }}>확인</button>
+                <button onClick={() => { setShowUrl(false); setUrlVal(''); }}
+                  style={{ background: 'none', border: `1px solid ${D.border}`, borderRadius: 4,
+                    color: D.text3, cursor: 'pointer', fontSize: 12, padding: '0 8px' }}>취소</button>
+              </div>
+              <p style={{ fontSize: 10, color: 'var(--color-text-tertiary)',
+                margin: '4px 0 0', lineHeight: 1.4 }}>
+                일부 외부 이미지는 보안 정책으로 표시되지 않을 수 있습니다. 파일 업로드를 권장합니다.
+              </p>
+            </div>
+          )}
+        </div>
+      ) : (
+        /* ── 그리기 모드 ── */
+        <div>
+          {/* 툴바 */}
+          <div style={{ display: 'flex', gap: 4, padding: '4px 8px', alignItems: 'center',
+            borderBottom: `1px solid ${D.border}` }}>
+            {[['pen','펜'],['highlighter','형광펜'],['eraser','지우개']].map(([t, l]) => (
+              <button key={t} onClick={() => setSbTool(t)}
+                style={{ fontSize: 11, padding: '2px 6px', borderRadius: 4, border: 'none',
+                  cursor: 'pointer',
+                  background: sbTool === t ? 'var(--color-background-info)' : 'transparent',
+                  color: sbTool === t ? 'var(--color-text-info)' : 'var(--color-text-secondary)' }}>
+                {l}
+              </button>
+            ))}
+            <button
+              onClick={() => hwCanvasRef.current?.save()}
+              style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, border: 'none',
+                cursor: 'pointer', marginLeft: 'auto',
+                background: 'var(--color-background-success)',
+                color: 'var(--color-text-success)', fontWeight: 500 }}>
+              저장
+            </button>
+          </div>
+          {/* 캔버스 영역 */}
+          <div ref={slotContainerRef}
+            style={{ position: 'relative', height: slotHeight, overflow: 'hidden', background: '#ffffff' }}>
+            <HandwritingCanvas
+              ref={hwCanvasRef}
+              scriptLinkId={panelId ? `sb_${panelId}` : null}
+              isActive={true}
+              containerRef={slotContainerRef}
+              activeTool={sbTool}
+              onSave={dataUrl => { onChange(dataUrl); setMode('image'); }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -3264,14 +3353,14 @@ function SbPanelCard({ panel, index, total, onChange, onDelete, onMove, cardView
         isRow ? (
           <div style={{ display: 'flex' }}>
             <div style={{ width: '42%', flexShrink: 0, borderRight: `1px solid ${D.border}` }}>
-              <SbDrawingCanvas initialData={panel.drawingData} onSave={d => u('drawingData', d)} />
+              <SbImageSlot drawingData={panel.drawingData} onChange={d => u('drawingData', d)} slotHeight={120} panelId={panel.id} />
             </div>
             <div style={{ flex: 1, padding: 12, minWidth: 0 }}>{fields}</div>
           </div>
         ) : (
           <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{ border: `1px solid ${D.border}`, borderRadius: 4, overflow: 'hidden' }}>
-              <SbDrawingCanvas initialData={panel.drawingData} onSave={d => u('drawingData', d)} />
+              <SbImageSlot drawingData={panel.drawingData} onChange={d => u('drawingData', d)} slotHeight={160} panelId={panel.id} />
             </div>
             {fields}
           </div>
@@ -3930,7 +4019,7 @@ function StoryboardPanel({ isGuest, isMobile = false, mobilePreSelected = null, 
     // 색상 값 검증 (hex/rgb 계열만 허용)
     const safeColor = c => /^#[0-9a-f]{3,8}$|^rgb/i.test(c || '') ? c : '#fef08a';
     // drawingData: base64 data URL 형식만 허용
-    const safeDataUrl = d => typeof d === 'string' && d.startsWith('data:image/') ? d : null;
+    const safeDataUrl = d => typeof d === 'string' && (d.startsWith('data:image/') || /^https?:\/\/.+/.test(d)) ? d : null;
 
     const panelHtml = panels.map((p, i) => {
       const notes = (p.annotatedBlocks || []).filter(b => b.note);
