@@ -630,7 +630,7 @@ export default function DirectorNotesPage() {
               viewer.appState?.watermarkText
               || viewer.senderBadge?.label
               || viewer.senderDisplayName
-              || '연출'
+              || null
             }
           />
           {activeSession?.handwriting_png && (
