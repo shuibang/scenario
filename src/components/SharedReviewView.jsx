@@ -314,7 +314,7 @@ export default function SharedReviewView() {
                   color: handwritingMode ? '#1a73e8' : '#666',
                 }}
               >
-                ✏️ {handwritingMode ? '필기 모드' : '필기로 회신'}
+                ✏️ {handwritingMode ? '메모 모드' : '메모후 회신'}
               </button>
               {handwritingMode && (
                 <button
@@ -452,7 +452,7 @@ export default function SharedReviewView() {
                 width: '100%', minHeight: 80, padding: '8px',
                 fontSize: 13, borderRadius: 8, resize: 'vertical',
                 border: '1px solid #D0CCC4', fontFamily: 'inherit',
-                boxSizing: 'border-box', background: '#FAFAF8',
+                boxSizing: 'border-box', background: '#FAFAF8', color: '#333',
               }}
             />
           </div>
@@ -488,7 +488,7 @@ export default function SharedReviewView() {
                     width: '100%', minHeight: 200, padding: '8px',
                     fontSize: 13, borderRadius: 8, resize: 'vertical',
                     border: '1px solid #D0CCC4', fontFamily: 'inherit',
-                    boxSizing: 'border-box', background: '#FAFAF8',
+                    boxSizing: 'border-box', background: '#FAFAF8', color: '#333',
                   }}
                 />
               </div>

@@ -12,7 +12,7 @@ import { handleDropboxCallback, consumeInitialDropboxCode, isDropboxTokenValid, 
 import { getActiveProvider, setActiveProvider } from './store/storageProvider';
 import { useDropboxAuthState } from './hooks/useDropboxAuthState';
 import { describeDropboxError } from './utils/dropboxError';
-import { serializeProject } from './utils/projectSerializer';
+import { serializeProject, deserializeProject } from './utils/projectSerializer';
 import { supabase, signInWithGoogle, supabaseSignOut, extractUserData, refreshDriveToken } from './store/supabaseClient';
 import LeftPanel from './components/LeftPanel';
 import RightPanel from './components/RightPanel';
@@ -3013,9 +3013,29 @@ export default function App() {
     <AppProvider>
       <Shell authUser={authUser} setAuthUser={setAuthUser} />
       <StyleOnboardingGate />
+      <FileOpenHandler />
       {webViewModal && <WebViewModal onClose={() => setWebViewModal(false)} />}
     </AppProvider>
   );
+}
+
+function FileOpenHandler() {
+  const { dispatch } = useApp();
+  useEffect(() => {
+    if (!('launchQueue' in window)) return;
+    window.launchQueue.setConsumer(async (launchParams) => {
+      if (!launchParams.files?.length) return;
+      const fileHandle = launchParams.files[0];
+      try {
+        const file = await fileHandle.getFile();
+        const text = await file.text();
+        const imported = deserializeProject(JSON.parse(text));
+        dispatch({ type: 'REPLACE_PROJECT_DATA', payload: imported });
+        dispatch({ type: 'SET_ACTIVE_PROJECT', id: imported.project.id });
+      } catch { /* 잘못된 파일 형식 무시 */ }
+    });
+  }, [dispatch]);
+  return null;
 }
 
 // 처음 사용자에게만 1회 표시되는 스타일 마법사 게이트.
