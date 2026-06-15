@@ -3535,7 +3535,17 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   const flushSave = useCallback(() => {
     if (!activeEpisodeId || !blocks.length) return;
     clearTimeout(saveTimer.current);
-    const sceneBlocks = blocks.filter(b => b.type === 'scene_number');
+
+    // composing 중이면 DOM 직접 읽어 in-flight 음절 포함 (Ctrl+S 타이밍 버그 방지)
+    let saveBlocks = blocks;
+    if (composingRef.current && surfaceRef.current) {
+      const parsed = parseSurface(surfaceRef.current, metaRef, activeEpisodeId, activeProjectId);
+      const normalized = normalizeEmptySceneNumberBlocks(parsed);
+      if (normalized.length > 0) saveBlocks = normalized;
+      composingRef.current = false;
+    }
+
+    const sceneBlocks = saveBlocks.filter(b => b.type === 'scene_number');
     const updatedScenes = sceneBlocks.map((b, idx) => {
       const existing = scenes.find(s => s.id === b.sceneId);
       return {
@@ -3554,10 +3564,10 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
         createdAt: existing?.createdAt || now(), updatedAt: now(),
       };
     });
-    dispatch({ type: 'SET_BLOCKS', episodeId: activeEpisodeId, payload: blocks });
+    dispatch({ type: 'SET_BLOCKS', episodeId: activeEpisodeId, payload: saveBlocks });
     dispatch({ type: 'SYNC_SCENES', episodeId: activeEpisodeId, payload: updatedScenes, removeOrphans: true });
     dispatch({ type: 'SET_SAVE_STATUS', payload: 'saved' });
-    lastSavedBlocks.current = JSON.stringify(blocks);
+    lastSavedBlocks.current = JSON.stringify(saveBlocks);
   }, [activeEpisodeId, activeProjectId, blocks, scenes, dispatch]);
 
   // ── 씬번호 블록에 인물 태그 표시 (등장체크 + 대사에서 감지된 인물)
