@@ -1696,11 +1696,14 @@ function Shell({ authUser, setAuthUser }) {
   const [updatingVersion, setUpdatingVersion] = useState(false);
   const [availableVersion, setAvailableVersion] = useState(null);
   const dismissedUpdateVersionRef = useRef(null);
+  const updateSWRef = useRef(null);
+
   useEffect(() => {
-    const DISMISS_KEY = 'drama_dismissed_update_version';
-    try { dismissedUpdateVersionRef.current = localStorage.getItem(DISMISS_KEY); } catch {}
     let active = true;
     const currentVersion = import.meta.env.VITE_BUILD_VERSION ?? 'dev';
+    const DISMISS_KEY = 'drama_dismissed_update_version';
+    try { dismissedUpdateVersionRef.current = localStorage.getItem(DISMISS_KEY); } catch {}
+
     const check = async () => {
       try {
         const res = await fetch('/version.json?t=' + Date.now(), { cache: 'no-store' });
@@ -1720,12 +1723,36 @@ function Shell({ authUser, setAuthUser }) {
         setNewVersionReady(true);
       } catch { /* 무시 */ }
     };
+
     check();
     const id = setInterval(check, 5 * 60 * 1000); // 5분마다
     return () => {
       active = false;
       clearInterval(id);
     };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    const register = async () => {
+      if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+      try {
+        const { registerSW } = await import('virtual:pwa-register');
+        const updateSW = registerSW({
+          immediate: true,
+          onNeedRefresh() {
+            if (!mounted) return;
+            setAvailableVersion((prev) => prev || 'sw');
+            setNewVersionReady(true);
+          },
+        });
+        updateSWRef.current = updateSW;
+      } catch {
+        // PWA 등록이 불가능하면 무시
+      }
+    };
+    register();
+    return () => { mounted = false; };
   }, []);
 
   // 10분마다 자동저장 스냅샷
@@ -2458,6 +2485,9 @@ function Shell({ authUser, setAuthUser }) {
                 await new Promise(r => setTimeout(r, 600));
                 // 2. IndexedDB flush 대기
                 await new Promise(r => setTimeout(r, 400));
+                if (updateSWRef.current) {
+                  try { await updateSWRef.current(true); } catch {}
+                }
                 window.location.reload();
               }}
               style={{ fontSize: 13, padding: '6px 20px', borderRadius: 8, border: 'none', background: 'var(--c-accent)', color: '#fff', cursor: 'pointer', fontWeight: 600 }}
