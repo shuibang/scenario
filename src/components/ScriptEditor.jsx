@@ -21,6 +21,8 @@ import { createAnnotation } from '../utils/annotationUtils';
 import { BUILTIN_GUIDES } from '../data/structureTags';
 import { resolveAnchorRect } from '../utils/pickerPosition';
 
+let suppressSceneNormalize = false;
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 const CHAR_SUGGEST_KEY = 'drama_charSuggestInAction';
 
@@ -725,6 +727,7 @@ function normalizeEmptySceneNumberBlocks(blocks = []) {
       specialSituation,
       ...rest
     } = block;
+    if (suppressSceneNormalize) return { ...rest };
     return { ...rest, type: 'action', content: '' };
   });
 }
@@ -1388,6 +1391,7 @@ const EditorSurface = forwardRef(function EditorSurface({
   // Backspace/Delete 머지처럼 직접 DOM 조작 후 명시적으로 doParse를 호출했을 때,
   // 그 직후 자동 발동되는 onInput이 cleanupBr + doParse를 또 돌려 race로 줄이 복제되는 버그 가드.
   const suppressNextInputRef = useRef(false);
+  const sceneBackspaceScheduledRef = useRef(false);
   const epIdRef = useRef(activeEpisodeId);
   const projIdRef = useRef(activeProjectId);
   epIdRef.current = activeEpisodeId;
@@ -1826,18 +1830,6 @@ const EditorSurface = forwardRef(function EditorSurface({
 
     syncSceneDraftDom(surfaceRef.current);
 
-    {
-      const normalizedSceneBlock = normalizeEmptySceneNumberDom(surfaceRef.current);
-      if (normalizedSceneBlock) {
-        slashOffsetRef.current = null;
-        onSlashClose?.();
-        onCharSuggest?.(null, null);
-        setCaret(normalizedSceneBlock, 0);
-        doParse();
-        return;
-      }
-    }
-
     // "1." → 씬번호 변환 (모바일 IME 키보드는 keydown에서 '.' 키를 못 잡으므로
     // input 이벤트에서도 "숫자+마침표" 상태를 감지해 변환한다. 데스크톱은 keydown
     // 핸들러가 '.' 입력 전에 이미 변환하므로 여기 도달하지 않음.)
@@ -1916,14 +1908,12 @@ const EditorSurface = forwardRef(function EditorSurface({
     const type = blockEl.dataset.blockType;
 
     if (!ctrl && !e.altKey && (e.key === 'Backspace' || e.key === 'Delete') && type === 'scene_number') {
+      suppressSceneNormalize = true;
+      sceneBackspaceScheduledRef.current = true;
       requestAnimationFrame(() => {
-        const normalizedSceneBlock = normalizeEmptySceneNumberDom(surfaceRef.current);
-        if (!normalizedSceneBlock) return;
-        slashOffsetRef.current = null;
-        onSlashClose?.();
-        onCharSuggest?.(null, null);
-        setCaret(normalizedSceneBlock, 0);
+        sceneBackspaceScheduledRef.current = false;
         doParse();
+        suppressSceneNormalize = false;
       });
     }
 
@@ -2255,6 +2245,8 @@ const EditorSurface = forwardRef(function EditorSurface({
             return;
           }
           if (type === 'scene_number') {
+            // rAF 예약 중이면 action 변환 차단 — rAF에서 처리
+            if (sceneBackspaceScheduledRef.current) return;
             // 내용 있는 씬번호 첫 블록: action 변환 (씬번호 라벨만 제거, 텍스트 유지)
             e.preventDefault();
             changeBlockTypeEl(blockEl, 'action');
@@ -2263,6 +2255,10 @@ const EditorSurface = forwardRef(function EditorSurface({
             return;
           }
           // 내용 있는 기타 첫 블록: 아무것도 안 함
+          return;
+        }
+        if (type === 'scene_number' && sceneBackspaceScheduledRef.current) {
+          e.preventDefault();
           return;
         }
         e.preventDefault();
@@ -2325,6 +2321,7 @@ const EditorSurface = forwardRef(function EditorSurface({
 
   // ── Click: dialogue 블록 클릭 시 인물명(::before 영역) 클릭이면 피커 열기
   const handleClick = useCallback((e) => {
+    lastKeyRef.current = null;
     const el = surfaceRef.current;
     if (!el) return;
     const blockEl = findBlockEl(e.target, el);
@@ -2377,6 +2374,7 @@ const EditorSurface = forwardRef(function EditorSurface({
       onInput={handleInput}
       onKeyDown={handleKeyDown}
       onClick={(e) => { handleClick(e); doParse(); }}
+      onBlur={() => { lastKeyRef.current = null; }}
       onPaste={onPaste}
       onCopy={onCopy}
     />
