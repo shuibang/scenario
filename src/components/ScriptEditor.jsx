@@ -561,7 +561,8 @@ function blocksToHtml(blocks) {
       case 'dialogue': {
         const cn = esc(b.characterName || b.charName || '');
         const ci = esc(b.characterId || '');
-        return `<div data-block-id="${id}" data-block-type="dialogue" data-char-name="${cn}" data-char-id="${ci}" class="ce-block ce-dialogue"${alignAttr}>${dc}</div>`;
+        const cp = esc(b.charPrefix || '');
+        return `<div data-block-id="${id}" data-block-type="dialogue" data-char-name="${cn}" data-char-id="${ci}" data-char-prefix="${cp}" class="ce-block ce-dialogue"${alignAttr}>${dc}</div>`;
       }
       case 'scene_ref': {
         const refId = esc(b.refSceneId || '');
@@ -689,10 +690,26 @@ function changeBlockTypeEl(blockEl, newType) {
   // Strip existing S# prefix when converting to scene_number to avoid double-labeling
   const displayText = newType === 'scene_number' ? text.replace(SCENE_PREFIX_STRIP_RE, '') : text;
   if (newType === 'dialogue') {
-    blockEl.innerText = displayText;
+    let prefix = '';
+    let cleanText = displayText;
+    for (const sym of DEFAULT_SYMBOLS) {
+      if (displayText.startsWith(sym)) {
+        const after = displayText.slice(sym.length);
+        if (after.startsWith(' ')) {
+          prefix = sym + ' ';   // 띄어쓰기 포함
+          cleanText = after.slice(1);
+        } else {
+          prefix = sym;          // 붙임
+          cleanText = after;
+        }
+        break;
+      }
+    }
+    blockEl.innerText = cleanText;
     blockEl.dataset.charName = ''; blockEl.dataset.charId = '';
+    blockEl.dataset.charPrefix = prefix;
   } else if (old === 'dialogue') {
-    delete blockEl.dataset.charName; delete blockEl.dataset.charId;
+    delete blockEl.dataset.charName; delete blockEl.dataset.charId; delete blockEl.dataset.charPrefix;
     blockEl.textContent = displayText;
   } else {
     blockEl.textContent = displayText;
@@ -815,6 +832,7 @@ function parseSurface(surface, metaRef, epId, projId) {
         characterName: div.dataset.charName || prev.characterName || '',
         characterId: div.dataset.charId || prev.characterId || undefined,
         charName: div.dataset.charName || prev.charName || '',
+        charPrefix: div.dataset.charPrefix || prev.charPrefix || '',
       };
     }
     if (type === 'scene_ref') {
@@ -1508,6 +1526,7 @@ const EditorSurface = forwardRef(function EditorSurface({
           div.dataset.charName = cn;
           div.dataset.charId = b.characterId || '';
         }
+        div.dataset.charPrefix = b.charPrefix || '';
       }
       if (b.type === 'scene_number' && b.label && div.dataset.label !== b.label) {
         div.dataset.label = b.label;
@@ -3270,16 +3289,29 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     if (!suggestEnabled || !blockId) { setCharSuggestState(null); return; }
     const trimmed = (content || '').trim();
     if (!trimmed) { setCharSuggestState(null); return; }
+    const allSymbols = (state.stylePreset?.customSymbols?.length > 0)
+      ? state.stylePreset.customSymbols
+      : DEFAULT_SYMBOLS;
+    let detectedPrefix = '';
+    let nameToMatch = trimmed;
+    for (const sym of allSymbols) {
+      if (trimmed.startsWith(sym)) {
+        detectedPrefix = sym;
+        nameToMatch = trimmed.slice(sym.length).trim();
+        break;
+      }
+    }
+    if (!nameToMatch) { setCharSuggestState(null); return; }
     const match = projectChars.find(c =>
-      [c.name, c.givenName].filter(Boolean).some(n => n.startsWith(trimmed))
+      [c.name, c.givenName].filter(Boolean).some(n => n.startsWith(nameToMatch))
     );
     if (match) {
       const el = surfaceApiRef.current ? document.querySelector(`[data-block-id="${blockId}"]`) : null;
-      setCharSuggestState({ blockId, charName: match.givenName || match.name, charObj: match, blockEl: el });
+      setCharSuggestState({ blockId, charName: match.givenName || match.name, charObj: match, blockEl: el, charPrefix: detectedPrefix });
     } else {
       setCharSuggestState(null);
     }
-  }, [suggestEnabled, projectChars]);
+  }, [suggestEnabled, projectChars, state.stylePreset]);
 
   // ── applyFormat (B/I/U 툴바)
   const applyFormat = useCallback((format) => {
@@ -3436,13 +3468,19 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     };
 
     if (blockEl && cmd.action !== 'sceneref' && cmd.action !== 'symbol'
-        && cmd.action !== 'unifiedtag' && cmd.action !== 'parenthetical') {
+        && cmd.action !== 'unifiedtag' && cmd.action !== 'parenthetical'
+        && cmd.action !== 'block' && cmd.action !== 'charcheck') {
       clearBlockSlash(blockEl);
     }
 
     if (cmd.action === 'block') {
+      removeSlashOnly(blockEl, targetEl);
       requestAnimationFrame(() => applyBlockType(cmd.type));
     } else if (cmd.action === 'charcheck') {
+      removeSlashOnly(blockEl, targetEl);
+      charCheckSavedRangeRef.current = window.getSelection()?.rangeCount > 0
+        ? window.getSelection().getRangeAt(0).cloneRange()
+        : null;
       requestAnimationFrame(() => handleCharCheckRef.current?.());
     } else if (cmd.action === 'sceneref') {
       // 연결: 현재 블록 기준으로 sceneRefPicker 열기
@@ -3613,6 +3651,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   }, [blocks, episodeScenes, projectChars]);
 
   const handleCharCheckRef = useRef(null);
+  const charCheckSavedRangeRef = useRef(null);
   const getCurrentSceneIdRef = useRef(null);
 
   const sceneRefPickerRef = useRef(null);
@@ -3831,6 +3870,12 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
       }
     }
     setCharCheckPicker(null);
+    if (charCheckSavedRangeRef.current) {
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(charCheckSavedRangeRef.current);
+      charCheckSavedRangeRef.current = null;
+    }
   }, [charCheckPicker, episodeScenes, dispatch]);
 
   // ── CharSuggestion: intercept Enter (confirm) / Esc (dismiss) ─────────────
@@ -3845,7 +3890,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         e.stopImmediatePropagation();
-        const { blockId, charObj } = charSuggestState;
+        const { blockId, charObj, charPrefix = '' } = charSuggestState;
         const surface = document.querySelector('[data-editor-surface]');
         if (surface) {
           const div = surface.querySelector(`[data-block-id="${blockId}"]`);
@@ -3854,6 +3899,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
             div.className = 'ce-block ce-dialogue';
             div.dataset.charName = charObj.givenName || charObj.name;
             div.dataset.charId = charObj.id || '';
+            div.dataset.charPrefix = charPrefix;
             div.innerHTML = `<span contenteditable="false" class="ce-char-badge">${esc(charObj.givenName || charObj.name)}</span><span class="ce-speech"></span>`;
             setCaret(div, 0);
           }
@@ -3861,7 +3907,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
         setCharSuggestState(null);
         setBlocks(prev => syncLabels(prev.map(b =>
           b.id === blockId
-            ? { ...b, type: 'dialogue', content: '', characterId: charObj.id, characterName: charObj.name, charName: charObj.givenName || charObj.name }
+            ? { ...b, type: 'dialogue', content: '', characterId: charObj.id, characterName: charObj.name, charName: charObj.givenName || charObj.name, charPrefix }
             : b
         )));
       }
@@ -4464,7 +4510,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
               <CharSuggestionPanel
                 charName={charSuggestState.charName}
                 onConfirm={() => {
-                  const { blockId, charObj } = charSuggestState;
+                  const { blockId, charObj, charPrefix = '' } = charSuggestState;
                   const surface = document.querySelector('[data-editor-surface]');
                   if (!surface) return;
                   const div = surface.querySelector(`[data-block-id="${blockId}"]`);
@@ -4473,13 +4519,14 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
                     div.className = 'ce-block ce-dialogue';
                     div.dataset.charName = charObj.givenName || charObj.name;
                     div.dataset.charId = charObj.id || '';
+                    div.dataset.charPrefix = charPrefix;
                     div.innerHTML = `<span contenteditable="false" class="ce-char-badge">${esc(charObj.givenName || charObj.name)}</span><span class="ce-speech"></span>`;
                     setCaret(div, 0);
                   }
                   setCharSuggestState(null);
                   setBlocks(prev => syncLabels(prev.map(b =>
                     b.id === blockId
-                      ? { ...b, type: 'dialogue', content: '', characterId: charObj.id, characterName: charObj.name, charName: charObj.givenName || charObj.name }
+                      ? { ...b, type: 'dialogue', content: '', characterId: charObj.id, characterName: charObj.name, charName: charObj.givenName || charObj.name, charPrefix }
                       : b
                   )));
                 }}
