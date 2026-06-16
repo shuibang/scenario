@@ -24,7 +24,7 @@ function SceneListPreview({ section, scale }) {
   const FS = 10;
   const COL = ['6%', '11%', '10%', '6%', '6%', '12%', '38%', '11%'];
   const HEADERS = ['씬번호', '장소', '세부장소', '낮', '밤', '등장인물', '내용 요약', '비고'];
-  const epTitle = `${section.episodeNumber}회 씬리스트${section.episodeTitle ? ` — ${section.episodeTitle}` : ''}`;
+  const epTitle = `${section.episodeTitle ? section.episodeTitle + ' ' : ''}씬리스트`;
 
   const cellBase = { fontSize: FS, padding: '3px 5px', border: '0.5px solid #bbb', verticalAlign: 'top', wordBreak: 'break-all' };
   const thStyle  = { ...cellBase, fontWeight: 700, background: '#ececec' };

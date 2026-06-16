@@ -89,8 +89,6 @@ function renderSynopsis(section, isFirst) {
 
 function renderEpisode(section, dialogueGap, isFirst) {
   const breakClass = isFirst ? '' : ' page-break';
-  const epLabel = `${section.episodeNumber}회${section.episodeTitle ? ' ' + section.episodeTitle : ''}`;
-
   const blocksHtml = section.blocks.map(block => {
     const richContent = (block.content || '').replace(/\n/g, '<br>');
     const plainContent = esc(block.content || '');
@@ -129,8 +127,9 @@ function renderEpisode(section, dialogueGap, isFirst) {
     return renderBlockWithAnnotations(blockHtml, block.annotations);
   }).filter(Boolean).join('\n');
 
+  const epLabel = section.episodeTitle || '';
   return `<div class="${breakClass.trim() || 'block'}">
-  <div class="ep-title">${esc(epLabel)}</div>
+  ${epLabel ? `<div class="ep-title">${esc(epLabel)}</div>` : ''}
   ${blocksHtml}
 </div>`;
 }

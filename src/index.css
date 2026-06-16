@@ -307,7 +307,7 @@ textarea {
   font-style: var(--scene-italic, normal);
   text-decoration: var(--scene-underline, none);
   margin-left: var(--scene-indent, 0);
-  margin-top: 1.5em;
+  margin-top: calc(var(--line-height, 1.5) * 1em);
   margin-bottom: 0.25em;
   color: var(--c-text);
 }
@@ -368,7 +368,7 @@ textarea {
   word-break: break-word;
 }
 .ce-block[data-block-type="dialogue"]::before {
-  content: attr(data-char-name);
+  content: attr(data-char-prefix, '') attr(data-char-name);
   position: absolute;
   left: 0;
   top: 0;

@@ -357,8 +357,8 @@ function buildDocxSections(printModel, dp, { hancom = false } = {}) {
     }
 
     else if (section.type === 'episode') {
-      const epTitle = `${section.episodeNumber}회 ${section.episodeTitle}`.trim();
-      paras.push(para(epTitle, dp, { bold: true, center: true }));
+      const epTitle = section.episodeTitle || '';
+      if (epTitle) paras.push(para(epTitle, dp, { bold: true, center: true }));
 
       let prevBlock = null;
       for (const block of section.blocks) {

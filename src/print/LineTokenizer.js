@@ -196,8 +196,8 @@ export function tokenizeSection(section, metrics) {
 
   // ── Episode
   if (section.type === 'episode') {
-    const epTitle = `${section.episodeNumber}회 ${section.episodeTitle}`.trim();
-    tokens.push(T('ep_title', epTitle, { bold: true, center: true }));
+    const epTitle = section.episodeTitle || '';
+    if (epTitle) tokens.push(T('ep_title', epTitle, { bold: true, center: true }));
 
     let prevBlock = null;
     for (const block of section.blocks) {

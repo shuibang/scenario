@@ -3,9 +3,12 @@ import { useApp } from '../store/AppContext';
 import { getChipInlineStyle } from '../utils/emotionColor';
 import { getTimelineColor } from '../utils/color';
 import { getLayoutMetrics } from '../print/LineTokenizer';
+import { exportScenelistXlsx } from '../print/scenelistExport';
+import ShareLinkModal from './Modals/ShareLinkModal';
 import { stripHtml } from '../utils/textFormat';
+import { getSceneFormat, formatSceneHeader } from '../utils/sceneFormat';
 import { buildSceneLabel } from '../utils/scenePrefix';
-import { SCENE_PREFIX_STRIP_RE } from '../utils/sceneResolver';
+import { FileSpreadsheet, Maximize2 } from 'lucide-react';
 
 // ─── Built-in guide sets ──────────────────────────────────────────────────────
 export const BUILTIN_GUIDES = [
@@ -337,12 +340,33 @@ function ColorBar({ tab, scenes, scriptBlocks, characters, epId, selectedCharKey
 }
 
 // ─── SceneBoardCard ───────────────────────────────────────────────────────────
-function SceneBoardCard({ scene, seqNum, isSelected, isOver, isDragging, onClick, onDelete, onCopy, sceneChars, dragProps, dispatch, episodes, currentEpId }) {
+function SceneBoardCard({
+  scene,
+  seqNum,
+  isSelected,
+  isOver,
+  isDragging,
+  onClick,
+  onDelete,
+  onCopy,
+  sceneChars,
+  dragProps,
+  dispatch,
+  episodes,
+  currentEpId,
+  onMetaChange,
+  onSaveSummary,
+}) {
   const [deleteMode, setDeleteMode] = useState(false);
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
   const [copyOpen, setCopyOpen] = useState(false);
   const [hovered, setHovered] = useState(false);
   const cardRef = useRef(null);
+  const metaFieldPlaceholders = {
+    location: '장소',
+    subLocation: '세부장소',
+    timeOfDay: '시간대',
+  };
 
   // 카드 밖 클릭 시 deleteMode/copyOpen 해제
   useEffect(() => {
@@ -380,10 +404,41 @@ function SceneBoardCard({ scene, seqNum, isSelected, isOver, isDragging, onClick
       }}
     >
       {/* 씬정보 + 액션 버튼 (복사/삭제) */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 }}>
-        <div style={{ fontSize: 10, color: 'var(--c-text5)', fontWeight: 600 }}>
-          <span style={{ color: 'var(--c-accent2)', marginRight: 4 }}>{buildSceneLabel(seqNum)}</span>
-          {scene.content && <span>{scene.content.replace(SCENE_PREFIX_STRIP_RE, '')}</span>}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 3 }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontSize: 10, color: 'var(--c-text5)', fontWeight: 600, marginBottom: 4 }}>
+            <span style={{ color: 'var(--c-accent2)', marginRight: 4 }}>{buildSceneLabel(seqNum)}</span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', marginBottom: '0.3rem' }}>
+            {['location', 'subLocation', 'timeOfDay'].map(field => (
+              <div
+                key={field}
+                contentEditable
+                draggable={false}
+                suppressContentEditableWarning
+                data-placeholder={metaFieldPlaceholders[field]}
+                onMouseDown={e => e.stopPropagation()}
+                onClick={e => e.stopPropagation()}
+                onBlur={e => {
+                  const nextValue = e.currentTarget.textContent.trim();
+                  if (nextValue !== (scene[field] || '')) {
+                    onMetaChange?.(scene.id, { [field]: nextValue });
+                  }
+                }}
+                style={{
+                  outline: 'none',
+                  cursor: 'text',
+                  fontSize: '0.85em',
+                  color: scene[field] ? 'var(--c-text2)' : 'var(--c-text5)',
+                  minHeight: '1em',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                }}
+              >
+                {scene[field] || ''}
+              </div>
+            ))}
+          </div>
         </div>
         <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
           {/* hover 또는 액션 popup 열린 동안 [복사] [삭제] 노출. 삭제 1차 클릭 시 deleteMode 빨강 진입 → 한 번 더 클릭으로 확정. */}
@@ -487,17 +542,29 @@ function SceneBoardCard({ scene, seqNum, isSelected, isOver, isDragging, onClick
 
       {/* 내용요약 (씬리스트에서 입력한 내용 표시) */}
       <div
+        contentEditable
+        draggable={false}
+        suppressContentEditableWarning
+        data-placeholder="내용 입력"
         onMouseDown={e => e.stopPropagation()}
+        onClick={e => e.stopPropagation()}
+        onBlur={e => {
+          const nextValue = e.currentTarget.textContent.trim();
+          if (nextValue !== (scene.sceneListContent || '')) {
+            onSaveSummary?.(scene.id, nextValue);
+          }
+        }}
         style={{
+          outline: 'none',
+          cursor: 'text',
           fontSize: 11, lineHeight: 1.5, marginBottom: 4,
-          color: scene.sceneListContent ? 'var(--c-text3)' : 'var(--c-text6)',
-          fontStyle: scene.sceneListContent ? 'normal' : 'italic',
-          minHeight: '4em',
+          color: scene.sceneListContent ? 'var(--c-text)' : 'var(--c-text3)',
+          minHeight: '2em',
           whiteSpace: 'pre-wrap',
           wordBreak: 'break-word',
         }}
       >
-        {scene.sceneListContent || '씬리스트에서 입력'}
+        {scene.sceneListContent || ''}
       </div>
 
       {/* 태그 + 추가 버튼 */}
@@ -532,7 +599,159 @@ function SceneBoardCard({ scene, seqNum, isSelected, isOver, isDragging, onClick
 }
 
 // ─── SceneBoardTab ────────────────────────────────────────────────────────────
-function SceneBoardTab({ epId, scenes, scriptBlocks, characters, episodes, dispatch, onSelectScene, selectedSceneId }) {
+function SceneListTabRow({ scene, projectChars, onMetaChange, onSaveSummary, remarkMode, emotionTags, autoCharacters }) {
+  const idNames = (scene.characterIds || [])
+    .map(id => {
+      const char = projectChars.find(c => c.id === id);
+      return char ? (char.givenName || char.name || '') : '';
+    })
+    .filter(Boolean);
+  const autoNames = autoCharacters ? autoCharacters.split(', ').filter(Boolean) : [];
+  const charDisplay = [...new Set([...idNames, ...autoNames])].join(', ');
+
+  const renderEditableCell = ({ field, value, placeholder, minWidth = '4rem', minHeight = '1.5em' }) => (
+    <td style={{ padding: '0.4rem', borderBottom: '1px solid var(--c-border)', verticalAlign: 'top', fontSize: '0.85em' }}>
+      <div
+        contentEditable
+        suppressContentEditableWarning
+        data-placeholder={placeholder}
+        onBlur={e => {
+          const nextValue = e.currentTarget.textContent.trim();
+          if (nextValue === (value || '')) return;
+          if (field === 'sceneListContent') {
+            onSaveSummary?.(scene.id, nextValue);
+          } else {
+            onMetaChange?.(scene.id, { [field]: nextValue });
+          }
+        }}
+        style={{
+          minWidth,
+          minHeight,
+          outline: 'none',
+          cursor: 'text',
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word',
+          color: value ? 'var(--c-text)' : 'var(--c-text3)',
+        }}
+      >
+        {value || ''}
+      </div>
+    </td>
+  );
+
+  return (
+    <tr>
+      <td style={{ padding: '0.4rem', borderBottom: '1px solid var(--c-border)', whiteSpace: 'nowrap', color: 'var(--c-text2)', fontSize: '0.85em', verticalAlign: 'top' }}>
+        {scene.label || buildSceneLabel(scene.sceneSeq)}
+      </td>
+      {renderEditableCell({ field: 'location', value: scene.location, placeholder: '장소' })}
+      {renderEditableCell({ field: 'subLocation', value: scene.subLocation, placeholder: '세부장소' })}
+      {renderEditableCell({ field: 'timeOfDay', value: scene.timeOfDay, placeholder: '시간대' })}
+      {renderEditableCell({ field: 'sceneListContent', value: scene.sceneListContent, placeholder: '내용 입력', minWidth: '12rem', minHeight: '2em' })}
+      <td style={{ padding: '0.4rem', borderBottom: '1px solid var(--c-border)', color: 'var(--c-text2)', fontSize: '0.85em', verticalAlign: 'top' }}>
+        {charDisplay}
+      </td>
+      <td style={{ padding: '0.4rem', borderBottom: '1px solid var(--c-border)', verticalAlign: 'top', fontSize: '0.85em' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px' }}>
+          {remarkMode !== 'emotion' && remarkMode !== 'empty' && (scene.tags || []).map(t => (
+            <span key={t} style={{ fontSize: '0.75em', padding: '1px 4px', borderRadius: 3, background: 'var(--c-tag)', color: 'var(--c-accent2)' }}>#{t}</span>
+          ))}
+          {remarkMode !== 'structure' && remarkMode !== 'empty' && (emotionTags || []).map((et, i) => (
+            <span key={i} style={getChipInlineStyle(et.color, et.intensity)}>{et.word}</span>
+          ))}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function SceneListTab({ currentEp, epScenes, projectChars, onMetaChange, onSaveSummary, scriptBlocks, remarkMode }) {
+  const epId = currentEp?.id;
+  const epBlocks = useMemo(
+    () => (scriptBlocks || []).filter(b => b.episodeId === epId),
+    [scriptBlocks, epId]
+  );
+  const sortedScenes = useMemo(
+    () => [...epScenes].sort((a, b) => (a.sceneSeq || 0) - (b.sceneSeq || 0)),
+    [epScenes]
+  );
+
+  const sceneCharacters = useMemo(() => {
+    const result = {};
+    epScenes.forEach(scene => {
+      const snBlock = epBlocks.find(b => b.type === 'scene_number' && b.sceneId === scene.id);
+      if (!snBlock) { result[scene.id] = ''; return; }
+      const snIdx = epBlocks.indexOf(snBlock);
+      const nextSn = epBlocks.find((b, i) => i > snIdx && b.type === 'scene_number');
+      const endIdx = nextSn ? epBlocks.indexOf(nextSn) : epBlocks.length;
+      const seg = epBlocks.slice(snIdx + 1, endIdx);
+      const names = new Set(seg.filter(b => b.type === 'dialogue' && b.characterName).map(b => b.characterName));
+      result[scene.id] = [...names].join(', ');
+    });
+    return result;
+  }, [epScenes, epBlocks]);
+
+  const sceneEmotionTags = useMemo(() => {
+    const result = {};
+    epScenes.forEach(scene => {
+      const snBlock = epBlocks.find(b => b.type === 'scene_number' && b.sceneId === scene.id);
+      const seen = new Set();
+      const collected = [];
+      const push = (t) => {
+        if (!t || !t.word || !t.color || !t.intensity) return;
+        if (seen.has(t.word)) return;
+        seen.add(t.word);
+        collected.push(t);
+      };
+      (Array.isArray(scene.emotionTags) ? scene.emotionTags : []).forEach(push);
+      if (snBlock) {
+        const snIdx = epBlocks.indexOf(snBlock);
+        const nextSn = epBlocks.find((b, i) => i > snIdx && b.type === 'scene_number');
+        const endIdx = nextSn ? epBlocks.indexOf(nextSn) : epBlocks.length;
+        epBlocks.slice(snIdx, endIdx).forEach(b => push(b.emotionTag));
+      }
+      result[scene.id] = collected;
+    });
+    return result;
+  }, [epScenes, epBlocks]);
+
+  return (
+    <div style={{ padding: '1rem' }}>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'inherit', minWidth: 800 }}>
+          <thead>
+            <tr>
+              {['씬번호', '장소', '세부장소', '시간대', '내용', '등장인물', '비고'].map(header => (
+                <th key={header} style={{ borderBottom: '1px solid var(--c-border)', padding: '0.5rem', textAlign: 'left', whiteSpace: 'nowrap', color: 'var(--c-text3)', fontSize: '0.8em' }}>
+                  {header}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sortedScenes.map(scene => (
+              <SceneListTabRow
+                key={scene.id}
+                scene={scene}
+                projectChars={projectChars}
+                onMetaChange={onMetaChange}
+                onSaveSummary={onSaveSummary}
+                remarkMode={remarkMode}
+                emotionTags={sceneEmotionTags[scene.id]}
+                autoCharacters={sceneCharacters[scene.id]}
+              />
+            ))}
+          </tbody>
+        </table>
+        {sortedScenes.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--c-text5)', fontSize: 13 }}>씬이 없습니다.</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SceneBoardTab({ epId, scenes, scriptBlocks, characters, episodes, dispatch, onSelectScene, selectedSceneId, onMetaChange, onSaveSummary }) {
   const epScenes = useMemo(() =>
     scenes.filter(s => s.episodeId === epId).sort((a, b) => (a.sceneSeq ?? 0) - (b.sceneSeq ?? 0)),
     [scenes, epId]
@@ -623,9 +842,6 @@ function SceneBoardTab({ epId, scenes, scriptBlocks, characters, episodes, dispa
     dispatch({ type: 'UPDATE_SCENE', payload: { id: sceneId, deleted: false }, _record: true });
   }
 
-  function handleSaveSummary(sceneId, content) {
-    dispatch({ type: 'UPDATE_SCENE', payload: { id: sceneId, sceneListContent: content }, _record: true });
-  }
 
   // 같은 대본의 회차들 (현재 대본만 — episodes 자체가 이미 대본 필터링되어 들어왔다고 가정)
   const projectEpisodes = useMemo(() => {
@@ -712,6 +928,8 @@ function SceneBoardTab({ epId, scenes, scriptBlocks, characters, episodes, dispa
             currentEpId={epId}
             sceneChars={sceneCharsMap[scene.id] || []}
             dispatch={dispatch}
+            onMetaChange={onMetaChange}
+            onSaveSummary={onSaveSummary}
             dragProps={{
               draggable: true,
               onDragStart: (e) => { e.stopPropagation(); handleDragStart(e, idx); },
@@ -1059,17 +1277,20 @@ function CharacterTab({ epId, scenes, scriptBlocks, characters, onCharKeyChange 
 }
 
 // ─── StructurePage ────────────────────────────────────────────────────────────
-export default function StructurePage() {
+export default function StructurePage({ activeTab = '씬리스트', onTabChange }) {
   const { state, dispatch } = useApp();
   const { scenes, episodes, scriptBlocks, characters, projects, activeProjectId, activeEpisodeId } = state;
   const activeProject = projects?.find(p => p.id === activeProjectId);
   const stylePreset = activeProject?.stylePreset || {};
 
-  const TABS = ['씬보드', '지문', '인물'];
-  const [activeTab, setActiveTab] = useState('씬보드');
+  const TABS = ['씬리스트', '씬보드', '지문', '인물'];
+  const setActiveTab = onTabChange;
   const [selectedSceneId, setSelectedSceneId] = useState(null);
   const [selectedCharKey, setSelectedCharKey] = useState(null);
   const [climaxOpen, setClimaxOpen] = useState(false);
+  const [showSceneListShare, setShowSceneListShare] = useState(false);
+  const [remarkMode, setRemarkMode] = useState('all');
+  const [fullscreen, setFullscreen] = useState(false);
   const [editTotalMins, setEditTotalMins] = useState(activeProject?.totalMins ?? 70);
   const [editClimaxStart, setEditClimaxStart] = useState(activeProject?.climaxStart ?? 55);
   const [editClimaxEnd, setEditClimaxEnd] = useState(activeProject?.climaxEnd ?? 68);
@@ -1098,13 +1319,60 @@ export default function StructurePage() {
   }, [projectEpisodes]); // eslint-disable-line
 
   const epId = selectedEpId || projectEpisodes[0]?.id || null;
+  const currentEp = useMemo(
+    () => projectEpisodes.find(ep => ep.id === epId) || null,
+    [projectEpisodes, epId]
+  );
+  const epScenes = useMemo(
+    () => scenes.filter(scene => scene.episodeId === epId && !scene.deleted).sort((a, b) => (a.sceneSeq ?? 0) - (b.sceneSeq ?? 0)),
+    [scenes, epId]
+  );
+  const epBlocks = useMemo(
+    () => scriptBlocks.filter(block => block.episodeId === epId),
+    [scriptBlocks, epId]
+  );
+  const projectChars = useMemo(
+    () => characters.filter(char => char.projectId === activeProjectId),
+    [characters, activeProjectId]
+  );
 
   const handleSelectScene = (id) => {
     setSelectedSceneId(id);
     dispatch({ type: 'SET_SELECTED_STRUCTURE_SCENE', id });
   };
 
+  const handleSceneSummarySave = (sceneId, content) => {
+    dispatch({ type: 'UPDATE_SCENE', payload: { id: sceneId, sceneListContent: content }, _record: true });
+  };
+
+  const handleSceneMetaChange = (sceneId, meta) => {
+    dispatch({ type: 'UPDATE_SCENE', payload: { id: sceneId, ...meta } });
+    const block = epBlocks.find(item => item.type === 'scene_number' && item.sceneId === sceneId);
+    const scene = scenes.find(item => item.id === sceneId);
+    if (!block || !scene) return;
+
+    const merged = { ...scene, ...meta };
+    const format = getSceneFormat();
+    const updatedBlocks = epBlocks.map(item => {
+      if (item.id !== block.id) return item;
+      return {
+        ...item,
+        content: formatSceneHeader(merged, format),
+        location: merged.location ?? item.location,
+        subLocation: merged.subLocation ?? item.subLocation,
+        timeOfDay: merged.timeOfDay ?? item.timeOfDay,
+      };
+    });
+
+    dispatch({ type: 'SET_BLOCKS', episodeId: epId, payload: updatedBlocks });
+  };
+
   // 탭별 도움말 (? 버튼) — 다른 페이지(SceneListPage/CharacterPanel 등)와 동일 패턴.
+  const handleDownload = () => {
+    if (!currentEp || !epScenes.length) return;
+    exportScenelistXlsx(currentEp, epScenes, projectChars);
+  };
+
   const [tabHelpOpen, setTabHelpOpen] = useState(false);
   const tabHelpRef = useRef(null);
   useEffect(() => {
@@ -1119,6 +1387,14 @@ export default function StructurePage() {
   useEffect(() => { setTabHelpOpen(false); }, [activeTab]);
 
   const tabHelpContent = {
+    '씬리스트': {
+      title: '씬리스트 안내',
+      items: [
+        '장소, 세부장소, 시간대, 내용을 표에서 바로 수정할 수 있어요.',
+        '씬 헤더 정보는 저장할 때 대본의 scene_number 블록과 함께 동기화돼요.',
+        '엑셀 다운로드와 링크 공유를 같은 탭에서 바로 할 수 있어요.',
+      ],
+    },
     '씬보드': {
       title: '씬보드 안내',
       items: [
@@ -1241,6 +1517,36 @@ export default function StructurePage() {
         >⚡</button>
       </div>
 
+      {activeTab === '씬리스트' && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.3rem 1rem', borderBottom: '1px solid var(--c-border)', fontSize: '0.82em', flexShrink: 0 }}>
+          <span style={{ color: 'var(--c-text3)' }}>태그 표기</span>
+          <span style={{ color: 'var(--c-text3)' }}>:</span>
+          {[['all','모두'],['structure','구조'],['emotion','감정'],['empty','비움']].map(([v,l]) => (
+            <button key={v}
+              onClick={() => setRemarkMode(v)}
+              style={{
+                padding: '2px 8px', fontSize: '0.85em',
+                background: remarkMode === v ? 'var(--c-accent)' : 'transparent',
+                color: remarkMode === v ? '#fff' : 'var(--c-text3)',
+                border: remarkMode === v ? 'none' : '1px solid var(--c-border)',
+                borderRadius: '4px', cursor: 'pointer',
+              }}
+            >{l}</button>
+          ))}
+          <div style={{ flex: 1 }} />
+          <button onClick={handleDownload}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--c-text3)', padding: '2px 4px' }}
+            title="엑셀 다운로드">
+            <FileSpreadsheet size={16} />
+          </button>
+          <button onClick={() => setFullscreen(true)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--c-text3)', padding: '2px' }}
+            title="크게 보기">
+            <Maximize2 size={15} />
+          </button>
+        </div>
+      )}
+
       {/* 클라이막스 설정 패널 */}
       {climaxOpen && (
         <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--c-border)', background: 'var(--c-panel)', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', flexShrink: 0 }}>
@@ -1274,11 +1580,26 @@ export default function StructurePage() {
       <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
         {epId ? (
           <>
+            {activeTab === '씬리스트' && (
+              <SceneListTab
+                currentEp={currentEp}
+                epScenes={epScenes}
+                projectChars={projectChars}
+                onMetaChange={handleSceneMetaChange}
+                onSaveSummary={handleSceneSummarySave}
+                scriptBlocks={scriptBlocks}
+                remarkMode={remarkMode}
+              />
+            )}
             {activeTab === '씬보드' && (
               <SceneBoardTab
                 epId={epId} scenes={scenes} scriptBlocks={scriptBlocks}
                 characters={characters} episodes={projectEpisodes}
-                dispatch={dispatch} onSelectScene={handleSelectScene} selectedSceneId={selectedSceneId}
+                dispatch={dispatch}
+                onSelectScene={handleSelectScene}
+                selectedSceneId={selectedSceneId}
+                onMetaChange={handleSceneMetaChange}
+                onSaveSummary={handleSceneSummarySave}
               />
             )}
             {activeTab === '지문' && (
@@ -1297,6 +1618,43 @@ export default function StructurePage() {
           </div>
         )}
       </div>
+
+      {showSceneListShare && (
+        <ShareLinkModal
+          open={showSceneListShare}
+          onClose={() => setShowSceneListShare(false)}
+        />
+      )}
+
+      {fullscreen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 9999, background: 'var(--c-bg)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', borderBottom: '1px solid var(--c-border)', flexShrink: 0 }}>
+            <span style={{ fontSize: '0.82em', color: 'var(--c-text3)' }}>태그 표기 :</span>
+            {[['all','모두'],['structure','구조'],['emotion','감정'],['empty','비움']].map(([v,l]) => (
+              <button key={v} onClick={() => setRemarkMode(v)} style={{
+                padding: '2px 8px', fontSize: '0.85em',
+                background: remarkMode === v ? 'var(--c-accent)' : 'transparent',
+                color: remarkMode === v ? '#fff' : 'var(--c-text3)',
+                border: remarkMode === v ? 'none' : '1px solid var(--c-border)',
+                borderRadius: '4px', cursor: 'pointer',
+              }}>{l}</button>
+            ))}
+            <div style={{ flex: 1 }} />
+            <button onClick={() => setFullscreen(false)} style={{ padding: '0.3rem 0.8rem', fontSize: '0.85em', background: 'transparent', border: '1px solid var(--c-border3)', borderRadius: '6px', cursor: 'pointer', color: 'var(--c-text4)' }}>✕ 닫기</button>
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            <SceneListTab
+              currentEp={currentEp}
+              epScenes={epScenes}
+              projectChars={projectChars}
+              onMetaChange={handleSceneMetaChange}
+              onSaveSummary={handleSceneSummarySave}
+              scriptBlocks={scriptBlocks}
+              remarkMode={remarkMode}
+            />
+          </div>
+        </div>
+      )}
 
     </div>
   );

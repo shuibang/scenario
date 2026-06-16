@@ -89,7 +89,7 @@ export default function TreatmentPage() {
     try {
       const saved = localStorage.getItem(TREATMENT_SELECTED_EP_KEY);
       if (!saved || saved === 'all') return 'all';
-      return episodes.some(e => e.id === saved) ? saved : 'all';
+      return episodes.some(e => e.id === saved && e.projectId === activeProjectId) ? saved : 'all';
     } catch { return 'all'; }
   });
   useEffect(() => {

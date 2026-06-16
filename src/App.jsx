@@ -429,6 +429,7 @@ function ScriptWithTimeline({ scrollToSceneId, onScrollHandled, keyboardUp, isMo
 function CenterPanel({ scrollToSceneId, onScrollHandled, keyboardUp, isMobile, focusMode, setFocusMode, onNewProject }) {
   const { state } = useApp();
   const { activeDoc, activeEpisodeId, activeProjectId, initialized } = state;
+  const [structureTab, setStructureTab] = useState('씬리스트');
 
   if (!initialized) {
     return (
@@ -453,7 +454,7 @@ function CenterPanel({ scrollToSceneId, onScrollHandled, keyboardUp, isMobile, f
   if (activeDoc === 'synopsis') return <SynopsisEditor />;
   if (activeDoc === 'characters') return <CharacterPanel />;
   if (activeDoc === 'resources') return <ResourcePanel />;
-  if (activeDoc === 'structure') return <StructurePage />;
+  if (activeDoc === 'structure') return <StructurePage activeTab={structureTab} onTabChange={setStructureTab} />;
   if (activeDoc === 'scenelist') return <SceneListPage />;
   if (activeDoc === 'director_notes') return <DirectorNotesPage />;
   if (activeDoc === 'treatment') return <TreatmentPage />;
@@ -2081,6 +2082,15 @@ function Shell({ authUser, setAuthUser }) {
     if (deleteAccountOpen) {
       dispatch({ type: 'SET_ACTIVE_DOC', payload: 'mypage' });
       // 해시 정리 (히스토리 오염 방지)
+      history.replaceState(null, '', window.location.pathname);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // #goto-errors 딥링크 — 설문 완료 화면의 오류제출 버튼에서 진입
+  useEffect(() => {
+    if (window.location.hash === '#goto-errors') {
+      dispatch({ type: 'SET_ACTIVE_DOC', payload: 'mypage' });
+      sessionStorage.setItem('mypage_tab', 'errors');
       history.replaceState(null, '', window.location.pathname);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps

@@ -483,7 +483,7 @@ function xmlSection(printModel, margins, blockStyles = {}) {
         break;
       }
       case 'episode': {
-        head(`${sec.episodeNumber}회${sec.episodeTitle ? ' ' + sec.episodeTitle : ''}`);
+        if (sec.episodeTitle) head(sec.episodeTitle);
         const CONTENT_TYPES = new Set(['action', 'dialogue', 'parenthetical']);
         let prevBlock = null;
         for (const block of sec.blocks) {

@@ -1927,13 +1927,16 @@ const EditorSurface = forwardRef(function EditorSurface({
     const type = blockEl.dataset.blockType;
 
     if (!ctrl && !e.altKey && (e.key === 'Backspace' || e.key === 'Delete') && type === 'scene_number') {
-      suppressSceneNormalize = true;
-      sceneBackspaceScheduledRef.current = true;
-      requestAnimationFrame(() => {
-        sceneBackspaceScheduledRef.current = false;
-        doParse();
-        suppressSceneNormalize = false;
-      });
+      const hasContent = blockText(blockEl).trim().length > 0;
+      if (hasContent) {
+        suppressSceneNormalize = true;
+        sceneBackspaceScheduledRef.current = true;
+        requestAnimationFrame(() => {
+          sceneBackspaceScheduledRef.current = false;
+          doParse();
+          suppressSceneNormalize = false;
+        });
+      }
     }
 
     if (!ctrl && !e.altKey && !e.shiftKey && e.key === '.' && sel.isCollapsed && type !== 'scene_number') {
@@ -2367,6 +2370,7 @@ const EditorSurface = forwardRef(function EditorSurface({
         fontFamily,
         fontSize,
         lineHeight,
+        '--line-height': lineHeight,
         outline: 'none',
         '--dialogue-gap':      dialogueGap || '7em',
         '--action-indent':    `${(blockStyles?.action?.indent    ?? 1) * 8}mm`,
@@ -2493,6 +2497,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   const saveTimer = useRef(null);
   const lastSavedBlocks = useRef(null);
   const surfaceApiRef = useRef(null);
+  const episodeTitleRef = useRef(null);
   // Refs for unmount-flush and episode-switch flush (always up-to-date)
   const blocksRef = useRef([]);
   const activeEpisodeIdRef = useRef(null);
@@ -3813,13 +3818,21 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
     window.addEventListener('script:undo', onUndo);
     window.addEventListener('script:redo', onRedo);
     const onAlignment = (e) => surfaceApiRef.current?.applyAlignment(e.detail);
+    const onEpisodeTitleAlignment = (e) => {
+      const el = episodeTitleRef.current;
+      if (!el || !el.contains(document.activeElement)) return;
+      el.style.textAlign = e.detail;
+      dispatch({ type: 'UPDATE_EPISODE', payload: { id: episode.id, titleAlign: e.detail } });
+    };
     window.addEventListener('script:alignment', onAlignment);
+    window.addEventListener('script:alignment', onEpisodeTitleAlignment);
     return () => {
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('script:requestSave', onSave);
       window.removeEventListener('script:undo', onUndo);
       window.removeEventListener('script:redo', onRedo);
       window.removeEventListener('script:alignment', onAlignment);
+      window.removeEventListener('script:alignment', onEpisodeTitleAlignment);
     };
   }, [flushSave, applyBlockType, handleUndo, handleRedo, openEmotionPickerOnCursor, openSymbolPickerOnCursor]);
 
@@ -4407,6 +4420,46 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
             paddingRight: '1.5rem',
           }}
         >
+          {episode?.title !== undefined && (
+            <div
+              ref={episodeTitleRef}
+              contentEditable
+              suppressContentEditableWarning
+              onFocus={(e) => {
+                // 전체 선택
+                const range = document.createRange();
+                range.selectNodeContents(e.currentTarget);
+                window.getSelection()?.removeAllRanges();
+                window.getSelection()?.addRange(range);
+              }}
+              onBlur={(e) => {
+                const newTitle = e.currentTarget.textContent.trim();
+                if (newTitle !== (episode.title || '')) {
+                  dispatch({ type: 'UPDATE_EPISODE', payload: { id: episode.id, title: newTitle } });
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  e.currentTarget.blur();
+                }
+              }}
+              style={{
+                textAlign: episode.titleAlign || 'center',
+                fontWeight: 'bold',
+                fontSize: '1em',
+                color: 'var(--c-text1)',
+                padding: '0 0 1.5rem 0',
+                outline: 'none',
+                cursor: 'text',
+                minHeight: '1.5em',
+                whiteSpace: 'pre-wrap',
+              }}
+              data-placeholder="에피소드 제목"
+            >
+              {episode.title || ''}
+            </div>
+          )}
           <EditorSurface
             ref={surfaceApiRef}
             episodeId={activeEpisodeId}
