@@ -12,6 +12,7 @@ import {
   sortFeedbackCommentsByDocumentOrder,
 } from '../utils/feedbackVersions';
 import {
+  deleteFeedbackSession,
   deleteFeedbackVersion,
   listFeedbackComments,
   listFeedbackSessionsForVersions,
@@ -107,6 +108,38 @@ function FeedbackDeleteModal({ open, versionName, sessionCount, commentCount, on
   );
 }
 
+function SessionDeleteConfirmModal({ open, onClose, onConfirm, deleting }) {
+  if (!open) return null;
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div style={{ width: '100%', maxWidth: 400, background: '#fff', borderRadius: 14, boxShadow: '0 20px 50px rgba(0,0,0,0.24)', padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: '#111' }}>이 피드백을 삭제할까요?</div>
+        <div style={{ fontSize: 13, color: '#555', lineHeight: 1.7 }}>복구할 수 없습니다.</div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <button onClick={onClose} disabled={deleting} style={{ padding: '9px 14px', borderRadius: 8, border: '1px solid #ddd', background: '#fff', color: '#666', cursor: deleting ? 'default' : 'pointer', fontSize: 13 }}>취소</button>
+          <button onClick={onConfirm} disabled={deleting} style={{ padding: '9px 16px', borderRadius: 8, border: 'none', background: deleting ? '#fca5a5' : '#dc2626', color: '#fff', cursor: deleting ? 'default' : 'pointer', fontSize: 13, fontWeight: 700 }}>{deleting ? '삭제 중...' : '삭제'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SessionAllDeletedModal({ open, onDeleteVersion, onClose }) {
+  if (!open) return null;
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div style={{ width: '100%', maxWidth: 400, background: '#fff', borderRadius: 14, boxShadow: '0 20px 50px rgba(0,0,0,0.24)', padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: '#111' }}>피드백이 모두 삭제됐습니다.</div>
+        <div style={{ fontSize: 13, color: '#555', lineHeight: 1.7 }}>이 버전도 삭제할까요?</div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <button onClick={onClose} style={{ padding: '9px 14px', borderRadius: 8, border: '1px solid #ddd', background: '#fff', color: '#666', cursor: 'pointer', fontSize: 13 }}>아니오</button>
+          <button onClick={onDeleteVersion} style={{ padding: '9px 16px', borderRadius: 8, border: 'none', background: '#dc2626', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>버전 삭제</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function DirectorNotesPage() {
   const { state } = useApp();
   const activeProjectId = state.activeProjectId;
@@ -122,6 +155,10 @@ export default function DirectorNotesPage() {
   const [renameValue, setRenameValue] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [deleteVersionId, setDeleteVersionId] = useState('');
+  const [deleteSessionId, setDeleteSessionId] = useState(null);
+  const [deletingSession, setDeletingSession] = useState(false);
+  const [sessionEmptyVersionId, setSessionEmptyVersionId] = useState(null);
+  const [hoveredSessionId, setHoveredSessionId] = useState(null);
   const viewerScrollRef = useRef(null);
   useEffect(() => {
     if (!activeProjectId) {
@@ -370,6 +407,33 @@ export default function DirectorNotesPage() {
     }
   };
 
+  const handleDeleteSessionConfirm = async () => {
+    if (!deleteSessionId) return;
+    try {
+      setDeletingSession(true);
+      await deleteFeedbackSession(deleteSessionId);
+      const remaining = allSessions.filter((s) => s.id !== deleteSessionId);
+      setAllSessions(remaining);
+      setComments((prev) => prev.filter((c) => c.session_id !== deleteSessionId));
+      setDeleteSessionId(null);
+      const versionRemaining = remaining.filter((s) => s.version_id === selectedVersion?.id);
+      if (versionRemaining.length === 0) {
+        setActiveSessionId(null);
+        localStorage.removeItem(ACTIVE_SESSION_KEY);
+        setSessionEmptyVersionId(selectedVersion?.id || null);
+      } else {
+        const next = versionRemaining[0].id;
+        setActiveSessionId(next);
+        localStorage.setItem(ACTIVE_SESSION_KEY, next);
+      }
+    } catch (sessionDeleteError) {
+      reportError({ source: 'manual', message: sessionDeleteError?.message || String(sessionDeleteError), stack: sessionDeleteError?.stack });
+      setError('피드백을 삭제하지 못했어요. 잠시 후 다시 시도해주세요.');
+    } finally {
+      setDeletingSession(false);
+    }
+  };
+
   if (!activeProjectId) {
     return (
       <div style={{ padding: '60px 32px', textAlign: 'center', color: 'var(--c-text5)', fontSize: 13 }}>
@@ -573,6 +637,8 @@ export default function DirectorNotesPage() {
                   <button
                     key={session.id}
                     onClick={() => handleSelectSession(session.id)}
+                    onMouseEnter={() => setHoveredSessionId(session.id)}
+                    onMouseLeave={() => setHoveredSessionId(null)}
                     style={{
                       flexShrink: 0,
                       padding: '6px 11px',
@@ -599,6 +665,28 @@ export default function DirectorNotesPage() {
                           display: 'inline-block',
                         }}
                       />
+                    )}
+                    {hoveredSessionId === session.id && (
+                      <span
+                        role="button"
+                        onClick={(e) => { e.stopPropagation(); setDeleteSessionId(session.id); }}
+                        title="피드백 삭제"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: 14,
+                          height: 14,
+                          borderRadius: 3,
+                          color: '#b91c1c',
+                          fontSize: 14,
+                          lineHeight: 1,
+                          cursor: 'pointer',
+                          flexShrink: 0,
+                        }}
+                      >
+                        ×
+                      </span>
                     )}
                   </button>
                 );
@@ -753,6 +841,21 @@ export default function DirectorNotesPage() {
         )}
       </div>
 
+      <SessionDeleteConfirmModal
+        open={!!deleteSessionId}
+        onClose={() => setDeleteSessionId(null)}
+        onConfirm={handleDeleteSessionConfirm}
+        deleting={deletingSession}
+      />
+      <SessionAllDeletedModal
+        open={!!sessionEmptyVersionId}
+        onClose={() => setSessionEmptyVersionId(null)}
+        onDeleteVersion={() => {
+          const vId = sessionEmptyVersionId;
+          setSessionEmptyVersionId(null);
+          setDeleteVersionId(vId);
+        }}
+      />
       <FeedbackDeleteModal
         open={!!deleteTarget}
         versionName={deleteTarget?.version_name || ''}

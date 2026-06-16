@@ -1416,7 +1416,11 @@ const TABS = [
 ];
 
 export default function MyPage() {
-  const [activeTab, setActiveTab] = useState('stats');
+  const [activeTab, setActiveTab] = useState(() => {
+    const queued = sessionStorage.getItem('mypage_tab');
+    if (queued) { sessionStorage.removeItem('mypage_tab'); return queued; }
+    return 'stats';
+  });
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
 
   useEffect(() => {

@@ -415,6 +415,19 @@ export async function deleteFeedbackVersion(version) {
   }
 }
 
+export async function deleteFeedbackSession(sessionId) {
+  ensureSupabase();
+  const { data, error } = await supabase
+    .from('feedback_sessions')
+    .delete()
+    .eq('id', sessionId)
+    .select('id');
+  if (error) throw new Error(error.message);
+  if (!data || data.length === 0) {
+    throw new Error('이 피드백을 삭제할 권한이 없거나 이미 삭제된 항목입니다.');
+  }
+}
+
 export async function saveLogPayload(payload) {
   ensureSupabase();
   assertPayloadSize(payload);

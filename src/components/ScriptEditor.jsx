@@ -732,8 +732,10 @@ function normalizeEmptySceneNumberBlocks(blocks = []) {
     const hasStructured = !!(block.location || block.specialSituation);
     if (block.sceneDraft) return block;
     if (hasStructured) return block;
-    const body = (block.content || '').replace(SCENE_PREFIX_STRIP_RE, '').trim();
+    const rawContent = (block.content || '').trim();
+    const body = rawContent.replace(SCENE_PREFIX_STRIP_RE, '').trim();
     if (body) return block;
+    if (rawContent) return block;  // prefix만 입력된 상태(입력 중) — 변환하지 않음
     const {
       label,
       sceneId,
@@ -2257,7 +2259,15 @@ const EditorSurface = forwardRef(function EditorSurface({
           if (isContentEmpty) {
             // 빈 첫 블록: 뒤에 블록이 있으면 삭제
             const allBlocks = [...el.querySelectorAll('[data-block-id]')];
-            if (allBlocks.length <= 1) return;
+            if (allBlocks.length <= 1) {
+              e.preventDefault();
+              if (type === 'scene_number') {
+                changeBlockTypeEl(blockEl, 'action');
+                setCaret(blockEl, 0);
+                doParse();
+              }
+              return;
+            }
             e.preventDefault();
             const nextBlock = nextBlockEl(el, blockEl);
             blockEl.remove();

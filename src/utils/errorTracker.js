@@ -30,6 +30,7 @@ const IGNORE_PATTERNS = [
   /Failed to fetch.*googletagmanager/i,       // 광고 차단기
   /Failed to fetch.*doubleclick/i,
   /Failed to fetch.*adsbygoogle/i,
+  /Blocked a frame with origin/,             // Whale 브라우저 자동완성 iframe 노이즈
 ];
 
 let sessionId = null;
@@ -96,6 +97,13 @@ async function send(payload) {
  */
 export async function reportError({ source, message, stack, url } = {}) {
   if (sentCount >= SESSION_LIMIT) return;
+
+  // 로컬 개발 서버 에러 무시
+  const hostname = window.location.hostname;
+  if (hostname === 'localhost' || hostname === '127.0.0.1') return;
+
+  // Google 봇/크롤러 에러 무시
+  if (/Googlebot/i.test(navigator.userAgent || '')) return;
 
   const safeMessage = maskPII(truncate(message || '(no message)', MAX_LEN));
   if (shouldIgnore(safeMessage)) return;

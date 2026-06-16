@@ -21,6 +21,7 @@ const HandwritingCanvas = forwardRef(function HandwritingCanvas(
   const pointsRef          = useRef([]);   // 베지어 스무딩용 포인트 누적 (펜·형광펜 공용)
   const offscreenCanvasRef = useRef(null); // 형광펜 획 누적용 오프스크린
   const savedImageRef      = useRef(null); // 획 시작 전 메인 캔버스 스냅샷 (ImageData)
+  const imageUrlRef        = useRef(null); // 재생 모드에서 컨테이너 리사이즈 후 재드로우용
   const storageKey = scriptLinkId ? `director_handwriting_${scriptLinkId}` : null;
 
   // 캔버스를 스크롤 컨테이너 전체 크기에 맞춤, 리사이즈 전 내용 보존
@@ -29,9 +30,22 @@ const HandwritingCanvas = forwardRef(function HandwritingCanvas(
     if (initialSize) {
       const canvas = canvasRef.current;
       if (!canvas) return;
-      if (canvas.width === initialSize.width && canvas.height === initialSize.height) return;
-      canvas.width  = initialSize.width;
-      canvas.height = initialSize.height;
+      const container = containerRef?.current;
+      const cw = (container?.offsetWidth > 0 ? container.offsetWidth : initialSize.width);
+      const scale = cw / initialSize.width;
+      const tw = Math.round(cw);
+      const th = Math.round(initialSize.height * scale);
+      if (canvas.width === tw && canvas.height === th) return;
+      canvas.width  = tw;
+      canvas.height = th;
+      if (imageUrlRef.current) {
+        const img = new Image();
+        img.onload = () => {
+          const ctx = canvasRef.current?.getContext('2d');
+          if (ctx) ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        };
+        img.src = imageUrlRef.current;
+      }
       return;
     }
     const container = containerRef?.current;
@@ -76,8 +90,11 @@ const HandwritingCanvas = forwardRef(function HandwritingCanvas(
   useEffect(() => {
     if (!canvasRef.current) return;
     if (initialSize) {
-      canvasRef.current.width  = initialSize.width;
-      canvasRef.current.height = initialSize.height;
+      const container = containerRef?.current;
+      const cw = (container?.offsetWidth > 0 ? container.offsetWidth : initialSize.width);
+      const scale = cw / initialSize.width;
+      canvasRef.current.width  = Math.round(cw);
+      canvasRef.current.height = Math.round(initialSize.height * scale);
     }
     const ctx = canvasRef.current.getContext('2d');
     ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
@@ -89,12 +106,15 @@ const HandwritingCanvas = forwardRef(function HandwritingCanvas(
       }
     }
     src = src || initialImageUrl || null;
+    imageUrlRef.current = src;
     if (!src) return;
     const img = new Image();
-    img.onload = () => ctx.drawImage(img, 0, 0,
-      canvasRef.current.width, canvasRef.current.height);
+    img.onload = () => {
+      const ctx2 = canvasRef.current?.getContext('2d');
+      if (ctx2) ctx2.drawImage(img, 0, 0, canvasRef.current.width, canvasRef.current.height);
+    };
     img.src = src;
-  }, [scriptLinkId, storageKey, initialImageUrl, initialSize]);
+  }, [scriptLinkId, storageKey, initialImageUrl, initialSize, containerRef]);
 
   const saveToStorage = useCallback(() => {
     const canvas = canvasRef.current;

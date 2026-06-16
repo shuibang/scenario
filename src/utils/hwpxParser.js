@@ -6,7 +6,13 @@ import JSZip from 'jszip';
  */
 export async function parseHwpxFile(file) {
   const buffer = file instanceof File ? await file.arrayBuffer() : file;
-  const zip = await JSZip.loadAsync(buffer);
+  let zip;
+  try {
+    zip = await JSZip.loadAsync(buffer);
+  } catch (err) {
+    console.error('[hwpxParser] JSZip 로드 실패:', err);
+    throw new Error('파일을 열 수 없습니다. 손상된 파일이거나 지원하지 않는 형식일 수 있습니다.');
+  }
 
   if (!zip.file('META-INF/container.xml')) {
     throw new Error('올바른 HWPX 파일이 아닙니다 (container.xml 없음)');

@@ -55,6 +55,7 @@ export default function ImportHwpxModal({ open, onClose }) {
       setMode(hasContent ? 'new' : 'append');
       setStep('confirm');
     } catch (err) {
+      console.error('[ImportHwpxModal] 파일 파싱 실패:', err);
       reportError({ source: 'manual', message: err?.message || String(err), stack: err?.stack });
       setError('HWPX 파일을 읽을 수 없어요. 파일이 손상되었거나 지원되지 않는 형식일 수 있어요.');
     } finally {

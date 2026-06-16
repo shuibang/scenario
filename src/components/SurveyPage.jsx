@@ -481,20 +481,25 @@ export default function SurveyPage() {
             더 좋은 툴로 돌아올게요 🎬<br />
             여러분의 의견이 대본 작업실을 만들어갑니다.
           </p>
-          <p style={{ marginTop: 16, fontSize: 12, color: 'var(--c-text5)' }}>
-            이미 제출하신 설문입니다. 내용을 고치고 싶으면 아래에서 수정할 수 있어요.
-          </p>
+          <div style={{
+            marginTop: 28, padding: '14px 16px',
+            background: 'var(--c-active)', border: '1px solid var(--c-border2)',
+            borderRadius: 10, fontSize: 13, color: 'var(--c-text3)', lineHeight: 1.8,
+          }}>
+            <strong style={{ color: 'var(--c-text2)' }}>오류나 버그를 발견하셨나요?</strong><br />
+            설문이 아닌 <strong>오류제출</strong>로 보내주시면 더 빠르게 처리됩니다.
+          </div>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
             <button
               type="button"
-              onClick={() => { setIsEditing(true); setSubmitted(false); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+              onClick={() => { window.location.href = '/#goto-errors'; }}
               style={{
-                marginTop: 28, padding: '12px 28px', borderRadius: 10,
-                border: '1px solid var(--c-accent)', background: 'transparent',
-                color: 'var(--c-accent)', fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                marginTop: 16, padding: '12px 28px', borderRadius: 10,
+                border: '1px solid var(--c-border2)', background: 'var(--c-input)',
+                color: 'var(--c-text2)', fontSize: 14, fontWeight: 600, cursor: 'pointer',
               }}
             >
-              응답 수정하기
+              오류 제출하러 가기
             </button>
             <HomeButton />
           </div>
@@ -511,7 +516,7 @@ export default function SurveyPage() {
       <div style={{ maxWidth: 680, margin: '0 auto', padding: '32px 16px 80px' }}>
 
         {/* 헤더 */}
-        <div style={{ textAlign: 'center', marginBottom: 40 }}>
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--c-text)', marginBottom: 10 }}>
             대본 작업실 베타 테스트 설문
           </h1>
@@ -520,6 +525,7 @@ export default function SurveyPage() {
             약 5~10분 소요됩니다.
           </p>
         </div>
+
 
         <form onSubmit={handleSubmit}>
 

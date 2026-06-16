@@ -1,19 +1,4 @@
 {
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node -e \"let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const fp=(JSON.parse(d).tool_input||{}).file_path||'';if(/(changelog\\.html|announcements\\.js)$/.test(fp)){require('child_process').execSync('node scripts/syncAnnouncements.js',{cwd:'c:/Users/jiusu/OneDrive/\\ubc14\\ud0225 \\ud654\\uba74/\\ucf54\\ub529/star_sky',stdio:'pipe'})}}catch(e){}})\"",
-            "statusMessage": "뉴스레터 DB 동기화 중…",
-            "async": true
-          }
-        ]
-      }
-    ]
-  },
   "permissions": {
     "allow": [
       "Bash(cmd /c \"cd /d \"\"c:\\\\Users\\\\jiusu\\\\OneDrive\\\\바탕 화면\\\\코딩\\\\star_sky\"\" && npx vite build 2>&1\")",
@@ -64,10 +49,29 @@
       "Bash(awk 'NR>=1310 && NR<=2230' src/components/ScriptEditor.jsx)",
       "Bash(awk 'NR>=2248 && NR<=2258' src/components/ScriptEditor.jsx)",
       "Bash(\\\\\"]*\" dist/assets/app-B7PZQFHv.js 2>&1 | head -5)",
-      "Bash(grep -o \"[a-zA-Z0-9_.?]*scene-header-tabbed[^`\\\\\"]*\" dist/assets/app-B7PZQFHv.js 2>&1 | head -5)"
+      "Bash(grep -o \"[a-zA-Z0-9_.?]*scene-header-tabbed[^`\\\\\"]*\" dist/assets/app-B7PZQFHv.js 2>&1 | head -5)",
+      "PowerShell(git add src/components/DirectorNotesPage.jsx src/components/SharedReviewView.jsx src/components/director/DirectorDashboard.jsx src/components/director/HandwritingCanvas.jsx src/utils/reviewShare.js supabase/migrations/20260613_handwriting_memo.sql supabase/migrations/20260613_handwriting_session.sql supabase/migrations/20260613_handwriting_size.sql)",
+      "PowerShell(git add src/components/DirectorNotesPage.jsx)",
+      "Bash(git -C \"c:\\\\dev\\\\star_sky\" status)",
+      "Bash(git -C \"c:\\\\dev\\\\star_sky\" log origin/main..HEAD --oneline)"
     ],
     "additionalDirectories": [
       "C:\\Users\\jiusu"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const fp=(JSON.parse(d).tool_input||{}).file_path||'';if(/(changelog\\.html|announcements\\.js)$/.test(fp)){require('child_process').execSync('node scripts/syncAnnouncements.js',{cwd:'c:/Users/jiusu/OneDrive/\\ubc14\\ud0225 \\ud654\\uba74/\\ucf54\\ub529/star_sky',stdio:'pipe'})}}catch(e){}})\"",
+            "statusMessage": "뉴스레터 DB 동기화 중…",
+            "async": true
+          }
+        ]
+      }
     ]
   }
 }
