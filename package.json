@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "build:notices": "node scripts/buildNoticesHtml.js",
+    "sync:newsletter": "node scripts/syncAnnouncements.js",
     "lint": "eslint .",
     "preview": "vite preview"
   },

@@ -1,0 +1,44 @@
+name: Sync Newsletter Items
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/data/announcements.js'
+      - 'public/changelog.html'
+      - 'scripts/syncAnnouncements.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/sync-newsletter-items.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-newsletter-items
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Sync newsletter_items
+        run: npm run sync:newsletter
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}

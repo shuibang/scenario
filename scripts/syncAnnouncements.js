@@ -1,12 +1,14 @@
 /**
- * src/data/announcements.js + public/changelog.html
- *   → Supabase newsletter_items 테이블 upsert
- *   → public/newsletter-preview.html 생성
+ * Sync announcement sources into Supabase `newsletter_items`
+ * and generate a local preview HTML file.
  *
- * 실행: node scripts/syncAnnouncements.js
- * 환경변수 (루트 .env 또는 shell에서 직접 설정):
- *   SUPABASE_URL              — Supabase 프로젝트 URL
- *   SUPABASE_SERVICE_ROLE_KEY — service role 키 (RLS 우회 필요)
+ * Run:
+ *   node scripts/syncAnnouncements.js
+ *
+ * Env:
+ *   SUPABASE_URL
+ *   SUPABASE_SERVICE_ROLE_KEY
+ *   SUPABASE_SERVICE_KEY        // legacy alias
  */
 import { createClient } from '@supabase/supabase-js';
 import { pathToFileURL } from 'node:url';
@@ -14,24 +16,28 @@ import path from 'node:path';
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
+const NOTICE_URL = 'https://daejak.kr/notice';
+const CHANGELOG_URL = 'https://daejak.kr/changelog';
 
 function loadEnv() {
   try {
     const env = readFileSync(path.resolve(ROOT, '.env'), 'utf8');
     for (const line of env.split('\n')) {
-      const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
-      if (m && !process.env[m[1]]) process.env[m[1]] = m[2].trim();
+      const match = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
+      if (match && !process.env[match[1]]) process.env[match[1]] = match[2].trim();
     }
-  } catch { /* .env 없으면 무시 */ }
+  } catch {
+    // Ignore missing .env in CI.
+  }
 }
 
 loadEnv();
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SERVICE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
 
 if (!SUPABASE_URL || !SERVICE_KEY) {
-  console.error('SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY 환경변수를 설정해주세요.');
+  console.error('Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SERVICE_KEY).');
   process.exit(1);
 }
 
@@ -39,39 +45,41 @@ const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
   auth: { persistSession: false },
 });
 
-const DATA_FILE = pathToFileURL(path.resolve(ROOT, 'src/data/announcements.js')).href;
-const { announcements } = await import(DATA_FILE);
+const dataFileUrl = pathToFileURL(path.resolve(ROOT, 'src/data/announcements.js')).href;
+const { announcements } = await import(dataFileUrl);
 
-// ── 공지사항 rows (badge 포함) ─────────────────────────────────────────────
 const announcementRows = announcements.map(({ id, date, title, content, badge }) => ({
-  id, date, title, content, badge: badge ?? null,
+  id,
+  date,
+  title,
+  content,
+  badge: badge ?? null,
 }));
 
-// ── changelog.html 파싱 → 업데이트 내역 rows (badge: null, 제목만) ──────────
-// 각 항목 앞의 주석(<!-- vXX~YY ... -->)을 ID 소스로 사용해 안정적인 PK 생성
 function parseChangelogRows() {
   const html = readFileSync(path.resolve(ROOT, 'public/changelog.html'), 'utf8');
   const rows = [];
-  // 주석 + cl-entry 안의 cl-date / cl-title 한 번에 캡처
   const re = /<!--\s*(v[\d~]+)[^\n]*\n\s*<div class="cl-entry[\s\S]*?<div class="cl-date">([\d-]+)<\/div>\s*<div class="cl-title">([\s\S]*?)<\/div>/g;
-  let m;
-  while ((m = re.exec(html)) !== null) {
-    const version = m[1].replace(/~/g, '-');   // 'v50~51' → 'v50-51'
-    const date    = m[2].trim();
-    const title   = m[3].trim().replace(/\s+/g, ' ');
+  let match;
+
+  while ((match = re.exec(html)) !== null) {
+    const version = match[1].replace(/~/g, '-');
+    const date = match[2].trim();
+    const title = match[3].trim().replace(/\s+/g, ' ');
     rows.push({
-      id:      `cl-${version}`,
+      id: `cl-${version}`,
       date,
       title,
-      content: '',   // 업데이트 내역은 제목만 표시 — 본문 불필요
-      badge:   null,
+      content: '',
+      badge: null,
     });
   }
+
   return rows;
 }
 
 const changelogRows = parseChangelogRows();
-console.log(`changelog 항목 파싱 — ${changelogRows.length}개`);
+console.log(`changelog parsed: ${changelogRows.length}`);
 
 const rows = [...announcementRows, ...changelogRows];
 
@@ -80,29 +88,35 @@ const { error } = await supabase
   .upsert(rows, { onConflict: 'id', ignoreDuplicates: false });
 
 if (error) {
-  console.error('upsert 실패:', error.message);
+  console.error('newsletter_items upsert failed:', error.message);
   process.exit(1);
 }
 
-console.log(`newsletter_items upsert 완료 — 공지 ${announcementRows.length}개 + 업데이트 ${changelogRows.length}개`);
+console.log(`newsletter_items upserted: notices=${announcementRows.length}, changelog=${changelogRows.length}`);
 
-// ─── 미리보기 HTML 생성 ────────────────────────────────────────────────────────
-const NOTICE_URL = 'https://daejak.kr/notice';
 const since = new Date();
 since.setDate(since.getDate() - 7);
 const sinceStr = since.toISOString().split('T')[0];
-const recent = rows.filter(r => r.date >= sinceStr);
-const notices = recent.filter(r => r.badge);
-const updates = recent.filter(r => !r.badge);
+const recent = rows.filter(row => row.date >= sinceStr);
+const notices = recent.filter(row => row.badge);
+const updates = recent.filter(row => !row.badge);
 
-function escapeHtml(s) {
-  return String(s ?? '')
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
+
 function contentToHtml(content) {
-  return String(content ?? '').split(/\n{2,}/).filter(p => p.length > 0)
-    .map(p => `<p style="margin:0 0 12px;font-size:14px;color:#374151;line-height:1.7;">${escapeHtml(p).replace(/\n/g, '<br>')}</p>`).join('');
+  return String(content ?? '')
+    .split(/\n{2,}/)
+    .filter(Boolean)
+    .map(paragraph => (
+      `<p style="margin:0 0 12px;font-size:14px;color:#374151;line-height:1.7;">${escapeHtml(paragraph).replace(/\n/g, '<br>')}</p>`
+    ))
+    .join('');
 }
 
 const noticesHtml = notices.length === 0 ? '' : `
@@ -134,20 +148,20 @@ const previewHtml = `<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>뉴스레터 미리보기 — 대본 작업실</title>
+<title>뉴스레터 미리보기 - 대본 작업실</title>
 </head>
 <body style="margin:0;padding:32px 16px;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
 <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:12px 16px;margin-bottom:24px;font-size:13px;color:#856404;max-width:760px;margin-left:auto;margin-right:auto;">
-  ⚠️ 미리보기 모드 — 실제 발송되지 않습니다. 생성: ${new Date().toLocaleString('ko-KR')}
+  로컬 미리보기 모드이며 실제 발송은 일어나지 않습니다. 생성: ${new Date().toLocaleString('ko-KR')}
 </div>
 <div style="max-width:760px;margin:0 auto;">
   <table width="100%" cellpadding="0" cellspacing="0">
     <tr><td style="background:#111827;border-radius:12px 12px 0 0;padding:24px 32px;">
-      <a href="https://daejak.kr" style="text-decoration:none;font-size:20px;font-weight:700;color:#fff;">🎬 대본 작업실</a>
+      <a href="https://daejak.kr" style="text-decoration:none;font-size:20px;font-weight:700;color:#fff;">대본 작업실</a>
       <span style="float:right;font-size:12px;color:#9ca3af;line-height:28px;">주간 업데이트</span>
     </td></tr>
     <tr><td style="background:#fff;padding:32px;border-left:1px solid #e5e7eb;border-right:1px solid #e5e7eb;">
-      <p style="margin:0 0 28px;font-size:15px;color:#374151;">안녕하세요! 이번 주 업데이트 내용을 정리해 드려요.</p>
+      <p style="margin:0 0 28px;font-size:15px;color:#374151;">안녕하세요. 이번 주 업데이트 내용을 정리해 드려요.</p>
       ${noticesHtml}
       ${updatesHtml}
       <div style="text-align:center;">
@@ -164,6 +178,6 @@ const previewHtml = `<!DOCTYPE html>
 </body>
 </html>`;
 
-const OUT = path.resolve(ROOT, 'public/newsletter-preview.html');
-writeFileSync(OUT, previewHtml, 'utf8');
-console.log(`미리보기 HTML 생성 완료 → public/newsletter-preview.html`);
+const outFile = path.resolve(ROOT, 'public/newsletter-preview.html');
+writeFileSync(outFile, previewHtml, 'utf8');
+console.log('Generated public/newsletter-preview.html');
