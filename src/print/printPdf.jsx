@@ -405,17 +405,31 @@ export async function exportPdf(appState, selections, { onStep = () => {}, water
   try {
     onStep('직렬화');
     printModel   = buildPrintModel(appState, selections, preset);
-
     onStep('레이아웃');
     const docs   = buildPdfGroups(printModel, watermarkText);
-
     onStep('파일 생성');
     const blobs  = await Promise.all(docs.map(doc => pdf(doc).toBlob()));
     blob = blobs.length === 1 ? blobs[0] : await mergePdfBlobs(blobs);
-  } catch (err) {
-    console.error('[printPdf] FAILED:', err?.message);
-    console.error('[printPdf] stack:', err?.stack);
-    throw new Error(`PDF 생성 실패: ${err.message}`);
+  } catch (firstErr) {
+    // @react-pdf/renderer의 FontSource.loadResultPromise가 첫 fetch 실패 결과를
+    // 캐시해 이후 모든 시도가 동일하게 실패함. Font.clear()로 fontFamilies 전체를
+    // 초기화하면 새 FontSource 인스턴스가 생성되어 loadResultPromise가 null로 리셋됨.
+    console.warn('[printPdf] 첫 시도 실패, 폰트 캐시 초기화 후 재시도:', firstErr?.message);
+    Font.clear();
+    _fontsRegistered = false;
+    ensureFontsRegistered();
+    try {
+      if (!printModel) printModel = buildPrintModel(appState, selections, preset);
+      onStep('레이아웃');
+      const docs  = buildPdfGroups(printModel, watermarkText);
+      onStep('파일 생성');
+      const blobs = await Promise.all(docs.map(doc => pdf(doc).toBlob()));
+      blob = blobs.length === 1 ? blobs[0] : await mergePdfBlobs(blobs);
+    } catch (err) {
+      console.error('[printPdf] FAILED:', err?.message);
+      console.error('[printPdf] stack:', err?.stack);
+      throw new Error(`PDF 생성 실패: ${err.message}`);
+    }
   }
   try {
     onStep('다운로드');
@@ -440,6 +454,16 @@ export async function getPdfBlob(appState, selections, { watermarkText = null } 
   const preset     = appState?.stylePreset || {};
   const printModel = buildPrintModel(appState, selections, preset);
   const docs       = buildPdfGroups(printModel, watermarkText);
-  const blobs      = await Promise.all(docs.map(doc => pdf(doc).toBlob()));
-  return blobs.length === 1 ? blobs[0] : mergePdfBlobs(blobs);
+  const toBlob = async () => {
+    const blobs = await Promise.all(docs.map(doc => pdf(doc).toBlob()));
+    return blobs.length === 1 ? blobs[0] : mergePdfBlobs(blobs);
+  };
+  try {
+    return await toBlob();
+  } catch {
+    Font.clear();
+    _fontsRegistered = false;
+    ensureFontsRegistered();
+    return await toBlob();
+  }
 }
