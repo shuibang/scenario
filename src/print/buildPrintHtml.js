@@ -105,7 +105,7 @@ function renderEpisode(section, dialogueGap, isFirst) {
         blockHtml = `<div class="action"${alignStyle}>${richContent}</div>`;
         break;
       case 'dialogue': {
-        const charName = esc(block.charName || '');
+        const charName = esc((block.charPrefix || '') + (block.charName || '') + (block.charSuffix || ''));
         blockHtml = `<div class="dialogue">
           <span class="char-col" style="width:${dialogueGap}">${charName}</span>
           <span class="speech-col"${alignStyle}>${richContent}</span>

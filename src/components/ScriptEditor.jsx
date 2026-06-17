@@ -562,7 +562,8 @@ function blocksToHtml(blocks) {
         const cn = esc(b.characterName || b.charName || '');
         const ci = esc(b.characterId || '');
         const cp = esc(b.charPrefix || '');
-        return `<div data-block-id="${id}" data-block-type="dialogue" data-char-name="${cn}" data-char-id="${ci}" data-char-prefix="${cp}" class="ce-block ce-dialogue"${alignAttr}>${dc}</div>`;
+        const cs = esc(b.charSuffix || '');
+        return `<div data-block-id="${id}" data-block-type="dialogue" data-char-name="${cn}" data-char-id="${ci}" data-char-prefix="${cp}" data-char-suffix="${cs}" class="ce-block ce-dialogue"${alignAttr}>${dc}</div>`;
       }
       case 'scene_ref': {
         const refId = esc(b.refSceneId || '');
@@ -705,11 +706,20 @@ function changeBlockTypeEl(blockEl, newType) {
         break;
       }
     }
-    blockEl.innerText = cleanText;
-    blockEl.dataset.charName = ''; blockEl.dataset.charId = '';
+    const SUFFIX_RE = /\s?\([A-Za-z./\s]+\)$/;
+    let suffix = '';
+    const suffixMatch = cleanText.match(SUFFIX_RE);
+    if (suffixMatch) {
+      suffix = suffixMatch[0];
+      cleanText = cleanText.slice(0, -suffixMatch[0].length);
+    }
+    blockEl.dataset.charName = cleanText;
+    blockEl.dataset.charId = '';
     blockEl.dataset.charPrefix = prefix;
+    blockEl.dataset.charSuffix = suffix;
+    blockEl.innerHTML = '<br>';
   } else if (old === 'dialogue') {
-    delete blockEl.dataset.charName; delete blockEl.dataset.charId; delete blockEl.dataset.charPrefix;
+    delete blockEl.dataset.charName; delete blockEl.dataset.charId; delete blockEl.dataset.charPrefix; delete blockEl.dataset.charSuffix;
     blockEl.textContent = displayText;
   } else {
     blockEl.textContent = displayText;
@@ -835,6 +845,7 @@ function parseSurface(surface, metaRef, epId, projId) {
         characterId: div.dataset.charId || prev.characterId || undefined,
         charName: div.dataset.charName || prev.charName || '',
         charPrefix: div.dataset.charPrefix || prev.charPrefix || '',
+        charSuffix: div.dataset.charSuffix || prev.charSuffix || '',
       };
     }
     if (type === 'scene_ref') {
@@ -1253,13 +1264,17 @@ function CharPickerOverlay({ anchor, projectChars, onSelect, onClose, onAddNew, 
     };
   }, []); // 마운트 1회만 — onClose/onSelect는 ref로 접근
 
-  const filtered = (query
-    ? projectChars.filter(c => (c.name || '').includes(query) || (c.givenName || '').includes(query))
+  const PICKER_SUFFIX_RE = /\s?\([A-Za-z./\s]+\)$/;
+  const querySuffix = query.match(PICKER_SUFFIX_RE)?.[0] || '';
+  const queryBase = querySuffix ? query.slice(0, -querySuffix.length).trim() : query;
+
+  const filtered = (queryBase
+    ? projectChars.filter(c => (c.name || '').includes(queryBase) || (c.givenName || '').includes(queryBase))
     : projectChars
   ).slice(0, 10);
 
   // 미등록 행이 표시되는 조건
-  const showUnreg = filtered.length === 0 && query.trim();
+  const showUnreg = filtered.length === 0 && queryBase.trim();
   // 방향키 인덱스 최대값: 등록 목록 또는 미등록 행(그대로=0, 인물추가=1)
   const maxIdx = showUnreg ? (onAddNew ? 1 : 0) : filtered.length - 1;
 
@@ -1284,7 +1299,9 @@ function CharPickerOverlay({ anchor, projectChars, onSelect, onClose, onAddNew, 
       if (!showUnreg) {
         // 등록 인물 목록
         if (activeIdx >= 0 && filtered[activeIdx]) {
-          onSelect(filtered[activeIdx]);
+          const sel = filtered[activeIdx];
+          const isExact = querySuffix && (sel.name === queryBase || sel.givenName === queryBase);
+          onSelect(sel, isExact ? querySuffix : '');
         } else if (onSkip) {
           onSkip();
         } else {
@@ -1293,9 +1310,9 @@ function CharPickerOverlay({ anchor, projectChars, onSelect, onClose, onAddNew, 
       } else {
         // 미등록 행: 0=그대로 사용, 1=인물 추가
         if (activeIdx === 1 && onAddNew) {
-          onAddNew(query.trim());
+          onAddNew(queryBase.trim(), querySuffix);
         } else {
-          onSelect({ id: undefined, name: query.trim(), givenName: query.trim() });
+          onSelect({ id: undefined, name: queryBase.trim(), givenName: queryBase.trim() }, querySuffix);
         }
       }
     }
@@ -1330,24 +1347,28 @@ function CharPickerOverlay({ anchor, projectChars, onSelect, onClose, onAddNew, 
         />
       </div>
       <div ref={listRef} className="max-h-48 overflow-y-auto">
-        {filtered.map((c, i) => (
-          <div
-            key={c.id || c.name}
-            data-char-item
-            onMouseDown={e => { e.preventDefault(); e.stopPropagation(); onSelect(c); }}
-            onMouseEnter={() => setActiveIdx(i)}
-            className="px-3 py-1.5 text-sm cursor-pointer"
-            style={{ color: 'var(--c-text)', background: i === activeIdx ? 'var(--c-active)' : 'transparent' }}
-          >
-            {c.givenName || c.name}
-            {c.surname && c.givenName && <span className="ml-2 text-[10px]" style={{ color: 'var(--c-text6)' }}>{c.surname}{c.givenName}</span>}
-          </div>
-        ))}
+        {filtered.map((c, i) => {
+          const charDisplay = c.givenName || c.name;
+          const exactMatch = querySuffix && (c.name === queryBase || c.givenName === queryBase);
+          return (
+            <div
+              key={c.id || c.name}
+              data-char-item
+              onMouseDown={e => { e.preventDefault(); e.stopPropagation(); onSelect(c, exactMatch ? querySuffix : ''); }}
+              onMouseEnter={() => setActiveIdx(i)}
+              className="px-3 py-1.5 text-sm cursor-pointer"
+              style={{ color: 'var(--c-text)', background: i === activeIdx ? 'var(--c-active)' : 'transparent' }}
+            >
+              {exactMatch ? query.trim() : charDisplay}
+              {c.surname && c.givenName && <span className="ml-2 text-[10px]" style={{ color: 'var(--c-text6)' }}>{c.surname}{c.givenName}</span>}
+            </div>
+          );
+        })}
         {showUnreg && (
           <>
             <div
               data-char-item
-              onMouseDown={e => { e.preventDefault(); e.stopPropagation(); onSelect({ id: undefined, name: query.trim(), givenName: query.trim() }); }}
+              onMouseDown={e => { e.preventDefault(); e.stopPropagation(); onSelect({ id: undefined, name: queryBase.trim(), givenName: queryBase.trim() }, querySuffix); }}
               onMouseEnter={() => setActiveIdx(0)}
               className="px-3 py-1.5 text-sm cursor-pointer"
               style={{ color: 'var(--c-accent2)', background: activeIdx === 0 ? 'var(--c-active)' : 'transparent' }}
@@ -1355,7 +1376,7 @@ function CharPickerOverlay({ anchor, projectChars, onSelect, onClose, onAddNew, 
             {onAddNew && (
               <div
                 data-char-item
-                onMouseDown={e => { e.preventDefault(); e.stopPropagation(); onAddNew(query.trim()); }}
+                onMouseDown={e => { e.preventDefault(); e.stopPropagation(); onAddNew(queryBase.trim(), querySuffix); }}
                 onMouseEnter={() => setActiveIdx(1)}
                 className="px-3 py-1.5 text-sm cursor-pointer"
                 style={{ color: 'var(--c-text)', background: activeIdx === 1 ? 'var(--c-active)' : 'transparent' }}
@@ -1529,6 +1550,7 @@ const EditorSurface = forwardRef(function EditorSurface({
           div.dataset.charId = b.characterId || '';
         }
         div.dataset.charPrefix = b.charPrefix || '';
+        div.dataset.charSuffix = b.charSuffix || '';
       }
       if (b.type === 'scene_number' && b.label && div.dataset.label !== b.label) {
         div.dataset.label = b.label;
@@ -1617,13 +1639,14 @@ const EditorSurface = forwardRef(function EditorSurface({
       const div = el.querySelector(`[data-scene-id="${sceneId}"]`);
       if (div) div.scrollIntoView({ behavior: 'smooth', block: 'start' });
     },
-    updateBlockChar(blockId, charId, charName) {
+    updateBlockChar(blockId, charId, charName, charSuffix = undefined) {
       const el = surfaceRef.current;
       if (!el) return;
       const div = el.querySelector(`[data-block-id="${blockId}"]`);
       if (!div) return;
       div.dataset.charName = charName;
       div.dataset.charId = charId || '';
+      if (charSuffix !== undefined) div.dataset.charSuffix = charSuffix;
       // 커서를 블록 시작으로
       try {
         const r = document.createRange();
@@ -3316,13 +3339,20 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
         break;
       }
     }
+    const CHAR_SUFFIX_RE = /\s?\([A-Za-z./\s]+\)$/;
+    let detectedSuffix = '';
+    const suffixMatch = nameToMatch.match(CHAR_SUFFIX_RE);
+    if (suffixMatch) {
+      detectedSuffix = suffixMatch[0];
+      nameToMatch = nameToMatch.slice(0, -suffixMatch[0].length).trim();
+    }
     if (!nameToMatch) { setCharSuggestState(null); return; }
     const match = projectChars.find(c =>
       [c.name, c.givenName].filter(Boolean).some(n => n.startsWith(nameToMatch))
     );
     if (match) {
       const el = surfaceApiRef.current ? document.querySelector(`[data-block-id="${blockId}"]`) : null;
-      setCharSuggestState({ blockId, charName: match.givenName || match.name, charObj: match, blockEl: el, charPrefix: detectedPrefix });
+      setCharSuggestState({ blockId, charName: match.givenName || match.name, charObj: match, blockEl: el, charPrefix: detectedPrefix, charSuffix: detectedSuffix });
     } else {
       setCharSuggestState(null);
     }
@@ -3913,7 +3943,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         e.stopImmediatePropagation();
-        const { blockId, charObj, charPrefix = '' } = charSuggestState;
+        const { blockId, charObj, charPrefix = '', charSuffix = '' } = charSuggestState;
         const surface = document.querySelector('[data-editor-surface]');
         if (surface) {
           const div = surface.querySelector(`[data-block-id="${blockId}"]`);
@@ -3923,6 +3953,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
             div.dataset.charName = charObj.givenName || charObj.name;
             div.dataset.charId = charObj.id || '';
             div.dataset.charPrefix = charPrefix;
+            div.dataset.charSuffix = charSuffix;
             div.innerHTML = `<span contenteditable="false" class="ce-char-badge">${esc(charObj.givenName || charObj.name)}</span><span class="ce-speech"></span>`;
             setCaret(div, 0);
           }
@@ -3930,7 +3961,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
         setCharSuggestState(null);
         setBlocks(prev => syncLabels(prev.map(b =>
           b.id === blockId
-            ? { ...b, type: 'dialogue', content: '', characterId: charObj.id, characterName: charObj.name, charName: charObj.givenName || charObj.name, charPrefix }
+            ? { ...b, type: 'dialogue', content: '', characterId: charObj.id, characterName: charObj.name, charName: charObj.givenName || charObj.name, charPrefix, charSuffix }
             : b
         )));
       }
@@ -4573,7 +4604,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
               <CharSuggestionPanel
                 charName={charSuggestState.charName}
                 onConfirm={() => {
-                  const { blockId, charObj, charPrefix = '' } = charSuggestState;
+                  const { blockId, charObj, charPrefix = '', charSuffix = '' } = charSuggestState;
                   const surface = document.querySelector('[data-editor-surface]');
                   if (!surface) return;
                   const div = surface.querySelector(`[data-block-id="${blockId}"]`);
@@ -4583,13 +4614,14 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
                     div.dataset.charName = charObj.givenName || charObj.name;
                     div.dataset.charId = charObj.id || '';
                     div.dataset.charPrefix = charPrefix;
+                    div.dataset.charSuffix = charSuffix;
                     div.innerHTML = `<span contenteditable="false" class="ce-char-badge">${esc(charObj.givenName || charObj.name)}</span><span class="ce-speech"></span>`;
                     setCaret(div, 0);
                   }
                   setCharSuggestState(null);
                   setBlocks(prev => syncLabels(prev.map(b =>
                     b.id === blockId
-                      ? { ...b, type: 'dialogue', content: '', characterId: charObj.id, characterName: charObj.name, charName: charObj.givenName || charObj.name, charPrefix }
+                      ? { ...b, type: 'dialogue', content: '', characterId: charObj.id, characterName: charObj.name, charName: charObj.givenName || charObj.name, charPrefix, charSuffix }
                       : b
                   )));
                 }}
@@ -4736,24 +4768,24 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
           anchor={{ top: charPickerState.top, left: charPickerState.left }}
           projectChars={projectChars}
           initialQuery={charPickerState.initialQuery || ''}
-          onSelect={(char) => {
+          onSelect={(char, detectedSuffix = '') => {
             const blockId = charPickerState.blockId;
             const charId = char.id || '';
             const charName = char.givenName || char.name || '';
             suppressCharPickerOpenUntilRef.current = performance.now() + 300;
             setCharPickerState(null);
             requestAnimationFrame(() => {
-              surfaceApiRef.current?.updateBlockChar(blockId, charId, charName);
+              surfaceApiRef.current?.updateBlockChar(blockId, charId, charName, detectedSuffix);
             });
           }}
-          onAddNew={(name) => {
+          onAddNew={(name, detectedSuffix = '') => {
             const blockId = charPickerState.blockId;
             suppressCharPickerOpenUntilRef.current = performance.now() + 300;
             setCharPickerState(null);
             const newChar = { id: genId(), projectId: activeProjectId, name, givenName: name, role: '', createdAt: now() };
             dispatch({ type: 'ADD_CHARACTER', payload: newChar });
             requestAnimationFrame(() => {
-              surfaceApiRef.current?.updateBlockChar(blockId, newChar.id, name);
+              surfaceApiRef.current?.updateBlockChar(blockId, newChar.id, name, detectedSuffix);
             });
           }}
           onClose={() => {

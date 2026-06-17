@@ -505,7 +505,8 @@ function xmlSection(printModel, margins, blockStyles = {}) {
             }
             case 'dialogue': {
               const speechLines = splitOnBr(block.content || '');
-              dialogue(block.charName, speechLines[0] ?? '');
+              const fullCharName = (block.charPrefix || '') + (block.charName || '') + (block.charSuffix || '');
+              dialogue(fullCharName, speechLines[0] ?? '');
               for (let i = 1; i < speechLines.length; i++) {
                 paras.push(para(speechLines[i], { cid: 0, parid: 5, html: true }));
               }

@@ -396,7 +396,8 @@ function buildDocxSections(printModel, dp, { hancom = false } = {}) {
           }
           case 'dialogue': {
             const dLines = splitOnBr(block.content || '');
-            paras.push(dialoguePara(block.charName, dLines[0] ?? '', dp));
+            const fullCharName = (block.charPrefix || '') + (block.charName || '') + (block.charSuffix || '');
+            paras.push(dialoguePara(fullCharName, dLines[0] ?? '', dp));
             for (let i = 1; i < dLines.length; i++)
               paras.push(para(dLines[i], dp, { html: true }));
             break;

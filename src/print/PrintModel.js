@@ -88,6 +88,8 @@ function normalizeBlock(block, characters) {
     label:       stripLiteralTags(block.label || ''),
     content,
     charName,
+    charPrefix:  block.charPrefix  || '',
+    charSuffix:  block.charSuffix  || '',
     alignment:   block.alignment || undefined,
     sceneId:     block.sceneId,
     refSceneId:  block.refSceneId || '',

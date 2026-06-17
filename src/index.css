@@ -368,7 +368,7 @@ textarea {
   word-break: break-word;
 }
 .ce-block[data-block-type="dialogue"]::before {
-  content: attr(data-char-prefix, '') attr(data-char-name);
+  content: attr(data-char-prefix, '') attr(data-char-name) attr(data-char-suffix, '');
   position: absolute;
   left: 0;
   top: 0;
