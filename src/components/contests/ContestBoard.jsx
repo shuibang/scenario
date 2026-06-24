@@ -290,8 +290,9 @@ export default function ContestBoard({ compact = false }) {
   }, []);
 
   const filtered = useMemo(() => {
-    if (selectedCats.length === 0) return contests;
-    return contests.filter((c) => {
+    const notExpired = contests.filter((c) => daysUntil(c.submit_end) >= 0);
+    if (selectedCats.length === 0) return notExpired;
+    return notExpired.filter((c) => {
       const cats = Array.isArray(c.category) ? c.category : (c.category ? [c.category] : []);
       if (cats.length === 0) return selectedCats.includes('기타');
       return cats.some((cat) => selectedCats.includes(cat));
