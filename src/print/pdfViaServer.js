@@ -29,16 +29,25 @@ function printViaIframe(html) {
     doc.write(html);
     doc.close();
 
+    let cleaned = false;
+    let cleanupTimer = null;
+    const cleanup = () => {
+      if (cleaned) return;
+      cleaned = true;
+      clearTimeout(cleanupTimer);
+      if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+      resolve();
+    };
+
+    let printed = false;
     const doPrint = () => {
+      if (printed) return;
+      printed = true;
       iframe.contentWindow.focus();
       iframe.contentWindow.print();
       // 인쇄 다이얼로그가 닫힌 뒤 iframe 제거 (afterprint 이벤트 or 타임아웃)
-      const cleanup = () => {
-        document.body.removeChild(iframe);
-        resolve();
-      };
       iframe.contentWindow.addEventListener('afterprint', cleanup, { once: true });
-      setTimeout(cleanup, 60_000); // 최대 1분 후 강제 정리
+      cleanupTimer = setTimeout(cleanup, 60_000); // 최대 1분 후 강제 정리
     };
 
     // readyState가 이미 complete이면 바로, 아니면 onload 대기 후 실행
