@@ -24,9 +24,9 @@ const DATA_DOCS = [
 ];
 
 const PLAN_DOCS = [
-  { doc: 'structure',  label: '구조' },
   { doc: 'treatment',  label: '트리트먼트' },
-  { doc: 'scenelist',  label: '씬리스트' },
+  { doc: 'structure',  label: '구조' },
+  { doc: 'scenelist',  label: '씬리스트', disabled: true, hint: '이전→구조' },
 ];
 
 function LegacyFeedbackTabContent({ dispatch, onClose }) {
@@ -252,12 +252,16 @@ export default function MobileBottomPanel({ open, onToggle, tab, onTabChange, on
                 )}
                 {tab === 'plan' && (
                   <div className="m-panel-content">
-                    {PLAN_DOCS.map(({ doc, label }) => (
+                    {PLAN_DOCS.map(({ doc, label, disabled, hint }) => (
                       <div
                         key={doc}
-                        className={`m-item${activeDoc === doc ? ' active' : ''}`}
-                        onClick={() => { dispatch({ type: 'SET_ACTIVE_DOC', payload: doc }); onClose?.(); }}
-                      >{label}</div>
+                        className={`m-item${!disabled && activeDoc === doc ? ' active' : ''}`}
+                        style={disabled ? { opacity: 0.4, pointerEvents: 'none', cursor: 'default', display: 'flex', justifyContent: 'space-between' } : {}}
+                        onClick={disabled ? undefined : () => { dispatch({ type: 'SET_ACTIVE_DOC', payload: doc }); onClose?.(); }}
+                      >
+                        <span>{label}</span>
+                        {hint && <span style={{ fontSize: 10, color: 'var(--c-text6)' }}>{hint}</span>}
+                      </div>
                     ))}
                   </div>
                 )}

@@ -218,13 +218,6 @@ function ProjectItem({ project, section = 'all', expanded, onToggle }) {
                 const treatCount = epList.reduce((acc, ep) => acc + (ep.summaryItems?.length || 0), 0);
                 return (<>
                   <NavItem
-                    icon={LayoutGrid}
-                    label="구조"
-                    active={activeDoc === 'structure'}
-                    onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'structure' })}
-                    indent={2}
-                  />
-                  <NavItem
                     icon={Film}
                     label="트리트먼트"
                     active={activeDoc === 'treatment'}
@@ -233,15 +226,31 @@ function ProjectItem({ project, section = 'all', expanded, onToggle }) {
                     badge={treatCount > 0 ? `${treatCount}개` : null}
                   />
                   <NavItem
-                    icon={ListOrdered}
-                    label="씬리스트"
-                    active={activeDoc === 'scenelist'}
-                    onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'scenelist' })}
+                    icon={LayoutGrid}
+                    label="구조"
+                    active={activeDoc === 'structure'}
+                    onClick={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'structure' })}
                     indent={2}
                   />
                 </>);
               })()}
               <FeedbackSection activeDoc={activeDoc} dispatch={dispatch} large={large} />
+              <div
+                className="flex items-center rounded mx-1 mb-0.5"
+                style={{
+                  paddingLeft: `${2 * 12}px`,
+                  paddingRight: '8px',
+                  paddingTop: '5px',
+                  paddingBottom: '5px',
+                  opacity: 0.4,
+                  cursor: 'default',
+                  pointerEvents: 'none',
+                }}
+              >
+                <ListOrdered size={14} strokeWidth={1.75} style={{ flexShrink: 0, marginRight: 6, color: 'var(--c-text5)' }} />
+                <span className="truncate flex-1 text-sm" style={{ color: 'var(--c-text4)' }}>씬리스트</span>
+                <span className="ml-2 text-[10px] shrink-0" style={{ color: 'var(--c-text6)' }}>이전→구조</span>
+              </div>
             </div>
           </>}
         </div>
