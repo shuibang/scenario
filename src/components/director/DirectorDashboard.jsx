@@ -753,7 +753,12 @@ function DirectorMobileView({ session, onBack, isGuest, D, loginWithReturnHash, 
         <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: D.text3, fontSize: 13 }}>대본 불러오는 중…</div>
       );
       if (projViewing?.error) return (
-        <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#e05c5c', fontSize: 13, padding: 16, textAlign: 'center' }}>{projViewing.error}</div>
+        <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {isDriveError(projViewing.error)
+            ? <DriveReconnectCard D={D} message={projViewing.error} />
+            : <div style={{ color: '#e05c5c', fontSize: 13, padding: 16, textAlign: 'center' }}>불러오기 실패: {projViewing.error}</div>
+          }
+        </div>
       );
       if (projViewing) return (
         <div style={{ height: '100%', overflow: 'auto', background: '#d8d8d8' }}>
@@ -1400,7 +1405,7 @@ function isDriveMissing(msg) {
 // Drive 끊김 여부: provider_token이 없을 때 참
 function isDriveError(msg) {
   if (isDriveMissing(msg)) return false;
-  return msg && (msg.includes('Drive 권한') || msg.includes('provider_token') || msg.includes('Drive'));
+  return msg && (msg.includes('DRIVE_AUTH_REQUIRED') || msg.includes('Drive 권한') || msg.includes('provider_token') || msg.includes('Drive'));
 }
 
 function OrphanScriptCard({ D, onRemove, removing }) {
@@ -1430,12 +1435,13 @@ function OrphanScriptCard({ D, onRemove, removing }) {
 
 function DriveReconnectCard({ D, message }) {
   const [loading, setLoading] = useState(false);
+  const isAuthSentinel = !message || message === 'DRIVE_AUTH_REQUIRED';
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, padding: 32, textAlign: 'center', maxWidth: 320 }}>
       <div style={{ fontSize: 32 }}>🔌</div>
-      <div style={{ fontSize: 14, fontWeight: 700, color: D.text }}>Drive 연결이 끊겼습니다</div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: D.text }}>드라이브 재연결이 필요해요.</div>
       <div style={{ fontSize: 12, color: D.text2, lineHeight: 1.7 }}>
-        {message || 'Google Drive 권한이 만료되었습니다.'}<br />
+        {isAuthSentinel ? 'Google Drive 권한이 만료되었습니다.' : message}<br />
         Google 계정으로 다시 로그인하면 계속 이용할 수 있습니다.
       </div>
       <button
