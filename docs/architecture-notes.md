@@ -30,9 +30,8 @@
 
 ## 알려진 한계
 
-### SceneListPage의 timeOfDay 손실 (후속 이슈)
-- handleMetaChange가 meta에 timeOfDay 없을 때 기존 content 파싱 안 함
-- 영향: 레거시 씬 구조화 전환 시 시간대 정보 소실 가능
+### ~~SceneListPage의 timeOfDay 손실~~ (수정 완료)
+- 커밋 `56b1672`: 본문 씬 헤더의 장소·시간대가 씬리스트에 자동 반영되도록 수정됨
 
 ### 전역 포맷 vs 대본별 포맷
 - 현재: 전역 localStorage에 포맷 저장
@@ -42,6 +41,6 @@
 ## Phase 진행 상황
 
 - Phase 0 (완료): 데이터 안전 방어선 구축
-- Phase 1 (보류): sceneFormat.js 엄격화 (#2~#8)
-- Phase 2 (계획): 대본별 포맷 아키텍처
-- Phase 1.5 (계획): 워터마크 + 유출 추적
+- Phase 1 (보류): sceneFormat.js 엄격화 (#2~#8) — 포맷 시스템 전면 수정(`821252d`)이 있었으나 원래 계획한 #2~#8 항목 기준으로는 미완
+- Phase 1.5 (완료): 워터마크 + 유출 추적 — 커밋 `b977ae9` (검토링크·PDF 워터마크, 작품별 공유 설정)
+- Phase 2 (계획): 대본별 포맷 아키텍처 — 미구현
