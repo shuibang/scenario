@@ -76,7 +76,7 @@ function MemoInputBox({ top, left, sceneId, quotedText, episodeId, projectId, sa
         user_id:     user.id,
       });
       if (error) { setSaveError('저장에 실패했어요. 다시 시도해주세요.'); setSaving(false); return; }
-      onClose(savedRange);
+      onClose(savedRange, true);
     } catch {
       setSaveError('저장에 실패했어요. 다시 시도해주세요.');
       setSaving(false);
@@ -2605,6 +2605,212 @@ function AnnotationLayer({ blocks, onAnnotationsChange }) {
   });
 }
 
+// ─── MemoViewPopover ─────────────────────────────────────────────────────────
+function MemoViewPopover({ sceneId, memos, top, left, onDelete, onClose }) {
+  useEffect(() => {
+    const handler = (e) => { if (e.key === 'Escape') { e.preventDefault(); onClose(); } };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  return (
+    <div
+      data-annotation-ui
+      onMouseDown={e => e.stopPropagation()}
+      style={{
+        position: 'fixed',
+        top: Math.min(top, (window.visualViewport?.height ?? window.innerHeight) - 300),
+        left: Math.max(8, Math.min(left, window.innerWidth - 296)),
+        zIndex: 200,
+        background: 'var(--c-bg-card, #fff)',
+        border: '1px solid var(--c-border2)',
+        borderRadius: 10,
+        boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+        padding: '10px 12px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+        width: 280,
+        maxWidth: 'calc(100vw - 32px)',
+        maxHeight: 360,
+        overflowY: 'auto',
+      }}
+    >
+      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--c-text4)' }}>
+        메모 {memos.length}개
+      </div>
+      {memos.map(memo => (
+        <div key={memo.id} style={{
+          borderRadius: 6,
+          background: 'var(--c-bg)',
+          padding: '6px 8px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 4,
+        }}>
+          {memo.quoted_text && (
+            <div style={{
+              fontSize: 11, color: 'var(--c-text4)',
+              borderLeft: '3px solid var(--c-accent)',
+              paddingLeft: 8, lineHeight: 1.5,
+              overflow: 'hidden', display: '-webkit-box',
+              WebkitBoxOrient: 'vertical', WebkitLineClamp: 2,
+            }}>{memo.quoted_text}</div>
+          )}
+          <div style={{ fontSize: 13, color: 'var(--c-text1)', lineHeight: 1.6 }}>
+            {memo.content}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 2 }}>
+            <button
+              onClick={() => onDelete(memo.id, sceneId)}
+              style={{
+                fontSize: 11, padding: '2px 8px',
+                border: '1px solid var(--c-border2)', borderRadius: 5,
+                background: 'transparent', color: '#e05c5c', cursor: 'pointer',
+              }}
+            >삭제</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── MemoGutterLayer ─────────────────────────────────────────────────────────
+// scene_number 블록 오른쪽 gutter에 메모 수 뱃지를 position:fixed로 표시.
+// DOM 주입 없이 getBoundingClientRect + 스크롤 추적으로 위치 동기화 →
+// AnnotationLayer placeholder와 DOM 순서 충돌 없음.
+function MemoGutterLayer({ blocks, episodeId, refreshToken, scrollRef }) {
+  const [memosByScene, setMemosByScene] = useState({});
+  const [badgeRects, setBadgeRects] = useState([]);
+  const [popover, setPopover] = useState(null); // null | { sceneId, top, left }
+
+  useEffect(() => {
+    if (!episodeId) { setMemosByScene({}); return; }
+    let cancelled = false;
+    supabase
+      .from('script_memos')
+      .select('id, scene_id, quoted_text, content, created_at')
+      .eq('document_id', episodeId)
+      .order('created_at', { ascending: true })
+      .then(({ data }) => {
+        if (cancelled || !data) return;
+        const grouped = {};
+        for (const m of data) {
+          const key = m.scene_id || '__no_scene__';
+          if (!grouped[key]) grouped[key] = [];
+          grouped[key].push(m);
+        }
+        setMemosByScene(grouped);
+      });
+    return () => { cancelled = true; };
+  }, [episodeId, refreshToken]);
+
+  useEffect(() => { setPopover(null); }, [episodeId]);
+
+  const computeRects = useCallback(() => {
+    const surface = document.querySelector('[data-editor-surface]');
+    if (!surface) return;
+    const rects = [];
+    for (const b of blocks) {
+      if (b.type !== 'scene_number' || !b.sceneId) continue;
+      const el = surface.querySelector(`[data-block-id="${b.id}"]`);
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      if (rect.height > 0) rects.push({ blockId: b.id, sceneId: b.sceneId, rect });
+    }
+    setBadgeRects(rects);
+  }, [blocks]);
+
+  useLayoutEffect(() => { computeRects(); }, [computeRects]);
+
+  useEffect(() => {
+    const el = scrollRef?.current;
+    window.addEventListener('resize', computeRects);
+    el?.addEventListener('scroll', computeRects, { passive: true });
+    return () => {
+      window.removeEventListener('resize', computeRects);
+      el?.removeEventListener('scroll', computeRects);
+    };
+  }, [computeRects, scrollRef]);
+
+  const handleDelete = async (memoId, sceneId) => {
+    const { error } = await supabase.from('script_memos').delete().eq('id', memoId);
+    if (error) return;
+    if ((memosByScene[sceneId] || []).length <= 1) setPopover(null);
+    setMemosByScene(prev => {
+      const key = sceneId || '__no_scene__';
+      const updated = (prev[key] || []).filter(m => m.id !== memoId);
+      const next = { ...prev };
+      if (updated.length) next[key] = updated; else delete next[key];
+      return next;
+    });
+  };
+
+  const visible = badgeRects.filter(({ sceneId }) => (memosByScene[sceneId] || []).length > 0);
+  if (!visible.length && !popover) return null;
+
+  return createPortal(
+    <>
+      {visible.map(({ blockId, sceneId, rect }) => {
+        const count = (memosByScene[sceneId] || []).length;
+        const isOpen = popover?.sceneId === sceneId;
+        return (
+          <button
+            key={blockId}
+            data-annotation-ui
+            onClick={e => {
+              e.stopPropagation();
+              setPopover(isOpen ? null : {
+                sceneId,
+                top: rect.bottom + 4,
+                left: Math.min(rect.left, window.innerWidth - 296),
+              });
+            }}
+            style={{
+              position: 'fixed',
+              top: rect.top + Math.round((rect.height - 22) / 2),
+              right: Math.max(4, window.innerWidth - rect.right + 4),
+              zIndex: 10,
+              fontSize: 11,
+              fontWeight: 600,
+              padding: '2px 7px',
+              border: `1px solid ${isOpen ? 'var(--c-accent)' : 'var(--c-border2)'}`,
+              borderRadius: 10,
+              background: isOpen ? 'var(--c-accent)' : 'var(--c-bg-card, #fff)',
+              color: isOpen ? '#fff' : 'var(--c-text4)',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              lineHeight: 1.4,
+              pointerEvents: 'auto',
+            }}
+          >
+            메 {count}
+          </button>
+        );
+      })}
+      {popover && (
+        <>
+          <div
+            data-annotation-ui
+            style={{ position: 'fixed', inset: 0, zIndex: 9 }}
+            onMouseDown={() => setPopover(null)}
+          />
+          <MemoViewPopover
+            sceneId={popover.sceneId}
+            memos={memosByScene[popover.sceneId] || []}
+            top={popover.top}
+            left={popover.left}
+            onDelete={handleDelete}
+            onClose={() => setPopover(null)}
+          />
+        </>
+      )}
+    </>,
+    document.body
+  );
+}
+
 // ─── ScriptEditor (main) ──────────────────────────────────────────────────────
 export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboardUp, isMobile, onScrollRefReady, focusMode, setFocusMode }) {
   const { state, dispatch } = useApp();
@@ -2650,6 +2856,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
   const [slashEmotionPicker, setSlashEmotionPicker] = useState(null); // 🎭 버튼 전용 (3단계)
   const [slashUnifiedTag, setSlashUnifiedTag] = useState(null); // null | { blockId, sceneId, top, left }
   const [memoInputState, setMemoInputState] = useState(null); // null | { top, left, sceneId, quotedText, savedRange }
+  const [memoRefreshToken, setMemoRefreshToken] = useState(0);
   // UnifiedTagPicker의 emotion/custom 항목 클릭은 onOpenFullPicker(); onClose(); 두 콜백을
   // 같은 mousedown에서 연속 호출. 이때 onClose 내 restoreEditorSelection이 EmotionTagPicker의
   // 마운트 직후 focus를 강탈해 picker 동작을 방해 → ref 플래그로 전환 시 onClose의 caret 복원만 스킵.
@@ -4636,6 +4843,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
             onCloseSceneRef={() => { if (sceneRefPickerRef.current) setSceneRefPicker(null); }}
           />
           <AnnotationLayer blocks={blocks} onAnnotationsChange={handleAnnotationsChange} />
+          <MemoGutterLayer blocks={blocks} episodeId={activeEpisodeId} refreshToken={memoRefreshToken} scrollRef={editorScrollRef} />
           {annMiniBar && createPortal(
             <>
               <div
@@ -4764,8 +4972,9 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
           {...memoInputState}
           episodeId={activeEpisodeIdRef.current}
           projectId={activeProjectIdRef.current}
-          onClose={(savedRange) => {
+          onClose={(savedRange, saved) => {
             setMemoInputState(null);
+            if (saved) setMemoRefreshToken(t => t + 1);
             if (savedRange) {
               requestAnimationFrame(() => {
                 try {
