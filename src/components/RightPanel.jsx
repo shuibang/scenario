@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useApp } from '../store/AppContext';
-import { now, genId } from '../store/db';
+import { now, genId, getAll, setAll } from '../store/db';
 import { supabase } from '../store/supabaseClient';
 import { CoverPreview } from './CoverEditor';
 import { charDisplayName } from './CharacterPanel';
@@ -439,6 +439,116 @@ function PageInfoPanel({ icon, title, items }) {
   );
 }
 
+// ─── MemoTabContent ───────────────────────────────────────────────────────────
+function formatMemoDate(ts) {
+  if (!ts) return '';
+  const diff = Date.now() - ts;
+  if (diff < 60000) return '방금';
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}분 전`;
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}시간 전`;
+  return new Date(ts).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+}
+
+function MemoTabContent({ episodeId, scenes, onScrollToScene }) {
+  const [memos, setMemos] = useState([]);
+
+  const sceneMap = useMemo(() => {
+    const m = {};
+    scenes.forEach(s => { m[s.id] = s; });
+    return m;
+  }, [scenes]);
+
+  const load = useCallback(async () => {
+    if (!episodeId) { setMemos([]); return; }
+    const all = await getAll('script_memos_' + episodeId);
+    setMemos([...all].sort((a, b) => b.created_at - a.created_at));
+  }, [episodeId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    window.addEventListener('script:memoSaved', load);
+    return () => window.removeEventListener('script:memoSaved', load);
+  }, [load]);
+
+  const handleDelete = async (e, id) => {
+    e.stopPropagation();
+    const all = await getAll('script_memos_' + episodeId);
+    await setAll('script_memos_' + episodeId, all.filter(m => m.id !== id));
+    setMemos(prev => prev.filter(m => m.id !== id));
+  };
+
+  if (!episodeId) {
+    return (
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--c-text6)', fontSize: 12 }}>
+        대본을 선택해주세요
+      </div>
+    );
+  }
+
+  if (memos.length === 0) {
+    return (
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--c-text6)', fontSize: 12, padding: 20, textAlign: 'center' }}>
+        아직 작성한 메모가 없어요
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
+      {memos.map(m => {
+        const scene = sceneMap[m.scene_id];
+        const sceneBody = scene ? (scene.content || resolveSceneLabel({ ...scene, label: '' }) || '') : null;
+        return (
+          <div
+            key={m.id}
+            onClick={() => scene && onScrollToScene?.(m.scene_id)}
+            style={{
+              padding: '8px 12px',
+              borderBottom: '1px solid var(--c-border)',
+              cursor: scene ? 'pointer' : 'default',
+            }}
+          >
+            {/* 씬 레이블 */}
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 4 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--c-accent2)', flexShrink: 0 }}>
+                {scene ? scene.label : '삭제된 씬'}
+              </span>
+              {sceneBody && (
+                <span style={{ fontSize: 10, color: 'var(--c-text5)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {sceneBody}
+                </span>
+              )}
+            </div>
+            {/* 인용구 */}
+            {m.quoted_text && (
+              <div style={{
+                fontSize: 10, color: 'var(--c-text5)', fontStyle: 'italic',
+                borderLeft: '2px solid var(--c-border3)', paddingLeft: 6, marginBottom: 4,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+                {m.quoted_text}
+              </div>
+            )}
+            {/* 본문 */}
+            <div style={{ fontSize: 11, color: 'var(--c-text2)', lineHeight: 1.5, marginBottom: 4, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+              {m.content}
+            </div>
+            {/* 날짜 + 삭제 */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 10, color: 'var(--c-text6)' }}>{formatMemoDate(m.created_at)}</span>
+              <button
+                onClick={(e) => handleDelete(e, m.id)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 10, color: 'var(--c-text6)', padding: '0 2px' }}
+              >삭제</button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── RightPanel ───────────────────────────────────────────────────────────────
 export default function RightPanel({ onScrollToScene }) {
   const { state, dispatch } = useApp();
@@ -450,7 +560,7 @@ export default function RightPanel({ onScrollToScene }) {
 
   const [activeSceneId, setActiveSceneId] = useState(null);
   const [tagFilter, setTagFilter] = useState('');
-  const [mainTab, setMainTab] = useState('context'); // 'context' | 'checklist'
+  const [mainTab, setMainTab] = useState('context'); // 'context' | 'memo' | 'checklist'
   const [contestOpen, setContestOpen] = useState(() => localStorage.getItem('drama_contest_open') !== '0');
 
   // E8: activeDoc/episode 변경 시 문맥 탭으로 리셋
@@ -715,9 +825,9 @@ export default function RightPanel({ onScrollToScene }) {
 
   return (
     <div className="h-full flex flex-col" style={{ background: 'var(--c-panel)', borderLeft: '1px solid var(--c-border)' }}>
-      {/* Top-level tabs: 문맥(인물현황) | 체크리스트 */}
+      {/* Top-level tabs: 문맥(인물현황) | 메모 | 체크리스트 */}
       <div className="flex shrink-0" style={{ borderBottom: '1px solid var(--c-border)' }}>
-        {[['context', '문맥'], ['checklist', '체크리스트']].map(([t, l]) => (
+        {[['context', '문맥'], ['memo', '메모'], ['checklist', '체크리스트']].map(([t, l]) => (
           <button key={t} onClick={() => setMainTab(t)}
             className="flex-1 py-2 text-[11px] font-medium"
             style={{
@@ -734,6 +844,12 @@ export default function RightPanel({ onScrollToScene }) {
         ? <ChecklistPanel
             projectId={activeProjectId}
             docId={null}
+          />
+        : mainTab === 'memo'
+        ? <MemoTabContent
+            episodeId={activeEpisodeId}
+            scenes={episodeScenes}
+            onScrollToScene={onScrollToScene}
           />
         : <div className="flex flex-col flex-1 min-h-0">{contextContent}</div>
       }

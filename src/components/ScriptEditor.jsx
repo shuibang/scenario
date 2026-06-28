@@ -3866,7 +3866,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
       const rect = blockEl?.getBoundingClientRect() || { bottom: 120, left: 200 };
       const sel = window.getSelection();
       const savedRange = sel?.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
-      if (blockEl) clearBlockSlash(blockEl);
+      removeSlashOnly(blockEl, targetEl);
       requestAnimationFrame(() => {
         setMemoInputState({
           top:  Math.min(rect.bottom + 4, window.innerHeight - 220),
@@ -4959,7 +4959,7 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
           episodeId={activeEpisodeIdRef.current}
           onClose={(savedRange, saved) => {
             setMemoInputState(null);
-            if (saved) setMemoRefreshToken(t => t + 1);
+            if (saved) { setMemoRefreshToken(t => t + 1); window.dispatchEvent(new CustomEvent('script:memoSaved')); }
             if (savedRange) {
               requestAnimationFrame(() => {
                 try {
