@@ -5,7 +5,7 @@ import React, {
 import { createPortal } from 'react-dom';
 import DOMPurify from 'dompurify';
 import { useApp } from '../store/AppContext';
-import { genId, now } from '../store/db';
+import { genId, now, getAll, setAll } from '../store/db';
 import { resolveSceneLabel, SCENE_PREFIX_STRIP_RE } from '../utils/sceneResolver';
 import { buildSceneNumberBlock } from '../utils/sceneBlockBuilder';
 import { buildSceneLabel, getScenePrefix } from '../utils/scenePrefix';
@@ -20,7 +20,6 @@ import BlockAnnotations from './annotations/BlockAnnotations';
 import { createAnnotation } from '../utils/annotationUtils';
 import { BUILTIN_GUIDES } from '../data/structureTags';
 import { resolveAnchorRect } from '../utils/pickerPosition';
-import { supabase } from '../store/supabaseClient';
 
 let suppressSceneNormalize = false;
 
@@ -53,7 +52,7 @@ const SLASH_COMMANDS = [
 ];
 
 // ─── MemoInputBox ─────────────────────────────────────────────────────────────
-function MemoInputBox({ top, left, sceneId, quotedText, episodeId, projectId, savedRange, onClose }) {
+function MemoInputBox({ top, left, sceneId, quotedText, episodeId, savedRange, onClose }) {
   const [content, setContent] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
@@ -65,17 +64,9 @@ function MemoInputBox({ top, left, sceneId, quotedText, episodeId, projectId, sa
     setSaving(true);
     setSaveError(null);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setSaveError('저장에 실패했어요. 다시 시도해주세요.'); setSaving(false); return; }
-      const { error } = await supabase.from('script_memos').insert({
-        document_id: episodeId,
-        project_id:  projectId,
-        scene_id:    sceneId || null,
-        quoted_text: quotedText || null,
-        content:     content.trim(),
-        user_id:     user.id,
-      });
-      if (error) { setSaveError('저장에 실패했어요. 다시 시도해주세요.'); setSaving(false); return; }
+      const memo = { id: genId(), scene_id: sceneId || null, quoted_text: quotedText || null, content: content.trim(), created_at: now() };
+      const existing = await getAll('script_memos_' + episodeId);
+      await setAll('script_memos_' + episodeId, [...existing, memo]);
       onClose(savedRange, true);
     } catch {
       setSaveError('저장에 실패했어요. 다시 시도해주세요.');
@@ -2688,21 +2679,16 @@ function MemoGutterLayer({ blocks, episodeId, refreshToken, scrollRef }) {
   useEffect(() => {
     if (!episodeId) { setMemosByScene({}); return; }
     let cancelled = false;
-    supabase
-      .from('script_memos')
-      .select('id, scene_id, quoted_text, content, created_at')
-      .eq('document_id', episodeId)
-      .order('created_at', { ascending: true })
-      .then(({ data }) => {
-        if (cancelled || !data) return;
-        const grouped = {};
-        for (const m of data) {
-          const key = m.scene_id || '__no_scene__';
-          if (!grouped[key]) grouped[key] = [];
-          grouped[key].push(m);
-        }
-        setMemosByScene(grouped);
-      });
+    getAll('script_memos_' + episodeId).then(memos => {
+      if (cancelled) return;
+      const grouped = {};
+      for (const m of (memos || [])) {
+        const key = m.scene_id || '__no_scene__';
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(m);
+      }
+      setMemosByScene(grouped);
+    });
     return () => { cancelled = true; };
   }, [episodeId, refreshToken]);
 
@@ -2735,8 +2721,8 @@ function MemoGutterLayer({ blocks, episodeId, refreshToken, scrollRef }) {
   }, [computeRects, scrollRef]);
 
   const handleDelete = async (memoId, sceneId) => {
-    const { error } = await supabase.from('script_memos').delete().eq('id', memoId);
-    if (error) return;
+    const existing = await getAll('script_memos_' + episodeId);
+    await setAll('script_memos_' + episodeId, existing.filter(m => m.id !== memoId));
     if ((memosByScene[sceneId] || []).length <= 1) setPopover(null);
     setMemosByScene(prev => {
       const key = sceneId || '__no_scene__';
@@ -4971,7 +4957,6 @@ export default function ScriptEditor({ scrollToSceneId, onScrollHandled, keyboar
         <MemoInputBox
           {...memoInputState}
           episodeId={activeEpisodeIdRef.current}
-          projectId={activeProjectIdRef.current}
           onClose={(savedRange, saved) => {
             setMemoInputState(null);
             if (saved) setMemoRefreshToken(t => t + 1);
