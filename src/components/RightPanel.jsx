@@ -476,6 +476,7 @@ function MemoTabContent({ episodeId, scenes, onScrollToScene }) {
     const all = await getAll('script_memos_' + episodeId);
     await setAll('script_memos_' + episodeId, all.filter(m => m.id !== id));
     setMemos(prev => prev.filter(m => m.id !== id));
+    window.dispatchEvent(new CustomEvent('script:memoSaved'));
   };
 
   if (!episodeId) {
