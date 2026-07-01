@@ -270,9 +270,12 @@ export default function TreatmentPage() {
         episodeNumber,
         isMissing: !ep,
         items: ep
-          ? (migrateItems(ep.summaryItems).length
-              ? migrateItems(ep.summaryItems)
-              : [{ id: genId(), text: '', order: 0 }])
+          ? (() => {
+              const raw = ep.summaryItems;
+              if (!Array.isArray(raw) || raw.length === 0)
+                return [{ id: ep.id + '-ph', text: '', order: 0, emotionTags: [], structureTags: [] }];
+              return migrateItems(raw);
+            })()
           : [],
       };
     });
@@ -343,8 +346,10 @@ export default function TreatmentPage() {
   // 보드뷰 카드 인라인 편집 저장
   const saveItemTextForEp = useCallback((targetEpId, itemId, text) => {
     const epItems = getLatestItemsForEp(targetEpId);
-    saveForEp(targetEpId, epItems.map(it => it.id === itemId ? { ...it, text } : it), true);
-  }, [getLatestItemsForEp, saveForEp]);
+    const next = epItems.map(it => it.id === itemId ? { ...it, text } : it);
+    saveForEp(targetEpId, next, true);
+    if (targetEpId === epId) setItems(next);
+  }, [getLatestItemsForEp, saveForEp, epId]);
 
   // 보드뷰 카드 삭제
   const removeItemForEp = useCallback((targetEpId, itemId) => {
@@ -967,9 +972,13 @@ export default function TreatmentPage() {
     next.splice(Math.min(toIdx, next.length), 0, moved);
 
     // 트리트먼트 순서만 즉시 변경 — 대본 동기화는 "대본으로 가져오기" 시점에서 처리
-    saveForEp(episodeId, next, true);
+    if (episodeId === epId) {
+      save(next, true);
+    } else {
+      saveForEp(episodeId, next, true);
+    }
     // dragInfo/overInfo 클리어는 handleDragEnd에서 일괄
-  }, [getLatestItemsForEp, saveForEp]);
+  }, [getLatestItemsForEp, saveForEp, epId, save]);
 
   if (!activeProjectId) return null;
 
