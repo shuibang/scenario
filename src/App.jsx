@@ -1641,6 +1641,7 @@ function Shell({ authUser, setAuthUser }) {
   // ── 파일 미저장 상태 추적 ─────────────────────────────────────────────────
   const [fileUnsaved, setFileUnsaved] = useState(false);
   const fileUnsavedRef = useRef(false);
+  const localFileHandleRef = useRef(new Map()); // Map<projectId, FileSystemFileHandle>
 
   // Dropbox OAuth 콜백 결과 수신 (App 컴포넌트에서 발행)
   useEffect(() => {
@@ -2024,6 +2025,91 @@ function Shell({ authUser, setAuthUser }) {
     }
   }, [waitForEditorFlush]);
 
+  // 로컬 파일 덮어쓰기 저장 (Ctrl+S)
+  // File System Access API 지원 브라우저: 핸들 있으면 팝업 없이 덮어쓰기, 없으면 최초 1회 선택
+  // 미지원(Firefox/Safari): 기존 <a download> 폴백
+  const handleSaveToLocalFile = useCallback(async () => {
+    clearTimeout(saveToastTimer.current);
+    setSaveToastMsg('💾 파일 저장 중…');
+    setSaveToast(true);
+
+    window.dispatchEvent(new Event('script:requestSave'));
+    await waitForEditorFlush();
+
+    const latestState = latestStateRef.current;
+    const projectSnap = latestState.activeProjectId
+      ? serializeProject(latestState, latestState.activeProjectId) : null;
+    if (!projectSnap) { setSaveToast(false); return; }
+
+    try { await saveSnapshot(projectSnap, '수동저장', 'manual'); } catch {}
+
+    const djs_readme = '이 파일은 대본작업실(daejak.kr) 전용 파일입니다. 일반 텍스트 편집기로 열지 마세요. daejak.kr에 접속한 후 파일 열기 메뉴에서 불러올 수 있습니다.';
+    const blob = new Blob([JSON.stringify({ _readme: djs_readme, ...projectSnap }, null, 2)], { type: 'application/json' });
+    const saveProject = latestState.projects?.find(p => p.id === latestState.activeProjectId);
+    const saveVerSuffix = saveProject?.version != null ? `_v${saveProject.version}` : '';
+    const suggestedName = `${sanitizeFolderName(projectSnap.project?.title || '대본')}${saveVerSuffix}.djs`;
+    const projectId = latestState.activeProjectId;
+
+    const doADownload = () => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = suggestedName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      fileUnsavedRef.current = false;
+      setFileUnsaved(false);
+      clearTimeout(saveToastTimer.current);
+      saveToastTimer.current = setTimeout(() => setSaveToast(false), 1500);
+    };
+
+    if (typeof window.showSaveFilePicker !== 'function') {
+      try { doADownload(); } catch {
+        clearTimeout(saveToastTimer.current);
+        setSaveToastMsg('저장 실패 — 다시 시도');
+        saveToastTimer.current = setTimeout(() => setSaveToast(false), 3500);
+      }
+      return;
+    }
+
+    let handle = localFileHandleRef.current.get(projectId);
+    if (!handle) {
+      try {
+        handle = await window.showSaveFilePicker({
+          suggestedName,
+          types: [{ description: 'DJS 대본 파일', accept: { 'application/json': ['.djs'] } }],
+          startIn: 'documents',
+        });
+        localFileHandleRef.current.set(projectId, handle);
+      } catch {
+        // 사용자 취소(AbortError) → 조용히 처리
+        setSaveToast(false);
+        return;
+      }
+    }
+
+    try {
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      fileUnsavedRef.current = false;
+      setFileUnsaved(false);
+      clearTimeout(saveToastTimer.current);
+      setSaveToastMsg('💾 저장됨');
+      saveToastTimer.current = setTimeout(() => setSaveToast(false), 1500);
+    } catch {
+      // 파일 삭제/권한 소실 → 핸들 제거 후 <a download> 폴백
+      localFileHandleRef.current.delete(projectId);
+      try { doADownload(); } catch {
+        clearTimeout(saveToastTimer.current);
+        setSaveToastMsg('저장 실패 — 다시 시도');
+        saveToastTimer.current = setTimeout(() => setSaveToast(false), 3500);
+      }
+    }
+  }, [waitForEditorFlush]);
+
   // 전역 저장 단축키: Ctrl+S / Ctrl+Shift+S / Ctrl+Alt+S
   useEffect(() => {
     const onKey = (e) => {
@@ -2031,11 +2117,11 @@ function Shell({ authUser, setAuthUser }) {
       e.preventDefault();
       if (e.shiftKey)     handleSaveToLocalDrive(); // 다른 이름으로 클라우드 저장
       else if (e.altKey)  handleSaveToCloud();        // 클라우드 저장
-      else                handleSaveToLocal();         // 내 기기에 저장
+      else                handleSaveToLocalFile();      // 내 기기에 저장 (FSA 덮어쓰기 또는 폴백)
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handleSaveToCloud, handleSaveToLocalDrive, handleSaveToLocal]);
+  }, [handleSaveToCloud, handleSaveToLocalDrive, handleSaveToLocalFile]);
 
   // 탭/창 닫기 시 파일 미저장 경고 (브라우저 기본 다이얼로그)
   // Chrome: e.returnValue에 non-empty string 필요 (빈 문자열은 falsy 취급되어 무시됨)
