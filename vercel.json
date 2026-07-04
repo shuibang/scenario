@@ -7,6 +7,7 @@
       "permanent": true
     },
     { "source": "/landing.html",  "destination": "/",          "permanent": true },
+    { "source": "/landing",       "destination": "/",          "permanent": true },
     { "source": "/help.html",     "destination": "/help",      "permanent": true },
     { "source": "/notice.html",   "destination": "/notice",    "permanent": true },
     { "source": "/changelog.html","destination": "/changelog", "permanent": true },
