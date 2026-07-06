@@ -110,14 +110,23 @@ Deno.serve(async (req) => {
     return new Response('Unauthorized', { status: 401 });
   }
 
-  const since = new Date();
-  since.setDate(since.getDate() - 7);
-  const sinceStr = since.toISOString().split('T')[0];
+  // 마지막 발송 시각 이후 새로 생긴 항목만 조회 (재발송 방지)
+  const { data: lastLog } = await supabase
+    .from('newsletter_send_logs')
+    .select('sent_at')
+    .order('sent_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const since = lastLog
+    ? new Date(lastLog.sent_at)
+    : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // 최초 실행 fallback: 7일
+  const sinceIso = since.toISOString();
 
   const { data: items, error: itemsErr } = await supabase
     .from('newsletter_items')
-    .select('id, date, title, content, badge')
-    .gte('date', sinceStr)
+    .select('id, date, title, content, badge, created_at')
+    .gt('created_at', sinceIso)
     .order('date', { ascending: false });
 
   if (itemsErr) return new Response(itemsErr.message, { status: 500 });
