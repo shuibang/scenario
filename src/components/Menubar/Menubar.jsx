@@ -14,7 +14,8 @@ export default function Menubar({ onAction, recentProjects = [], checkedItems = 
   useEffect(() => {
     const handler = (e) => {
       if (!e.altKey) return;
-      const key = e.key.toLowerCase();
+      const key = e.key?.toLowerCase();
+      if (!key) return;
       const menu = menuConfig.find(m => m.altKey === key);
       if (menu) {
         e.preventDefault();

@@ -37,7 +37,7 @@ export default function MenubarMenu({ menu, onAction, checkedItems = {}, dynamic
         <button
           className="menubar-trigger"
           onKeyDown={e => {
-            if (e.altKey && e.key.toLowerCase() === menu.altKey) e.preventDefault();
+            if (e.altKey && e.key?.toLowerCase() === menu.altKey) e.preventDefault();
           }}
         >
           {menu.label}

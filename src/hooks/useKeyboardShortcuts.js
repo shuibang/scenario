@@ -48,9 +48,9 @@ function matchesCombo(e, combo) {
 
   // e.key 비교 (F1–F12, 한/영 전환 등도 처리)
   const keyMatch =
-    e.key.toLowerCase() === key ||
-    e.code.toLowerCase() === `key${key}` ||
-    e.code.toLowerCase() === key;
+    e.key?.toLowerCase() === key ||
+    e.code?.toLowerCase() === `key${key}` ||
+    e.code?.toLowerCase() === key;
 
   return ctrlMatch && shiftMatch && altMatch && keyMatch;
 }
