@@ -51,6 +51,20 @@ export function extractUserData(session) {
   };
 }
 
+// Supabase refreshSession()이 provider_token을 실제로 재발급하지 못했을 때의
+// 폴백. 서버에 보관해둔 refresh_token으로 Edge Function이 Google 토큰
+// 엔드포인트를 직접 호출해 access_token을 재발급한다.
+async function refreshViaEdgeFunction() {
+  try {
+    const { data, error } = await supabase.functions.invoke('refresh-drive-token', { method: 'POST' });
+    if (error || !data?.access_token) return null;
+    setAccessToken(data.access_token, data.expires_in || 3600);
+    return data.access_token;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * 세션 갱신 후 Drive access token 업데이트
  * Drive 401 오류 발생 시 호출
@@ -60,13 +74,14 @@ export async function refreshDriveToken() {
   if (!supabase) return null;
   const { data, error } = await supabase.auth.refreshSession();
   const token = data?.session?.provider_token;
-  if (error || !token) return null;
+  if (error || !token) return refreshViaEdgeFunction();
   // Supabase refreshSession은 Google provider_token을 실제로 갱신하지 못하고
   // 만료된 옛 토큰을 그대로 돌려주는 경우가 있다. 그때 호출자가 이를 "새 토큰"으로
   // 오인해 401 → refresh → 재시도 를 무한 반복하면 요청 폭주(수백 건)가 난다.
-  // 현재 토큰과 동일하면 = 실제 갱신 안 됨 → null 반환해 재시도/재귀를 즉시 멈추고
-  // 상위에서 수동 재연결(reauth)로 유도한다. (drive-sync 정책: 자동 루프 금지)
-  if (token === getAccessToken()) return null;
+  // 현재 토큰과 동일하면 = 실제 갱신 안 됨 → Edge Function 폴백으로 넘긴다.
+  // (drive-sync 정책: 자동 루프 금지 — 폴백도 실패하면 null 반환해 상위에서
+  // 수동 재연결(reauth)로 유도)
+  if (token === getAccessToken()) return refreshViaEdgeFunction();
   // expires_in 실제값 사용 — 하드코딩 3600 대체 (시나리오 5)
   setAccessToken(token, data.session.expires_in ?? 3600);
   return token;

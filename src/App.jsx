@@ -3050,6 +3050,14 @@ export default function App() {
               }
             }
           } catch {}
+          // Drive refresh_token 서버 보관 — Edge Function 폴백 갱신용.
+          // TOKEN_REFRESHED/INITIAL_SESSION에는 provider_refresh_token이 오지 않음.
+          if (session.provider_refresh_token) {
+            supabase.rpc('store_drive_refresh_token', { p_token: session.provider_refresh_token })
+              .then(({ error }) => {
+                if (error) console.warn('[Auth] drive refresh_token 저장 실패:', error.message);
+              });
+          }
         }
       } else if (event === 'SIGNED_OUT') {
         try { localStorage.removeItem('drama_auth_user'); } catch {}
