@@ -4,6 +4,22 @@ vercel.json의 Content-Security-Policy 헤더 변경 이력.
 
 ---
 
+## 2026-07-16: AdMob 제거 + daumcdn 허용 도메인 정리
+
+### 변경 사항
+
+| Directive   | 제거                                                                                          |
+|-------------|-----------------------------------------------------------------------------------------------|
+| script-src  | `*.daumcdn.net`, `pagead2.googlesyndication.com`                                               |
+| connect-src | `*.daumcdn.net`, `*.daum.net`, `pagead2.googlesyndication.com`, `googleads.g.doubleclick.net`, `securepubads.g.doubleclick.net` |
+| frame-src   | `*.daum.net`, `*.daumcdn.net`, `googleads.g.doubleclick.net`, `tpc.googlesyndication.com`      |
+
+### 사유
+- Play Store 앱 출시 취소로 TWA WebView 전용 AdMob 분기 삭제 (AdMobBanner, AdMobAppOpenAd 제거)
+- 카카오 애드핏 SDK는 이미 t1.kakaocdn.net만 사용 중이며, 애드핏 관련 실제 서빙 도메인(kakaocdn.net/onkakao.net)이 이미 허용되어 있어 daum 계열 제거해도 영향 없음
+
+---
+
 ## 2026-04-27 (2): Pretendard sourcemap 차단 수정
 
 연결 변경: connect-src에 cdn.jsdelivr.net 추가

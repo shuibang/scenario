@@ -28,8 +28,6 @@ const IGNORE_PATTERNS = [
   /Non-Error promise rejection captured/i,
   /Script error\.?$/i,                       // cross-origin 스크립트 — 정보 없음
   /Failed to fetch.*googletagmanager/i,       // 광고 차단기
-  /Failed to fetch.*doubleclick/i,
-  /Failed to fetch.*adsbygoogle/i,
   /Blocked a frame with origin/,             // Whale 브라우저 자동완성 iframe 노이즈
 ];
 
