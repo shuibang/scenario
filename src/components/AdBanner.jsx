@@ -3,13 +3,6 @@ import { useApp } from '../store/AppContext';
 
 const IS_DEV = import.meta.env.DEV;
 
-// TWA WebView 감지 (navigator.userAgent에 'wv' 포함 = Android WebView)
-export const isWebView = () =>
-  typeof navigator !== 'undefined' && navigator.userAgent.includes('wv');
-
-const ADMOB_PUB         = 'ca-app-pub-5479563960989185';
-const ADMOB_BANNER_SLOT = '4862003495';
-
 const AD_ALLOWED_HOSTS = ['link.coupang.com', 'coupa.ng', 'www.coupang.com'];
 function isSafeAdUrl(url) {
   try { return AD_ALLOWED_HOSTS.includes(new URL(url).hostname); } catch { return false; }
@@ -73,40 +66,8 @@ export function KakaoAdBanner(props) {
   return <KakaoAdBannerBase {...props} isPro={state.isPro} />;
 }
 
-// AdMob 배너 — TWA WebView 전용. adsbygoogle.push 1회 호출.
-export function AdMobBanner({ width = 320, height = 100, style = {} }) {
-  const { state } = useApp();
-
-  useEffect(() => {
-    if (IS_DEV || state.isPro) return;
-    try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch {}
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  if (state.isPro) return null;
-
-  if (IS_DEV) {
-    return (
-      <div style={{ minHeight: height, background: '#dbeafe', border: '1px dashed #2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', ...style }}>
-        <span style={{ fontSize: 10, color: '#1d4ed8', fontWeight: 600 }}>AdMob 배너 {ADMOB_PUB}/{ADMOB_BANNER_SLOT} {width}×{height}</span>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ minHeight: height, display: 'flex', justifyContent: 'center', overflow: 'hidden', ...style }}>
-      <ins
-        className="adsbygoogle"
-        style={{ display: 'inline-block', width, height }}
-        data-ad-client={ADMOB_PUB}
-        data-ad-slot={ADMOB_BANNER_SLOT}
-      />
-    </div>
-  );
-}
-
-// 모바일 하단 고정 광고 — TWA면 AdMob, 웹이면 카카오 애드핏
+// 모바일 하단 고정 광고 — 카카오 애드핏
 export function MobileBottomAd() {
-  if (isWebView()) return <AdMobBanner width={320} height={100} />;
   return <KakaoAdBanner unitId="DAN-0Eobamy6SYfeIpxd" width={320} height={100} mobileHide={false} />;
 }
 
