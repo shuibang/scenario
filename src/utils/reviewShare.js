@@ -75,18 +75,18 @@ export async function saveReviewPayload(payload) {
   return id;
 }
 
+function mapLegacyLinkError(error) {
+  const msg = String(error?.message || '');
+  if (msg.includes('LEGACY_LINK_EXPIRED')) return new Error('EXPIRED');
+  if (msg.includes('LEGACY_LINK_NOT_FOUND')) return new Error('NOT_FOUND');
+  return new Error(error.message);
+}
+
 export async function loadReviewPayload(id) {
   ensureSupabase();
-  const { data, error } = await supabase
-    .from('review_links')
-    .select('payload, expires_at')
-    .eq('id', id)
-    .single();
-  if (error) throw new Error(error.message);
+  const { data, error } = await supabase.rpc('get_legacy_link_payload', { p_link_id: id });
+  if (error) throw mapLegacyLinkError(error);
   if (!data) throw new Error('NOT_FOUND');
-  if (data.expires_at && new Date(data.expires_at) < new Date()) {
-    throw new Error('EXPIRED');
-  }
   return data.payload;
 }
 
@@ -443,14 +443,8 @@ export async function saveLogPayload(payload) {
 
 export async function loadLogPayload(id) {
   ensureSupabase();
-  const { data, error } = await supabase
-    .from('review_links')
-    .select('payload, expires_at')
-    .eq('id', id)
-    .single();
-  if (error) throw new Error(error.message);
-  if (data.expires_at && new Date(data.expires_at) < new Date()) {
-    throw new Error('EXPIRED');
-  }
+  const { data, error } = await supabase.rpc('get_legacy_link_payload', { p_link_id: id });
+  if (error) throw mapLegacyLinkError(error);
+  if (!data) throw new Error('NOT_FOUND');
   return data.payload;
 }
