@@ -24,11 +24,33 @@ function titleForHash(hash) {
   return null;
 }
 
+// 공유 링크 접근 토큰(UUID)·본문(base64)이 GA4로 새어나가지 않도록
+// 카테고리만 남기고 '=' 뒤 값은 항상 제거한다.
+const ANALYTICS_HASH_PREFIXES = {
+  '#review=': '#review',
+  '#log=': '#log',
+  '#delivery=': '#delivery',
+  '#sl=': '#scene-list',
+};
+
+export function sanitizeHashForAnalytics(hash) {
+  if (!hash) return '';
+  for (const prefix of Object.keys(ANALYTICS_HASH_PREFIXES)) {
+    if (hash.startsWith(prefix)) return ANALYTICS_HASH_PREFIXES[prefix];
+  }
+  // 안전장치: 매핑되지 않은 '#xxx=값' 형태도 값은 잘라내고 접두어만 남긴다.
+  if (hash.startsWith('#')) {
+    const eqIdx = hash.indexOf('=');
+    if (eqIdx !== -1) return hash.slice(0, eqIdx);
+  }
+  return hash;
+}
+
 function sendPageView(hash) {
   const title = titleForHash(hash);
   if (title) document.title = title;
   if (typeof window.gtag !== 'function') return;
-  const pagePath = hash || '/';
+  const pagePath = sanitizeHashForAnalytics(hash) || '/';
   window.gtag('event', 'page_view', {
     page_path: pagePath,
     page_title: document.title,
