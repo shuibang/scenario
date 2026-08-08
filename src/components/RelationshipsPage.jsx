@@ -4,23 +4,27 @@ import { charDisplayName, getCharRoles, getRoleColor, getRoleLabel } from './Cha
 import { genId } from '../store/db';
 import { hasPhoto } from '../utils/characterPhoto';
 import {
-  NODE_W, NODE_H, CANVAS_H,
-  autoPositions, clampPos, isValidPos, mergePositions, samePositions,
+  NODE_W, CANVAS_H, PHOTO_W, PHOTO_H,
+  autoPositions, clampPos, isValidPos, mergePositions, nameAnchorOffsetY, nodeHeight, samePositions,
 } from '../utils/relationshipLayout';
 
 const ARROW_LEN = 10; // arrowhead length offset
 
 // ─── Rectangle border intersection ────────────────────────────────────────────
-function rectEdge(cx, cy, nx, ny) {
+// node = { x, y(이름 블록 중심 = 앵커), top, bottom(카드 테두리) }.
+// 선은 이름 블록을 향해 계산하고, 끝점은 카드 테두리에서 끊는다 —
+// 이름 블록에서 바로 끊으면 화살촉이 카드 배경에 가려 보이지 않는다.
+// 사진 없는 카드는 이름이 세로 중앙이라 top/bottom이 대칭 → 변경 전 계산과 동일하다.
+function rectEdge(node, nx, ny) {
   const HW = NODE_W / 2;
-  const HH = NODE_H / 2;
   const absDx = Math.abs(nx);
   const absDy = Math.abs(ny);
+  const vExtent = ny > 0 ? node.bottom - node.y : node.y - node.top;
   const t = Math.min(
     absDx > 0.001 ? HW / absDx : Infinity,
-    absDy > 0.001 ? HH / absDy : Infinity,
+    absDy > 0.001 ? vExtent / absDy : Infinity,
   );
-  return { x: cx + nx * t, y: cy + ny * t };
+  return { x: node.x + nx * t, y: node.y + ny * t };
 }
 
 // ─── EdgeArrow ─────────────────────────────────────────────────────────────────
@@ -36,8 +40,8 @@ function EdgeArrow({ from, to, label, sideOffset = 0 }) {
   const perpX = -ny * sideOffset;
   const perpY =  nx * sideOffset;
 
-  const p1raw = rectEdge(from.x, from.y, nx, ny);
-  const p2raw = rectEdge(to.x, to.y, -nx, -ny);
+  const p1raw = rectEdge(from, nx, ny);
+  const p2raw = rectEdge(to, -nx, -ny);
 
   const p1 = { x: p1raw.x + perpX, y: p1raw.y + perpY };
   const x2  = p2raw.x - nx * ARROW_LEN + perpX;
@@ -83,17 +87,18 @@ function EdgeArrow({ from, to, label, sideOffset = 0 }) {
 }
 
 // ─── CharNode ──────────────────────────────────────────────────────────────────
-// 카드 자체는 NODE_W × NODE_H 고정(엣지 계산 일관성 유지).
+// 카드 폭은 항상 NODE_W. 높이는 두 종류뿐 — 사진 있음(NODE_H_PHOTO) / 없음(NODE_H).
 // 다중 역할 칩은 카드 아래로 별도 줄로 배치 — 노드 위치(pos)에는 영향 없음.
 function CharNode({ char, pos, onDragStart, printMode }) {
-  const initial = charDisplayName(char).charAt(0) || '?';
   const roles = getCharRoles(char);
+  const photo = hasPhoto(char);
+  const h = nodeHeight(char);
   return (
     <div
       style={{
         position: 'absolute',
         left: pos.x - NODE_W / 2,
-        top: pos.y - NODE_H / 2,
+        top: pos.y - h / 2,
         width: NODE_W,
         userSelect: 'none',
         pointerEvents: 'none', // 자식 카드만 mouseDown 받도록
@@ -102,7 +107,7 @@ function CharNode({ char, pos, onDragStart, printMode }) {
       <div
         onPointerDown={!printMode ? (e) => onDragStart(char.id, e) : undefined}
         style={{
-          height: NODE_H,
+          height: h,
           touchAction: 'none', // 모바일: 드래그가 페이지 스크롤로 먹히지 않게
           background: 'var(--c-card)',
           border: '1.5px solid var(--c-border2)',
@@ -118,23 +123,21 @@ function CharNode({ char, pos, onDragStart, printMode }) {
           pointerEvents: 'auto',
         }}
       >
-        {/* 사진이 있으면 아바타 자리에 썸네일 — 카드 크기(NODE_W/NODE_H)는 그대로다 */}
-        <div style={{
-          width: 26, height: 26, borderRadius: '50%',
-          background: 'var(--c-accent)', flexShrink: 0,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '12px', color: '#fff', fontWeight: 700,
-          overflow: 'hidden',
-        }}>
-          {hasPhoto(char) ? (
+        {/* 사진 있는 카드만 사각 사진 블록. 없으면 아무것도 렌더하지 않고 이름만 세로 중앙에 둔다. */}
+        {photo && (
+          <div style={{
+            width: PHOTO_W, height: PHOTO_H,
+            borderRadius: 4, overflow: 'hidden', flexShrink: 0,
+            background: 'var(--c-input)',
+          }}>
             <img
               src={char.photo.dataUrl}
               alt=""
               draggable={false}
               style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
             />
-          ) : initial}
-        </div>
+          </div>
+        )}
         <div style={{
           fontSize: '11px', fontWeight: 600, color: 'var(--c-text)',
           textAlign: 'center', lineHeight: 1.2,
@@ -205,9 +208,22 @@ function GraphCanvas({ chars, edges, positions, containerRef, onDragStart, print
         </defs>
         {(() => {
           const pairSet = new Set(edges.map(e => `${e.fromId}→${e.toId}`));
+          // 노드별 기하: 앵커는 이름 블록 중심, 끝점 계산용 상/하단은 카드 테두리.
+          const geom = {};
+          chars.forEach(c => {
+            const p = positions[c.id];
+            if (!p) return;
+            const h = nodeHeight(c);
+            geom[c.id] = {
+              x: p.x,
+              y: p.y + nameAnchorOffsetY(c),
+              top: p.y - h / 2,
+              bottom: p.y + h / 2,
+            };
+          });
           return edges.map(edge => {
-            const from = positions[edge.fromId];
-            const to   = positions[edge.toId];
+            const from = geom[edge.fromId];
+            const to   = geom[edge.toId];
             if (!from || !to) return null;
             const hasPair = pairSet.has(`${edge.toId}→${edge.fromId}`);
             // 쌍방이면 각각 +8 / -8px 옆으로 분리
@@ -458,13 +474,15 @@ export default function RelationshipsPage() {
     const startPos = { ...(positionsRef.current[charId] || { x: 0, y: 0 }) };
     const W = container.offsetWidth;
     const pointerId = e.pointerId;
+    // 사진 카드는 더 높으므로 clamp 상하한도 그만큼 좁다.
+    const h = nodeHeight(charsRef.current.find(c => c.id === charId));
     let lastPos = startPos;
 
     const onMove = (me) => {
       if (me.pointerId !== pointerId) return;
       const nx = me.clientX - rect.left;
       const ny = me.clientY - rect.top;
-      lastPos = clampPos({ x: startPos.x + (nx - ox), y: startPos.y + (ny - oy) }, W);
+      lastPos = clampPos({ x: startPos.x + (nx - ox), y: startPos.y + (ny - oy) }, W, h);
       setPositions(prev => ({ ...prev, [charId]: lastPos }));
     };
     const cleanup = () => {
@@ -585,7 +603,7 @@ export default function RelationshipsPage() {
             <button
               onClick={resetLayout}
               style={{ fontSize: '11px', color: 'var(--c-text5)', background: 'none', border: 'none', cursor: 'pointer' }}
-            >자동 배치</button>
+            >카드 자동 정렬</button>
           </div>
           <GraphCanvas
             chars={projectChars}
