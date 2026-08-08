@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CONTENT_PAD,
   DEFAULT_ORIENTATION,
   PAGE,
   buildRelationshipPrintHtml,
+  computeViewBox,
+  contentBounds,
   escapeHtml,
   estimateTextWidth,
   normalizeOrientation,
@@ -50,6 +53,47 @@ describe('estimateTextWidth / truncateToWidth', () => {
 
   it('한 글자도 못 넣으면 말줄임만', () => {
     expect(truncateToWidth('홍길동', 1, 11)).toBe('…');
+  });
+});
+
+describe('computeViewBox — 확대 방지', () => {
+  const W = 700;
+
+  it('인물이 적어도 viewBox가 기준 크기(화면 캔버스)까지 확장된다', () => {
+    // 3명이 가운데 몰려 있는 관계도
+    const nodes = [node('a', 340, 220), node('b', 360, 240), node('c', 380, 260)];
+    const vb = computeViewBox(nodes, W);
+    expect(vb.w).toBe(W);
+    expect(vb.h).toBe(CANVAS_H);
+  });
+
+  it('확장된 viewBox 안에서 콘텐츠가 가운데 놓인다', () => {
+    const nodes = [node('a', 100, 100), node('b', 200, 200)];
+    const vb = computeViewBox(nodes, W);
+    const b = contentBounds(nodes);
+    expect((b.minX + b.maxX) / 2).toBeCloseTo(vb.x + vb.w / 2, 6);
+    expect((b.minY + b.maxY) / 2).toBeCloseTo(vb.y + vb.h / 2, 6);
+  });
+
+  it('기준보다 큰 콘텐츠는 그만큼 넓어진다 (칩이 캔버스 밖으로 흘러나온 경우)', () => {
+    const nodes = [node('a', 350, 450, { roles: [{ label: '주인공', color: '#c33' }, { label: '조력자', color: '#3c3' }] })];
+    const b = contentBounds(nodes);
+    expect(b.maxY).toBeGreaterThan(CANVAS_H); // 칩이 캔버스 아래로 넘침
+    const vb = computeViewBox(nodes, W);
+    expect(vb.h).toBeGreaterThanOrEqual(b.maxY - b.minY + CONTENT_PAD * 2);
+    expect(vb.y + vb.h).toBeGreaterThanOrEqual(b.maxY); // 잘리지 않는다
+  });
+
+  it('노드가 없으면 기준 크기 그대로', () => {
+    expect(computeViewBox([], W)).toEqual({ x: 0, y: 0, w: W, h: CANVAS_H });
+  });
+
+  it('viewBox는 항상 기준 크기 이상 — meet 배율이 1을 넘지 못한다', () => {
+    [[node('a', 350, 240)], [node('a', 100, 100), node('b', 600, 400)]].forEach(nodes => {
+      const vb = computeViewBox(nodes, W);
+      expect(vb.w).toBeGreaterThanOrEqual(W);
+      expect(vb.h).toBeGreaterThanOrEqual(CANVAS_H);
+    });
   });
 });
 
@@ -140,20 +184,36 @@ describe('buildRelationshipPrintHtml', () => {
         const html = buildRelationshipPrintHtml({ ...base, width, orientation });
         expect(html).not.toContain('transform:scale(');
         expect(html).not.toContain('margin-top:');
-        expect(html).not.toMatch(/height:\s*\d+(\.\d+)?px/);
-        // 축소·가운데 정렬은 viewBox + meet가 페이지 박스 기준으로 처리한다
-        expect(html).toContain(`viewBox="0 0 ${width} ${CANVAS_H}"`);
+        // 축소·가운데 정렬은 viewBox + meet + 퍼센트가 실제 페이지 박스 기준으로 처리한다
+        const vb = computeViewBox(base.nodes, width);
+        expect(html).toContain(`viewBox="${vb.x} ${vb.y} ${vb.w} ${vb.h}"`);
         expect(html).toContain('preserveAspectRatio="xMidYMid meet"');
-        expect(html).toContain('svg.diagram{width:100%;height:100%');
+        expect(html).toContain('max-width:100%;max-height:100%');
         expect(html).toContain('html,body{height:100%');
       });
     });
   });
 
+  it('SVG 자연 크기 = viewBox 크기 → 확대되지 않는다', () => {
+    [700, 1400].forEach(width => {
+      const vb = computeViewBox(base.nodes, width);
+      const html = buildRelationshipPrintHtml({ ...base, width });
+      // 페이지가 넓어도 자연 크기까지만 그린다(1:1). 넘칠 때만 max-*가 줄인다.
+      expect(html).toContain(`svg.diagram{width:${vb.w}px;height:${vb.h}px;max-width:100%;max-height:100%`);
+    });
+  });
+
+  it('용지 크기에서 유도한 px가 남아 있지 않다', () => {
+    const html = buildRelationshipPrintHtml(base);
+    const css = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
+    // A4 콘텐츠 크기(가로 896 / 세로 567·877 등)에서 나온 값이 들어가면 안 된다
+    [896, 877, 567, 548].forEach(n => expect(css).not.toContain(`${n}px`));
+  });
+
   it('본문이 페이지 높이를 기준으로 배치된다', () => {
     const html = buildRelationshipPrintHtml(base);
     expect(html).toContain('body{display:flex;flex-direction:column;overflow:hidden}');
-    expect(html).toContain('.stage{flex:1 1 auto;min-height:0;display:flex}');
+    expect(html).toContain('.stage{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center}');
   });
 
   it('@page size가 방향을 반영한다', () => {

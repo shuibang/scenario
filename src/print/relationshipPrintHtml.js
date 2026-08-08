@@ -56,6 +56,49 @@ export function truncateToWidth(text, maxWidth, fontSize) {
   return out ? `${out}…` : '…';
 }
 
+// 노드 한 개가 실제로 차지하는 세로 길이 — 역할 칩은 카드 아래로 흘러나온다.
+function nodeBottomExtra(node) {
+  const n = (node.roles || []).length;
+  return n > 0 ? 4 + n * CHIP_H + (n - 1) * CHIP_GAP : 0;
+}
+
+// 카드+칩이 차지하는 실제 범위. 캔버스 밖으로 흘러나온 칩까지 포함한다.
+export function contentBounds(nodes = []) {
+  if (nodes.length === 0) return null;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  nodes.forEach(n => {
+    minX = Math.min(minX, n.x - NODE_W / 2);
+    maxX = Math.max(maxX, n.x + NODE_W / 2);
+    minY = Math.min(minY, n.y - n.h / 2);
+    maxY = Math.max(maxY, n.y + n.h / 2 + nodeBottomExtra(n));
+  });
+  return { minX, minY, maxX, maxY };
+}
+
+export const CONTENT_PAD = 8;
+
+/**
+ * viewBox 계산 — 확대 방지의 핵심.
+ * 콘텐츠 바운딩 박스를 기준 크기(화면 캔버스)까지 확장하고 그 안에서 가운데 배치한다.
+ * 기준보다 큰 경우(칩이 캔버스 밖으로 흘러나온 경우 등)에만 그만큼 넓어진다.
+ * viewBox 크기가 곧 SVG의 자연 크기(px)가 되고, CSS max-width/height:100%가
+ * 페이지를 넘을 때만 줄여주므로 배율은 절대 1을 넘지 않는다.
+ */
+export function computeViewBox(nodes, width) {
+  const refW = width > 0 ? width : NODE_W;
+  const refH = CANVAS_H;
+  const b = contentBounds(nodes);
+  if (!b) return { x: 0, y: 0, w: refW, h: refH };
+
+  const cw = b.maxX - b.minX + CONTENT_PAD * 2;
+  const ch = b.maxY - b.minY + CONTENT_PAD * 2;
+  const w = Math.max(cw, refW);
+  const h = Math.max(ch, refH);
+  const cx = (b.minX + b.maxX) / 2;
+  const cy = (b.minY + b.maxY) / 2;
+  return { x: cx - w / 2, y: cy - h / 2, w, h };
+}
+
 export function escapeHtml(s) {
   return String(s ?? '')
     .replace(/&/g, '&amp;')
@@ -148,12 +191,12 @@ export function buildRelationshipPrintHtml({ title, width, nodes = [], edges = [
   const w = width > 0 ? width : NODE_W;
   const page = normalizeOrientation(orientation);
 
-  // 크기·정렬을 px로 못박지 않는다. 인쇄 팝업에서 용지 방향을 바꾸면 페이지 박스만
-  // 회전하고 심어둔 px는 그대로여서 관계도가 페이지 밖으로 밀려나기 때문이다.
-  // 대신 body를 페이지 높이(100%)에 맞춘 flex 컬럼으로 두고, viewBox + meet에
-  // 축소·가운데 정렬을 맡긴다 → 어떤 용지 방향에서도 브라우저가 다시 맞춘다.
+  // 용지 크기에서 유도한 값은 아무것도 심지 않는다. 인쇄 팝업에서 방향을 바꾸면
+  // 페이지 박스만 회전하고 심어둔 px는 그대로여서 관계도가 밖으로 밀려나기 때문이다.
+  // 축소·가운데 정렬은 viewBox + meet + CSS 퍼센트가 실제 페이지 박스 기준으로 처리한다.
+  const vb = computeViewBox(nodes, w);
   const svg = `<svg class="diagram" xmlns="http://www.w3.org/2000/svg" `
-    + `viewBox="0 0 ${w} ${CANVAS_H}" preserveAspectRatio="xMidYMid meet">`
+    + `viewBox="${vb.x} ${vb.y} ${vb.w} ${vb.h}" preserveAspectRatio="xMidYMid meet">`
     + `<defs><marker id="rel-arrow" markerWidth="${ARROW_LEN - 2}" markerHeight="6" refX="${ARROW_LEN - 2}" refY="3" orient="auto">`
     + `<path d="M0,0 L${ARROW_LEN - 2},3 L0,6 Z" fill="${C.line}" opacity="0.75" /></marker></defs>`
     + edgesSvg(nodes, edges)
@@ -169,8 +212,10 @@ export function buildRelationshipPrintHtml({ title, width, nodes = [], edges = [
     // overflow:hidden — 내용이 페이지 높이를 넘어 빈 2쪽이 생기는 것을 막는다
     + `body{display:flex;flex-direction:column;overflow:hidden}`
     + `h1{flex:0 0 auto;font-size:14pt;font-weight:700;margin:0 0 10px}`
-    + `.stage{flex:1 1 auto;min-height:0;display:flex}`
-    + `svg.diagram{width:100%;height:100%;display:block}`
+    + `.stage{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center}`
+    // 자연 크기 = viewBox 크기(화면과 1:1). max-*:100%가 페이지를 넘을 때만 줄인다
+    // → 확대는 없고, 방향을 바꾸면 퍼센트가 실제 페이지 박스 기준으로 다시 계산된다.
+    + `svg.diagram{width:${vb.w}px;height:${vb.h}px;max-width:100%;max-height:100%;display:block}`
     + `</style></head><body>`
     + `<h1>${escapeHtml(title)}</h1>`
     + `<div class="stage">${svg}</div>`
