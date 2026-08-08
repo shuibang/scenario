@@ -14,14 +14,25 @@ import { ARROW_LEN, LABEL_H, buildNodeGeom, edgeGeometry, pairSideOffset } from 
 
 const MM_TO_PX = 96 / 25.4;
 
-// A4 세로 + 기존 인쇄 여백(index.css의 @page와 동일: 위 35mm / 좌우·아래 30mm)
+// A4 + 기존 인쇄 여백(index.css의 @page와 동일: 위 35mm / 좌우·아래 30mm).
+// w/h는 세로(portrait) 기준 — 가로는 아래에서 뒤집는다.
 export const PAGE = { w: 210, h: 297, top: 35, right: 30, bottom: 30, left: 30 };
 export const TITLE_BLOCK_H = 30; // 제목 줄이 차지하는 높이(px) — 축소 비율 계산에 반영
 
-export function pageContentPx() {
+export const DEFAULT_ORIENTATION = 'landscape';
+
+// 방향 필드가 없는 기존 작품은 기본 가로. 마이그레이션 없이 읽는 쪽에서만 폴백한다.
+export function normalizeOrientation(v) {
+  return v === 'portrait' ? 'portrait' : DEFAULT_ORIENTATION;
+}
+
+export function pageContentPx(orientation) {
+  const landscape = normalizeOrientation(orientation) === 'landscape';
+  const pw = landscape ? PAGE.h : PAGE.w;   // 가로면 297mm
+  const ph = landscape ? PAGE.w : PAGE.h;   // 가로면 210mm
   return {
-    w: (PAGE.w - PAGE.left - PAGE.right) * MM_TO_PX,
-    h: (PAGE.h - PAGE.top - PAGE.bottom) * MM_TO_PX,
+    w: (pw - PAGE.left - PAGE.right) * MM_TO_PX,
+    h: (ph - PAGE.top - PAGE.bottom) * MM_TO_PX,
   };
 }
 
@@ -29,6 +40,20 @@ export function pageContentPx() {
 export function computePrintScale(w, h, maxW, maxH) {
   if (!(w > 0) || !(h > 0)) return 1;
   return Math.min(1, maxW / w, maxH / h);
+}
+
+/**
+ * 방향에 따른 인쇄 배치 — 축소 비율 + 세로 가운데 정렬 오프셋.
+ * 남는 세로 여백을 위아래로 균등 분배한다. 세로로 늘려 채우지 않는다 —
+ * 화면에서 배치한 비율이 그대로 유지되어야 한다.
+ */
+export function computePrintLayout(width, orientation) {
+  const content = pageContentPx(orientation);
+  const w = width > 0 ? width : NODE_W;
+  const available = Math.max(0, content.h - TITLE_BLOCK_H);
+  const scale = computePrintScale(w, CANVAS_H, content.w, available);
+  const offsetY = Math.max(0, (available - CANVAS_H * scale) / 2);
+  return { scale, offsetY, content, available };
 }
 
 export function escapeHtml(s) {
@@ -106,10 +131,10 @@ function edgesSvg(nodes, edges, width) {
  *        좌표는 화면에 보이는 값 그대로 — 재배치하지 않는다.
  * edges: [{ id, fromId, toId, label }]
  */
-export function buildRelationshipPrintHtml({ title, width, nodes = [], edges = [] }) {
+export function buildRelationshipPrintHtml({ title, width, nodes = [], edges = [], orientation }) {
   const w = width > 0 ? width : NODE_W;
-  const content = pageContentPx();
-  const scale = computePrintScale(w, CANVAS_H, content.w, content.h - TITLE_BLOCK_H);
+  const page = normalizeOrientation(orientation);
+  const { scale, offsetY } = computePrintLayout(w, page);
 
   const stage = `<div style="position:absolute;top:0;left:0;width:${w}px;height:${CANVAS_H}px;`
     + `transform:scale(${scale});transform-origin:top left">`
@@ -119,14 +144,16 @@ export function buildRelationshipPrintHtml({ title, width, nodes = [], edges = [
 
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>`
     + `<style>`
-    + `@page{size:A4;margin:${PAGE.top}mm ${PAGE.right}mm ${PAGE.bottom}mm ${PAGE.left}mm}`
+    + `@page{size:A4 ${page};margin:${PAGE.top}mm ${PAGE.right}mm ${PAGE.bottom}mm ${PAGE.left}mm}`
     + `*{box-sizing:border-box}`
     + `html,body{margin:0;padding:0;background:#fff;color:${C.text};`
     + `font-family:'Malgun Gothic','AppleGothic',sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}`
     + `h1{font-size:14pt;font-weight:700;margin:0 0 10px}`
     + `</style></head><body>`
     + `<h1>${escapeHtml(title)}</h1>`
-    + `<div style="position:relative;overflow:hidden;width:${w * scale}px;height:${CANVAS_H * scale}px">${stage}</div>`
+    // 남는 세로 여백을 위아래로 균등 분배 — 위쪽에 몰리지 않게
+    + `<div style="position:relative;overflow:hidden;margin-top:${offsetY}px;`
+    + `width:${w * scale}px;height:${CANVAS_H * scale}px">${stage}</div>`
     + `</body></html>`;
 }
 
