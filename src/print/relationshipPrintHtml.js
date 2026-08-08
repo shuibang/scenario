@@ -81,8 +81,8 @@ export const CONTENT_PAD = 8;
  * viewBox 계산 — 확대 방지의 핵심.
  * 콘텐츠 바운딩 박스를 기준 크기(화면 캔버스)까지 확장하고 그 안에서 가운데 배치한다.
  * 기준보다 큰 경우(칩이 캔버스 밖으로 흘러나온 경우 등)에만 그만큼 넓어진다.
- * viewBox 크기가 곧 SVG의 자연 크기(px)가 되고, CSS max-width/height:100%가
- * 페이지를 넘을 때만 줄여주므로 배율은 절대 1을 넘지 않는다.
+ * viewBox 크기가 곧 SVG의 자연 크기(px)가 되고, CSS width:min(100%, 자연폭)이
+ * 그 이상 커지지 못하게 막으므로 배율은 절대 1을 넘지 않는다.
  */
 export function computeViewBox(nodes, width) {
   const refW = width > 0 ? width : NODE_W;
@@ -212,10 +212,13 @@ export function buildRelationshipPrintHtml({ title, width, nodes = [], edges = [
     // overflow:hidden — 내용이 페이지 높이를 넘어 빈 2쪽이 생기는 것을 막는다
     + `body{display:flex;flex-direction:column;overflow:hidden}`
     + `h1{flex:0 0 auto;font-size:14pt;font-weight:700;margin:0 0 10px}`
-    + `.stage{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center}`
-    // 자연 크기 = viewBox 크기(화면과 1:1). max-*:100%가 페이지를 넘을 때만 줄인다
-    // → 확대는 없고, 방향을 바꾸면 퍼센트가 실제 페이지 박스 기준으로 다시 계산된다.
-    + `svg.diagram{width:${vb.w}px;height:${vb.h}px;max-width:100%;max-height:100%;display:block}`
+    + `.stage{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center}`
+    // 높이를 퍼센트로 잡지 않는다 — .stage는 flex로 정해지는 높이라 확정 높이가 없고,
+    // 거기 기댄 max-height:100%가 0으로 풀리면 도형이 통째로 접힌다(가로에서 노출됨).
+    // 폭은 min()으로 자연 크기(화면과 1:1)를 넘지 않게 하고 높이는 aspect-ratio로 따라오게 한다.
+    // 페이지가 더 낮으면 세로축(main axis) flex-shrink가 줄이고, meet가 비율을 지킨다.
+    + `svg.diagram{width:min(100%,${vb.w}px);aspect-ratio:${vb.w}/${vb.h};`
+    + `flex:0 1 auto;min-height:0;display:block}`
     + `</style></head><body>`
     + `<h1>${escapeHtml(title)}</h1>`
     + `<div class="stage">${svg}</div>`

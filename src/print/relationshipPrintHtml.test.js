@@ -184,11 +184,11 @@ describe('buildRelationshipPrintHtml', () => {
         const html = buildRelationshipPrintHtml({ ...base, width, orientation });
         expect(html).not.toContain('transform:scale(');
         expect(html).not.toContain('margin-top:');
-        // 축소·가운데 정렬은 viewBox + meet + 퍼센트가 실제 페이지 박스 기준으로 처리한다
+        // 축소·가운데 정렬은 viewBox + meet + 페이지 상대 폭이 실제 페이지 박스 기준으로 처리한다
         const vb = computeViewBox(base.nodes, width);
         expect(html).toContain(`viewBox="${vb.x} ${vb.y} ${vb.w} ${vb.h}"`);
         expect(html).toContain('preserveAspectRatio="xMidYMid meet"');
-        expect(html).toContain('max-width:100%;max-height:100%');
+        expect(html).toContain(`width:min(100%,${vb.w}px)`);
         expect(html).toContain('html,body{height:100%');
       });
     });
@@ -198,9 +198,39 @@ describe('buildRelationshipPrintHtml', () => {
     [700, 1400].forEach(width => {
       const vb = computeViewBox(base.nodes, width);
       const html = buildRelationshipPrintHtml({ ...base, width });
-      // 페이지가 넓어도 자연 크기까지만 그린다(1:1). 넘칠 때만 max-*가 줄인다.
-      expect(html).toContain(`svg.diagram{width:${vb.w}px;height:${vb.h}px;max-width:100%;max-height:100%`);
+      // 페이지가 넓어도 자연 폭까지만 그린다(1:1). 넘칠 때만 min()의 100%가 줄인다.
+      expect(html).toContain(`svg.diagram{width:min(100%,${vb.w}px);aspect-ratio:${vb.w}/${vb.h};`);
     });
+  });
+
+  // ── 높이를 확정 높이 없는 퍼센트에 기대면 0으로 접힌다(가로에서 실제로 터진 결함).
+  it('확정 높이 없는 부모에 기댄 퍼센트 높이가 남아 있지 않다', () => {
+    const html = buildRelationshipPrintHtml(base);
+    const css = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
+    expect(css).not.toContain('max-height:100%');
+    // height:100%는 페이지 박스가 확정 높이인 html,body 체인에만 허용
+    const heightPercentRules = css.split('}').filter(r => /height:\s*100%/.test(r));
+    expect(heightPercentRules).toHaveLength(1);
+    expect(heightPercentRules[0]).toContain('html,body{');
+    // .stage / svg 규칙에는 퍼센트 높이가 없다
+    expect(css).toMatch(/\.stage\{[^}]*\}/);
+    expect(css.match(/\.stage\{[^}]*\}/)[0]).not.toContain('%');
+    expect(css.match(/svg\.diagram\{[^}]*\}/)[0]).not.toMatch(/height:\s*\d*%/);
+  });
+
+  it('aspect-ratio가 viewBox 비율과 일치한다', () => {
+    [700, 1400].forEach(width => {
+      const vb = computeViewBox(base.nodes, width);
+      const html = buildRelationshipPrintHtml({ ...base, width });
+      expect(html).toContain(`aspect-ratio:${vb.w}/${vb.h}`);
+      expect(html).toContain(`viewBox="${vb.x} ${vb.y} ${vb.w} ${vb.h}"`);
+    });
+  });
+
+  it('페이지가 낮으면 세로축 flex-shrink로 줄어든다 (퍼센트 없이)', () => {
+    const html = buildRelationshipPrintHtml(base);
+    expect(html).toContain('.stage{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;');
+    expect(html).toContain('flex:0 1 auto;min-height:0;display:block}');
   });
 
   it('용지 크기에서 유도한 px가 남아 있지 않다', () => {
@@ -213,7 +243,7 @@ describe('buildRelationshipPrintHtml', () => {
   it('본문이 페이지 높이를 기준으로 배치된다', () => {
     const html = buildRelationshipPrintHtml(base);
     expect(html).toContain('body{display:flex;flex-direction:column;overflow:hidden}');
-    expect(html).toContain('.stage{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center}');
+    expect(html).toContain('.stage{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center}');
   });
 
   it('@page size가 방향을 반영한다', () => {
