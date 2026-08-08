@@ -9,6 +9,7 @@ import {
   findInCoverDoc, replaceInCoverDoc,
 } from '../utils/findReplace';
 import { generateRenamePairs } from '../utils/characterRename';
+import { buildCharacterPhoto, hasPhoto, photoErrorMessage } from '../utils/characterPhoto';
 import RenameConfirmDialog from './Modals/RenameConfirmDialog';
 import RolePicker from './RolePicker';
 import RenamePreviewDialog from './Modals/RenamePreviewDialog';
@@ -579,8 +580,80 @@ function CharacterIndexItem({ char, isSelected, onClick }) {
   );
 }
 
+// ─── CharacterPhoto ────────────────────────────────────────────────────────────
+// 캐스팅 참고 사진 1장. 축소 완료 후 onChange를 한 번만 호출한다.
+function CharacterPhoto({ char, onChange }) {
+  const inputRef = useRef(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const photo = hasPhoto(char) ? char.photo : null;
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // 같은 파일 재선택도 동작하도록
+    if (!file) return;
+    setError('');
+    setBusy(true);
+    try {
+      const { dataUrl, w, h } = await buildCharacterPhoto(file);
+      onChange({ dataUrl, w, h, updatedAt: now() });
+    } catch (err) {
+      setError(photoErrorMessage(err?.code));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const btn = {
+    padding: '2px 8px', fontSize: 11, borderRadius: 4,
+    border: '1px solid var(--c-border3)', background: 'transparent',
+    color: 'var(--c-text4)', cursor: busy ? 'default' : 'pointer',
+  };
+
+  return (
+    <div className="flex items-start gap-3 mb-3">
+      <div
+        style={{
+          width: 60, height: 80, borderRadius: 6, flexShrink: 0,
+          background: 'var(--c-input)', border: '1px solid var(--c-border3)',
+          overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}
+      >
+        {photo ? (
+          <img
+            src={photo.dataUrl}
+            alt={`${charFullName(char) || charDisplayName(char)} 사진`}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          />
+        ) : (
+          <span style={{ fontSize: 10, color: 'var(--c-text6)' }}>사진 없음</span>
+        )}
+      </div>
+      <div className="flex flex-col gap-1 pt-0.5">
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleFile}
+          style={{ display: 'none' }}
+        />
+        <div className="flex gap-1">
+          <button onClick={() => inputRef.current?.click()} disabled={busy} style={btn}>
+            {busy ? '처리 중…' : photo ? '변경' : '사진 첨부'}
+          </button>
+          {photo && !busy && (
+            <button onClick={() => { setError(''); onChange(null); }} style={{ ...btn, color: '#f87171' }}>삭제</button>
+          )}
+        </div>
+        <span style={{ fontSize: 10, color: 'var(--c-text6)' }}>캐스팅 참고용 · 장변 320px로 축소 저장</span>
+        {error && <span style={{ fontSize: 10, color: '#f87171' }}>{error}</span>}
+      </div>
+    </div>
+  );
+}
+
 // ─── CharacterDetail ───────────────────────────────────────────────────────────
-function CharacterDetail({ char, onEdit, onDelete, episodes, scenes, scriptBlocks }) {
+function CharacterDetail({ char, onEdit, onDelete, onPhotoChange, episodes, scenes, scriptBlocks }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const fullName = charFullName(char);
   const displayName = charDisplayName(char);
@@ -634,6 +707,9 @@ function CharacterDetail({ char, onEdit, onDelete, episodes, scenes, scriptBlock
           </span>
         )}
       </div>
+
+      {/* Photo */}
+      <CharacterPhoto char={char} onChange={onPhotoChange} />
 
       {/* Intro */}
       {charIntro(char) && (
@@ -988,6 +1064,7 @@ export default function CharacterPanel() {
             char={selectedChar}
             onEdit={() => setEditingId(selectedChar.id)}
             onDelete={() => dispatch({ type: 'DELETE_CHARACTER', id: selectedChar.id })}
+            onPhotoChange={(photo) => dispatch({ type: 'UPDATE_CHARACTER', payload: { id: selectedChar.id, photo } })}
             episodes={epList}
             scenes={sceneList}
             scriptBlocks={blockList}
