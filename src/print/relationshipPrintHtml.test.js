@@ -2,13 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_ORIENTATION,
   PAGE,
-  TITLE_BLOCK_H,
   buildRelationshipPrintHtml,
-  computePrintLayout,
-  computePrintScale,
   escapeHtml,
+  estimateTextWidth,
   normalizeOrientation,
-  pageContentPx,
+  truncateToWidth,
 } from './relationshipPrintHtml';
 import { CANVAS_H, NODE_H, NODE_H_PHOTO, NODE_W } from '../utils/relationshipLayout';
 
@@ -16,29 +14,6 @@ const DATA_URL = 'data:image/jpeg;base64,aGk=';
 
 const node = (id, x, y, extra = {}) => ({
   id, x, y, h: NODE_H, anchorOffsetY: 0, name: id, photoDataUrl: null, roles: [], ...extra,
-});
-
-describe('computePrintScale', () => {
-  it('A4 안에 들어가면 축소하지 않는다', () => {
-    expect(computePrintScale(400, 300, 566, 800)).toBe(1);
-  });
-
-  it('폭이 넘치면 폭 기준으로 비례 축소', () => {
-    expect(computePrintScale(1000, 300, 500, 800)).toBe(0.5);
-  });
-
-  it('높이가 더 빡빡하면 높이 기준', () => {
-    expect(computePrintScale(400, 800, 800, 400)).toBe(0.5);
-  });
-
-  it('확대는 하지 않는다 (1 초과 없음)', () => {
-    expect(computePrintScale(100, 100, 5000, 5000)).toBe(1);
-  });
-
-  it('비정상 입력은 1로 폴백', () => {
-    expect(computePrintScale(0, 300, 500, 500)).toBe(1);
-    expect(computePrintScale(NaN, NaN, 500, 500)).toBe(1);
-  });
 });
 
 describe('normalizeOrientation', () => {
@@ -55,59 +30,26 @@ describe('normalizeOrientation', () => {
   });
 });
 
-describe('pageContentPx', () => {
-  it('세로: A4에서 기존 인쇄 여백을 뺀 콘텐츠 크기', () => {
-    const { w, h } = pageContentPx('portrait');
-    expect(Math.round(w)).toBe(Math.round((PAGE.w - PAGE.left - PAGE.right) * (96 / 25.4))); // 150mm ≈ 567px
-    expect(Math.round(h)).toBe(Math.round((PAGE.h - PAGE.top - PAGE.bottom) * (96 / 25.4))); // 232mm ≈ 877px
+describe('estimateTextWidth / truncateToWidth', () => {
+  it('한글은 약 1em, 영문은 약 0.55em으로 근사한다', () => {
+    expect(estimateTextWidth('가나', 10)).toBeCloseTo(20, 6);
+    expect(estimateTextWidth('ab', 10)).toBeCloseTo(11, 6);
+    expect(estimateTextWidth('', 10)).toBe(0);
+    expect(estimateTextWidth(null, 10)).toBe(0);
   });
 
-  it('가로: 폭·높이가 뒤바뀐다', () => {
-    const { w, h } = pageContentPx('landscape');
-    expect(Math.round(w)).toBe(Math.round((PAGE.h - PAGE.left - PAGE.right) * (96 / 25.4))); // 237mm ≈ 896px
-    expect(Math.round(h)).toBe(Math.round((PAGE.w - PAGE.top - PAGE.bottom) * (96 / 25.4))); // 145mm ≈ 548px
+  it('폭 안에 들어가면 그대로 둔다', () => {
+    expect(truncateToWidth('홍길동', 100, 11)).toBe('홍길동');
   });
 
-  it('가로가 세로보다 넓고 낮다', () => {
-    const l = pageContentPx('landscape');
-    const p = pageContentPx('portrait');
-    expect(l.w).toBeGreaterThan(p.w);
-    expect(l.h).toBeLessThan(p.h);
-  });
-});
-
-describe('computePrintLayout', () => {
-  it('방향별로 축소 비율이 달라진다 (가로가 덜 줄어든다)', () => {
-    const l = computePrintLayout(1200, 'landscape');
-    const p = computePrintLayout(1200, 'portrait');
-    expect(l.scale).toBeGreaterThan(p.scale);
+  it('넘치면 말줄임을 붙이고 폭 안에 맞춘다', () => {
+    const out = truncateToWidth('아주아주긴이름입니다', 44, 11);
+    expect(out.endsWith('…')).toBe(true);
+    expect(estimateTextWidth(out, 11)).toBeLessThanOrEqual(44);
   });
 
-  it('남는 세로 여백을 위아래로 균등 분배한다', () => {
-    const { scale, offsetY, available } = computePrintLayout(700, 'landscape');
-    expect(offsetY).toBeCloseTo((available - CANVAS_H * scale) / 2, 6);
-    // 위 여백 + 관계도 + 아래 여백 = 사용 가능한 높이
-    expect(offsetY * 2 + CANVAS_H * scale).toBeCloseTo(available, 6);
-  });
-
-  it('꽉 차면 오프셋은 0 (음수로 밀지 않는다)', () => {
-    const { scale, offsetY, available } = computePrintLayout(5000, 'portrait');
-    expect(CANVAS_H * scale).toBeLessThanOrEqual(available + 1e-9);
-    expect(offsetY).toBeGreaterThanOrEqual(0);
-  });
-
-  it('두 방향 모두 페이지를 벗어나지 않는다', () => {
-    ['landscape', 'portrait'].forEach(o => {
-      [400, 700, 1400, 3000].forEach(w => {
-        const { scale, offsetY, content, available } = computePrintLayout(w, o);
-        expect(w * scale).toBeLessThanOrEqual(content.w + 1e-9);
-        expect(offsetY + CANVAS_H * scale).toBeLessThanOrEqual(available + 1e-9);
-      });
-    });
-  });
-
-  it('방향 미지정은 가로와 동일', () => {
-    expect(computePrintLayout(700)).toEqual(computePrintLayout(700, 'landscape'));
+  it('한 글자도 못 넣으면 말줄임만', () => {
+    expect(truncateToWidth('홍길동', 1, 11)).toBe('…');
   });
 });
 
@@ -145,9 +87,9 @@ describe('buildRelationshipPrintHtml', () => {
 
   it('화면 좌표를 그대로 반영한다 (재배치하지 않음)', () => {
     const html = buildRelationshipPrintHtml(base);
-    // 카드 좌상단 = 중심 − 카드 절반
-    expect(html).toContain(`left:${200 - NODE_W / 2}px;top:${100 - NODE_H / 2}px`);
-    expect(html).toContain(`left:${500 - NODE_W / 2}px;top:${300 - NODE_H / 2}px`);
+    // 카드 좌상단 = 중심 − 카드 절반. viewBox 좌표계라 화면 좌표가 그대로 들어간다.
+    expect(html).toContain(`<rect x="${200 - NODE_W / 2}" y="${100 - NODE_H / 2}" width="${NODE_W}" height="${NODE_H}"`);
+    expect(html).toContain(`<rect x="${500 - NODE_W / 2}" y="${300 - NODE_H / 2}" width="${NODE_W}" height="${NODE_H}"`);
   });
 
   it('사진 있는 카드는 data URL을 그대로 싣고, 없는 카드는 img가 없다', () => {
@@ -159,8 +101,9 @@ describe('buildRelationshipPrintHtml', () => {
       ],
     });
     expect(html).toContain(DATA_URL);
-    expect(html.match(/<img /g)).toHaveLength(1);
-    expect(html).toContain(`top:${300 - NODE_H_PHOTO / 2}px`); // 사진 카드는 더 높다
+    expect(html.match(/<image /g)).toHaveLength(1);
+    expect(html).toContain('preserveAspectRatio="xMidYMid slice"'); // object-fit: cover
+    expect(html).toContain(`y="${300 - NODE_H_PHOTO / 2}" width="${NODE_W}" height="${NODE_H_PHOTO}"`);
   });
 
   it('관계선·화살촉·라벨을 모두 그린다', () => {
@@ -177,7 +120,8 @@ describe('buildRelationshipPrintHtml', () => {
       edges: [{ id: 'e1', fromId: 'a', toId: 'b', label: '' }],
     });
     expect(html).toContain('<line ');
-    expect(html).not.toContain('<text ');
+    expect(html).not.toContain('>연인</text>');
+    expect(html).not.toContain('rx="3"'); // 라벨 배경 박스도 없다 (카드 이름 텍스트와 구분)
   });
 
   it('좌표가 없는 노드를 가리키는 관계선은 건너뛴다', () => {
@@ -188,12 +132,28 @@ describe('buildRelationshipPrintHtml', () => {
     expect(html).not.toContain('<line ');
   });
 
-  it('캔버스가 A4보다 넓으면 전체를 축소한다', () => {
-    const wide = buildRelationshipPrintHtml({ ...base, width: 1400, orientation: 'portrait' });
-    const content = pageContentPx('portrait');
-    const expected = computePrintScale(1400, CANVAS_H, content.w, content.h - TITLE_BLOCK_H);
-    expect(expected).toBeLessThan(1);
-    expect(wide).toContain(`transform:scale(${expected})`);
+  // ── 인쇄 팝업에서 방향을 바꿔도 관계도가 사라지지 않아야 한다.
+  // 방향 의존 px를 심으면 페이지 박스만 회전하고 값은 그대로여서 밖으로 밀려난다.
+  it('축소·정렬을 고정 px로 심지 않는다 (페이지 상대 배치)', () => {
+    [700, 1400, 3000].forEach(width => {
+      ['landscape', 'portrait', undefined].forEach(orientation => {
+        const html = buildRelationshipPrintHtml({ ...base, width, orientation });
+        expect(html).not.toContain('transform:scale(');
+        expect(html).not.toContain('margin-top:');
+        expect(html).not.toMatch(/height:\s*\d+(\.\d+)?px/);
+        // 축소·가운데 정렬은 viewBox + meet가 페이지 박스 기준으로 처리한다
+        expect(html).toContain(`viewBox="0 0 ${width} ${CANVAS_H}"`);
+        expect(html).toContain('preserveAspectRatio="xMidYMid meet"');
+        expect(html).toContain('svg.diagram{width:100%;height:100%');
+        expect(html).toContain('html,body{height:100%');
+      });
+    });
+  });
+
+  it('본문이 페이지 높이를 기준으로 배치된다', () => {
+    const html = buildRelationshipPrintHtml(base);
+    expect(html).toContain('body{display:flex;flex-direction:column;overflow:hidden}');
+    expect(html).toContain('.stage{flex:1 1 auto;min-height:0;display:flex}');
   });
 
   it('@page size가 방향을 반영한다', () => {
@@ -206,19 +166,33 @@ describe('buildRelationshipPrintHtml', () => {
     expect(buildRelationshipPrintHtml({ ...base, orientation: 'xxx' })).toContain('@page{size:A4 landscape');
   });
 
-  it('세로 가운데 정렬 오프셋을 margin-top으로 넣는다', () => {
-    ['landscape', 'portrait'].forEach(o => {
-      const html = buildRelationshipPrintHtml({ ...base, orientation: o });
-      expect(html).toContain(`margin-top:${computePrintLayout(base.width, o).offsetY}px`);
-    });
-  });
-
-  it('방향이 카드 좌표를 바꾸지 않는다 (화면 배치 유지)', () => {
+  it('방향은 @page size에만 반영되고 본문은 동일하다', () => {
     const l = buildRelationshipPrintHtml({ ...base, orientation: 'landscape' });
     const p = buildRelationshipPrintHtml({ ...base, orientation: 'portrait' });
-    const card = `left:${200 - NODE_W / 2}px;top:${100 - NODE_H / 2}px`;
-    expect(l).toContain(card);
-    expect(p).toContain(card);
+    const body = html => html.slice(html.indexOf('<body>'));
+    expect(body(l)).toBe(body(p)); // 본문에 방향 의존 값이 없다
+  });
+
+  it('여백은 기존 인쇄 설정과 동일하다', () => {
+    expect(buildRelationshipPrintHtml(base))
+      .toContain(`margin:${PAGE.top}mm ${PAGE.right}mm ${PAGE.bottom}mm ${PAGE.left}mm`);
+  });
+
+  it('역할 칩도 SVG로 그린다', () => {
+    const html = buildRelationshipPrintHtml({
+      ...base,
+      nodes: [node('a', 200, 100, { roles: [{ label: '주인공', color: '#c33' }] })],
+    });
+    expect(html).toContain('>주인공</text>');
+    expect(html).toContain('stroke="#c33"');
+  });
+
+  it('긴 이름은 카드 폭에 맞춰 말줄임', () => {
+    const html = buildRelationshipPrintHtml({
+      ...base,
+      nodes: [node('a', 200, 100, { name: '아주아주아주긴인물이름' })],
+    });
+    expect(html).toContain('…</text>');
   });
 
   it('노드가 없어도 깨지지 않는다', () => {
