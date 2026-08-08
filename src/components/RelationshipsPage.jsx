@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { useApp } from '../store/AppContext';
 import { charDisplayName, getCharRoles, getRoleColor, getRoleLabel } from './CharacterPanel';
 import { genId } from '../store/db';
+import { hasPhoto } from '../utils/characterPhoto';
 import {
   NODE_W, NODE_H, CANVAS_H,
   autoPositions, clampPos, isValidPos, mergePositions, samePositions,
@@ -117,13 +118,22 @@ function CharNode({ char, pos, onDragStart, printMode }) {
           pointerEvents: 'auto',
         }}
       >
+        {/* 사진이 있으면 아바타 자리에 썸네일 — 카드 크기(NODE_W/NODE_H)는 그대로다 */}
         <div style={{
           width: 26, height: 26, borderRadius: '50%',
           background: 'var(--c-accent)', flexShrink: 0,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: '12px', color: '#fff', fontWeight: 700,
+          overflow: 'hidden',
         }}>
-          {initial}
+          {hasPhoto(char) ? (
+            <img
+              src={char.photo.dataUrl}
+              alt=""
+              draggable={false}
+              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+            />
+          ) : initial}
         </div>
         <div style={{
           fontSize: '11px', fontWeight: 600, color: 'var(--c-text)',
