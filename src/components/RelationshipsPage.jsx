@@ -2,10 +2,11 @@ import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { useApp } from '../store/AppContext';
 import { charDisplayName, getCharRoles, getRoleColor, getRoleLabel } from './CharacterPanel';
 import { genId } from '../store/db';
+import {
+  NODE_W, NODE_H, CANVAS_H,
+  autoPositions, clampPos, isValidPos, mergePositions, samePositions,
+} from '../utils/relationshipLayout';
 
-const NODE_W = 110;
-const NODE_H = 58;
-const CANVAS_H = 480;
 const ARROW_LEN = 10; // arrowhead length offset
 
 // ─── Rectangle border intersection ────────────────────────────────────────────
@@ -98,9 +99,10 @@ function CharNode({ char, pos, onDragStart, printMode }) {
       }}
     >
       <div
-        onMouseDown={!printMode ? (e) => onDragStart(char.id, e) : undefined}
+        onPointerDown={!printMode ? (e) => onDragStart(char.id, e) : undefined}
         style={{
           height: NODE_H,
+          touchAction: 'none', // 모바일: 드래그가 페이지 스크롤로 먹히지 않게
           background: 'var(--c-card)',
           border: '1.5px solid var(--c-border2)',
           borderRadius: '8px',
@@ -358,25 +360,16 @@ function EditView({ projectChars, allEdges, onAdd, onUpdate, onRemove }) {
   );
 }
 
-// ─── initPositions ─────────────────────────────────────────────────────────────
-function initPositions(chars, W) {
-  const n = chars.length;
-  if (n === 0) return {};
-  const cx = W / 2;
-  const cy = CANVAS_H / 2;
-  const r = Math.min(cx - NODE_W / 2 - 8, cy - NODE_H / 2 - 8, 180);
-  return Object.fromEntries(chars.map((c, i) => {
-    const angle = (2 * Math.PI * i) / n - Math.PI / 2;
-    return [c.id, { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) }];
-  }));
-}
-
 // ─── RelationshipsPage ─────────────────────────────────────────────────────────
 export default function RelationshipsPage() {
   const { state, dispatch } = useApp();
   const { characters, activeProjectId } = state;
 
-  const projectChars = characters.filter(c => c.projectId === activeProjectId);
+  // 매 렌더 새 배열이 되면 allEdges useMemo와 좌표 초기화 effect가 매 렌더 재실행된다.
+  const projectChars = useMemo(
+    () => characters.filter(c => c.projectId === activeProjectId),
+    [characters, activeProjectId],
+  );
 
   const [helpOpen, setHelpOpen] = useState(false);
   const helpRef = useRef(null);
@@ -416,67 +409,79 @@ export default function RelationshipsPage() {
     return () => ro.disconnect();
   }, []);
 
-  // Init positions for new characters
+  // 저장된 relPos 우선 → 없는 캐릭터만 자동배치.
+  // 드래그 중에는 dispatch가 없어 projectChars가 그대로이므로 이 effect가 끼어들지 않는다.
   useEffect(() => {
     const W = containerRef.current?.offsetWidth || containerW;
     setPositions(prev => {
-      const next = { ...prev };
-      let changed = false;
-      const all = initPositions(projectChars, W);
-      projectChars.forEach(c => {
-        if (!next[c.id]) {
-          next[c.id] = all[c.id] || { x: W / 2, y: CANVAS_H / 2 };
-          changed = true;
-        }
-      });
-      // Remove positions for deleted chars
-      Object.keys(next).forEach(id => {
-        if (!projectChars.find(c => c.id === id)) {
-          delete next[id];
-          changed = true;
-        }
-      });
-      return changed ? next : prev;
+      const next = mergePositions(projectChars, W, prev);
+      return samePositions(prev, next) ? prev : next;
     });
   }, [projectChars, containerW]);
 
-  // Drag handler
+  // 드래그 중 최신 좌표를 이벤트 핸들러에서 읽기 위한 ref (stale closure 방지)
+  const positionsRef = useRef(positions);
+  useEffect(() => { positionsRef.current = positions; }, [positions]);
+  const charsRef = useRef(projectChars);
+  useEffect(() => { charsRef.current = projectChars; }, [projectChars]);
+
+  // 드래그 종료 시 1회만 영속화 — 이동 중에는 로컬 state로만 그린다.
+  const commitPos = useCallback((charId, pos) => {
+    const c = charsRef.current.find(x => x.id === charId);
+    if (!c) return;
+    const relPos = { x: Math.round(pos.x), y: Math.round(pos.y) };
+    const prev = c.relPos;
+    // 실제로 움직인 경우에만 dispatch (클릭만 했으면 no-op)
+    if (isValidPos(prev) && prev.x === relPos.x && prev.y === relPos.y) return;
+    dispatch({ type: 'UPDATE_CHARACTER', payload: { id: charId, relPos } });
+  }, [dispatch]);
+
+  // Drag handler — pointer 이벤트로 마우스/터치/펜 공통 처리
   const startDrag = useCallback((charId, e) => {
+    if (e.button > 0) return; // 우클릭/보조 버튼은 드래그로 취급하지 않음
     e.preventDefault();
     const container = containerRef.current;
     if (!container) return;
     const rect = container.getBoundingClientRect();
     const ox = e.clientX - rect.left;
     const oy = e.clientY - rect.top;
-    const startPos = { ...(positions[charId] || { x: 0, y: 0 }) };
+    const startPos = { ...(positionsRef.current[charId] || { x: 0, y: 0 }) };
     const W = container.offsetWidth;
+    const pointerId = e.pointerId;
+    let lastPos = startPos;
 
     const onMove = (me) => {
+      if (me.pointerId !== pointerId) return;
       const nx = me.clientX - rect.left;
       const ny = me.clientY - rect.top;
-      setPositions(prev => ({
-        ...prev,
-        [charId]: {
-          x: Math.max(NODE_W / 2, Math.min(W - NODE_W / 2, startPos.x + (nx - ox))),
-          y: Math.max(NODE_H / 2, Math.min(CANVAS_H - NODE_H / 2, startPos.y + (ny - oy))),
-        },
-      }));
+      lastPos = clampPos({ x: startPos.x + (nx - ox), y: startPos.y + (ny - oy) }, W);
+      setPositions(prev => ({ ...prev, [charId]: lastPos }));
     };
-    const onUp = () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
+    const cleanup = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
     };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-    return () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-    };
-  }, [positions]);
+    // pointercancel(시스템 제스처 등)도 마지막 위치를 그대로 확정한다 — 되돌리면 사용자가 잃는다.
+    function onUp(ue) {
+      if (ue && ue.pointerId !== pointerId) return;
+      cleanup();
+      commitPos(charId, lastPos);
+    }
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+  }, [commitPos]);
 
+  // 자동 배치: 저장된 좌표를 비워야 다음 진입에서도 자동배치가 유지된다.
   const resetLayout = () => {
     const W = containerRef.current?.offsetWidth || containerW;
-    setPositions(initPositions(projectChars, W));
+    setPositions(autoPositions(projectChars, W));
+    projectChars.forEach(c => {
+      if (isValidPos(c.relPos)) {
+        dispatch({ type: 'UPDATE_CHARACTER', payload: { id: c.id, relPos: null } });
+      }
+    });
   };
 
   // CRUD helpers

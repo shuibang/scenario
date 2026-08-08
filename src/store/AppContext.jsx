@@ -724,6 +724,8 @@ export function AppProvider({ children }) {
   const lastSavedSizesRef = useRef(null);
   const guardAcceptOnceRef = useRef(false);
   const guardDismissedSizesRef = useRef(null);
+  // 대기 중인 persist 본문 — pagehide/백그라운드 전환 시 디바운스를 건너뛰고 즉시 실행
+  const persistNowRef = useRef(null);
 
   useEffect(() => {
     (async () => {
@@ -849,7 +851,9 @@ export function AppProvider({ children }) {
     // 가드 모달이 떠 있으면 persist 보류 — 사용자 응답 후 재개
     if (state.guardPending) return;
     clearTimeout(persistTimer.current);
-    persistTimer.current = setTimeout(async () => {
+    const runPersist = async () => {
+      persistTimer.current = null;
+      persistNowRef.current = null;
       // Size guard: 70%+ 감소 감지 시 저장 중단 + 모달 트리거
       // INIT/LOAD_FROM_DRIVE 로 lastSavedSizesRef가 비면 초기값으로 선주입 후 비교 스킵
       const currentSizes = {
@@ -912,7 +916,9 @@ export function AppProvider({ children }) {
         forcedSavedAtRef.current = null;
         return;
       }
-    }, 300);
+    };
+    persistNowRef.current = runPersist;
+    persistTimer.current = setTimeout(runPersist, 300);
   }, [
     state.initialized,
     state.projects, state.episodes, state.characters,
@@ -924,6 +930,26 @@ export function AppProvider({ children }) {
     // guardPending이 non-null → null로 바뀌는 전이를 효과가 감지해 저장을 재개하도록 포함
     state.guardPending,
   ]);
+
+  // 300ms 디바운스 유실 방어 — 탭/창을 닫거나 모바일 WebView가 백그라운드로 내려가면
+  // 대기 중인 persist가 통째로 날아간다. 그 직전에 디바운스를 건너뛰고 즉시 실행한다.
+  useEffect(() => {
+    const flushPersist = () => {
+      const run = persistNowRef.current;
+      if (!run) return; // 대기 중인 저장 없음
+      clearTimeout(persistTimer.current);
+      persistTimer.current = null;
+      persistNowRef.current = null;
+      run();
+    };
+    const onVisibility = () => { if (document.hidden) flushPersist(); };
+    window.addEventListener('pagehide', flushPersist);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('pagehide', flushPersist);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, []);
 
   // 상태 변경마다 URL 동기화 + localStorage fallback 저장
   // 주의: 초기화 직후 activeDoc/projectId가 null인 상태에서 기존 저장본을 지우면
