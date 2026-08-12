@@ -5,6 +5,8 @@ import { supabase, refreshDriveToken, signInWithGoogle } from '../../store/supab
 import { isDropboxTokenValid, connectDropbox, listDropboxBackupFiles, loadDropboxBackupData } from '../../store/dropbox';
 import { isMultiEpisode, getTypeLabel } from '../../utils/projectTypes';
 import { deserializeProject } from '../../utils/projectSerializer';
+import { reportError } from '../../utils/errorTracker';
+import { classifyListFailure, driveListMessage, shouldReportListFailure } from '../../utils/driveListResult';
 import { KakaoAdBanner } from '../AdBanner';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import {
@@ -53,6 +55,7 @@ export default function OpenProjectModal({ open, onClose, projects = [], activeP
   const [driveFiles,  setDriveFiles]  = useState([]);
   const [driveSelected, setDriveSelected] = useState(null);
   const [driveBusy,   setDriveBusy]   = useState(false);
+  const [driveListReason, setDriveListReason] = useState(null); // 목록 조회 실패 사유
 
   // Dropbox 탭
   const [dropboxState, setDropboxState] = useState('idle'); // idle | loading | authed | unauthed | error
@@ -132,10 +135,25 @@ export default function OpenProjectModal({ open, onClose, projects = [], activeP
 
         if (!isTokenValid()) { setDriveState('unauthed'); return; }
 
-        const files = await listAllBackupFiles();
-        setDriveFiles(files);
+        // 조회 실패를 빈 목록으로 표시하면 "백업이 사라졌다"는 오해를 준다 — 사유를 구분한다.
+        const result = await listAllBackupFiles();
+        if (!result.ok) {
+          setDriveListReason(result.reason);
+          setDriveFiles([]);
+          setDriveState('error');
+          if (shouldReportListFailure(result.reason)) {
+            reportError({
+              source: 'OpenProjectModal.listAllBackupFiles',
+              message: `Drive 백업 목록 조회 실패: ${result.error || result.reason}`,
+            })?.catch?.(() => {});
+          }
+          return;
+        }
+        setDriveFiles(result.files);
+        setDriveListReason(null);
         setDriveState('authed');
-      } catch {
+      } catch (e) {
+        setDriveListReason(classifyListFailure(e));
         setDriveState('error');
       }
     })();
@@ -347,7 +365,20 @@ export default function OpenProjectModal({ open, onClose, projects = [], activeP
             }}
             connectLabel="다시 연결"
           />
-        ) : driveState === 'error' ? <Empty style={{ color: 'var(--c-danger, #e53e3e)' }}>Drive 파일을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.</Empty>
+        ) : driveState === 'error' ? (
+          <div style={{ padding: '18px 0', textAlign: 'center' }}>
+            <p style={{ fontSize: 13, color: 'var(--c-danger, #e53e3e)', marginBottom: 4 }}>
+              {driveListMessage(driveListReason)}
+            </p>
+            <p style={{ fontSize: 12, color: 'var(--c-text5)', marginBottom: 14 }}>
+              목록을 못 불러온 것일 뿐, Drive의 백업은 그대로 있습니다.
+            </p>
+            <button
+              onClick={() => setDriveLoadKey(k => k + 1)}
+              style={{ padding: '6px 16px', borderRadius: 6, border: '1px solid var(--c-border3)', background: 'transparent', color: 'var(--c-text3)', fontSize: 13, cursor: 'pointer' }}
+            >다시 시도</button>
+          </div>
+        )
         : <>
             <DriveFileList items={filteredDrive} selected={driveSelected} onSelect={setDriveSelected} onOpen={handleDriveOpen} />
             {importError && <p style={{ fontSize: 12, color: 'var(--c-danger, #e53e3e)', textAlign: 'center', margin: '8px 0 0' }}>{importError}</p>}
