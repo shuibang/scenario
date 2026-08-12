@@ -5,6 +5,7 @@
  */
 
 import { computeSnapshotMeta } from '../utils/snapshotMeta';
+import { classifyListFailure, LIST_UNAUTHED } from '../utils/driveListResult';
 import { saveSnapshotToIDB, loadSnapshotsList, loadSnapshotRecord, deleteSnapshotFromIDB } from './db';
 
 const DRIVE_API  = 'https://www.googleapis.com/drive/v3';
@@ -544,19 +545,26 @@ export async function listDriveBackups(safeProjectName) {
   }
 }
 
-/** 전체 백업 폴더의 .djs 파일 목록 (OpenProjectModal Drive 탭용) */
+/**
+ * 전체 백업 폴더의 .djs 파일 목록 (OpenProjectModal Drive 탭용).
+ *
+ * 반환: { ok: true, files } | { ok: false, files: [], reason, error }
+ * 실패를 빈 배열로 삼키면 "저장된 파일이 없어요"로 표시되어 사용자가 백업 소실로
+ * 오해한다. "실제로 0건"과 "조회 실패"를 반드시 구분해서 돌려준다.
+ */
 export async function listAllBackupFiles() {
-  if (!isTokenValid()) return [];
+  if (!isTokenValid()) return { ok: false, files: [], reason: LIST_UNAUTHED };
   try {
     const rootId = await findBackupFolder();
-    if (!rootId) return [];
-    return await withAuthRetry(async () => {
+    // 백업 폴더 자체가 없으면 아직 한 번도 백업하지 않은 것 — 정상적인 0건이다.
+    if (!rootId) return { ok: true, files: [] };
+    const files = await withAuthRetry(async () => {
       // 프로젝트 서브폴더 목록 조회
       const foldersRes = await fetch(
         `${DRIVE_API}/files?q=${encodeURIComponent(`'${rootId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`)}&fields=files(id,name)&pageSize=50`,
         { headers: { Authorization: `Bearer ${_accessToken}` } },
       );
-      if (!foldersRes.ok) return [];
+      if (!foldersRes.ok) await throwDriveError(foldersRes, 'Drive 백업 폴더 목록 조회 실패');
       const { files: folders = [] } = await foldersRes.json();
 
       // 각 폴더에서 .djs 파일 병렬 조회
@@ -566,15 +574,17 @@ export async function listAllBackupFiles() {
           `${DRIVE_API}/files?q=${fq}&fields=files(id,name,createdTime)&orderBy=createdTime desc&pageSize=20`,
           { headers: { Authorization: `Bearer ${_accessToken}` } },
         );
-        if (!res.ok) return [];
+        // 일부 폴더만 조용히 빠지면 그것도 "백업이 줄었다"는 오해를 만든다 — 전체 실패로 알린다.
+        if (!res.ok) await throwDriveError(res, 'Drive 백업 파일 목록 조회 실패');
         const { files = [] } = await res.json();
         return files.map(f => ({ id: f.id, name: f.name, savedAt: f.createdTime, projectFolder: folder.name }));
       }));
 
       return results.flat().sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt));
     });
-  } catch {
-    return [];
+    return { ok: true, files };
+  } catch (e) {
+    return { ok: false, files: [], reason: classifyListFailure(e), error: e?.message || String(e) };
   }
 }
 
