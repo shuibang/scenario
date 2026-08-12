@@ -8,7 +8,7 @@ import {
   autoPositions, clampPos, isValidPos, mergePositions, nameAnchorOffsetY, nodeHeight, samePositions,
 } from '../utils/relationshipLayout';
 import { ARROW_LEN, LABEL_H, buildNodeGeom, edgeGeometry, pairSideOffset } from '../utils/relationshipEdges';
-import { buildRelationshipPrintHtml, printHtmlInIframe } from '../print/relationshipPrintHtml';
+import { buildRelationshipPrintHtml, normalizeOrientation, printHtmlInIframe } from '../print/relationshipPrintHtml';
 
 // ─── EdgeArrow ─────────────────────────────────────────────────────────────────
 // 좌표 계산은 relationshipEdges.js 하나에서만 한다 — 인쇄본이 화면과 같아야 하므로.
@@ -475,6 +475,15 @@ export default function RelationshipsPage() {
   // 화면에 보이는 좌표(positions)를 그대로 쓴다 — 재배치하지 않는다.
   const [printing, setPrinting] = useState(false);
   const [printError, setPrintError] = useState('');
+  // 용지 방향은 작품별로 기억한다. 필드가 없는 기존 작품은 기본 가로로 폴백.
+  const activeProject = state.projects?.find(p => p.id === activeProjectId);
+  const orientation = normalizeOrientation(activeProject?.relPrintOrientation);
+  const setOrientation = (next) => {
+    setPrintError('');
+    if (next === orientation) return;
+    dispatch({ type: 'UPDATE_PROJECT', payload: { id: activeProjectId, relPrintOrientation: next } });
+  };
+
   const handlePrint = async () => {
     setPrintError('');
     const width = containerRef.current?.offsetWidth || containerW;
@@ -494,12 +503,13 @@ export default function RelationshipsPage() {
       setPrintError('인쇄할 인물이 없습니다.');
       return;
     }
-    const projectTitle = state.projects?.find(p => p.id === activeProjectId)?.title;
+    const projectTitle = activeProject?.title;
     const html = buildRelationshipPrintHtml({
       title: projectTitle ? `${projectTitle} — 인물관계도` : '인물관계도',
       width,
       nodes,
       edges: allEdges,
+      orientation,
     });
     setPrinting(true);
     try {
@@ -642,6 +652,19 @@ export default function RelationshipsPage() {
             >← 돌아가기</button>
             <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               {printError && <span style={{ fontSize: 11, color: '#f87171' }}>{printError}</span>}
+              <span style={{ display: 'inline-flex', border: '1px solid var(--c-border3)', borderRadius: 6, overflow: 'hidden' }}>
+                {[['landscape', '가로'], ['portrait', '세로']].map(([val, label]) => (
+                  <button
+                    key={val}
+                    onClick={() => setOrientation(val)}
+                    style={{
+                      fontSize: 11, padding: '3px 10px', border: 'none', cursor: 'pointer',
+                      background: orientation === val ? 'var(--c-accent)' : 'transparent',
+                      color: orientation === val ? '#fff' : 'var(--c-text4)',
+                    }}
+                  >{label}</button>
+                ))}
+              </span>
               <button
                 onClick={handlePrint}
                 disabled={printing}
