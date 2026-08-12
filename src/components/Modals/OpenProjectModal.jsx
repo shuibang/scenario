@@ -1,12 +1,19 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Modal, { ModalBtn } from './Modal';
 import { listAllBackupFiles, loadDriveBackupData, setAccessToken, isTokenValid } from '../../store/googleDrive';
 import { supabase, refreshDriveToken, signInWithGoogle } from '../../store/supabaseClient';
 import { isDropboxTokenValid, connectDropbox, listDropboxBackupFiles, loadDropboxBackupData } from '../../store/dropbox';
 import { isMultiEpisode, getTypeLabel } from '../../utils/projectTypes';
 import { deserializeProject } from '../../utils/projectSerializer';
+import { openFilePicker } from '../../utils/filePick';
 import { reportError } from '../../utils/errorTracker';
 import { classifyListFailure, driveListMessage, shouldReportListFailure } from '../../utils/driveListResult';
+import {
+  GOOGLE_UNKNOWN,
+  classifyGoogleSession,
+  shouldShowDriveRetry,
+  shouldShowDriveTab,
+} from '../../utils/googleSessionState';
 import { KakaoAdBanner } from '../AdBanner';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import {
@@ -23,13 +30,20 @@ const TAB_DROPBOX = 'dropbox';
 const TAB_LOCAL   = 'local';
 const TAB_FILE    = 'file';
 
-/** Google 로그인(구글 계정) 여부 — provider_token 만료여도 세션이 있으면 true */
-async function isGoogleUser() {
+const SESSION_TIMEOUT_MS = 5000;
+
+/**
+ * 세션 조회 결과를 { session } | { failed } 형태로 돌려준다.
+ * "구글 사용자 아님"과 "판정 실패"를 호출부에서 구분할 수 있어야 하므로 boolean으로 접지 않는다.
+ */
+async function fetchGoogleSession() {
+  if (!supabase) return { session: null }; // 미설정 = 구글 사용자 아님 (실패가 아니다)
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    return !!(session?.user?.app_metadata?.provider === 'google' || session?.provider_token);
+    const { data, error } = await supabase.auth.getSession();
+    if (error) return { failed: true };
+    return { session: data?.session ?? null };
   } catch {
-    return false;
+    return { failed: true };
   }
 }
 
@@ -73,6 +87,54 @@ export default function OpenProjectModal({ open, onClose, projects = [], activeP
 
   const [importError, setImportError] = useState(null);
 
+  // 파일 선택 다이얼로그 정리 함수 — 언마운트 시 input이 DOM에 남지 않도록
+  const filePickCleanupRef = useRef(null);
+  useEffect(() => () => { filePickCleanupRef.current?.(); }, []);
+
+  // Google 세션 판정: 구글 사용자 / 아님 / 판정 실패(재시도 UI)
+  const [googleState, setGoogleState] = useState(GOOGLE_UNKNOWN);
+  const [googleChecking, setGoogleChecking] = useState(false);
+  const aliveRef = useRef(true);
+  useEffect(() => () => { aliveRef.current = false; }, []);
+
+  // 판정 결과를 탭 목록에 반영. 보고 있던 탭이 그대로 있으면 유지한다.
+  const applyGoogleState = useCallback((state) => {
+    setGoogleState(state);
+    const newTabs = [TAB_LOCAL];
+    if (shouldShowDriveTab(state)) newTabs.push(TAB_DRIVE);
+    if (hasDropboxHistory())       newTabs.push(TAB_DROPBOX);
+    newTabs.push(TAB_FILE);
+    setTabs(newTabs);
+    setTab(prev => (prev && newTabs.includes(prev) ? prev : newTabs[0]));
+  }, []);
+
+  // 세션 조회는 응답하지 않는 경우가 있다. 타임아웃을 두어 모달이 "불러오는 중…"에서
+  // 멈추지 않게 하되, 그 결과를 "구글 사용자 아님"으로 접지 않고 '판정 실패'로 남긴다.
+  const decideTabs = useCallback(async () => {
+    setGoogleChecking(true);
+    const sessionPromise = fetchGoogleSession();
+    const outcome = await Promise.race([
+      sessionPromise,
+      new Promise(resolve => setTimeout(() => resolve({ timedOut: true }), SESSION_TIMEOUT_MS)),
+    ]);
+    if (!aliveRef.current) return;
+    applyGoogleState(classifyGoogleSession(outcome));
+    setGoogleChecking(false);
+
+    if (outcome.timedOut || outcome.failed) {
+      reportError({
+        source: 'OpenProjectModal.decideTabs',
+        message: `Google 세션 판정 실패 (${outcome.timedOut ? 'timeout' : 'error'})`,
+      })?.catch?.(() => {});
+      // 늦게라도 응답이 오면 그때 탭을 갱신한다 — 사용자가 재시도를 누르지 않아도 복구된다.
+      if (outcome.timedOut) {
+        sessionPromise
+          .then(late => { if (aliveRef.current) applyGoogleState(classifyGoogleSession(late)); })
+          .catch(() => {});
+      }
+    }
+  }, [applyGoogleState]);
+
   // 모달 열릴 때마다 탭 목록 결정 + 상태 초기화
   useEffect(() => {
     if (!open) return;
@@ -84,16 +146,8 @@ export default function OpenProjectModal({ open, onClose, projects = [], activeP
     setLocalFsState('idle'); setLocalFsFiles([]); setLocalFsSelected(null);
     localFsDirRef.current = null;
 
-    (async () => {
-      const [googleUser, dropboxHistory] = await Promise.all([isGoogleUser(), Promise.resolve(hasDropboxHistory())]);
-      const newTabs = [TAB_LOCAL];
-      if (googleUser)     newTabs.push(TAB_DRIVE);
-      if (dropboxHistory) newTabs.push(TAB_DROPBOX);
-      newTabs.push(TAB_FILE);
-      setTabs(newTabs);
-      setTab(newTabs[0]);
-    })();
-  }, [open]);
+    decideTabs();
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 내 컴퓨터 탭 진입 시 폴더 핸들 확인 + 파일 목록 로드
   useEffect(() => {
@@ -266,27 +320,32 @@ export default function OpenProjectModal({ open, onClose, projects = [], activeP
   };
 
   // 파일에서 열기
+  // input을 DOM에 부착한 뒤 click한다 — detached input은 첫 호출의 change가 유실돼
+  // 다이얼로그만 뜨고 아무 일도 일어나지 않는 무음 실패가 났다(iPad Safari 재현).
   const handleFileOpen = () => {
     setImportError(null);
-    const input = document.createElement('input');
-    input.type = 'file'; input.accept = '.djs,.json';
-    input.onchange = (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        let imported;
-        try { imported = deserializeProject(JSON.parse(ev.target.result)); }
-        catch (err) {
-          setImportError(err?.name === 'ZodError' ? '올바른 .djs 파일이 아닙니다.' : '파일을 읽을 수 없습니다.');
-          return;
-        }
-        onFileImport?.(imported, 'replace'); onClose();
-      };
-      reader.onerror = () => setImportError('파일을 읽을 수 없습니다.');
-      reader.readAsText(file);
-    };
-    input.click();
+    filePickCleanupRef.current = openFilePicker({
+      accept: '.djs,.json',
+      onFile: (file) => {
+        // 유실 의심 안내를 먼저 띄웠더라도, 뒤늦게 파일이 오면 지운다
+        setImportError(null);
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          let imported;
+          try { imported = deserializeProject(JSON.parse(ev.target.result)); }
+          catch (err) {
+            setImportError(err?.name === 'ZodError' ? '올바른 .djs 파일이 아닙니다.' : '파일을 읽을 수 없습니다.');
+            return;
+          }
+          onFileImport?.(imported, 'replace'); onClose();
+        };
+        reader.onerror = () => setImportError('파일을 읽을 수 없습니다.');
+        reader.readAsText(file);
+      },
+      // 취소는 정상 흐름 — 조용히 끝낸다
+      onCancel: () => {},
+      onLost: () => setImportError('파일 선택 결과가 전달되지 않았습니다. 다시 시도해 주세요.'),
+    });
   };
 
   const filteredLocal = [...projects].reverse()
@@ -336,6 +395,26 @@ export default function OpenProjectModal({ open, onClose, projects = [], activeP
             }}
           >{TAB_LABELS[t]}</button>
         ))}
+        {/* 판정 실패 — Drive 탭 자리에 재시도 경로를 둔다. 조용히 사라지지 않게. */}
+        {shouldShowDriveRetry(googleState) && (
+          <button
+            onClick={() => { if (!googleChecking) decideTabs(); }}
+            disabled={googleChecking}
+            title="Google 연결 상태를 확인하지 못했습니다. 눌러서 다시 확인하세요."
+            style={{
+              padding: '6px 14px', fontSize: 13, fontWeight: 400,
+              color: 'var(--c-text5)', background: 'transparent', border: 'none',
+              borderBottom: '2px solid transparent', marginBottom: -1,
+              cursor: googleChecking ? 'default' : 'pointer', borderRadius: 0,
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+            }}
+          >
+            <span style={{ opacity: 0.7 }}>Google Drive</span>
+            <span style={{ fontSize: 11, color: 'var(--c-accent)' }}>
+              {googleChecking ? '확인 중…' : '· 확인 실패, 다시 시도'}
+            </span>
+          </button>
+        )}
       </div>
 
       {/* 검색 (파일 탭 제외) */}
