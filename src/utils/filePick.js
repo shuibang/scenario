@@ -34,12 +34,18 @@ export function classifyFilePick({ changeFired = false, cancelFired = false, has
  *
  * @returns {() => void} 정리 함수 — 언마운트 시 호출하면 input과 리스너를 제거한다.
  */
+// 포커스가 돌아온 뒤 이만큼 아무 이벤트도 없으면 "유실 의심"으로 알린다.
+// 짧게 잡으면 오탐이 난다 — 태블릿에서 다이얼로그를 열어둔 채 다른 앱에 갔다 오는 것은
+// 흔한 동작이고, 그때 포커스만 돌아온다. 오탐은 사용자가 고른 파일을 버리므로
+// 미탐보다 훨씬 나쁘다. 넉넉히 잡고, 알린 뒤에도 picker는 계속 살려둔다.
+const LOST_NOTICE_MS = 10_000;
+
 export function openFilePicker({
   accept = '',
   onFile,
   onCancel,
   onLost,
-  settleDelayMs = 1200,
+  lostNoticeMs = LOST_NOTICE_MS,
 } = {}) {
   const input = document.createElement('input');
   input.type = 'file';
@@ -52,30 +58,27 @@ export function openFilePicker({
 
   let changeFired = false;
   let cancelFired = false;
-  let settled = false;
-  let settleTimer = null;
+  let settled = false;      // 종료 콜백(onFile/onCancel)이 나갔는가
+  let lostNotified = false; // 유실 의심을 이미 알렸는가
+  let lostTimer = null;
 
   const cleanup = () => {
-    clearTimeout(settleTimer);
+    clearTimeout(lostTimer);
     input.removeEventListener('change', onChange);
     input.removeEventListener('cancel', onCancelEvent);
     window.removeEventListener('focus', onWindowFocus);
     if (input.parentNode) input.parentNode.removeChild(input);
   };
 
+  // 종료는 change/cancel 이벤트로만 한다. 어떤 경로로 끝나든 cleanup을 먼저 돌려
+  // input이 DOM에 남지 않게 하고, 콜백은 정확히 한 번만 호출한다.
   const settle = (file) => {
     if (settled) return;
     settled = true;
     const result = classifyFilePick({ changeFired, cancelFired, hasFile: !!file });
     cleanup();
-    if (result === PICK_SELECTED) { onFile?.(file); return; }
-    if (result === PICK_CANCELED) { onCancel?.(); return; } // 취소는 정상 — 보고하지 않는다
-    // 유실: 다이얼로그는 닫혔는데 change/cancel이 오지 않았다
-    reportError({
-      source: 'filePick.openFilePicker',
-      message: `파일 선택 이벤트 유실 (accept=${accept || '*'})`,
-    })?.catch?.(() => {});
-    onLost?.();
+    if (result === PICK_SELECTED) onFile?.(file);
+    else onCancel?.(); // 취소는 정상 흐름 — 오류로 보고하지 않는다
   };
 
   function onChange(e) {
@@ -83,16 +86,27 @@ export function openFilePicker({
     settle(e.target.files?.[0] || null);
   }
 
-  // cancel 이벤트 미지원 브라우저를 위해 focus 복귀 + 유예시간으로도 판정한다.
   function onCancelEvent() {
     cancelFired = true;
     settle(null);
   }
 
+  // 포커스가 돌아왔는데 한참 아무 이벤트도 없으면 "유실 의심"을 알린다.
+  // 다만 picker를 닫지는 않는다 — 사용자가 다이얼로그를 열어둔 채 앱을 오갔을 뿐일 수
+  // 있고, 그때 정리해버리면 뒤늦게 고른 파일이 통째로 버려진다(오탐 비용이 크다).
   function onWindowFocus() {
-    // 다이얼로그가 닫혀 포커스가 돌아왔다. change/cancel이 조금 늦게 오는 경우가 있어 유예를 둔다.
-    clearTimeout(settleTimer);
-    settleTimer = setTimeout(() => settle(null), settleDelayMs);
+    if (settled || lostNotified) return;
+    clearTimeout(lostTimer);
+    lostTimer = setTimeout(() => {
+      if (settled || lostNotified) return;
+      lostNotified = true;
+      reportError({
+        source: 'filePick.openFilePicker',
+        message: `파일 선택 이벤트 유실 의심 (accept=${accept || '*'})`,
+      })?.catch?.(() => {});
+      onLost?.();
+      // picker는 계속 살려둔다 — 늦게 change가 오면 그때 정상 처리된다.
+    }, lostNoticeMs);
   }
 
   input.addEventListener('change', onChange);

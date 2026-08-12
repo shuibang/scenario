@@ -87,7 +87,14 @@ export default function OpenProjectModal({ open, onClose, projects = [], activeP
     localFsDirRef.current = null;
 
     (async () => {
-      const [googleUser, dropboxHistory] = await Promise.all([isGoogleUser(), Promise.resolve(hasDropboxHistory())]);
+      // isGoogleUser()는 supabase.auth.getSession()을 기다린다. 이게 응답하지 않으면
+      // tabs가 null로 남아 모달이 "불러오는 중…"에서 영원히 멈춘다(:309).
+      // 타임아웃을 두고, 늦으면 Drive 탭 없이 먼저 사용 가능한 상태로 연다.
+      const googleUser = await Promise.race([
+        isGoogleUser(),
+        new Promise(resolve => setTimeout(() => resolve(false), 5000)),
+      ]);
+      const dropboxHistory = hasDropboxHistory();
       const newTabs = [TAB_LOCAL];
       if (googleUser)     newTabs.push(TAB_DRIVE);
       if (dropboxHistory) newTabs.push(TAB_DROPBOX);
@@ -260,6 +267,8 @@ export default function OpenProjectModal({ open, onClose, projects = [], activeP
     filePickCleanupRef.current = openFilePicker({
       accept: '.djs,.json',
       onFile: (file) => {
+        // 유실 의심 안내를 먼저 띄웠더라도, 뒤늦게 파일이 오면 지운다
+        setImportError(null);
         const reader = new FileReader();
         reader.onload = (ev) => {
           let imported;
