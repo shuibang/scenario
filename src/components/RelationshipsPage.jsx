@@ -7,73 +7,31 @@ import {
   NODE_W, CANVAS_H, PHOTO_W, PHOTO_H,
   autoPositions, clampPos, isValidPos, mergePositions, nameAnchorOffsetY, nodeHeight, samePositions,
 } from '../utils/relationshipLayout';
-
-const ARROW_LEN = 10; // arrowhead length offset
-
-// ─── Rectangle border intersection ────────────────────────────────────────────
-// node = { x, y(이름 블록 중심 = 앵커), top, bottom(카드 테두리) }.
-// 선은 이름 블록을 향해 계산하고, 끝점은 카드 테두리에서 끊는다 —
-// 이름 블록에서 바로 끊으면 화살촉이 카드 배경에 가려 보이지 않는다.
-// 사진 없는 카드는 이름이 세로 중앙이라 top/bottom이 대칭 → 변경 전 계산과 동일하다.
-function rectEdge(node, nx, ny) {
-  const HW = NODE_W / 2;
-  const absDx = Math.abs(nx);
-  const absDy = Math.abs(ny);
-  const vExtent = ny > 0 ? node.bottom - node.y : node.y - node.top;
-  const t = Math.min(
-    absDx > 0.001 ? HW / absDx : Infinity,
-    absDy > 0.001 ? vExtent / absDy : Infinity,
-  );
-  return { x: node.x + nx * t, y: node.y + ny * t };
-}
+import { ARROW_LEN, LABEL_H, buildNodeGeom, edgeGeometry, pairSideOffset } from '../utils/relationshipEdges';
+import { buildRelationshipPrintHtml, printHtmlInIframe } from '../print/relationshipPrintHtml';
 
 // ─── EdgeArrow ─────────────────────────────────────────────────────────────────
+// 좌표 계산은 relationshipEdges.js 하나에서만 한다 — 인쇄본이 화면과 같아야 하므로.
 function EdgeArrow({ from, to, label, sideOffset = 0 }) {
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  const dist = Math.sqrt(dx * dx + dy * dy);
-  if (dist < 2) return null;
-  const nx = dx / dist;
-  const ny = dy / dist;
-
-  // Perpendicular unit vector (rotate 90°)
-  const perpX = -ny * sideOffset;
-  const perpY =  nx * sideOffset;
-
-  const p1raw = rectEdge(from, nx, ny);
-  const p2raw = rectEdge(to, -nx, -ny);
-
-  const p1 = { x: p1raw.x + perpX, y: p1raw.y + perpY };
-  const x2  = p2raw.x - nx * ARROW_LEN + perpX;
-  const y2  = p2raw.y - ny * ARROW_LEN + perpY;
-
-  // Skip if line would be too short
-  const lineDist = Math.sqrt((x2 - p1.x) ** 2 + (y2 - p1.y) ** 2);
-  if (lineDist < 4) return null;
-
-  const mx = (p1.x + x2) / 2;
-  const my = (p1.y + y2) / 2;
-  // Label offset: perpendicular to line, opposite side from sideOffset
-  const lx = -ny * (sideOffset !== 0 ? Math.sign(sideOffset) * 12 : 12);
-  const ly =  nx * (sideOffset !== 0 ? Math.sign(sideOffset) * 12 : 12);
-  const lw = label ? Math.max(label.length * 6 + 10, 24) : 0;
+  const g = edgeGeometry(from, to, label || '', sideOffset);
+  if (!g) return null;
 
   return (
     <g>
       <line
-        x1={p1.x} y1={p1.y} x2={x2} y2={y2}
+        x1={g.p1.x} y1={g.p1.y} x2={g.p2.x} y2={g.p2.y}
         stroke="var(--c-accent)" strokeWidth="1.5" opacity="0.55"
         markerEnd="url(#rel-arrowhead)"
       />
       {label && (
         <>
           <rect
-            x={mx + lx - lw / 2} y={my + ly - 8}
-            width={lw} height={14} rx="3"
+            x={g.label.x - g.label.w / 2} y={g.label.y - 8}
+            width={g.label.w} height={LABEL_H} rx="3"
             fill="var(--c-input)" opacity="0.9"
           />
           <text
-            x={mx + lx} y={my + ly + 2}
+            x={g.label.x} y={g.label.y + 2}
             textAnchor="middle"
             fontSize="10" fill="var(--c-text4)"
             style={{ userSelect: 'none', pointerEvents: 'none' }}
@@ -207,28 +165,29 @@ function GraphCanvas({ chars, edges, positions, containerRef, onDragStart, print
           </marker>
         </defs>
         {(() => {
-          const pairSet = new Set(edges.map(e => `${e.fromId}→${e.toId}`));
           // 노드별 기하: 앵커는 이름 블록 중심, 끝점 계산용 상/하단은 카드 테두리.
-          const geom = {};
-          chars.forEach(c => {
-            const p = positions[c.id];
-            if (!p) return;
-            const h = nodeHeight(c);
-            geom[c.id] = {
-              x: p.x,
-              y: p.y + nameAnchorOffsetY(c),
-              top: p.y - h / 2,
-              bottom: p.y + h / 2,
-            };
-          });
+          const geom = buildNodeGeom(
+            chars
+              .filter(c => positions[c.id])
+              .map(c => ({
+                id: c.id,
+                x: positions[c.id].x,
+                y: positions[c.id].y,
+                h: nodeHeight(c),
+                anchorOffsetY: nameAnchorOffsetY(c),
+              })),
+          );
           return edges.map(edge => {
             const from = geom[edge.fromId];
             const to   = geom[edge.toId];
             if (!from || !to) return null;
-            const hasPair = pairSet.has(`${edge.toId}→${edge.fromId}`);
-            // 쌍방이면 각각 +8 / -8px 옆으로 분리
-            const sideOffset = hasPair ? 8 : 0;
-            return <EdgeArrow key={edge.id} from={from} to={to} label={edge.label} sideOffset={sideOffset} />;
+            return (
+              <EdgeArrow
+                key={edge.id}
+                from={from} to={to} label={edge.label}
+                sideOffset={pairSideOffset(edges, edge)}
+              />
+            );
           });
         })()}
       </svg>
@@ -512,6 +471,47 @@ export default function RelationshipsPage() {
     });
   };
 
+  // 인쇄 — 앱 셸이 아니라 관계도만 담은 독립 문서를 만들어 hidden iframe에서 인쇄한다.
+  // 화면에 보이는 좌표(positions)를 그대로 쓴다 — 재배치하지 않는다.
+  const [printing, setPrinting] = useState(false);
+  const [printError, setPrintError] = useState('');
+  const handlePrint = async () => {
+    setPrintError('');
+    const width = containerRef.current?.offsetWidth || containerW;
+    const nodes = projectChars
+      .filter(c => positions[c.id])
+      .map(c => ({
+        id: c.id,
+        x: positions[c.id].x,
+        y: positions[c.id].y,
+        h: nodeHeight(c),
+        anchorOffsetY: nameAnchorOffsetY(c),
+        name: charDisplayName(c),
+        photoDataUrl: hasPhoto(c) ? c.photo.dataUrl : null,
+        roles: getCharRoles(c).map(r => ({ label: getRoleLabel(r), color: getRoleColor(r) })),
+      }));
+    if (nodes.length === 0) {
+      setPrintError('인쇄할 인물이 없습니다.');
+      return;
+    }
+    const projectTitle = state.projects?.find(p => p.id === activeProjectId)?.title;
+    const html = buildRelationshipPrintHtml({
+      title: projectTitle ? `${projectTitle} — 인물관계도` : '인물관계도',
+      width,
+      nodes,
+      edges: allEdges,
+    });
+    setPrinting(true);
+    try {
+      await printHtmlInIframe(html);
+    } catch (e) {
+      console.error('[RelationshipsPage] 인쇄 실패:', e);
+      setPrintError('인쇄를 시작하지 못했습니다. 브라우저 인쇄 권한을 확인해 주세요.');
+    } finally {
+      setPrinting(false);
+    }
+  };
+
   // CRUD helpers
   const addRel = (fromId, toId, label = '') => {
     const c = projectChars.find(x => x.id === fromId);
@@ -574,7 +574,7 @@ export default function RelationshipsPage() {
             {helpOpen && (
               <div style={{ position: 'absolute', top: '24px', left: 0, zIndex: 200, background: 'var(--c-card)', border: '1px solid var(--c-border)', borderRadius: 8, padding: '10px 14px', width: 240, boxShadow: '0 4px 16px rgba(0,0,0,0.18)' }}>
                 <div className="text-xs font-semibold mb-2" style={{ color: 'var(--c-text3)' }}>인물관계도 안내</div>
-                {['편집 탭에서 인물 간 관계를 추가하세요.', '그래프 탭에서 노드를 드래그해 배치를 조정할 수 있습니다.', '인쇄 탭에서 관계도를 PDF로 저장할 수 있습니다.'].map((t, i) => (
+                {['편집 탭에서 인물 간 관계를 추가하세요.', '그래프 탭에서 노드를 드래그해 배치를 조정할 수 있습니다.', '인쇄 미리보기에서 인쇄하거나 PDF로 저장할 수 있습니다.'].map((t, i) => (
                   <div key={i} className="text-[11px] leading-relaxed" style={{ color: 'var(--c-text5)' }}>· {t}</div>
                 ))}
               </div>
@@ -640,10 +640,14 @@ export default function RelationshipsPage() {
               onClick={() => setView('graph')}
               style={{ fontSize: '12px', color: 'var(--c-text4)', background: 'none', border: 'none', cursor: 'pointer' }}
             >← 돌아가기</button>
-            <button
-              onClick={() => window.print()}
-              style={{ fontSize: '12px', background: 'var(--c-accent)', color: '#fff', border: 'none', borderRadius: '6px', padding: '4px 14px', cursor: 'pointer' }}
-            >인쇄</button>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {printError && <span style={{ fontSize: 11, color: '#f87171' }}>{printError}</span>}
+              <button
+                onClick={handlePrint}
+                disabled={printing}
+                style={{ fontSize: '12px', background: 'var(--c-accent)', color: '#fff', border: 'none', borderRadius: '6px', padding: '4px 14px', cursor: printing ? 'default' : 'pointer', opacity: printing ? 0.6 : 1 }}
+              >{printing ? '인쇄 준비 중…' : '인쇄'}</button>
+            </span>
           </div>
           <div style={{ padding: '24px' }}>
             <GraphCanvas
