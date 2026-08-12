@@ -5,6 +5,7 @@ import { supabase, refreshDriveToken, signInWithGoogle } from '../../store/supab
 import { isDropboxTokenValid, connectDropbox, listDropboxBackupFiles, loadDropboxBackupData } from '../../store/dropbox';
 import { isMultiEpisode, getTypeLabel } from '../../utils/projectTypes';
 import { deserializeProject } from '../../utils/projectSerializer';
+import { openFilePicker } from '../../utils/filePick';
 import { KakaoAdBanner } from '../AdBanner';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import {
@@ -69,6 +70,10 @@ export default function OpenProjectModal({ open, onClose, projects = [], activeP
   const localFsDirRef = useRef(null); // 현재 로드된 dirHandle
 
   const [importError, setImportError] = useState(null);
+
+  // 파일 선택 다이얼로그 정리 함수 — 언마운트 시 input이 DOM에 남지 않도록
+  const filePickCleanupRef = useRef(null);
+  useEffect(() => () => { filePickCleanupRef.current?.(); }, []);
 
   // 모달 열릴 때마다 탭 목록 결정 + 상태 초기화
   useEffect(() => {
@@ -248,27 +253,30 @@ export default function OpenProjectModal({ open, onClose, projects = [], activeP
   };
 
   // 파일에서 열기
+  // input을 DOM에 부착한 뒤 click한다 — detached input은 첫 호출의 change가 유실돼
+  // 다이얼로그만 뜨고 아무 일도 일어나지 않는 무음 실패가 났다(iPad Safari 재현).
   const handleFileOpen = () => {
     setImportError(null);
-    const input = document.createElement('input');
-    input.type = 'file'; input.accept = '.djs,.json';
-    input.onchange = (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        let imported;
-        try { imported = deserializeProject(JSON.parse(ev.target.result)); }
-        catch (err) {
-          setImportError(err?.name === 'ZodError' ? '올바른 .djs 파일이 아닙니다.' : '파일을 읽을 수 없습니다.');
-          return;
-        }
-        onFileImport?.(imported, 'replace'); onClose();
-      };
-      reader.onerror = () => setImportError('파일을 읽을 수 없습니다.');
-      reader.readAsText(file);
-    };
-    input.click();
+    filePickCleanupRef.current = openFilePicker({
+      accept: '.djs,.json',
+      onFile: (file) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          let imported;
+          try { imported = deserializeProject(JSON.parse(ev.target.result)); }
+          catch (err) {
+            setImportError(err?.name === 'ZodError' ? '올바른 .djs 파일이 아닙니다.' : '파일을 읽을 수 없습니다.');
+            return;
+          }
+          onFileImport?.(imported, 'replace'); onClose();
+        };
+        reader.onerror = () => setImportError('파일을 읽을 수 없습니다.');
+        reader.readAsText(file);
+      },
+      // 취소는 정상 흐름 — 조용히 끝낸다
+      onCancel: () => {},
+      onLost: () => setImportError('파일 선택 결과가 전달되지 않았습니다. 다시 시도해 주세요.'),
+    });
   };
 
   const filteredLocal = [...projects].reverse()
