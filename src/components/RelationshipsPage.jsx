@@ -505,7 +505,7 @@ export default function RelationshipsPage() {
     }
     const projectTitle = activeProject?.title;
     const html = buildRelationshipPrintHtml({
-      title: projectTitle ? `${projectTitle} — 인물관계도` : '인물관계도',
+      title: projectTitle ? `${projectTitle} 인물관계도` : '인물관계도',
       width,
       nodes,
       edges: allEdges,
@@ -645,32 +645,51 @@ export default function RelationshipsPage() {
       {/* Print view */}
       {isPrint && (
         <div>
-          <div className="no-print" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 24px', borderBottom: '1px solid var(--c-border)' }}>
-            <button
-              onClick={() => setView('graph')}
-              style={{ fontSize: '12px', color: 'var(--c-text4)', background: 'none', border: 'none', cursor: 'pointer' }}
-            >← 돌아가기</button>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              {printError && <span style={{ fontSize: 11, color: '#f87171' }}>{printError}</span>}
-              <span style={{ display: 'inline-flex', border: '1px solid var(--c-border3)', borderRadius: 6, overflow: 'hidden' }}>
-                {[['landscape', '가로'], ['portrait', '세로']].map(([val, label]) => (
-                  <button
-                    key={val}
-                    onClick={() => setOrientation(val)}
-                    style={{
-                      fontSize: 11, padding: '3px 10px', border: 'none', cursor: 'pointer',
-                      background: orientation === val ? 'var(--c-accent)' : 'transparent',
-                      color: orientation === val ? '#fff' : 'var(--c-text4)',
-                    }}
-                  >{label}</button>
-                ))}
-              </span>
+          <div className="no-print" style={{ padding: '8px 24px', borderBottom: '1px solid var(--c-border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <button
-                onClick={handlePrint}
-                disabled={printing}
-                style={{ fontSize: '12px', background: 'var(--c-accent)', color: '#fff', border: 'none', borderRadius: '6px', padding: '4px 14px', cursor: printing ? 'default' : 'pointer', opacity: printing ? 0.6 : 1 }}
-              >{printing ? '인쇄 준비 중…' : '인쇄'}</button>
-            </span>
+                onClick={() => setView('graph')}
+                style={{ fontSize: '12px', color: 'var(--c-text4)', background: 'none', border: 'none', cursor: 'pointer' }}
+              >← 돌아가기</button>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ display: 'inline-flex', border: '1px solid var(--c-border3)', borderRadius: 6, overflow: 'hidden' }}>
+                  {[['landscape', '가로'], ['portrait', '세로']].map(([val, label]) => (
+                    <button
+                      key={val}
+                      onClick={() => setOrientation(val)}
+                      style={{
+                        fontSize: 11, padding: '3px 10px', border: 'none', cursor: 'pointer',
+                        background: orientation === val ? 'var(--c-accent)' : 'transparent',
+                        color: orientation === val ? '#fff' : 'var(--c-text4)',
+                      }}
+                    >{label}</button>
+                  ))}
+                </span>
+                <button
+                  onClick={handlePrint}
+                  disabled={printing}
+                  style={{ fontSize: '12px', background: 'var(--c-accent)', color: '#fff', border: 'none', borderRadius: '6px', padding: '4px 14px', cursor: printing ? 'default' : 'pointer', opacity: printing ? 0.6 : 1 }}
+                >{printing ? '인쇄 준비 중…' : '인쇄'}</button>
+              </span>
+            </div>
+
+            {/* 방향 안내 — 사파리 등은 CSS로 용지 방향을 지정할 수 없어 인쇄 창에서 직접 골라야 한다.
+                브라우저 감지는 하지 않는다(UA 감지는 취약하고, 안내가 있어도 해롭지 않다). */}
+            <div style={{ fontSize: 11, color: 'var(--c-text5)', textAlign: 'right', marginTop: 4, lineHeight: 1.5 }}>
+              브라우저에 따라 인쇄 창에서 용지 방향을 직접 선택해야 할 수 있습니다.
+            </div>
+
+            {/* 인쇄 실패는 놓치면 안 되므로 안내와 다른 줄에, 더 크고 눈에 띄게 표시한다. */}
+            {printError && (
+              <div
+                role="alert"
+                style={{
+                  marginTop: 6, padding: '6px 10px', borderRadius: 6,
+                  border: '1px solid #f87171', background: 'rgba(248,113,113,0.12)',
+                  color: '#dc2626', fontSize: 13, fontWeight: 600, lineHeight: 1.5,
+                }}
+              >{printError}</div>
+            )}
           </div>
           <div style={{ padding: '24px' }}>
             <GraphCanvas
