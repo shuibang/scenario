@@ -4,16 +4,19 @@
  *
  * Run:
  *   node scripts/syncAnnouncements.js
+ *   node scripts/syncAnnouncements.js --dry-run   // DB 쓰기 없이 파싱 결과만 출력
  *
  * Env:
  *   SUPABASE_URL
  *   SUPABASE_SERVICE_ROLE_KEY
  *   SUPABASE_SERVICE_KEY        // legacy alias
+ *   (--dry-run 은 환경변수 없이도 실행된다)
  */
 import { createClient } from '@supabase/supabase-js';
 import { pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { readFileSync, writeFileSync } from 'node:fs';
+import { parseChangelogEntries, toNewsletterRows } from '../src/utils/changelogEntries.js';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const NOTICE_URL = 'https://daejak.kr/notice';
@@ -33,15 +36,17 @@ function loadEnv() {
 
 loadEnv();
 
+const DRY_RUN = process.argv.includes('--dry-run');
+
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
 
-if (!SUPABASE_URL || !SERVICE_KEY) {
+if (!DRY_RUN && (!SUPABASE_URL || !SERVICE_KEY)) {
   console.error('Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SERVICE_KEY).');
   process.exit(1);
 }
 
-const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
+const supabase = DRY_RUN ? null : createClient(SUPABASE_URL, SERVICE_KEY, {
   auth: { persistSession: false },
 });
 
@@ -56,32 +61,27 @@ const announcementRows = announcements.map(({ id, date, title, content, badge })
   badge: badge ?? null,
 }));
 
-function parseChangelogRows() {
-  const html = readFileSync(path.resolve(ROOT, 'public/changelog.html'), 'utf8');
-  const rows = [];
-  const re = /<!--\s*(v[\d~]+)[^\n]*\n\s*<div class="cl-entry[\s\S]*?<div class="cl-date">([\d-]+)<\/div>\s*<div class="cl-title">([\s\S]*?)<\/div>/g;
-  let match;
-
-  while ((match = re.exec(html)) !== null) {
-    const version = match[1].replace(/~/g, '-');
-    const date = match[2].trim();
-    const title = match[3].trim().replace(/\s+/g, ' ');
-    rows.push({
-      id: `cl-${version}`,
-      date,
-      title,
-      content: '',
-      badge: null,
-    });
-  }
-
-  return rows;
-}
-
-const changelogRows = parseChangelogRows();
-console.log(`changelog parsed: ${changelogRows.length}`);
+const changelogEntries = parseChangelogEntries(
+  readFileSync(path.resolve(ROOT, 'public/changelog.html'), 'utf8'),
+);
+const changelogRows = toNewsletterRows(changelogEntries);
+const versionCount = changelogEntries.filter(e => e.format === 'version').length;
+const dateCount = changelogEntries.filter(e => e.format === 'date').length;
+console.log(`changelog parsed: ${changelogRows.length} (version=${versionCount}, date=${dateCount})`);
 
 const rows = [...announcementRows, ...changelogRows];
+
+if (DRY_RUN) {
+  console.log(`\n[dry-run] DB에 쓰지 않습니다. upsert 대상 ${rows.length}건`);
+  console.log(`  공지사항 ${announcementRows.length} / 업데이트 내역 ${changelogRows.length}`);
+  console.log('\n[dry-run] 업데이트 내역 id 목록 (최신순)');
+  for (const e of changelogEntries) {
+    console.log(`  ${e.format === 'date' ? '날짜' : '버전'}  ${e.id.padEnd(18)} ${e.date}  ${e.title}`);
+  }
+  console.log('\n[dry-run] 공지사항 id 목록');
+  for (const r of announcementRows) console.log(`  ${String(r.id).padEnd(18)} ${r.date}  ${r.title}`);
+  process.exit(0);
+}
 
 const { error } = await supabase
   .from('newsletter_items')
