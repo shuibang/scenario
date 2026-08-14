@@ -107,7 +107,7 @@ describe('escapeHtml', () => {
 
 describe('buildRelationshipPrintHtml', () => {
   const base = {
-    title: '작품 — 인물관계도',
+    title: '작품 인물관계도',
     width: 700,
     nodes: [node('a', 200, 100), node('b', 500, 300)],
     edges: [{ id: 'e1', fromId: 'a', toId: 'b', label: '연인' }],
