@@ -6,6 +6,7 @@ import { buildSceneListShareURL } from '../../utils/sceneListShare';
 import { reportError } from '../../utils/errorTracker';
 import { listFeedbackVersions, createReviewLinkForExistingVersion } from '../../utils/reviewShare';
 import { useBadges } from '../../utils/badges';
+import { charactersWithPhoto } from '../../utils/sharePhoto';
 
 // 작품별로 분리 저장. 옛 글로벌 키('drama_share_link_selections_v1')는 같은 key가
 // 모든 작품에서 공유돼 다른 작품의 회차 ID 가 섞이면 normalize 가 자동으로 모두
@@ -41,6 +42,8 @@ function normalizeSelections(allEpisodes, source) {
     synopsis: typeof source?.synopsis === 'boolean' ? source.synopsis : true,
     episodes: episodesMap,
     chars: typeof source?.chars === 'boolean' ? source.chars : true,
+    // 사진 공유는 의식적 선택이어야 하므로 기본 꺼짐. 저장된 값이 없으면 false.
+    charPhotos: source?.charPhotos === true,
     biography: typeof source?.biography === 'boolean' ? source.biography : false,
     treatment: typeof source?.treatment === 'boolean' ? source.treatment : false,
   };
@@ -49,6 +52,11 @@ function normalizeSelections(allEpisodes, source) {
 export default function ShareLinkModal({ open, onClose }) {
   const { state } = useApp();
   const { episodes, activeProjectId, activeEpisodeId } = state;
+
+  // 사진 있는 인물 수 — 0명이면 사진 옵션 자체를 노출하지 않는다.
+  const photoCharCount = charactersWithPhoto(
+    (state.characters || []).filter(c => c.projectId === activeProjectId),
+  ).length;
 
   const allEpisodes = episodes
     .filter(e => e.projectId === activeProjectId)
@@ -293,6 +301,22 @@ export default function ShareLinkModal({ open, onClose }) {
 
           <div style={{ fontSize: 10, color: 'var(--c-text5)', margin: '6px 0 4px 0' }}>참고자료</div>
           <ShareCheck label="인물소개"   checked={sel.chars}     onChange={() => toggle('chars')}     indent />
+          {/* 사진 있는 인물이 하나도 없으면 노출하지 않는다. 기본 꺼짐. */}
+          {photoCharCount > 0 && (
+            <div style={{ marginLeft: 18 }}>
+              <ShareCheck
+                label={`인물 사진 함께 보내기 (${photoCharCount}명)`}
+                checked={!!sel.charPhotos && sel.chars}
+                onChange={() => toggle('charPhotos')}
+                indent
+              />
+              {!sel.chars && (
+                <div style={{ fontSize: 10, color: 'var(--c-text6)', marginLeft: 24, marginTop: -2 }}>
+                  인물소개를 함께 선택해야 사진이 나갑니다.
+                </div>
+              )}
+            </div>
+          )}
           <ShareCheck label="인물이력서" checked={sel.biography} onChange={() => toggle('biography')} indent />
           <ShareCheck label="트리트먼트" checked={sel.treatment} onChange={() => toggle('treatment')} indent />
         </div>
