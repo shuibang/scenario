@@ -6,6 +6,7 @@
 
 import { computeSnapshotMeta } from '../utils/snapshotMeta';
 import { classifyListFailure, LIST_UNAUTHED } from '../utils/driveListResult';
+import { failureResult, foundResult, missingResult } from '../utils/driveReadResult';
 import { saveSnapshotToIDB, loadSnapshotsList, loadSnapshotRecord, deleteSnapshotFromIDB } from './db';
 
 const DRIVE_API  = 'https://www.googleapis.com/drive/v3';
@@ -213,18 +214,34 @@ async function upsertFile(name, jsonContent) {
   });
 }
 
-async function readFileByName(name) {
-  const file = await findFileByName(name);
-  if (!file) return null;
-  return withAuthRetry(async () => {
-    const res = await fetch(`${DRIVE_API}/files/${file.id}?alt=media`, {
-      headers: { Authorization: `Bearer ${_accessToken}` },
+/**
+ * 파일 읽기 — { ok: true, data } | { ok: true, data: null }(없음) | { ok: false, reason, error }(실패).
+ * 실패를 null로 삼키면 호출부가 "원격에 데이터가 없다"로 착각한다.
+ * 404·미발견만 정상적인 '없음'이고, 나머지는 실패로 올린다.
+ */
+async function readFileByNameResult(name) {
+  try {
+    const file = await findFileByName(name);
+    if (!file) return missingResult();
+    return await withAuthRetry(async () => {
+      const res = await fetch(`${DRIVE_API}/files/${file.id}?alt=media`, {
+        headers: { Authorization: `Bearer ${_accessToken}` },
+      });
+      // 404는 "파일 없음" — 정상. 401은 throwDriveError로 던져 wrapper가 재시도.
+      if (res.status === 404) return missingResult();
+      if (!res.ok) await throwDriveError(res, 'Drive 파일 읽기 실패');
+      return foundResult(await res.json());
     });
-    // 404는 "파일 없음" — 정상 null 반환. 401은 throwDriveError로 던져 wrapper가 재시도.
-    if (res.status === 404) return null;
-    if (!res.ok) await throwDriveError(res, 'Drive 파일 읽기 실패');
-    return await res.json();
-  });
+  } catch (err) {
+    return failureResult(err);
+  }
+}
+
+// 기존 호출부(loadFromDrive)용 얇은 래퍼 — 데이터 또는 null.
+// loadFromDrive는 현재 앱에서 실행되지 않는 경로라 동작을 바꾸지 않는다.
+async function readFileByName(name) {
+  const result = await readFileByNameResult(name);
+  return result.ok ? result.data : null;
 }
 
 async function deleteFileByName(name) {
@@ -334,19 +351,26 @@ export async function saveIdeasToDrive(ideas) {
   return next;
 }
 
-/** Drive 에서 아이디어 컬렉션 로드. 없으면 null. */
+/**
+ * Drive 에서 아이디어 컬렉션 로드.
+ * 반환: { ok: true, ideas } | { ok: true, ideas: null }(원격에 파일 없음)
+ *      | { ok: false, reason, error }(조회 실패)
+ *
+ * 실패를 null로 돌려주면 호출부가 "원격에 아이디어가 없다"로 보고 로컬을 push해
+ * 다른 기기에서 쓴 아이디어를 덮어쓸 수 있다. 그래서 반드시 구분해서 올린다.
+ */
 export async function loadIdeasFromDrive() {
-  if (!isTokenValid()) return null;
-  try {
-    const data = await readFileByName(IDEAS_FILE_NAME);
-    if (!data) return null;
-    return Array.isArray(data.ideas) ? data.ideas : null;
-  } catch (err) {
+  if (!isTokenValid()) return { ok: false, ideas: null, reason: LIST_UNAUTHED, error: null };
+  const result = await readFileByNameResult(IDEAS_FILE_NAME);
+  if (!result.ok) {
     if (typeof console !== 'undefined' && console.warn) {
-      console.warn('[loadIdeasFromDrive] failed:', err);
+      console.warn('[loadIdeasFromDrive] failed:', result.reason, result.error);
     }
-    return null;
+    return { ok: false, ideas: null, reason: result.reason, error: result.error };
   }
+  // 파일이 없거나 형식이 어긋나면 "원격에 아이디어 없음" (정상 흐름)
+  const ideas = Array.isArray(result.data?.ideas) ? result.data.ideas : null;
+  return { ok: true, ideas };
 }
 
 // 대본별 PUT 직렬화 — 같은 대본 파일에 동시 PUT 발생 시 Drive API의 도착 순서가

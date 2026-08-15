@@ -19,6 +19,9 @@
 
 import { getAll, setAll, genId, now, isPublicPcMode } from './db';
 import { saveIdeasToDrive, loadIdeasFromDrive, isTokenValid } from './googleDrive';
+import { shouldReportListFailure } from '../utils/driveListResult';
+import { PULL_FAILED, classifyIdeasPull, shouldMarkDirtyOnPull } from '../utils/ideasPull';
+import { reportError } from '../utils/errorTracker';
 
 const IDB_KEY = 'ideas';
 
@@ -111,16 +114,33 @@ export async function pullIdeasFromDrive() {
   try {
     await ensureLoaded();
     if (!isTokenValid()) return { ok: false, reason: 'no-token' };
-    let remote;
+    let result;
     try {
-      remote = await loadIdeasFromDrive();
+      result = await loadIdeasFromDrive();
     } catch (err) {
-      return { ok: false, reason: 'load-error', error: err };
+      result = { ok: false, ideas: null, reason: 'failed', error: err?.message || String(err) };
     }
+
+    // 조회 실패 — "원격에 없음"과 반드시 구분한다.
+    // 실패를 '없음'으로 보고 dirty를 켜면, 다음 push가 로컬 캐시로 원격을 덮어써
+    // 다른 기기에서 쓴 아이디어가 사라진다. 실패면 아무것도 하지 않고 다음 pull을 기다린다.
+    // (백그라운드 동작이라 사용자에게 알리지 않고 조용히 재시도를 기다린다.)
+    const outcome = classifyIdeasPull(result);
+    if (outcome === PULL_FAILED) {
+      if (shouldReportListFailure(result?.reason)) {
+        reportError({
+          source: 'ideasStore.pullIdeasFromDrive',
+          message: `아이디어 노트 Drive 조회 실패: ${result?.error || result?.reason}`,
+        })?.catch?.(() => {});
+      }
+      return { ok: false, reason: 'load-error', driveReason: result?.reason, error: result?.error };
+    }
+
+    const remote = result.ideas;
     if (!Array.isArray(remote)) {
       // Drive 파일 자체가 없음 → 로컬 캐시가 있다면 그게 곧 dirty.
       // 첫 사용 케이스든, 다른 기기가 아직 push 안 한 케이스든 push 해서 만들어줌.
-      if ((_cache || []).length > 0) _hasUnsyncedChanges = true;
+      if (shouldMarkDirtyOnPull(outcome) && (_cache || []).length > 0) _hasUnsyncedChanges = true;
       return { ok: false, reason: 'no-remote' };
     }
 
