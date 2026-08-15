@@ -328,4 +328,21 @@ describe('buildSystemPrompt', () => {
   it('사용자에게 보일 글에 줄표를 쓰지 말라고 지시한다', () => {
     expect(buildSystemPrompt(MODE_PRODUCTION)).toContain('줄표(em dash)를 쓰지 않는다');
   });
+
+  // 서비스 원칙: 쓰는 것은 작가의 일이다. 예외가 없어야 하므로 두 모드 모두에서 확인한다.
+  it('대체 문장을 써주지 말라는 원칙이 두 모드 모두에 있다', () => {
+    [MODE_PRODUCTION, MODE_CONTEST].forEach(mode => {
+      const p = buildSystemPrompt(mode);
+      expect(p).toContain('대체 문장을 쓰지 않는다');
+      expect(p).toContain('대신할 대사·지문·문장·씬을 직접 쓰지 않는다');
+      expect(p).toContain('예외는 없다');
+      expect(p).toContain('AI는 쓰지 않는다');
+    });
+  });
+
+  // 8번이 4번(근거 인용)을 잡아먹으면 지적에서 근거가 사라진다.
+  it('인용은 대체 문장 금지의 예외임을 명시한다', () => {
+    expect(buildSystemPrompt(MODE_PRODUCTION))
+      .toContain('대본에 이미 있는 문장을 근거로 인용하는 것(4번)은 여기 해당하지 않는다');
+  });
 });
