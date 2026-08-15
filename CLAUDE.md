@@ -27,7 +27,7 @@ React + Vite + Supabase SPA, Vercel 배포, Google Drive 주 저장소.
 - UUID/cuid ID 포맷 — 임의 변경 시 고아 데이터 발생 이력 있음
 - 베타 유저가 사용 중인 기능의 데이터 구조
 - output 관련 파일(hwpxBuilder.js 등)은 명시적 요청 없이 수정 금지
-- changelog.html / announcements.js 수정 시: 서버에는 뉴스레터 자동동기화 후크가 안 먹으므로, 수정 후 `node scripts/syncAnnouncements.js` 수동 실행 필요
+- changelog.html 항목의 **날짜·버전 마커** — 한 번 확정하면 변경 금지. newsletter_items의 id가 여기서 나오므로(`cl-2026-08-15`, `cl-v50-51`), 바뀌면 새 항목으로 잡혀 이미 발송한 내용이 재발송된다. 제목·본문 수정은 안전함
 
 ## 한국어 IME 처리 원칙
 - composingRef 가드 필수
@@ -40,6 +40,12 @@ React + Vite + Supabase SPA, Vercel 배포, Google Drive 주 저장소.
 ## 커밋 원칙
 - 기능/버그픽스별 소단위 커밋, git add -p로 무관한 변경 분리
 - 빌드 확인 후 커밋: npm run build + npx vitest run
+
+## 뉴스레터 동기화
+- changelog.html / announcements.js는 **main에 머지되면 GitHub Actions가 자동 동기화**한다 (`.github/workflows/sync-newsletter-items.yml` → `scripts/syncAnnouncements.js` → Supabase `newsletter_items`). **수동 실행 불필요.**
+- 반영될 내용을 미리 보려면 `node scripts/syncAnnouncements.js --dry-run` (DB 쓰기·환경변수 없이 파싱 결과와 id 목록만 출력)
+- upsert는 payload에 `created_at`이 없어 **기존 항목의 created_at을 보존**한다. 오타 수정은 재발송을 유발하지 않는다
+- 주간 발송은 마지막 발송 이후 `created_at`인 항목을 모두 고른다. **과거 날짜 항목을 뒤늦게 추가하면 다음 발송에 함께 나가므로**, 발송에서 빼려면 해당 항목의 `created_at`을 각자 날짜로 내린다 (예: `supabase/migrations/20260815120000_newsletter_backfill_created_at.sql`)
 
 ## 자주 하는 실수 / 주의사항
 - JSZip HWPX 파싱 시 try-catch 필수
