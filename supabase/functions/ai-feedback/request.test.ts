@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   MAX_BODY_BYTES,
+  MAX_CONTENT_CHARS,
   MAX_PREVIOUS_FEEDBACKS,
   MAX_PREVIOUS_SUMMARY_CHARS,
+  TOO_LONG_MESSAGE,
   buildUserMessage,
   byteLength,
+  exceedsContentLimit,
   exceedsSizeLimit,
   neutralizeBlockTags,
   normalizeCharacters,
@@ -48,6 +51,49 @@ describe('요청 크기 상한', () => {
 
   it('60분물 1회 분량(약 4만자)은 여유롭게 들어간다', () => {
     expect(exceedsSizeLimit('대'.repeat(40_000))).toBe(false);
+  });
+
+  // 바이트 상한이 분량 상한보다 좁아지면, 정상 분량의 한글 대본이 400(분량 초과)이
+  // 아니라 413(본문 크기)에서 먼저 걸린다. 사용자에게 안내가 뒤바뀌므로 순서를 못 박아 둔다.
+  it('바이트 상한은 분량 상한보다 항상 넉넉하다', () => {
+    expect(MAX_BODY_BYTES).toBeGreaterThan(MAX_CONTENT_CHARS * 3);
+  });
+});
+
+// ── 대본 분량 상한 ───────────────────────────────────────────────────────────
+describe('대본 분량 상한', () => {
+  it('상한 이하는 통과', () => {
+    expect(exceedsContentLimit('가'.repeat(MAX_CONTENT_CHARS))).toBe(false);
+  });
+
+  it('상한을 넘기면 걸린다', () => {
+    expect(exceedsContentLimit('가'.repeat(MAX_CONTENT_CHARS + 1))).toBe(true);
+  });
+
+  // 영화 장편 시나리오는 통과시키고, 드라마 다회차 합본만 막는다.
+  it('영화 장편 시나리오 분량(약 6만자)은 통과한다', () => {
+    const r = validateRequest({ ...minimal, episode: { number: 1, content: '대'.repeat(60_000) } });
+    expect(r.ok).toBe(true);
+  });
+
+  it('다회차 합본 분량(약 16만자)은 CONTENT_TOO_LONG 으로 거부한다', () => {
+    const r = validateRequest({ ...minimal, episode: { number: 1, content: '대'.repeat(160_000) } });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.code).toBe('CONTENT_TOO_LONG');
+      expect(r.message).toBe(TOO_LONG_MESSAGE);
+    }
+  });
+
+  // 상한을 알리면 "최대한 채워 넣자"는 유인이 된다. 안내 문구에 숫자를 넣지 않는다.
+  it('안내 문구에 상한 수치가 들어가지 않는다', () => {
+    expect(TOO_LONG_MESSAGE).not.toMatch(/\d/);
+    expect(TOO_LONG_MESSAGE).toContain('회차 단위로 요청해 주세요');
+  });
+
+  it('회차 단위 요청은 상한 근처에도 가지 않는다', () => {
+    const r = validateRequest({ ...minimal, episode: { number: 3, content: '대'.repeat(40_000) } });
+    expect(r.ok).toBe(true);
   });
 });
 

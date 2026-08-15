@@ -8,15 +8,35 @@
 import { MODES, type Mode } from './prompt.ts';
 
 /**
- * 요청 본문 크기 상한 (바이트).
+ * 대본 분량 상한 (글자 수).
  *
- * 250 KiB. UTF-8 한글 1자 = 3바이트이므로 약 8만 3천자다.
- * 60분물 1회 대본이 대략 4만자라 시놉시스·인물·이전 피드백을 합쳐도 여유가 있고,
- * 그러면서 한 번 호출의 입력 토큰이 폭주하지 않는 선이다.
- * 상한을 넘기면 잘라내지 않고 거절한다 — 대본을 몰래 자르면 검토자가 없는 뒷부분을
+ * 10만자 = A4 약 120매. 영화 장편 시나리오 한 편은 정상적으로 들어가고,
+ * 드라마 여러 회차를 이어붙인 합본은 걸린다. 검토는 회차 단위일 때 가장 깊어진다.
+ *
+ * 이 값을 밖에 알리지 않는다. 상한을 알리면 "최대한 채워 넣자"는 유인이 되므로
+ * 사전 안내·툴팁·문서 어디에도 숫자를 쓰지 않고, 걸렸을 때만 숫자 없이 안내한다.
+ */
+export const MAX_CONTENT_CHARS = 100_000;
+
+/**
+ * 분량 초과 안내. 숫자를 넣지 않는다(위 참조).
+ * 413(본문 크기)과 400(대본 분량) 양쪽에서 같은 문구를 쓴다 — 사용자 입장에서는
+ * 어느 쪽에 걸렸든 해야 할 일이 "회차 단위로 나누기"로 같다.
+ */
+export const TOO_LONG_MESSAGE = '한 번에 요청할 수 있는 분량을 넘었습니다. 회차 단위로 요청해 주세요.';
+
+/**
+ * 요청 본문 크기 상한 (바이트). 서버 보호용 바깥 울타리다.
+ *
+ * 500 KiB. 분량 상한(10만자)은 UTF-8 한글로 약 300 KB 이므로, 시놉시스·인물·
+ * 이전 피드백과 JSON 오버헤드를 더해도 여기 걸리지 않는다. 즉 정상 요청은 항상
+ * 분량 상한(400)에서 걸리고, 이 상한은 정규화 전의 비정상적인 본문
+ * (이전 피드백 수백 건 등)만 잡는다.
+ *
+ * 어느 쪽이든 잘라내지 않고 거절한다 — 대본을 몰래 자르면 검토자가 없는 뒷부분을
  * "없다"고 판단해 버린다.
  */
-export const MAX_BODY_BYTES = 256_000;
+export const MAX_BODY_BYTES = 512_000;
 
 /** 이전 회차 피드백은 요약만 받는다. 회차가 쌓여도 입력이 선형으로 늘지 않게. */
 export const MAX_PREVIOUS_FEEDBACKS = 20;
@@ -54,6 +74,11 @@ export function byteLength(text: string): number {
 
 export function exceedsSizeLimit(text: string): boolean {
   return byteLength(text) > MAX_BODY_BYTES;
+}
+
+/** 대본 분량 초과 여부. 글자 수 기준이라 언어에 상관없이 같은 잣대다. */
+export function exceedsContentLimit(text: string): boolean {
+  return text.length > MAX_CONTENT_CHARS;
 }
 
 /**
@@ -157,6 +182,12 @@ export function validateRequest(raw: unknown): ValidationResult {
   const episodeContent = asText(episode.content).trim();
   if (!episodeContent) {
     return fail('EPISODE_REQUIRED', '검토할 회차 대본이 없습니다.');
+  }
+
+  // 한도 차감보다 먼저 걸러야 한다. 차감 뒤에 거절하면 결과 없이 횟수만 잃는다.
+  // (validateRequest 는 index.ts 에서 사용량 RPC 앞에 호출된다)
+  if (exceedsContentLimit(episodeContent)) {
+    return fail('CONTENT_TOO_LONG', TOO_LONG_MESSAGE);
   }
 
   return {

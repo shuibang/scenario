@@ -6,7 +6,8 @@
  *
  * 요청  { mode, synopsis, characters, episode: { number, content }, previousFeedbacks: [...] }
  * 응답  { feedback, remaining, isPremium }
- * 실패  402 LIMIT_REACHED / 403 FEATURE_DISABLED / 401 Unauthorized / 413 REQUEST_TOO_LARGE
+ * 실패  400 CONTENT_TOO_LONG(분량 초과) / 402 LIMIT_REACHED / 403 FEATURE_DISABLED
+ *       401 Unauthorized / 413 REQUEST_TOO_LARGE
  *
  * ── 무상태 원칙 ──────────────────────────────────────────────────────────────
  * 대본과 피드백을 어디에도 저장하지 않는다. DB 에도, 로그에도 남기지 않는다.
@@ -23,7 +24,13 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { buildSystemPrompt } from './prompt.ts';
-import { buildUserMessage, exceedsSizeLimit, MAX_BODY_BYTES, validateRequest } from './request.ts';
+import {
+  buildUserMessage,
+  exceedsSizeLimit,
+  MAX_BODY_BYTES,
+  TOO_LONG_MESSAGE,
+  validateRequest,
+} from './request.ts';
 
 const SUPABASE_URL      = Deno.env.get('SUPABASE_URL')              ?? '';
 const SERVICE_ROLE_KEY  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -99,24 +106,17 @@ Deno.serve(async (req) => {
   if (!authHeader.startsWith('Bearer ')) return json({ error: 'Unauthorized' }, 401, origin);
   const token = authHeader.slice(7);
 
-  // ── 2. 크기 상한 ───────────────────────────────────────────────────────────
-  // Content-Length 를 먼저 보되 그것만 믿지 않는다(누락·불일치 가능).
+  // ── 2. 본문 크기 (서버 보호용 바깥 울타리) ──────────────────────────────────
+  // 정상 요청은 아래 3단계의 대본 분량 상한에서 걸린다. 여기는 정규화 전의
+  // 비정상적인 본문만 잡는다. Content-Length 를 먼저 보되 그것만 믿지 않는다.
   const declared = Number(req.headers.get('Content-Length') ?? '');
   if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
-    return json(
-      { error: 'REQUEST_TOO_LARGE', message: '대본이 너무 깁니다. 회차를 나눠서 요청해주세요.' },
-      413,
-      origin,
-    );
+    return json({ error: 'REQUEST_TOO_LARGE', message: TOO_LONG_MESSAGE }, 413, origin);
   }
 
   const rawBody = await req.text();
   if (exceedsSizeLimit(rawBody)) {
-    return json(
-      { error: 'REQUEST_TOO_LARGE', message: '대본이 너무 깁니다. 회차를 나눠서 요청해주세요.' },
-      413,
-      origin,
-    );
+    return json({ error: 'REQUEST_TOO_LARGE', message: TOO_LONG_MESSAGE }, 413, origin);
   }
 
   let parsed: unknown;
@@ -126,13 +126,21 @@ Deno.serve(async (req) => {
     return json({ error: 'INVALID_BODY', message: '요청 형식이 올바르지 않습니다.' }, 400, origin);
   }
 
+  // ── 3. 요청 검증 (대본 분량 상한 포함) ──────────────────────────────────────
+  // 사용량 차감보다 앞이다. 차감 뒤에 거절하면 결과 없이 횟수만 잃고,
+  // 되돌리려면 환불 경로를 한 번 더 타야 한다.
   const validated = validateRequest(parsed);
   if (!validated.ok) {
-    return json({ error: validated.code, message: validated.message }, 400, origin);
+    // 분량 초과는 클라이언트가 재시도 대신 회차를 나누게 유도해야 하므로
+    // 다른 형식 오류와 구분되는 키로 내려보낸다.
+    const body = validated.code === 'CONTENT_TOO_LONG'
+      ? { reason: validated.code, message: validated.message }
+      : { error: validated.code, message: validated.message };
+    return json(body, 400, origin);
   }
   const request = validated.value;
 
-  // ── 3. 사용자 확인 ─────────────────────────────────────────────────────────
+  // ── 4. 사용자 확인 ─────────────────────────────────────────────────────────
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
   });
@@ -141,7 +149,7 @@ Deno.serve(async (req) => {
   if (authErr || !user) return json({ error: 'Unauthorized' }, 401, origin);
   const userId = user.id;
 
-  // ── 4. 한도 차감 (AI 호출 전) ───────────────────────────────────────────────
+  // ── 5. 한도 차감 (AI 호출 전) ───────────────────────────────────────────────
   const { data: usage, error: usageErr } = await admin.rpc('admin_check_and_increment_usage', {
     p_feature: FEATURE,
     p_user_id: userId,
@@ -183,7 +191,7 @@ Deno.serve(async (req) => {
     ? null
     : Number(usageRow.remaining);
 
-  // ── 5. AI 호출 ─────────────────────────────────────────────────────────────
+  // ── 6. AI 호출 ─────────────────────────────────────────────────────────────
   // 실패하면 반드시 차감을 되돌린다. 되돌리지 못하면 사용자는 결과 없이 횟수만 잃는다.
   let feedback = '';
   try {
