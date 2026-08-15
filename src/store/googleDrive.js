@@ -505,24 +505,31 @@ export async function saveDriveBackup(projectData, filename) {
 /**
  * 현재 프로젝트의 Drive 백업 목록.
  * @param {string} safeProjectName - sanitizeFolderName() 결과
- * Drive 미연결이거나 폴더가 없으면 [] 반환.
+ *
+ * 반환: { ok: true, files } | { ok: false, files: [], reason, error }
+ * 실패를 빈 배열로 삼키면 "이 대본의 백업이 없다"로 읽혀 작가가 백업 소실로 오해한다.
+ * listAllBackupFiles와 같은 형태로 "실제로 0건"과 "조회 실패"를 구분해 돌려준다.
  */
 export async function listDriveBackups(safeProjectName) {
-  if (!isTokenValid() || !safeProjectName) return [];
+  // 대본 이름이 없으면 조회 대상 자체가 없다 (실패가 아니다)
+  if (!safeProjectName) return { ok: true, files: [] };
+  if (!isTokenValid()) return { ok: false, files: [], reason: LIST_UNAUTHED };
   try {
     const rootId = await findBackupFolder();
-    if (!rootId) return [];
-    // 프로젝트 서브폴더 검색 (없으면 빈 배열)
+    // 백업 폴더가 아직 없으면 한 번도 백업하지 않은 것 — 정상적인 0건
+    if (!rootId) return { ok: true, files: [] };
+    // 프로젝트 서브폴더 검색
     const q = encodeURIComponent(`name='${safeProjectName}' and '${rootId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`);
     const folderRes = await fetch(`${DRIVE_API}/files?q=${q}&fields=files(id)`, {
       headers: { Authorization: `Bearer ${_accessToken}` },
     });
-    if (!folderRes.ok) return [];
+    if (!folderRes.ok) await throwDriveError(folderRes, 'Drive 백업 폴더 조회 실패');
     const folderData = await folderRes.json();
     const projectFolderId = folderData.files?.[0]?.id;
-    if (!projectFolderId) return [];
+    // 이 대본의 폴더가 없으면 이 대본은 아직 백업이 없는 것 — 정상적인 0건
+    if (!projectFolderId) return { ok: true, files: [] };
     _projectFolderIdCache.set(safeProjectName, projectFolderId);
-    return await withAuthRetry(async () => {
+    const files = await withAuthRetry(async () => {
       const fq = encodeURIComponent(`'${projectFolderId}' in parents and name contains '.djs' and trashed=false`);
       const res = await fetch(
         `${DRIVE_API}/files?q=${fq}&fields=files(id,name,createdTime)&orderBy=createdTime desc`,
@@ -540,8 +547,9 @@ export async function listDriveBackups(safeProjectName) {
         device:  null,
       }));
     });
-  } catch {
-    return [];
+    return { ok: true, files };
+  } catch (e) {
+    return { ok: false, files: [], reason: classifyListFailure(e), error: e?.message || String(e) };
   }
 }
 
