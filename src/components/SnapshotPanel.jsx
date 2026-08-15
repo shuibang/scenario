@@ -24,6 +24,8 @@ import {
 import { serializeProject } from '../utils/projectSerializer';
 import { formatSnapshotMetaLine } from '../utils/snapshotMeta';
 import { reportError } from '../utils/errorTracker';
+import { driveListMessage, shouldReportListFailure } from '../utils/driveListResult';
+import { shouldShowDriveListNotice } from '../utils/driveListNotice';
 
 // ── 날짜 포맷 ─────────────────────────────────────────────────────────────────
 function fmtDate(iso) {
@@ -144,6 +146,7 @@ export default function SnapshotPanel({ onClose }) {
   const [snapshots, setSnapshots]     = useState([]);
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState(null);
+  const [driveListReason, setDriveListReason] = useState(null); // Drive 목록만 실패한 경우의 사유
   const [confirm, setConfirm]         = useState(null);
   const [restoring, setRestoring]     = useState(false);
   const [deleting, setDeleting]       = useState(null);
@@ -158,14 +161,31 @@ export default function SnapshotPanel({ onClose }) {
   const refresh = useCallback(async ({ silent = false, projectFolderName = safeProjectName } = {}) => {
     if (!silent) setLoading(true);
     setError(null);
+    setDriveListReason(null);
     try {
-      const [idbList, driveList] = await Promise.all([
+      const [idbList, driveResult] = await Promise.all([
         loadSnapshots(),
         listDriveBackups(projectFolderName),
       ]);
+      // Drive 조회가 실패해도 로컬 스냅샷은 그대로 보여준다 (부분 실패).
+      // 실패를 빈 목록으로 합쳐버리면 "백업이 없다"로 읽혀 소실로 오해하게 된다.
+      if (!driveResult.ok) {
+        const loggedIn = (() => {
+          try { return !!localStorage.getItem('drama_auth_user'); } catch { return false; }
+        })();
+        if (shouldShowDriveListNotice(driveResult, { loggedIn })) {
+          setDriveListReason(driveResult.reason);
+        }
+        if (shouldReportListFailure(driveResult.reason)) {
+          reportError({
+            source: 'SnapshotPanel.listDriveBackups',
+            message: `Drive 백업 목록 조회 실패: ${driveResult.error || driveResult.reason}`,
+          })?.catch?.(() => {});
+        }
+      }
       const merged = [
         ...idbList.map(s => ({ ...s, source: 'idb' })),
-        ...driveList,
+        ...driveResult.files,
       ].sort((a, b) => b.savedAt.localeCompare(a.savedAt));
       setSnapshots(merged);
     } catch {
@@ -322,6 +342,23 @@ export default function SnapshotPanel({ onClose }) {
         {error && (
           <div style={{ fontSize: 12, color: '#f87171', marginBottom: 12, padding: '8px 12px', background: 'rgba(248,113,113,0.1)', borderRadius: 6 }}>
             {error}
+          </div>
+        )}
+
+        {/* Drive 목록만 실패 — 로컬 스냅샷은 아래에 그대로 보인다.
+            "백업이 없다"로 읽히지 않도록 사유를 밝히고 재시도 경로를 준다. */}
+        {driveListReason && (
+          <div style={{ marginBottom: 12, padding: '8px 12px', background: 'rgba(248,113,113,0.1)', borderRadius: 6 }}>
+            <div style={{ fontSize: 12, color: '#f87171', marginBottom: 2 }}>
+              {driveListMessage(driveListReason)}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--c-text5)', marginBottom: 6 }}>
+              Drive 백업 목록만 못 불러온 것이며, 저장된 백업은 그대로 있습니다.
+            </div>
+            <button
+              onClick={() => refresh()}
+              style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, border: '1px solid var(--c-border3)', background: 'transparent', color: 'var(--c-text3)', cursor: 'pointer' }}
+            >다시 시도</button>
           </div>
         )}
 
