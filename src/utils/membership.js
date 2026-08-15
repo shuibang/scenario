@@ -53,6 +53,22 @@ export function normalizeUsageResult(raw) {
   };
 }
 
+/**
+ * feature_limits 행 정규화. 행이 없거나 enabled=false 면 한도 0·비활성으로 닫는다 —
+ * 표시가 실제 서버 판정보다 후해지면 사용자가 "남았다"고 믿었다가 거부당한다.
+ */
+export function normalizeFeatureLimit(row) {
+  if (!row || row.enabled !== true) {
+    return { feature: row?.feature || null, limit: 0, enabled: false };
+  }
+  const limit = Number(row.free_monthly_limit);
+  return {
+    feature: row.feature || null,
+    limit: Number.isFinite(limit) && limit > 0 ? limit : 0,
+    enabled: true,
+  };
+}
+
 /** 로그인하지 않은 사용자의 고정 응답 — 항상 무료·사용 불가. */
 export function anonymousUsageResult() {
   return { allowed: false, remaining: 0, isPremium: false, used: 0, reason: 'AUTH_REQUIRED' };
@@ -92,15 +108,17 @@ export async function hasActiveSubscription() {
 
 /**
  * 사용량 판정 + 증가. 유료면 무제한 허용(카운트 없음), 무료면 이번 달 한도 안에서만 허용.
- * 판정과 증가는 서버 RPC 한 문장에서 처리되므로 동시 호출로 한도를 넘길 수 없다.
+ *
+ * 한도는 서버의 feature_limits 에서 읽는다 — 클라이언트가 한도를 넘기던 구조를 없앴다.
+ * 등록되지 않은 feature 는 서버가 FEATURE_DISABLED 로 거부한다(화이트리스트).
+ * 판정과 증가는 RPC 한 문장에서 처리되므로 동시 호출로 한도를 넘길 수 없다.
  */
-export async function checkUsage(feature, monthlyLimit) {
+export async function checkUsage(feature) {
   const userId = await getUserId();
   if (!userId) return anonymousUsageResult();
   try {
     const { data, error } = await supabase.rpc('check_and_increment_usage', {
       p_feature: feature,
-      p_monthly_limit: monthlyLimit,
     });
     if (error) {
       return { allowed: false, remaining: 0, isPremium: false, used: 0, reason: 'RPC_ERROR' };
@@ -108,5 +126,24 @@ export async function checkUsage(feature, monthlyLimit) {
     return normalizeUsageResult(data);
   } catch {
     return { allowed: false, remaining: 0, isPremium: false, used: 0, reason: 'RPC_ERROR' };
+  }
+}
+
+/**
+ * 기능별 무료 한도 조회 (남은 횟수 표시용).
+ * 조회 실패나 미등록 기능은 "사용 불가"로 닫는다 — 표시가 실제 판정보다 후해지면 안 된다.
+ */
+export async function getFeatureLimit(feature) {
+  if (!supabase) return normalizeFeatureLimit(null);
+  try {
+    const { data, error } = await supabase
+      .from('feature_limits')
+      .select('feature, free_monthly_limit, enabled')
+      .eq('feature', feature)
+      .maybeSingle();
+    if (error) return normalizeFeatureLimit(null);
+    return normalizeFeatureLimit(data);
+  } catch {
+    return normalizeFeatureLimit(null);
   }
 }
