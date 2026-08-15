@@ -10,6 +10,7 @@
 
 import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { buildPrintModel } from './PrintModel';
+import { hasPhoto } from '../utils/characterPhoto';
 import { getLayoutMetrics, tokenizeSection, paginate } from './LineTokenizer';
 import { resolveFont } from './FontRegistry';
 
@@ -337,6 +338,13 @@ export default function PreviewRenderer({ appState, selections, columnWidth = 34
   const lineHeight = preset.lineHeight  ?? 1.6;
   const margins    = preset.pageMargins ?? { top: 35, right: 30, bottom: 30, left: 30 };
 
+  // 사진은 옵션을 켜고 만든 링크에만 스냅샷에 들어 있다. 없으면 이 배열이 비어 아무것도 그리지 않는다
+  // (기존에 발행된 링크는 photo 필드 자체가 없으므로 그대로 동작한다).
+  const photoChars = useMemo(
+    () => (appState?.characters || []).filter(hasPhoto),
+    [appState?.characters],
+  );
+
   // null = 계산 중, [] = 선택 없음, [...] = 완료
   const [pages, setPages] = useState(null);
 
@@ -451,7 +459,18 @@ export default function PreviewRenderer({ appState, selections, columnWidth = 34
         const pageH = isLandscape ? A4_L_H_PX : A4_H_PX;
 
         return (
-          <div key={i}>
+          <React.Fragment key={i}>
+            {/* 인물 사진 — 링크 생성 시 '인물 사진 함께 보내기'를 켠 경우에만 스냅샷에 실린다.
+                인물소개 첫 페이지 앞에 별도 페이지로 붙인다(본문 조판은 건드리지 않는다). */}
+            {p.section.type === 'characters' && p.pageIdx === 0 && photoChars.length > 0 && (
+              <div>
+                <div style={{ fontSize: 10, color: '#888', marginBottom: 4, textAlign: 'center' }}>인물 사진</div>
+                <div style={{ width: A4_W_PX * scale, height: A4_H_PX * scale, position: 'relative', overflow: 'hidden' }}>
+                  <CharacterPhotoPage chars={photoChars} margins={margins} fontFamily={fontFamily} scale={scale} />
+                </div>
+              </div>
+            )}
+          <div>
             {p.pageIdx === 0 && (
               <div style={{ fontSize: 10, color: '#888', marginBottom: 4, textAlign: 'center' }}>
                 {sectionLabel}
@@ -484,8 +503,55 @@ export default function PreviewRenderer({ appState, selections, columnWidth = 34
               )}
             </div>
           </div>
+          </React.Fragment>
         );
       })}
     </div>
   );
+}
+
+// 인물 사진 페이지 (검토링크 뷰어 전용).
+// PrintModel을 건드리지 않으므로 PDF 내보내기에는 나오지 않는다 — 사진은 캐스팅 참고용이지
+// 대본 문서의 구성요소가 아니라는 판단.
+function CharacterPhotoPage({ chars, margins, fontFamily, scale }) {
+  const mmToXpx = (mm) => (mm / 210) * A4_W_PX;
+  const mmToYpx = (mm) => (mm / 297) * A4_H_PX;
+  const CARD_W = 110;
+  const PHOTO_H = 138; // 4:5 비율
+
+  return (
+    <div
+      style={{
+        width: A4_W_PX, height: A4_H_PX, background: '#fff',
+        transform: `scale(${scale})`, transformOrigin: 'top left',
+        paddingTop: mmToYpx(margins.top), paddingBottom: mmToYpx(margins.bottom),
+        paddingLeft: mmToXpx(margins.left), paddingRight: mmToXpx(margins.right),
+        boxSizing: 'border-box', fontFamily, color: '#111',
+        boxShadow: '0 1px 4px rgba(0,0,0,0.15)',
+      }}
+    >
+      <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>인물 사진</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+        {chars.map(c => (
+          <div key={c.id} style={{ width: CARD_W }}>
+            <div style={{ width: CARD_W, height: PHOTO_H, borderRadius: 4, overflow: 'hidden', background: '#eee', border: '1px solid #ddd' }}>
+              <img
+                src={c.photo.dataUrl}
+                alt=""
+                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+              />
+            </div>
+            <div style={{ fontSize: 11, marginTop: 4, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {charLabel(c)}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function charLabel(c) {
+  const full = [c.surname, c.givenName].filter(Boolean).join('');
+  return full || c.name || c.givenName || '';
 }

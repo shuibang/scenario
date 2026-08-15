@@ -1,9 +1,35 @@
+import { mergeSharePhotos } from './sharePhoto';
+
 const DEFAULT_SELECTIONS = { cover: true, synopsis: true, episodes: {}, chars: true };
 const SESSION_COLORS = ['#fef08a', '#bfdbfe', '#bbf7d0', '#fecdd3', '#fde68a', '#ddd6fe'];
 
 export const FEEDBACK_FOCUS_KEY = 'drama_feedback_focus';
 
-export function buildFeedbackSnapshot(state, selections) {
+/**
+ * 검토링크 payload에서 인물 사진을 걷어낸다.
+ *
+ * 캐릭터 레코드를 통째로 넣던 탓에 photo(장변 320px data URL)가 모든 링크에 실려
+ * Supabase에 저장되고 있었다. 뷰어는 사진을 렌더하지도 않아 화면에는 보이지 않는데,
+ * 작가가 모르는 사이 사진이 업로드되는 상태였다. 기본은 무조건 제외한다.
+ */
+export function stripCharacterPhotos(characters) {
+  return (characters || []).map((character) => {
+    if (!character || !('photo' in character)) return character;
+    const { photo, ...rest } = character; // eslint-disable-line no-unused-vars
+    return rest;
+  });
+}
+
+/**
+ * 공유용으로 재축소한 사진을 다시 얹을지 판단한다.
+ * 사진은 '인물소개'가 켜져 있고 사진 옵션도 켜져 있을 때만, 그것도 전달된 재축소본만 실린다.
+ * 저장된 320px 원본이 그대로 실리는 경로는 없다.
+ */
+export function shouldIncludeSharePhotos(selections, sharePhotos) {
+  return !!(selections?.chars && selections?.charPhotos && sharePhotos && Object.keys(sharePhotos).length > 0);
+}
+
+export function buildFeedbackSnapshot(state, selections, options = {}) {
   const {
     projects,
     episodes,
@@ -19,7 +45,16 @@ export function buildFeedbackSnapshot(state, selections) {
   return {
     projects: projects.filter((project) => project.id === activeProjectId),
     episodes: episodes.filter((episode) => episode.projectId === activeProjectId),
-    characters: characters.filter((character) => character.projectId === activeProjectId),
+    // 사진은 기본적으로 싣지 않는다 (위 stripCharacterPhotos 주석 참고).
+    // 옵션을 켠 경우에만, 링크 생성 시점에 160px로 재축소한 사본을 다시 얹는다.
+    characters: (() => {
+      const stripped = stripCharacterPhotos(
+        characters.filter((character) => character.projectId === activeProjectId),
+      );
+      return shouldIncludeSharePhotos(selections, options.sharePhotos)
+        ? mergeSharePhotos(stripped, options.sharePhotos)
+        : stripped;
+    })(),
     scenes: scenes.filter((scene) => scene.projectId === activeProjectId),
     scriptBlocks: scriptBlocks.filter((block) => block.projectId === activeProjectId),
     coverDocs: coverDocs.filter((doc) => doc.projectId === activeProjectId),

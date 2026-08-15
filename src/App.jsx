@@ -68,6 +68,7 @@ import PublicPcBadge from './components/PublicPcBadge';
 import { getLayoutMetrics } from './print/LineTokenizer';
 import { createFeedbackVersionShare } from './utils/reviewShare';
 import { buildFeedbackSnapshot } from './utils/feedbackVersions';
+import { buildSharePhotos } from './utils/sharePhoto';
 import SizeGuardModal from './components/SizeGuardModal';
 import { usePageTracking } from './hooks/usePageTracking';
 import { useDriveAuthState } from './hooks/useDriveAuthState';
@@ -471,7 +472,14 @@ function CenterPanel({ scrollToSceneId, onScrollHandled, keyboardUp, isMobile, f
 
 // ─── Share helper ─────────────────────────────────────────────────────────────
 export async function buildReviewURL(state, selections, options = {}) {
-  const snapshotContent = buildFeedbackSnapshot(state, selections);
+  // 사진 옵션을 켠 경우에만 링크 생성 시점에 160px로 재축소한다.
+  // 실패한 사진은 그 인물만 빠지고 링크 생성은 계속된다.
+  let sharePhotos = null;
+  if (selections?.chars && selections?.charPhotos) {
+    const projectChars = (state.characters || []).filter(c => c.projectId === state.activeProjectId);
+    ({ photoMap: sharePhotos } = await buildSharePhotos(projectChars));
+  }
+  const snapshotContent = buildFeedbackSnapshot(state, selections, { sharePhotos });
   const title = snapshotContent.projects?.[0]?.title || '피드백 버전';
   const share = await createFeedbackVersionShare({
     scriptId: state.activeProjectId,
