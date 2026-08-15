@@ -27,6 +27,7 @@ React + Vite + Supabase SPA, Vercel 배포, Google Drive 주 저장소.
 - UUID/cuid ID 포맷 — 임의 변경 시 고아 데이터 발생 이력 있음
 - 베타 유저가 사용 중인 기능의 데이터 구조
 - output 관련 파일(hwpxBuilder.js 등)은 명시적 요청 없이 수정 금지
+- `public/notice.html` — 빌드 산출물이라 직접 수정 금지 (아래 "공지 운영 원칙" 참고)
 - changelog.html 항목의 **날짜·버전 마커** — 한 번 확정하면 변경 금지. newsletter_items의 id가 여기서 나오므로(`cl-2026-08-15`, `cl-v50-51`), 바뀌면 새 항목으로 잡혀 이미 발송한 내용이 재발송된다. 제목·본문 수정은 안전함
 
 ## 한국어 IME 처리 원칙
@@ -40,6 +41,13 @@ React + Vite + Supabase SPA, Vercel 배포, Google Drive 주 저장소.
 ## 커밋 원칙
 - 기능/버그픽스별 소단위 커밋, git add -p로 무관한 변경 분리
 - 빌드 확인 후 커밋: npm run build + npx vitest run
+
+## 공지 운영 원칙
+- **`src/data/announcements.js`가 공지의 단일 소스**다. 공지 추가·수정·삭제는 여기서만 한다.
+- **`public/notice.html`은 빌드 산출물** — `npm run build` 시 vite가 announcements.js 기준으로 `<!-- ANNOUNCEMENTS_START -->` 블록을 재생성한다. **직접 수정 금지** (수정해도 다음 빌드에서 덮어써진다).
+- 두 파일이 어긋나면 **announcements.js가 정답**이다. 빌드로 재생성한 결과를 그대로 커밋해 맞춘다.
+- 빌드 후 `git status`에 `public/notice.html`이 뜨는데 이번 작업 의도가 아니라면, 그건 기존 불일치가 드러난 것이다. `git checkout -- public/notice.html`로 되돌리고 별건으로 보고할 것. `git add .`로 무심코 섞어 커밋하지 말 것.
+- **공지에는 중요 공지만 올린다. 기능 업데이트/변경 내역은 공지에 넣지 않는다** — 그건 changelog.html 담당이다. (과거 "메모 탭 추가" 업데이트 내역을 공지에 잘못 올렸다 내린 이력 있음)
 
 ## 뉴스레터 동기화
 - changelog.html / announcements.js는 **main에 머지되면 GitHub Actions가 자동 동기화**한다 (`.github/workflows/sync-newsletter-items.yml` → `scripts/syncAnnouncements.js` → Supabase `newsletter_items`). **수동 실행 불필요.**
