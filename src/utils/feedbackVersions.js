@@ -3,6 +3,21 @@ const SESSION_COLORS = ['#fef08a', '#bfdbfe', '#bbf7d0', '#fecdd3', '#fde68a', '
 
 export const FEEDBACK_FOCUS_KEY = 'drama_feedback_focus';
 
+/**
+ * 검토링크 payload에서 인물 사진을 걷어낸다.
+ *
+ * 캐릭터 레코드를 통째로 넣던 탓에 photo(장변 320px data URL)가 모든 링크에 실려
+ * Supabase에 저장되고 있었다. 뷰어는 사진을 렌더하지도 않아 화면에는 보이지 않는데,
+ * 작가가 모르는 사이 사진이 업로드되는 상태였다. 기본은 무조건 제외한다.
+ */
+export function stripCharacterPhotos(characters) {
+  return (characters || []).map((character) => {
+    if (!character || !('photo' in character)) return character;
+    const { photo, ...rest } = character; // eslint-disable-line no-unused-vars
+    return rest;
+  });
+}
+
 export function buildFeedbackSnapshot(state, selections) {
   const {
     projects,
@@ -19,7 +34,8 @@ export function buildFeedbackSnapshot(state, selections) {
   return {
     projects: projects.filter((project) => project.id === activeProjectId),
     episodes: episodes.filter((episode) => episode.projectId === activeProjectId),
-    characters: characters.filter((character) => character.projectId === activeProjectId),
+    // 사진은 기본적으로 싣지 않는다 (위 stripCharacterPhotos 주석 참고)
+    characters: stripCharacterPhotos(characters.filter((character) => character.projectId === activeProjectId)),
     scenes: scenes.filter((scene) => scene.projectId === activeProjectId),
     scriptBlocks: scriptBlocks.filter((block) => block.projectId === activeProjectId),
     coverDocs: coverDocs.filter((doc) => doc.projectId === activeProjectId),
