@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import AiFeedbackSection from './AiFeedbackSection';
 import DirectorScriptViewer from './director/DirectorScriptViewer';
 import HandwritingCanvas from './director/HandwritingCanvas';
 import { getBlockPosition, scrollToBlock } from '../utils/blockPosition';
@@ -140,7 +141,23 @@ function SessionAllDeletedModal({ open, onDeleteVersion, onClose }) {
   );
 }
 
+/**
+ * 페이지 껍데기 — 상단에 [AI] 절(로컬 데이터)을, 아래에 사람 피드백(Supabase)을 둔다.
+ * 아래쪽 본문은 "버전 없음"·"불러오기 실패" 등 여러 갈래로 일찍 return 하므로,
+ * AI 절이 그 갈래와 무관하게 항상 보이도록 바깥에서 감싼다.
+ */
 export default function DirectorNotesPage() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+      <AiFeedbackSection />
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <DirectorNotesBody />
+      </div>
+    </div>
+  );
+}
+
+function DirectorNotesBody() {
   const { state } = useApp();
   const activeProjectId = state.activeProjectId;
   const [versions, setVersions] = useState([]);

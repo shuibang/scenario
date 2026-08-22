@@ -100,6 +100,7 @@ export const menuConfig = [
     label: '도구',
     altKey: 't',
     items: [
+      { id: 'ai-feedback', label: 'AI 피드백…', action: 'tools:aiFeedback' },
       { id: 'spellcheck', label: '맞춤법 검사', action: 'tools:spellcheck', disabled: true, disabledLabel: '준비 중' },
       'separator',
       { id: 'settings',   label: '환경 설정…',  action: 'tools:settings' },

@@ -87,6 +87,8 @@ import UserSettingsModal     from './components/Modals/UserSettingsModal';
 import InitialUserSettingsModal from './components/Modals/InitialUserSettingsModal';
 import TagManageModal        from './components/Modals/TagManageModal';
 import AppSettingsModal      from './components/Modals/AppSettingsModal';
+import AiFeedbackModal       from './components/Modals/AiFeedbackModal';
+import { AI_FEEDBACK_OPEN_EVENT } from './components/AiFeedbackSection';
 import NoticesModal          from './components/Modals/NoticesModal';
 import QnAModal              from './components/Modals/QnAModal';
 
@@ -2164,6 +2166,14 @@ function Shell({ authUser, setAuthUser }) {
   const [userSettingsTab,      setUserSettingsTab]      = useState('sceneHeader');
   const [tagManageOpen,        setTagManageOpen]        = useState(false);
   const [appSettingsOpen,      setAppSettingsOpen]      = useState(false);
+  const [aiFeedbackOpen,       setAiFeedbackOpen]       = useState(false);
+
+  // 피드백 노트 안의 'AI 피드백 받기' 버튼 — 도구 메뉴와 같은 모달을 연다.
+  useEffect(() => {
+    const open = () => setAiFeedbackOpen(true);
+    window.addEventListener(AI_FEEDBACK_OPEN_EVENT, open);
+    return () => window.removeEventListener(AI_FEEDBACK_OPEN_EVENT, open);
+  }, []);
   const [noticesOpen,          setNoticesOpen]          = useState(false);
   const [qaOpen,               setQaOpen]               = useState(false);
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(
@@ -2376,6 +2386,7 @@ function Shell({ authUser, setAuthUser }) {
 
     // ── 도구 ──
     if (action === 'tools:settings')  { setAppSettingsOpen(true); return; }
+    if (action === 'tools:aiFeedback') { setAiFeedbackOpen(true); return; }
 
     // ── 도움말 ──
     if (action === 'help:manual')  { window.open('/help.html', '_blank', 'noopener,noreferrer'); return; }
@@ -2504,6 +2515,11 @@ function Shell({ authUser, setAuthUser }) {
       <UserSettingsModal open={userSettingsOpen} initialTab={userSettingsTab} onClose={() => setUserSettingsOpen(false)} />
       <TagManageModal      open={tagManageOpen}    onClose={() => setTagManageOpen(false)} />
       <AppSettingsModal    open={appSettingsOpen}  onClose={() => setAppSettingsOpen(false)} />
+      <AiFeedbackModal
+        open={aiFeedbackOpen}
+        onClose={() => setAiFeedbackOpen(false)}
+        onSaved={() => dispatch({ type: 'SET_ACTIVE_DOC', payload: 'director_notes' })}
+      />
       <NoticesModal        open={noticesOpen}      onClose={() => setNoticesOpen(false)} />
       <QnAModal            open={qaOpen}           onClose={() => setQaOpen(false)} />
       <ProjectInfoModal
