@@ -30,6 +30,7 @@ export const DB_KEYS = {
   resources: 'resources',
   workTimeLogs: 'workTimeLogs',
   checklistItems: 'checklistItems',
+  aiFeedbacks: 'aiFeedbacks',
   trash: 'trash',
 };
 

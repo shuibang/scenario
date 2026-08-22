@@ -34,6 +34,10 @@ export const projectExportSchema = z.object({
   resources:      dbArray(),
   workTimeLogs:   dbArray(),
   checklistItems: dbArray(),
+  // AI 피드백. version 을 올리지 않고 키만 늘렸다 — z.object 는 모르는 키를 걷어내므로
+  // 구버전 앱이 이 파일을 열어도 에러 없이 열리고(피드백만 빠짐), 신버전이 구버전 파일을
+  // 열면 default([]) 로 채워진다. 양방향 모두 마이그레이션이 필요 없다.
+  aiFeedbacks:    dbArray(),
   trash:      z.record(z.string(), z.array(dbRecord).optional().default([])).optional().default({}),
   drive:      z.object({ savedAt: z.string(), deviceId: z.string() }).optional(),
 });
@@ -41,7 +45,7 @@ export const projectExportSchema = z.object({
 const CASCADING_KEYS = [
   'episodes', 'characters', 'scenes', 'scriptBlocks',
   'coverDocs', 'synopsisDocs', 'resources',
-  'workTimeLogs', 'checklistItems',
+  'workTimeLogs', 'checklistItems', 'aiFeedbacks',
 ];
 
 // ── Serialize: state에서 한 대본의 모든 데이터 추출 ───────────────────────────
@@ -74,6 +78,7 @@ export function serializeProject(state, projectId, opts = {}) {
     resources:      filterByProject(state.resources),
     workTimeLogs:   filterByProject(state.workTimeLogs),
     checklistItems: filterByProject(state.checklistItems),
+    aiFeedbacks:    filterByProject(state.aiFeedbacks),
     trash:          trashFiltered,
     ...(opts.drive ? { drive: opts.drive } : {}),
   };
@@ -126,6 +131,15 @@ function reIdProject(imported) {
     characterId:  b.characterId  ? (characterIdMap.get(b.characterId) || b.characterId) : b.characterId,
   });
 
+  // AI 피드백은 회차를 참조한다. episodeNumber 는 요청 당시의 값을 그대로 둔다 —
+  // 표시용 스냅샷이라 새 ID 로 옮겨도 "몇 회차를 검토했는지"는 바뀌지 않아야 한다.
+  const remapAiFeedback = (f) => ({
+    ...f,
+    id: genId(),
+    projectId: newProjectId,
+    episodeId: f.episodeId ? (episodeIdMap.get(f.episodeId) || f.episodeId) : f.episodeId,
+  });
+
   const projectTitle = (imported.project?.title || '제목없음') + ' (사본)';
 
   return {
@@ -139,6 +153,7 @@ function reIdProject(imported) {
     resources:      (imported.resources      || []).map(remapEntity),
     workTimeLogs:   (imported.workTimeLogs   || []).map(l => ({ ...l, projectId: newProjectId })),
     checklistItems: (imported.checklistItems || []).map(remapEntity),
+    aiFeedbacks:    (imported.aiFeedbacks    || []).map(remapAiFeedback),
     trash:          imported.trash || {},
   };
 }
@@ -193,6 +208,7 @@ export function combineProjectsToState(payloads, { index } = {}) {
     resources: [],
     workTimeLogs: [],
     checklistItems: [],
+    aiFeedbacks: [],
     trash: {},
   };
   for (const p of payloads) {

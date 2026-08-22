@@ -102,6 +102,7 @@ const EMPTY_TRASH = {
   coverDocs:    [],
   synopsisDocs: [],
   resources:    [],
+  aiFeedbacks:  [],
 };
 
 // ─── State shape ────────────────────────────────────────────────────────────
@@ -117,6 +118,9 @@ const initialState = {
   resources: [],
   workTimeLogs: [],
   checklistItems: [],
+  // AI 피드백 결과. 대본 종속 데이터라 .djs / Drive 대본별 저장에 함께 실린다.
+  // 레코드: { id, projectId, episodeId, episodeNumber, mode, feedback, createdAt }
+  aiFeedbacks: [],
   trash: { ...EMPTY_TRASH },
   stylePreset: DEFAULT_STYLE_PRESET,
   // UI
@@ -174,6 +178,7 @@ function reducer(state, action) {
       const cv = split(state.coverDocs);
       const sy = split(state.synopsisDocs);
       const rs = split(state.resources);
+      const af = split(state.aiFeedbacks);
       // Orphan 안전장치 — 대본 ID와 매칭 안 되는 캐스케이드 데이터(예: 4/22-23 동기화 사고 등의
       // 예외 잔존)를 감지해 경고만 출력. 데이터는 state에 그대로 남겨 손실 방지 (보수 정책).
       const projectIdSet = new Set(state.projects.map(p => p.id));
@@ -185,6 +190,7 @@ function reducer(state, action) {
         coverDocs:    state.coverDocs   .filter(d => !projectIdSet.has(d.projectId)).length,
         synopsisDocs: state.synopsisDocs.filter(d => !projectIdSet.has(d.projectId)).length,
         resources:    state.resources   .filter(r => !projectIdSet.has(r.projectId)).length,
+        aiFeedbacks:  state.aiFeedbacks .filter(f => !projectIdSet.has(f.projectId)).length,
       };
       if (Object.values(orphanCount).some(n => n > 0)) {
         console.warn('[trash] orphan data detected', {
@@ -203,6 +209,7 @@ function reducer(state, action) {
         coverDocs:    cv.keep,
         synopsisDocs: sy.keep,
         resources:    rs.keep,
+        aiFeedbacks:  af.keep,
         trash: {
           projects:     [...(trash.projects     || []), { ...target, deletedAt: now() }],
           episodes:     [...(trash.episodes     || []), ...ep.moved],
@@ -212,6 +219,7 @@ function reducer(state, action) {
           coverDocs:    [...(trash.coverDocs    || []), ...cv.moved],
           synopsisDocs: [...(trash.synopsisDocs || []), ...sy.moved],
           resources:    [...(trash.resources    || []), ...rs.moved],
+          aiFeedbacks:  [...(trash.aiFeedbacks  || []), ...af.moved],
         },
         activeProjectId: state.activeProjectId === id ? null : state.activeProjectId,
         activeEpisodeId: state.episodes.find(e => e.projectId === id && e.id === state.activeEpisodeId) ? null : state.activeEpisodeId,
@@ -239,6 +247,7 @@ function reducer(state, action) {
       const cv = splitOut('coverDocs');
       const sy = splitOut('synopsisDocs');
       const rs = splitOut('resources');
+      const af = splitOut('aiFeedbacks');
       return {
         ...state,
         projects:     [...state.projects,     restored],
@@ -249,6 +258,7 @@ function reducer(state, action) {
         coverDocs:    [...state.coverDocs,    ...cv.restored],
         synopsisDocs: [...state.synopsisDocs, ...sy.restored],
         resources:    [...state.resources,    ...rs.restored],
+        aiFeedbacks:  [...state.aiFeedbacks,  ...af.restored],
         trash: {
           projects:     (trash.projects || []).filter(p => p.id !== id),
           episodes:     ep.keep,
@@ -258,6 +268,7 @@ function reducer(state, action) {
           coverDocs:    cv.keep,
           synopsisDocs: sy.keep,
           resources:    rs.keep,
+          aiFeedbacks:  af.keep,
         },
       };
     }
@@ -277,6 +288,7 @@ function reducer(state, action) {
           coverDocs:    (trash.coverDocs    || []).filter(d => d.projectId !== id),
           synopsisDocs: (trash.synopsisDocs || []).filter(d => d.projectId !== id),
           resources:    (trash.resources    || []).filter(r => r.projectId !== id),
+          aiFeedbacks:  (trash.aiFeedbacks  || []).filter(f => f.projectId !== id),
         },
       };
     }
@@ -304,9 +316,18 @@ function reducer(state, action) {
           coverDocs:    (trash.coverDocs    || []).filter(d => !expired.has(d.projectId)),
           synopsisDocs: (trash.synopsisDocs || []).filter(d => !expired.has(d.projectId)),
           resources:    (trash.resources    || []).filter(r => !expired.has(r.projectId)),
+          aiFeedbacks:  (trash.aiFeedbacks  || []).filter(f => !expired.has(f.projectId)),
         },
       };
     }
+
+    // ── AI 피드백 ────────────────────────────────────────────────────────────
+    // 결과는 덧붙이기만 한다. 기존 항목을 갱신하는 경로는 두지 않는다 —
+    // 같은 회차를 다시 요청하면 새 기록으로 쌓여 이전 지적과 비교할 수 있어야 한다.
+    case 'ADD_AI_FEEDBACK':
+      return { ...state, aiFeedbacks: [...state.aiFeedbacks, action.payload] };
+    case 'DELETE_AI_FEEDBACK':
+      return { ...state, aiFeedbacks: state.aiFeedbacks.filter(f => f.id !== action.id) };
 
     case 'ADD_EPISODE':
       return { ...state, episodes: [...state.episodes, action.payload] };
@@ -739,7 +760,7 @@ export function AppProvider({ children }) {
         // eslint-disable-next-line no-unused-vars
         const migratedEpisodes = rawEpisodes.map(({ subtitle, ...ep }) => ep);
         skipSavedAtRef.current  = true; // INIT은 사용자 편집이 아님 → savedAt 갱신 건너뜀
-        const [characters, scenes, scriptBlocks, coverDocs, synopsisDocs, resources, workTimeLogs, checklistItems, trashRaw] =
+        const [characters, scenes, scriptBlocks, coverDocs, synopsisDocs, resources, workTimeLogs, checklistItems, aiFeedbacks, trashRaw] =
           await Promise.all([
             getAll(DB_KEYS.characters),
             getAll(DB_KEYS.scenes),
@@ -749,6 +770,7 @@ export function AppProvider({ children }) {
             getAll(DB_KEYS.resources),
             getAll(DB_KEYS.workTimeLogs),
             getAll(DB_KEYS.checklistItems),
+            getAll(DB_KEYS.aiFeedbacks),
             getAll(DB_KEYS.trash),
           ]);
         // trash는 단일 객체 — getAll의 [] 폴백 또는 누락 시 EMPTY_TRASH 사용 (마이그레이션 안전망)
@@ -769,6 +791,7 @@ export function AppProvider({ children }) {
             resources,
             workTimeLogs,
             checklistItems,
+            aiFeedbacks,
             trash,
             stylePreset: savedPreset || DEFAULT_STYLE_PRESET,
           },
@@ -901,6 +924,7 @@ export function AppProvider({ children }) {
           setAll(DB_KEYS.resources,     state.resources),
           setAll(DB_KEYS.workTimeLogs,  state.workTimeLogs),
           setAll(DB_KEYS.checklistItems, state.checklistItems),
+          setAll(DB_KEYS.aiFeedbacks,    state.aiFeedbacks),
           setAll(DB_KEYS.trash,          state.trash || EMPTY_TRASH),
         ]);
         if (localStorage.getItem('drama_auth_user')) {
@@ -926,6 +950,7 @@ export function AppProvider({ children }) {
     state.coverDocs, state.synopsisDocs, state.resources,
     state.workTimeLogs,
     state.checklistItems,
+    state.aiFeedbacks,
     state.stylePreset,
     // guardPending이 non-null → null로 바뀌는 전이를 효과가 감지해 저장을 재개하도록 포함
     state.guardPending,
